@@ -47,3 +47,6 @@ next-env.d.ts
 /desktop-client/build
 /desktop-client/node_modules
 
+# uploaded files
+/public/uploads/
+
