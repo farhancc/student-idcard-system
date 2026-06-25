@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CardPreview from '@/app/components/CardPreview';
 import { 
   Users, 
   FileText, 
@@ -174,6 +175,47 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPDF = async () => {
+    if (cardholders.length === 0) return;
+    try {
+      setDownloadingPdf(true);
+      const cardholdersData = cardholders.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        designation: ch.designation || null,
+        photoUrl: ch.photoUrl || null,
+        cardSerial: ch.uniqueKey || null,
+        customFields: ch.customFields ? JSON.parse(ch.customFields) : {},
+      }));
+
+      const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
+      
+      const pdfBlob = await generateApprovalPdfClient(
+        client?.name || 'Client',
+        client?.name || 'Organisation',
+        template,
+        cardholdersData,
+        []
+      );
+
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Approval_Proof_${(client?.name || 'Client').replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err: any) {
+      console.error('Failed to compile approval PDF client-side:', err);
+      alert(`Error generating PDF: ${err.message || err}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   // Copy department links helper
@@ -475,16 +517,28 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
               {copied ? <Check size={16} /> : <Copy size={16} />}
               Copy Global Staff Link
             </button>
-            <a 
-              href={`/api/portal/org/${orgToken}/approval-pdf`}
-              target="_blank"
-              rel="noreferrer"
+            <button 
+              onClick={handleDownloadPDF}
+              disabled={cardholders.length === 0 || downloadingPdf}
               className="btn btn-primary" 
-              style={{ display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                opacity: (cardholders.length === 0 || downloadingPdf) ? 0.5 : 1,
+                cursor: (cardholders.length === 0 || downloadingPdf) ? 'not-allowed' : 'pointer'
+              }}
             >
-              <FileText size={16} />
-              Download Approval PDF
-            </a>
+              {downloadingPdf ? (
+                <>
+                  <Loader size={16} className="animate-spin" /> Generating PDF...
+                </>
+              ) : (
+                <>
+                  <FileText size={16} /> Download Approval PDF
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -1048,17 +1102,20 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
               position: 'relative',
               marginBottom: '20px',
             }}>
-              <img
-                src={`/api/portal/org/${orgToken}/cardholders/${previewCardholder.id}/preview?side=${previewSide}`}
-                alt={`ID Card ${previewSide} preview`}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '360px',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                }}
-                key={`${previewCardholder.id}-${previewSide}`}
-              />
+              {template && (
+                <CardPreview
+                  template={template}
+                  cardholder={previewCardholder}
+                  side={previewSide}
+                  style={{
+                    maxWidth: '100%',
+                    maxHeight: '360px',
+                    borderRadius: '8px',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                  }}
+                  key={`${previewCardholder.id}-${previewSide}`}
+                />
+              )}
             </div>
 
             {/* Toggle / Controls */}

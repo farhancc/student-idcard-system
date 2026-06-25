@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifySubscriptionLimits, processPdfJobInBackground } from '@/lib/pdf/job-processor';
+import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
 
 export async function POST(request: Request) {
   try {
@@ -122,16 +122,8 @@ export async function POST(request: Request) {
       },
     });
 
-    // 3. Trigger background processing
-    await processPdfJobInBackground(
-      job.id,
-      pressId,
-      order.id,
-      cardholderIds,
-      pdfType,
-      jobOptions,
-      userId
-    );
+    // 3. Delegation: The local Electron daemon will poll and process the PENDING job.
+
 
     return NextResponse.json({
       success: true,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { processPdfJobInBackground } from '@/lib/pdf/job-processor';
+
 import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import fs from 'fs';

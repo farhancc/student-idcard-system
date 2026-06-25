@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye } from 'lucide-react';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CardPreview from '@/app/components/CardPreview';
 
 const getOptimizedImageUrl = (url: string) => {
   if (!url) return '';
@@ -1527,21 +1528,27 @@ export default function TemplatesPage() {
           <div className="glass-panel" style={{ width: '90%', maxWidth: '700px', textAlign: 'center' }}>
             <h3 style={{ marginBottom: '16px' }}>Template Visual Preview ({previewSide.toUpperCase()})</h3>
             
-            <div style={{
-              display: 'flex',
-              justifyContent: 'center',
-              background: 'rgba(0,0,0,0.4)',
-              padding: '16px',
-              borderRadius: '12px',
-              marginBottom: '20px',
-              border: '1px solid var(--glass-border)'
-            }}>
-              <img 
-                src={`/api/templates/${previewId}/preview?side=${previewSide}`} 
-                alt="Template preview" 
-                style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px' }}
-              />
-            </div>
+            {(() => {
+              const tmpl = templates.find((t) => t.id === previewId);
+              if (!tmpl) return <p>Template not found</p>;
+              return (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.4)',
+                  padding: '16px',
+                  borderRadius: '12px',
+                  marginBottom: '20px',
+                  border: '1px solid var(--glass-border)'
+                }}>
+                  <CardPreview
+                    template={tmpl}
+                    side={previewSide}
+                    style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px' }}
+                  />
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button className="btn btn-secondary" onClick={() => setPreviewSide(previewSide === 'front' ? 'back' : 'front')}>

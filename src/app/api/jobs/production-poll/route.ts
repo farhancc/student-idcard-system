@@ -41,6 +41,10 @@ export async function GET(request: Request) {
       where: { id: job.pressId },
     });
 
+    const pressFonts = await prisma.pressFont.findMany({
+      where: { pressId },
+    });
+
     // Parse cardholders
     const cardholderIds: number[] = JSON.parse(order.cardholderIds || '[]');
     const cardholders = await prisma.cardholder.findMany({
@@ -83,6 +87,10 @@ export async function GET(request: Request) {
         email: press.email,
         city: press.city,
       } : null,
+      pressFonts: pressFonts.map(pf => ({
+        name: pf.name,
+        fileUrl: pf.fileUrl,
+      })),
       template: {
         id: order.template.id,
         name: order.template.name,
@@ -91,6 +99,9 @@ export async function GET(request: Request) {
         frontImageUrl: order.template.frontImageUrl,
         backImageUrl: order.template.backImageUrl,
         isDoubleSided: !!order.template.backImageUrl,
+        frontFields: order.template.frontFields,
+        backFields: order.template.backFields,
+        validTillDate: order.validTill,
       },
       cardholders: cardholders.map(ch => ({
         id: ch.id,

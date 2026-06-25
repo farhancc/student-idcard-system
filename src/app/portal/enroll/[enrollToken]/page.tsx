@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, use } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/app/components/ImageCropper';
+import CardPreview from '@/app/components/CardPreview';
 import { Upload, Check, AlertCircle, Loader, CreditCard } from 'lucide-react';
 
 interface FieldCoordinate {
@@ -46,10 +47,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [activeCropField, setActiveCropField] = useState<string | null>(null);
 
   // Live preview states
-  const [previewFrontUrl, setPreviewFrontUrl] = useState<string | null>(null);
-  const [previewBackUrl, setPreviewBackUrl] = useState<string | null>(null);
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
-  const [previewLoading, setPreviewLoading] = useState(false);
   const [hasBackFields, setHasBackFields] = useState(false);
 
   useEffect(() => {
@@ -132,40 +130,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
     fetchPortalInfo();
   }, [enrollToken]);
-
-  // Fetch live card preview whenever form values change
-  const fetchPreview = useCallback(async (side: 'front' | 'back') => {
-    setPreviewLoading(true);
-    try {
-      const payload = {
-        name: (hasName ? name : 'Cardholder') || 'Your Name',
-        designation: hasDesignation ? designation : null,
-        photoUrl: hasPhoto ? photoUrl : null,
-        customFields,
-      };
-      const res = await fetch(`/api/portal/enroll/${enrollToken}/preview?side=${side}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) return;
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      if (side === 'front') setPreviewFrontUrl(url);
-      else setPreviewBackUrl(url);
-    } catch { /* silent */ } finally {
-      setPreviewLoading(false);
-    }
-  }, [enrollToken, name, designation, photoUrl, customFields, hasName, hasDesignation, hasPhoto]);
-
-  useEffect(() => {
-    if (!template) return;
-    const timer = setTimeout(() => {
-      fetchPreview('front');
-      if (hasBackFields) fetchPreview('back');
-    }, 700); // debounce 700ms
-    return () => clearTimeout(timer);
-  }, [name, designation, photoUrl, customFields, template, hasBackFields]);
 
   const triggerUpload = (fieldKey: string) => {
     setActiveCropField(fieldKey);
@@ -320,7 +284,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     );
   }
 
-  const currentPreviewUrl = previewSide === 'front' ? previewFrontUrl : previewBackUrl;
+
 
   // Find main image field coordinate for rendering dimensions in upload box
   const mainImgField = template ? (() => {
@@ -514,7 +478,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <CreditCard size={18} style={{ color: 'var(--primary)' }} />
                 <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Live ID Card Preview</h3>
-                {previewLoading && <Loader size={14} className="animate-spin" style={{ color: 'var(--muted)' }} />}
               </div>
               {hasBackFields && (
                 <div style={{ display: 'flex', gap: '4px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px' }}>
@@ -554,25 +517,26 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
               minHeight: '220px',
               position: 'relative',
             }}>
-              {currentPreviewUrl ? (
-                <img
-                  src={currentPreviewUrl}
-                  alt={`ID Card ${previewSide} preview`}
-                  style={{
-                    maxWidth: '100%',
-                    maxHeight: '360px',
-                    borderRadius: '8px',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                    transition: 'opacity 0.3s ease',
-                    opacity: previewLoading ? 0.5 : 1,
-                  }}
-                />
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--muted)' }}>
-                  <CreditCard size={40} style={{ marginBottom: '12px', opacity: 0.3 }} />
-                  <p style={{ fontSize: '0.85rem' }}>Fill in your details above to see a live preview of your ID card.</p>
-                </div>
-              )}
+              <CardPreview
+                template={template}
+                cardholder={{
+                  id: 0,
+                  name: name || 'Your Name',
+                  designation: designation || '',
+                  photoUrl: photoUrl || '',
+                  customFields: JSON.stringify(customFields),
+                  uniqueKey: uniqueKey || '',
+                  createdAt: new Date().toISOString(),
+                }}
+                side={previewSide}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '360px',
+                  borderRadius: '8px',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+                }}
+                key={`${name}-${designation}-${photoUrl}-${JSON.stringify(customFields)}-${uniqueKey}-${previewSide}`}
+              />
             </div>
             <p style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'center', marginTop: '8px' }}>
               Preview updates automatically as you type

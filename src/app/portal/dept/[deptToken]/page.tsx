@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CardPreview from '@/app/components/CardPreview';
 import {
   Users,
   Copy,
@@ -63,10 +64,47 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
     }
   };
 
-  const handleDownloadPDF = () => {
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPDF = async () => {
     if (selectedIds.length === 0) return;
-    const url = `/api/portal/dept/${deptToken}/approval-pdf?ids=${selectedIds.join(',')}`;
-    window.open(url, '_blank');
+    try {
+      setDownloadingPdf(true);
+      const selectedChs = cardholders.filter(ch => selectedIds.includes(ch.id));
+      
+      const cardholdersData = selectedChs.map(ch => ({
+        id: ch.id,
+        name: ch.name,
+        designation: ch.designation || null,
+        photoUrl: ch.photoUrl || null,
+        cardSerial: ch.uniqueKey || null,
+        customFields: ch.customFields ? JSON.parse(ch.customFields) : {},
+      }));
+
+      const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
+      
+      const pdfBlob = await generateApprovalPdfClient(
+        client?.name || 'Client',
+        client?.name || 'Department',
+        template,
+        cardholdersData,
+        []
+      );
+
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Approval_Proof_${(client?.name || 'Client').replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err: any) {
+      console.error('Failed to compile approval PDF client-side:', err);
+      alert(`Error generating PDF: ${err.message || err}`);
+    } finally {
+      setDownloadingPdf(false);
+    }
   };
 
   const handleDownloadExcel = () => {
@@ -456,16 +494,24 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
             <button
               className="btn btn-primary"
               onClick={handleDownloadPDF}
-              disabled={selectedIds.length === 0}
+              disabled={selectedIds.length === 0 || downloadingPdf}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                opacity: selectedIds.length === 0 ? 0.5 : 1,
-                cursor: selectedIds.length === 0 ? 'not-allowed' : 'pointer'
+                opacity: (selectedIds.length === 0 || downloadingPdf) ? 0.5 : 1,
+                cursor: (selectedIds.length === 0 || downloadingPdf) ? 'not-allowed' : 'pointer'
               }}
             >
-              <FileText size={16} /> Download Approval PDF
+              {downloadingPdf ? (
+                <>
+                  <Loader size={16} className="animate-spin" /> Generating PDF...
+                </>
+              ) : (
+                <>
+                  <FileText size={16} /> Download Approval PDF
+                </>
+              )}
             </button>
             <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} /> Add Cardholder
@@ -716,12 +762,15 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
             <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>ID Card Preview</h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>Previewing card for <strong>{previewCardholder.name}</strong></p>
             <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)', background: '#111', padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '260px', marginBottom: '20px' }}>
-              <img
-                src={`/api/portal/dept/${deptToken}/cardholders/${previewCardholder.id}/preview?side=${previewSide}`}
-                alt={`ID Card ${previewSide} preview`}
-                style={{ maxWidth: '100%', maxHeight: '360px', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
-                key={`${previewCardholder.id}-${previewSide}`}
-              />
+              {template && (
+                <CardPreview
+                  template={template}
+                  cardholder={previewCardholder}
+                  side={previewSide}
+                  style={{ maxWidth: '100%', maxHeight: '360px', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
+                  key={`${previewCardholder.id}-${previewSide}`}
+                />
+              )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
               {(() => {
