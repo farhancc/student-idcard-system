@@ -1,0 +1,21 @@
+# Exclude the Electron client and its node_modules from Vercel uploads
+desktop-client
+
+# Exclude local project artifacts and logs
+artifacts
+scratch
+
+# Exclude large development/test assets
+id card setting.pdf
+sample_photos.zip
+model_photos
+model_photos.zip
+sample_cardholders.xlsx
+model_cardholders.xlsx
+tsconfig.tsbuildinfo
+
+# Exclude scripts and development helpers
+scripts
+create-zip.ts
+inspect-db.ts
+read-excel.ts
