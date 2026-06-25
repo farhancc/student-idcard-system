@@ -20,7 +20,7 @@ export async function GET(request: Request) {
       where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfMonth } },
       include: { order: { select: { cardholderIds: true } } },
     });
-    const cardsGenerated = productionJobsThisMonth.reduce((acc, job) => {
+    const cardsGenerated = productionJobsThisMonth.reduce((acc: number, job) => {
       try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
     }, 0);
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
       where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfLastMonth, lt: startOfMonth } },
       include: { order: { select: { cardholderIds: true } } },
     });
-    const cardsLastMonth = productionJobsLastMonth.reduce((acc, job) => {
+    const cardsLastMonth = productionJobsLastMonth.reduce((acc: number, job) => {
       try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
     }, 0);
 
@@ -67,10 +67,10 @@ export async function GET(request: Request) {
     });
     const revenueThisMonth = invoicesThisMonth
       .filter(i => i.paymentStatus === 'PAID')
-      .reduce((acc, i) => acc + Number(i.totalAmount), 0);
+      .reduce((acc: number, i) => acc + Number(i.totalAmount), 0);
     const pendingRevenue = invoicesThisMonth
       .filter(i => i.paymentStatus !== 'PAID')
-      .reduce((acc, i) => acc + Number(i.totalAmount), 0);
+      .reduce((acc: number, i) => acc + Number(i.totalAmount), 0);
 
     // Storage estimate
     const cardAssetsCount = await prisma.cardAsset.count({ where: { pressId } });
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
         where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: start, lt: end } },
         include: { order: { select: { cardholderIds: true } } },
       });
-      const cards = jobs.reduce((acc, job) => {
+      const cards = jobs.reduce((acc: number, job) => {
         try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
       }, 0);
       monthlyTrend.push({
