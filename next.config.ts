@@ -3,6 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  serverExternalPackages: ['canvas', 'sharp'],
   outputFileTracingExcludes: {
     '*': [
       './desktop-client/**/*',

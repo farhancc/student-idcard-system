@@ -290,7 +290,7 @@ export async function renderCardSide(
       }
       // Resolve local path if relative
       if (absoluteBgPath.startsWith('/')) {
-        absoluteBgPath = path.join(process.cwd(), 'public', absoluteBgPath);
+        absoluteBgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', absoluteBgPath);
       }
       const bg = await loadImage(absoluteBgPath);
       ctx.drawImage(bg, 0, 0, width, height);
