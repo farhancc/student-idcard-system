@@ -99,8 +99,8 @@ export async function GET(request: Request) {
       include: { _count: { select: { cardholders: true } } },
     });
     const topClients = clients
-      .map(c => ({ id: c.id, name: c.name, cardCount: c._count.cardholders }))
-      .sort((a, b) => b.cardCount - a.cardCount)
+      .map((c: any) => ({ id: c.id, name: c.name, cardCount: c._count.cardholders }))
+      .sort((a: any, b: any) => b.cardCount - a.cardCount)
       .slice(0, 5);
 
     // ── Recent Activity ────────────────────────────────────────────────────────
@@ -158,7 +158,7 @@ export async function GET(request: Request) {
       },
       breakdowns: { byType, byStatus },
       topClients,
-      recentJobs: recentJobs.map(j => ({
+      recentJobs: recentJobs.map((j: any) => ({
         id: j.id,
         pdfType: j.pdfType,
         status: j.status,
@@ -169,7 +169,7 @@ export async function GET(request: Request) {
         clientName: j.order?.client?.name || '—',
         orderId: j.orderId,
       })),
-      recentOrders: recentOrders.map(o => ({
+      recentOrders: recentOrders.map((o: any) => ({
         id: o.id,
         clientName: o.client.name,
         templateName: o.template.name,
