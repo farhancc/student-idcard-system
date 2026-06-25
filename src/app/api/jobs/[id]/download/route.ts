@@ -49,7 +49,7 @@ export async function GET(
       
       // Check /tmp first (production writeable folder), then fallback to public/uploads
       const tmpPath = path.join('/tmp', 'idexo', relativePath);
-      const publicPath = path.join(process.cwd(), 'public', relativePath);
+      const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', relativePath);
 
       let finalPath = '';
       if (fs.existsSync(tmpPath)) {

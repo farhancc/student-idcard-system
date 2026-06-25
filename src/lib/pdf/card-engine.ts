@@ -37,7 +37,7 @@ function hexToRgb(hex?: string) {
 // Helper to load file (local or HTTP) as a Buffer
 async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   if (fileUrl.startsWith('/')) {
-    const filePath = path.join(process.cwd(), 'public', fileUrl);
+    const filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
     return fs.readFileSync(filePath);
   } else if (fileUrl.startsWith('http')) {
     const res = await fetch(fileUrl);
@@ -92,10 +92,10 @@ export async function ensureFontRegistered(fontName: string, fontUrl: string): P
     // If the fontUrl is a relative path (local file), use it directly
     let filePath = fontUrl;
     if (fontUrl.startsWith('/')) {
-      filePath = path.join(process.cwd(), 'public', fontUrl);
+      filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fontUrl);
     } else if (fontUrl.startsWith('http')) {
       // In production, we'd download the font file from S3 to a local cache directory
-      const cacheDir = path.join(process.cwd(), 'tmp', 'fonts');
+      const cacheDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'tmp', 'fonts');
       fs.mkdirSync(cacheDir, { recursive: true });
       filePath = path.join(cacheDir, `${familyName}.ttf`);
 
@@ -487,7 +487,7 @@ export async function renderCardSide(
         try {
           let absoluteImgPath = rawValue;
           if (rawValue.startsWith('/')) {
-            absoluteImgPath = path.join(process.cwd(), 'public', rawValue);
+            absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', rawValue);
           }
           const img = await loadImage(absoluteImgPath);
 
