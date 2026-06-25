@@ -44,7 +44,7 @@ function isVersionOutdated(current, minimum) {
 }
 
 async function checkCloudVersionCompat() {
-  const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
+  const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
   const appVersion = app.getVersion();
   
   try {
@@ -79,7 +79,7 @@ function createWindow() {
     },
   });
 
-  const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
+  const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
   console.log('Loading startup URL:', `${portalUrl}/dashboard`);
   mainWindow.loadURL(`${portalUrl}/dashboard`);
 
@@ -150,13 +150,13 @@ ipcMain.handle('is-desktop', () => {
 
 // IPC handler to get Portal URL for the offline page
 ipcMain.handle('get-portal-url', () => {
-  return process.env.PORTAL_URL || 'http://localhost:3000';
+  return process.env.PORTAL_URL || 'https://idexocards.vercel.app';
 });
 
 // IPC handler to reload / reconnect the app
 ipcMain.handle('reload-app', () => {
   if (mainWindow) {
-    const portalUrl = process.env.PORTAL_URL || 'http://localhost:3000';
+    const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
     console.log(`Reconnecting to server at: ${portalUrl}/dashboard`);
     mainWindow.loadURL(`${portalUrl}/dashboard`);
   }
