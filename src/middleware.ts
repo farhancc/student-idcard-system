@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyToken } from './lib/auth';
+import { verifyToken } from './lib/auth-edge';
 
 // Define public routes that don't need auth
 const publicRoutes = [
