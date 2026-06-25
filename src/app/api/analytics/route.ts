@@ -66,10 +66,10 @@ export async function GET(request: Request) {
       select: { totalAmount: true, paymentStatus: true },
     });
     const revenueThisMonth = invoicesThisMonth
-      .filter(i => i.paymentStatus === 'PAID')
+      .filter((i: any) => i.paymentStatus === 'PAID')
       .reduce((acc: number, i: any) => acc + Number(i.totalAmount), 0);
     const pendingRevenue = invoicesThisMonth
-      .filter(i => i.paymentStatus !== 'PAID')
+      .filter((i: any) => i.paymentStatus !== 'PAID')
       .reduce((acc: number, i: any) => acc + Number(i.totalAmount), 0);
 
     // Storage estimate
