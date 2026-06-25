@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
 
-    const { jobId, success, errorMsg } = await request.json();
+    const { jobId, success, errorMsg, pdfBase64 } = await request.json();
 
     if (!jobId) {
       return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
@@ -37,6 +37,55 @@ export async function POST(request: Request) {
       }
 
       if (success) {
+        let downloadUrl = '';
+        if (pdfBase64) {
+          const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+          const isCloudinaryConfigured = 
+            process.env.CLOUDINARY_CLOUD_NAME && 
+            process.env.CLOUDINARY_API_KEY && 
+            process.env.CLOUDINARY_API_SECRET;
+
+          const fileName = `${job.pdfType.toLowerCase()}_order_${job.orderId}_job_${job.id}.pdf`;
+
+          if (isCloudinaryConfigured) {
+            const { v2: cloudinary } = require('cloudinary');
+            cloudinary.config({
+              cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+              api_key: process.env.CLOUDINARY_API_KEY,
+              api_secret: process.env.CLOUDINARY_API_SECRET,
+            });
+
+            const uploadResult = await new Promise<any>((resolve, reject) => {
+              cloudinary.uploader.upload_stream(
+                {
+                  folder: `press_${pressId}/pdfs`,
+                  resource_type: 'raw',
+                  public_id: fileName.replace('.pdf', ''),
+                },
+                (error: any, result: any) => {
+                  if (error) reject(error);
+                  else resolve(result);
+                }
+              ).end(pdfBuffer);
+            });
+
+            downloadUrl = uploadResult.secure_url;
+          } else {
+            const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
+            const fs = require('fs');
+            const path = require('path');
+            const pdfDir = isProd
+              ? path.join('/tmp', 'idexo', String(pressId), 'pdfs')
+              : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
+            fs.mkdirSync(pdfDir, { recursive: true });
+
+            const filePath = path.join(pdfDir, fileName);
+            fs.writeFileSync(filePath, pdfBuffer);
+
+            downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
+          }
+        }
+
         // Success Flow
         await tx.pdfJob.update({
           where: { id: job.id },
@@ -45,6 +94,7 @@ export async function POST(request: Request) {
             progress: 100,
             creditsLocked: 0, // Unlock credits as they are successfully used
             completedAt: new Date(),
+            downloadUrl: downloadUrl || undefined,
           },
         });
 

@@ -46,6 +46,12 @@ export default function CardPreview({
   className = '',
   style = {},
 }: CardPreviewProps) {
+  const [isElectron, setIsElectron] = useState(true);
+
+  useEffect(() => {
+    setIsElectron(typeof window !== 'undefined' && !!(window as any).electronAPI);
+  }, []);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +81,7 @@ export default function CardPreview({
       })();
 
   useEffect(() => {
+    if (!isElectron) return;
     let isMounted = true;
 
     async function draw() {
@@ -107,7 +114,33 @@ export default function CardPreview({
     return () => {
       isMounted = false;
     };
-  }, [template, cardholder, side, pressFonts, validTill]);
+  }, [template, cardholder, side, pressFonts, validTill, isElectron]);
+
+  if (!isElectron) {
+    return (
+      <div 
+        className={`relative flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 p-6 rounded-lg text-center bg-muted/20 ${className}`} 
+        style={{ 
+          width: `${template.cardWidth}px`, 
+          height: `${template.cardHeight}px`, 
+          maxWidth: '100%',
+          aspectRatio: `${template.cardWidth} / ${template.cardHeight}`,
+          maxHeight: '380px',
+          ...style 
+        }}
+      >
+        <div className="flex flex-col items-center justify-center gap-2 p-4">
+          <p className="text-sm font-semibold text-foreground/80">{side.toUpperCase()} SIDE PREVIEW</p>
+          <p className="text-xs text-muted-foreground leading-snug max-w-[200px]">
+            Real-time preview and graphics rendering is offloaded to the IDexo Desktop Client.
+          </p>
+          <div className="mt-2 text-xs px-2 py-1 bg-[#102650] text-white rounded font-medium shadow-sm">
+            Desktop Client Only
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Use CSS scale or sizing to make it fit nicely
   const displayStyle: React.CSSProperties = {

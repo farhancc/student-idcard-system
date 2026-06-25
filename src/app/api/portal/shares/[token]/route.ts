@@ -84,12 +84,32 @@ export async function GET(
       },
     });
 
+    // Fetch latest approval job
+    const latestApprovalJob = await prisma.pdfJob.findFirst({
+      where: {
+        order: {
+          clientId: share.clientId,
+          templateId: share.templateId,
+        },
+        pdfType: 'APPROVAL',
+        status: 'COMPLETED',
+      },
+      orderBy: { id: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        progress: true,
+        downloadUrl: true,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       type,
       client,
       template,
       departmentName,
+      latestApprovalJob,
       share: {
         id: share.id,
         enrollToken: enrollToken || share.enrollToken,

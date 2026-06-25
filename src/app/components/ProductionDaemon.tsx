@@ -88,12 +88,12 @@ export default function ProductionDaemon() {
     }
   };
 
-  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string) => {
+  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string) => {
     try {
       const res = await fetch('/api/jobs/production-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, success, errorMsg }),
+        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64 }),
         credentials: 'same-origin'
       });
       const result = await res.json();
@@ -222,13 +222,78 @@ export default function ProductionDaemon() {
 
     addLog(`Saved successfully to: ${saveResult.path}`);
     await updateProgress(job.id, 100, 'COMPLETED');
-    await reportJobComplete(job.id, true);
+    await reportJobComplete(job.id, true, undefined, base64Data);
+  };
+
+  const compileApprovalLocally = async (jobPayload: any) => {
+    const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
+    await updateProgress(job.id, 10, 'PROCESSING');
+    addLog(`Preparing Approval Proof Sheet PDF (#Job-${job.id})`);
+
+    const clientTemplate = {
+      cardWidth: template.width || 1011,
+      cardHeight: template.height || 638,
+      frontImageUrl: template.frontImageUrl,
+      backImageUrl: template.backImageUrl,
+      frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
+      backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+      validTill: template.validTillDate || null,
+    };
+
+    const clientCardholders = cardholders.map((ch: any) => ({
+      id: ch.id,
+      name: ch.name,
+      designation: ch.designation || null,
+      photoUrl: ch.photoUrl || null,
+      cardSerial: ch.cardSerial || null,
+      customFields: typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields || {},
+    }));
+
+    const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
+
+    const pdfBlob = await generateApprovalPdfClient(
+      order.clientName || 'Client',
+      order.clientName || 'Batch',
+      clientTemplate,
+      clientCardholders,
+      pressFonts
+    );
+
+    await updateProgress(job.id, 80);
+
+    const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+
+    addLog('Converting PDF buffer to base64...');
+    const base64Data = await new Promise<string>((resolve) => {
+      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(',')[1];
+        resolve(base64);
+      };
+      reader.readAsDataURL(blob);
+    });
+
+    addLog('Saving file using native bridge...');
+    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data);
+    if (!saveResult.success) {
+      throw new Error(saveResult.error || 'Failed to save file');
+    }
+
+    addLog(`Saved successfully to: ${saveResult.path}`);
+    await updateProgress(job.id, 100, 'COMPLETED');
+    await reportJobComplete(job.id, true, undefined, base64Data);
   };
 
   const processJob = async (jobPayload: any) => {
     const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
     if (job.pdfType === 'INVOICE') {
       await compileInvoiceLocally(jobPayload);
+      return;
+    }
+    if (job.pdfType === 'APPROVAL') {
+      await compileApprovalLocally(jobPayload);
       return;
     }
 
@@ -453,7 +518,7 @@ export default function ProductionDaemon() {
 
     addLog(`Saved successfully to: ${saveResult.path}`);
     await updateProgress(job.id, 100, 'COMPLETED');
-    await reportJobComplete(job.id, true);
+    await reportJobComplete(job.id, true, undefined, base64Data);
   };
 
   if (!isDesktop || !activeJob) return null;

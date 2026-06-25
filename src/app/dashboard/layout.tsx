@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import ProductionDaemon from '../components/ProductionDaemon';
+import dynamic from 'next/dynamic';
+const ProductionDaemon = dynamic(() => import('../components/ProductionDaemon'), { ssr: false });
 import { 
   LayoutDashboard, 
   Users, 

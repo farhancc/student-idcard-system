@@ -60,6 +60,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
   const [client, setClient] = useState<any>(null);
   const [template, setTemplate] = useState<any>(null);
   const [enrollToken, setEnrollToken] = useState('');
+  const [latestApprovalJob, setLatestApprovalJob] = useState<any>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [newDeptName, setNewDeptName] = useState('');
@@ -112,6 +113,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
       setClient(shareData.client);
       setTemplate(shareData.template);
       setEnrollToken(shareData.share.enrollToken);
+      setLatestApprovalJob(shareData.latestApprovalJob);
 
       // Parse fields
       const front = JSON.parse(shareData.template.frontFields || '[]');
@@ -177,46 +179,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const handleDownloadPDF = async () => {
-    if (cardholders.length === 0) return;
-    try {
-      setDownloadingPdf(true);
-      const cardholdersData = cardholders.map(ch => ({
-        id: ch.id,
-        name: ch.name,
-        designation: ch.designation || null,
-        photoUrl: ch.photoUrl || null,
-        cardSerial: ch.uniqueKey || null,
-        customFields: ch.customFields ? JSON.parse(ch.customFields) : {},
-      }));
-
-      const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
-      
-      const pdfBlob = await generateApprovalPdfClient(
-        client?.name || 'Client',
-        client?.name || 'Organisation',
-        template,
-        cardholdersData,
-        []
-      );
-
-      const downloadUrl = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `Approval_Proof_${(client?.name || 'Client').replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-    } catch (err: any) {
-      console.error('Failed to compile approval PDF client-side:', err);
-      alert(`Error generating PDF: ${err.message || err}`);
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
 
   // Copy department links helper
   const copyDeptLink = (token: string, type: 'dept' | 'enroll') => {
@@ -517,28 +480,37 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
               {copied ? <Check size={16} /> : <Copy size={16} />}
               Copy Global Staff Link
             </button>
-            <button 
-              onClick={handleDownloadPDF}
-              disabled={cardholders.length === 0 || downloadingPdf}
-              className="btn btn-primary" 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                opacity: (cardholders.length === 0 || downloadingPdf) ? 0.5 : 1,
-                cursor: (cardholders.length === 0 || downloadingPdf) ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {downloadingPdf ? (
-                <>
-                  <Loader size={16} className="animate-spin" /> Generating PDF...
-                </>
-              ) : (
-                <>
-                  <FileText size={16} /> Download Approval PDF
-                </>
-              )}
-            </button>
+            {latestApprovalJob && latestApprovalJob.downloadUrl ? (
+              <a
+                href={latestApprovalJob.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  textDecoration: 'none'
+                }}
+              >
+                <FileText size={16} /> Download Approval PDF
+              </a>
+            ) : (
+              <button
+                className="btn btn-primary"
+                disabled
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: 0.5,
+                  cursor: 'not-allowed'
+                }}
+                title="Approval PDF has not been compiled by the print provider yet."
+              >
+                <FileText size={16} /> Approval PDF Not Ready
+              </button>
+            )}
           </div>
         </div>
 

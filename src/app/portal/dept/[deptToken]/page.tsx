@@ -64,48 +64,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
     }
   };
 
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  const handleDownloadPDF = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      setDownloadingPdf(true);
-      const selectedChs = cardholders.filter(ch => selectedIds.includes(ch.id));
-      
-      const cardholdersData = selectedChs.map(ch => ({
-        id: ch.id,
-        name: ch.name,
-        designation: ch.designation || null,
-        photoUrl: ch.photoUrl || null,
-        cardSerial: ch.uniqueKey || null,
-        customFields: ch.customFields ? JSON.parse(ch.customFields) : {},
-      }));
-
-      const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
-      
-      const pdfBlob = await generateApprovalPdfClient(
-        client?.name || 'Client',
-        client?.name || 'Department',
-        template,
-        cardholdersData,
-        []
-      );
-
-      const downloadUrl = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `Approval_Proof_${(client?.name || 'Client').replace(/\s+/g, '_')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(downloadUrl);
-    } catch (err: any) {
-      console.error('Failed to compile approval PDF client-side:', err);
-      alert(`Error generating PDF: ${err.message || err}`);
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
 
   const handleDownloadExcel = () => {
     if (selectedIds.length === 0) return;
@@ -124,6 +83,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
   const [client, setClient] = useState<any>(null);
   const [template, setTemplate] = useState<any>(null);
   const [enrollToken, setEnrollToken] = useState('');
+  const [latestApprovalJob, setLatestApprovalJob] = useState<any>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [formFields, setFormFields] = useState<string[]>([]);
@@ -169,6 +129,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
       setClient(shareData.client);
       setTemplate(shareData.template);
       setEnrollToken(shareData.share.enrollToken);
+      setLatestApprovalJob(shareData.latestApprovalJob);
 
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
@@ -491,28 +452,37 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
             >
               <Download size={16} /> Export Excel
             </button>
-            <button
-              className="btn btn-primary"
-              onClick={handleDownloadPDF}
-              disabled={selectedIds.length === 0 || downloadingPdf}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                opacity: (selectedIds.length === 0 || downloadingPdf) ? 0.5 : 1,
-                cursor: (selectedIds.length === 0 || downloadingPdf) ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {downloadingPdf ? (
-                <>
-                  <Loader size={16} className="animate-spin" /> Generating PDF...
-                </>
-              ) : (
-                <>
-                  <FileText size={16} /> Download Approval PDF
-                </>
-              )}
-            </button>
+            {latestApprovalJob && latestApprovalJob.downloadUrl ? (
+              <a
+                href={latestApprovalJob.downloadUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  textDecoration: 'none'
+                }}
+              >
+                <FileText size={16} /> Download Approval PDF
+              </a>
+            ) : (
+              <button
+                className="btn btn-primary"
+                disabled
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  opacity: 0.5,
+                  cursor: 'not-allowed'
+                }}
+                title="Approval PDF has not been compiled by the print provider yet."
+              >
+                <FileText size={16} /> Approval PDF Not Ready
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} /> Add Cardholder
             </button>

@@ -46,6 +46,11 @@ interface FieldCoordinate {
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isElectron, setIsElectron] = useState(true);
+
+  useEffect(() => {
+    setIsElectron(typeof window !== 'undefined' && !!(window as any).electronAPI);
+  }, []);
 
   // Form toggling
   const [showForm, setShowForm] = useState(false);
@@ -514,22 +519,28 @@ export default function TemplatesPage() {
           <h1>Card Templates</h1>
           <p style={{ marginTop: '4px' }}>Upload design layouts and configure placement coordinate fields.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => {
-          if (showForm) {
-            setEditingTemplateId(null);
-            setName('');
-            setCardWidth(1011);
-            setCardHeight(638);
-            setFrontImageUrl('');
-            setBackImageUrl('');
-            setFrontFields([]);
-            setBackFields([]);
-            setTestData({});
-          }
-          setShowForm(!showForm);
-        }}>
-          <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
-        </button>
+        {isElectron ? (
+          <button className="btn btn-primary" onClick={() => {
+            if (showForm) {
+              setEditingTemplateId(null);
+              setName('');
+              setCardWidth(1011);
+              setCardHeight(638);
+              setFrontImageUrl('');
+              setBackImageUrl('');
+              setFrontFields([]);
+              setBackFields([]);
+              setTestData({});
+            }
+            setShowForm(!showForm);
+          }}>
+            <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
+          </button>
+        ) : (
+          <div style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', color: '#a0aec0', border: '1px solid rgba(255,255,255,0.08)' }}>
+            ℹ️ Design functions only available in Desktop App
+          </div>
+        )}
       </div>
 
       {showForm && (
@@ -1452,20 +1463,24 @@ export default function TemplatesPage() {
                   <h3 style={{ fontSize: '1.1rem', margin: 0 }}>{tmpl.name}</h3>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <span className="badge badge-primary">v{tmpl.version}</span>
-                    <button 
-                      className="btn btn-secondary" 
-                      style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                      onClick={() => handleEditClick(tmpl)}
-                    >
-                      Edit
-                    </button>
-                    <button 
-                      className="btn btn-danger" 
-                      style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                      onClick={() => handleDeleteTemplate(tmpl.id)}
-                    >
-                      Delete
-                    </button>
+                    {isElectron && (
+                      <>
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                          onClick={() => handleEditClick(tmpl)}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          className="btn btn-danger" 
+                          style={{ padding: '4px 8px', fontSize: '0.7rem' }}
+                          onClick={() => handleDeleteTemplate(tmpl.id)}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 
