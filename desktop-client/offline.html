@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connection Error - IDexo Press Client</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #102650;
+      --card-bg: rgba(255, 255, 255, 0.07);
+      --border-color: rgba(255, 255, 255, 0.12);
+      --text-main: #ffffff;
+      --text-muted: #cbd5e1;
+      --accent-color: #ffffff;
+      --accent-hover: #f8fafc;
+      --danger-color: #ef4444;
+      --warning-color: #f59e0b;
+      --success-color: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease;
+    }
+
+    .card.shake {
+      animation: shake 0.5s ease-in-out;
+    }
+
+    .status-icon-container {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 28px;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .pulse-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.1);
+      animation: pulse 2s infinite;
+      z-index: 0;
+    }
+
+    .pulse-ring.warning {
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .pulse-ring.checking {
+      background: rgba(59, 130, 246, 0.1);
+      animation: pulse 1.2s infinite;
+    }
+
+    .icon-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      transition: all 0.3s ease;
+    }
+
+    .icon-offline {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--danger-color);
+    }
+
+    .icon-server-down {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--warning-color);
+    }
+
+    .icon-checking {
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--accent-color);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+
+    p.description {
+      font-size: 15px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 24px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .status-dot.danger { background-color: var(--danger-color); }
+    .status-dot.warning { background-color: var(--warning-color); }
+    .status-dot.checking {
+      background-color: var(--accent-color);
+      animation: blink 1s infinite alternate;
+    }
+
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: none;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      color: #102650;
+      box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:active {
+      transform: translateY(1px);
+    }
+
+    .btn-primary:disabled {
+      background-color: rgba(59, 130, 246, 0.5);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background-color: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .auto-retry {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 18px;
+    }
+
+    /* Spinner animation */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.95);
+        opacity: 0.8;
+      }
+      50% {
+        transform: scale(1.15);
+        opacity: 0.3;
+      }
+      100% {
+        transform: scale(1.3);
+        opacity: 0;
+      }
+    }
+
+    @keyframes blink {
+      from { opacity: 0.3; }
+      to { opacity: 1; }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+      20%, 40%, 60%, 80% { transform: translateX(6px); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="card" id="card">
+      
+      <div class="status-icon-container">
+        <div class="pulse-ring" id="pulseRing"></div>
+        <div class="icon-wrapper" id="iconWrapper">
+          <!-- SVG icons loaded dynamically -->
+          <span id="statusIcon">⚡</span>
+        </div>
+      </div>
+
+      <h1 id="title">Unable to Connect</h1>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusBadgeText">Checking network...</span>
+      </div>
+
+      <p class="description" id="description">
+        We are preparing to check your connection to the central printing server.
+      </p>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="retryBtn" onclick="checkConnection()">
+          <span>Try Reconnecting</span>
+        </button>
+      </div>
+
+      <div class="auto-retry" id="autoRetry">
+        Auto-retrying in <span id="timer">10</span>s...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Icons in SVG
+    const icons = {
+      wifiOff: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.83-2.84M7.36 7.36A15 15 0 0 1 12 6c3.27 0 6.27 1.05 8.72 2.8M10.88 5.4A19.82 19.82 0 0 1 12 5c6.08 0 11.3 3.47 13.9 8.6M10.22 15.65a4.7 4.7 0 0 1 3.56 0M12 18.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>`,
+      server: `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>`,
+      loader: `<svg class="spinner" viewBox="0 0 24 24"></svg>`
+    };
+
+    let portalUrl = 'http://localhost:3000';
+    let countdown = 10;
+    let countdownInterval;
+    let isChecking = false;
+
+    // Load initial portal url from main process if available
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (window.electronAPI && typeof window.electronAPI.getPortalUrl === 'function') {
+        try {
+          portalUrl = await window.electronAPI.getPortalUrl();
+        } catch (e) {
+          console.error("Failed to get portal URL:", e);
+        }
+      }
+      updateStatus();
+      startCountdown();
+    });
+
+    function updateStatus() {
+      const card = document.getElementById('card');
+      const pulseRing = document.getElementById('pulseRing');
+      const iconWrapper = document.getElementById('iconWrapper');
+      const statusIcon = document.getElementById('statusIcon');
+      const title = document.getElementById('title');
+      const statusDot = document.getElementById('statusDot');
+      const statusBadgeText = document.getElementById('statusBadgeText');
+      const description = document.getElementById('description');
+
+      // Check internet connectivity
+      if (!navigator.onLine) {
+        // Network Offline
+        pulseRing.className = 'pulse-ring danger';
+        iconWrapper.className = 'icon-wrapper icon-offline';
+        statusIcon.innerHTML = icons.wifiOff;
+        title.innerText = 'No Internet Connection';
+        
+        statusDot.className = 'status-dot danger';
+        statusBadgeText.innerText = 'Offline';
+        description.innerText = 'Your computer is not connected to the internet. Please check your Wi-Fi, Ethernet cables, or router and try again.';
+      } else {
+        // Internet is up, but server is down
+        pulseRing.className = 'pulse-ring warning';
+        iconWrapper.className = 'icon-wrapper icon-server-down';
+        statusIcon.innerHTML = icons.server;
+        title.innerText = 'Server Connection Failed';
+        
+        statusDot.className = 'status-dot warning';
+        statusBadgeText.innerText = 'Server Down';
+        description.innerText = `Connected to the internet, but the central printing server at ${new URL(portalUrl).hostname} is currently unreachable. The server may be restarting or offline for maintenance.`;
+      }
+    }
+
+    async function checkConnection() {
+      if (isChecking) return;
+      isChecking = true;
+      clearInterval(countdownInterval);
+
+      const retryBtn = document.getElementById('retryBtn');
+      const autoRetry = document.getElementById('autoRetry');
+      const pulseRing = document.getElementById('pulseRing');
+      const iconWrapper = document.getElementById('iconWrapper');
+      const statusIcon = document.getElementById('statusIcon');
+      const statusDot = document.getElementById('statusDot');
+      const statusBadgeText = document.getElementById('statusBadgeText');
+      const title = document.getElementById('title');
+      
+      // Update UI for loading state
+      retryBtn.disabled = true;
+      retryBtn.innerHTML = `<div class="spinner"></div><span>Connecting...</span>`;
+      autoRetry.style.visibility = 'hidden';
+
+      pulseRing.className = 'pulse-ring checking';
+      iconWrapper.className = 'icon-wrapper icon-checking';
+      statusDot.className = 'status-dot checking';
+      statusBadgeText.innerText = 'Verifying...';
+      title.innerText = 'Reconnecting...';
+
+      // Small delay for UI smoothness
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      if (!navigator.onLine) {
+        handleFail();
+        return;
+      }
+
+      try {
+        // Attempt to fetch index or some health path to ensure server is alive
+        // Use no-cache and short timeout to prevent hanging
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+        const response = await fetch(`${portalUrl}/api/health`, {
+          method: 'GET',
+          cache: 'no-store',
+          signal: controller.signal,
+          mode: 'no-cors' // Use no-cors in case CORS is restricted on /api/health
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Success! Reload app in Electron
+        if (window.electronAPI && typeof window.electronAPI.reloadApp === 'function') {
+          window.electronAPI.reloadApp();
+        } else {
+          // Fallback if running in normal browser
+          window.location.href = portalUrl;
+        }
+      } catch (error) {
+        console.warn("Ping failed:", error);
+        handleFail();
+      }
+    }
+
+    function handleFail() {
+      isChecking = false;
+      
+      // Shake animation
+      const card = document.getElementById('card');
+      card.classList.add('shake');
+      setTimeout(() => card.classList.remove('shake'), 500);
+
+      // Restore button
+      const retryBtn = document.getElementById('retryBtn');
+      retryBtn.disabled = false;
+      retryBtn.innerHTML = `<span>Try Reconnecting</span>`;
+
+      const autoRetry = document.getElementById('autoRetry');
+      autoRetry.style.visibility = 'visible';
+
+      updateStatus();
+      startCountdown();
+    }
+
+    function startCountdown() {
+      countdown = 10;
+      document.getElementById('timer').innerText = countdown;
+      
+      clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        countdown--;
+        document.getElementById('timer').innerText = countdown;
+        if (countdown <= 0) {
+          clearInterval(countdownInterval);
+          checkConnection();
+        }
+      }, 1000);
+    }
+
+    // Monitor browser online status change
+    window.addEventListener('online', () => {
+      updateStatus();
+      checkConnection(); // Automatically retry if network status changes to online
+    });
+    
+    window.addEventListener('offline', () => {
+      updateStatus();
+    });
+  </script>
+</body>
+</html>

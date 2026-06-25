@@ -1,0 +1,413 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ── TENANTS (PRESSES) ────────────────────────────────────
+
+model Press {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  phone     String?
+  city      String?
+  plan      String   @default("BASIC") // BASIC | PRO | ENTERPRISE
+  isActive         Boolean   @default(true)
+  credits          Int       @default(0)
+  trialEndsAt      DateTime? @map("trial_ends_at")
+  stripeCustomerId String?   @map("stripe_customer_id")
+  stripeSubId      String?   @map("stripe_sub_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  users      PressUser[]
+  clients    Client[]
+  templates  CardTemplate[]
+  orders     CardOrder[]
+  invoices   OrderInvoice[]
+  apiKeys    PressApiKey[]
+  fonts      PressFont[]
+  vendors    PrintVendor[]
+  downloads  PdfDownloadLog[]
+  printRecs  CardPrintRecord[]
+  jobs       PdfJob[]
+  activities OrderActivityLog[]
+
+  @@map("press")
+}
+
+model PressUser {
+  id           Int      @id @default(autoincrement())
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   // OWNER | OPERATOR | DESIGNER
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("press_users")
+}
+
+// ── CLIENTS ───────────────────────────────────────────────
+
+model Client {
+  id           Int      @id @default(autoincrement())
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  name         String
+  type         String   // SCHOOL | COMPANY | NGO | GOVERNMENT | OTHER
+  contactName  String?  @map("contact_name")
+  contactPhone String?  @map("contact_phone")
+  contactEmail String?  @map("contact_email")
+  address      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  cardholders  Cardholder[]
+  orders       CardOrder[]
+  serialCtrs   CardSerialCounter[]
+
+  @@map("clients")
+}
+
+// ── CARDHOLDERS ───────────────────────────────────────────
+
+model Cardholder {
+  id           Int      @id @default(autoincrement())
+  pressId      Int      @map("press_id")
+  clientId     Int      @map("client_id")
+  client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name         String
+  designation  String?
+  photoUrl     String?  @map("photo_url")
+  customFields String?  @map("custom_fields") // JSON: { grade, bloodGroup, empId, ... }
+  uniqueKey    String?  @map("unique_key")    // For duplicate detection (empId, rollNumber, etc.)
+  cardSerial   String?  @map("card_serial")
+  active       Boolean  @default(true)
+  enrollToken  String?  @map("enroll_token")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  cardAsset    CardAsset?
+  printRecords CardPrintRecord[]
+
+  @@unique([clientId, uniqueKey])
+  @@index([pressId])
+  @@index([enrollToken])
+  @@map("cardholders")
+}
+
+// ── CARD TEMPLATES ────────────────────────────────────────
+
+model CardTemplate {
+  id            Int      @id @default(autoincrement())
+  pressId       Int      @map("press_id")
+  press         Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  clientId      Int?     @map("client_id") // Optional link to specific client
+  name          String
+  cardWidth     Int      @default(1011) @map("card_width") // pixels at 300 DPI (85.6mm)
+  cardHeight    Int      @default(638) @map("card_height") // pixels at 300 DPI (54mm)
+  frontImageUrl String   @map("front_image_url")
+  backImageUrl  String?  @map("back_image_url") // null = blank white back
+  frontFields   String   @map("front_fields") // JSON coordinate map
+  backFields    String   @default("[]") @map("back_fields") // JSON coordinate map
+  version       Int      @default(1)
+  parentId      Int?     @map("parent_id") // Reference to parent template version
+  isLatest      Boolean  @default(true) @map("is_latest")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  orders        CardOrder[]
+
+  @@map("card_templates")
+}
+
+// ── CARD ORDERS ───────────────────────────────────────────
+
+model CardOrder {
+  id              Int      @id @default(autoincrement())
+  pressId         Int      @map("press_id")
+  press           Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  clientId        Int      @map("client_id")
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  templateId      Int      @map("template_id")
+  template        CardTemplate @relation(fields: [templateId], references: [id])
+  status          String   @default("DRAFT") // DRAFT | APPROVAL_PDF_GENERATED | APPROVAL_PDF_SENT | APPROVED | PRINTING | DELIVERED
+  notes           String?
+  cardholderIds   String   @map("cardholder_ids") // JSON array: [1, 2, 3...]
+  validTill       DateTime? @map("valid_till")
+  templateVersion Int      @default(1) @map("template_version")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  invoice         OrderInvoice?
+  deliveryRecord  DeliveryRecord?
+  pdfJobs         PdfJob[]
+  notesHistory    OrderNote[]
+  activities      OrderActivityLog[]
+  printRecs       CardPrintRecord[]
+
+  @@index([pressId, clientId])
+  @@map("card_orders")
+}
+
+// ── CARD ASSET CACHE ──────────────────────────────────────
+
+model CardAsset {
+  id           Int      @id @default(autoincrement())
+  cardholderId Int      @unique @map("cardholder_id")
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  pressId      Int      @map("press_id")
+  templateId   Int      @map("template_id")
+  frontUrl     String   @map("front_url")
+  backUrl      String   @map("back_url") // Renders blank white if template has no back image
+  templateHash String   @map("template_hash") // MD5 to check if stale
+  isStale      Boolean  @default(false) @map("is_stale")
+  generatedAt  DateTime @default(now()) @map("generated_at")
+
+  @@map("card_assets")
+}
+
+// ── PDF JOBS (QUEUE) ──────────────────────────────────────
+
+model PdfJob {
+  id             Int      @id @default(autoincrement())
+  pressId        Int      @map("press_id")
+  press          Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  orderId        Int      @map("order_id")
+  order          CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pdfType        String   @map("pdf_type") // PRODUCTION | APPROVAL | INDIVIDUAL
+  status         String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  fileName       String   @map("file_name")
+  downloadUrl    String?  @map("download_url")
+  generatedBy    Int      @map("generated_by") // PressUser id
+  progress       Int      @default(0)
+  isLocalJob     Boolean  @default(false) @map("is_local_job")
+  creditsLocked  Int      @default(0) @map("credits_locked")
+  errorMsg       String?  @map("error_msg")
+  metadata       String?  // JSON: { paperSize, bleed, ... }
+  urlExpiresAt   DateTime? @map("url_expires_at")
+  version        Int      @default(1)
+  label          String?
+  vendorId       Int?     @map("vendor_id")
+  sentToVendorAt DateTime? @map("sent_to_vendor_at")
+  expiresAt      DateTime? @map("expires_at")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  completedAt    DateTime? @map("completed_at")
+
+  downloads      PdfDownloadLog[]
+
+  @@index([pressId, status])
+  @@index([isLocalJob])
+  @@map("pdf_jobs")
+}
+
+// ── INVOICING ─────────────────────────────────────────────
+
+model OrderInvoice {
+  id            Int      @id @default(autoincrement())
+  orderId       Int      @unique @map("order_id")
+  order         CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pressId       Int      @map("press_id")
+  press         Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  pricePerCard  Decimal  @db.Decimal(10, 2) @map("price_per_card")
+  cardCount     Int      @map("card_count")
+  subtotal      Decimal  @db.Decimal(10, 2)
+  taxPercent    Decimal  @default(0) @db.Decimal(5, 2) @map("tax_percent")
+  taxAmount     Decimal  @default(0) @db.Decimal(10, 2) @map("tax_amount")
+  totalAmount   Decimal  @db.Decimal(10, 2) @map("total_amount")
+  paymentStatus String   @default("UNPAID") @map("payment_status") // UNPAID | PARTIAL | PAID
+  paymentMethod String?  @map("payment_method") // CASH | UPI | BANK_TRANSFER | CHEQUE
+  paidAmount    Decimal  @default(0) @db.Decimal(10, 2) @map("paid_amount")
+  paidAt        DateTime? @map("paid_at")
+  invoicePdfUrl String?  @map("invoice_pdf_url")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("order_invoices")
+}
+
+// ── SERIAL COUNTER ────────────────────────────────────────
+
+model CardSerialCounter {
+  id       Int    @id @default(autoincrement())
+  pressId  Int    @map("press_id")
+  clientId Int    @map("client_id")
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  prefix   String
+  lastSeq  Int    @default(0) @map("last_seq")
+  padLen   Int    @default(4) @map("pad_len")
+
+  @@unique([pressId, clientId, prefix])
+  @@map("card_serial_counters")
+}
+
+// ── PRINT LIFECYCLE ───────────────────────────────────────
+
+model CardPrintRecord {
+  id           Int      @id @default(autoincrement())
+  cardholderId Int      @map("cardholder_id")
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  orderId      Int      @map("order_id")
+  order        CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status       String   // NOT_PRINTED | PRINTED | DISPATCHED | DELIVERED | LOST | REPRINTED
+  printedAt    DateTime? @map("printed_at")
+  deliveredAt  DateTime? @map("delivered_at")
+  remarks      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("card_print_records")
+}
+
+// ── DOWNLOAD LOGS ─────────────────────────────────────────
+
+model PdfDownloadLog {
+  id           Int      @id @default(autoincrement())
+  pdfJobId     Int      @map("pdf_job_id")
+  job          PdfJob   @relation(fields: [pdfJobId], references: [id], onDelete: Cascade)
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  downloadedBy Int      @map("downloaded_by") // PressUser id
+  downloadedAt DateTime @default(now()) @map("downloaded_at")
+  ipAddress    String?  @map("ip_address")
+
+  @@map("pdf_download_logs")
+}
+
+// ── AUDIT LOGS ────────────────────────────────────────────
+
+model OrderActivityLog {
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @map("order_id")
+  order      CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pressId    Int      @map("press_id")
+  press      Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  actorId    Int      @map("actor_id") // PressUser id
+  actorName  String   @map("actor_name")
+  action     String   // STATUS_CHANGED | NOTE_ADDED | PDF_GENERATED | CARDHOLDER_ADDED | ...
+  fromStatus String?  @map("from_status")
+  toStatus   String?  @map("to_status")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("order_activity_logs")
+}
+
+// ── FONTS ─────────────────────────────────────────────────
+
+model PressFont {
+  id       Int    @id @default(autoincrement())
+  pressId  Int    @map("press_id")
+  press    Press  @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  name     String
+  fileUrl  String @map("file_url")
+  language String // "hi" | "ta" | "ar" | "ur" | "en"
+
+  @@map("press_fonts")
+}
+
+// ── INTERNAL NOTES ────────────────────────────────────────
+
+model OrderNote {
+  id         Int      @id @default(autoincrement())
+  orderId    Int      @map("order_id")
+  order      CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pressId    Int      @map("press_id")
+  authorId   Int      @map("author_id") // PressUser id
+  authorName String   @map("author_name")
+  content    String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("order_notes")
+}
+
+// ── DELIVERY ──────────────────────────────────────────────
+
+model DeliveryRecord {
+  id           Int      @id @default(autoincrement())
+  orderId      Int      @unique @map("order_id")
+  order        CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  pressId      Int      @map("press_id")
+  deliveredTo  String   @map("delivered_to")
+  deliveredAt  DateTime @map("delivered_at")
+  deliveredBy  String   @map("delivered_by") // Staff name
+  cardCount    Int      @map("card_count")
+  remarks      String?
+  signatureUrl String?  @map("signature_url")
+
+  @@map("delivery_records")
+}
+
+// ── API KEYS ──────────────────────────────────────────────
+
+model PressApiKey {
+  id        Int      @id @default(autoincrement())
+  pressId   Int      @map("press_id")
+  press     Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  keyHash   String   @unique @map("key_hash")
+  label     String
+  lastUsed  DateTime? @map("last_used")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("press_api_keys")
+}
+
+// ── VENDORS ───────────────────────────────────────────────
+
+model PrintVendor {
+  id      Int     @id @default(autoincrement())
+  pressId Int     @map("press_id")
+  press   Press   @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  name    String
+  phone   String?
+  email   String?
+  city    String?
+  notes   String?
+
+  @@map("print_vendors")
+}
+
+// ── SUPER ADMINS ──────────────────────────────────────────
+
+model SuperAdmin {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("super_admins")
+}
+
+// ── CLIENT PORTAL SHARES ──────────────────────────────────
+
+model ClientPortalShare {
+  id          Int          @id @default(autoincrement())
+  pressId     Int          @map("press_id")
+  clientId    Int          @map("client_id")
+  templateId  Int          @map("template_id")
+  orgToken    String       @unique @map("org_token")
+  enrollToken String       @unique @map("enroll_token")
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  departments ClientDepartment[]
+
+  @@map("client_portal_shares")
+}
+
+model ClientDepartment {
+  id            Int               @id @default(autoincrement())
+  portalShareId Int               @map("portal_share_id")
+  portalShare   ClientPortalShare @relation(fields: [portalShareId], references: [id], onDelete: Cascade)
+  name          String
+  deptToken     String            @unique @map("dept_token")
+  enrollToken   String            @unique @map("enroll_token")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@map("client_departments")
+}
