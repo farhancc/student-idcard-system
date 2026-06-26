@@ -114,6 +114,7 @@ export async function GET(
         id: share.id,
         enrollToken: enrollToken || share.enrollToken,
         orgToken: share.orgToken,
+        showPreview: share.showPreview,
         createdAt: share.createdAt,
       },
     });
@@ -147,6 +148,40 @@ export async function DELETE(
     return NextResponse.json({ success: true, message: 'Portal link deactivated successfully' });
   } catch (error) {
     console.error('Deactivate portal share error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const { token } = await params;
+
+    const share = await prisma.clientPortalShare.findFirst({
+      where: { orgToken: token },
+    });
+
+    if (!share) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { showPreview } = body;
+
+    if (typeof showPreview !== 'boolean') {
+      return NextResponse.json({ error: 'showPreview must be a boolean' }, { status: 400 });
+    }
+
+    const updated = await prisma.clientPortalShare.update({
+      where: { id: share.id },
+      data: { showPreview },
+    });
+
+    return NextResponse.json({ success: true, showPreview: updated.showPreview });
+  } catch (error) {
+    console.error('Update portal share settings error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

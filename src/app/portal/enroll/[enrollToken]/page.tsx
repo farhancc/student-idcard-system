@@ -49,6 +49,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   // Preview side state (kept for future use)
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
   const [hasBackFields, setHasBackFields] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     const fetchPortalInfo = async () => {
@@ -61,6 +62,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setClient(data.client);
         setTemplate(data.template);
         setDepartmentName(data.departmentName || null);
+        setShowPreview(data.share?.showPreview ?? false);
 
         // Parse fields
         const front = JSON.parse(data.template.frontFields || '[]');
@@ -335,6 +337,62 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           )}
           <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Fill in details to generate your ID Card</p>
         </div>
+
+        {/* Card Template Preview */}
+        {showPreview && template && (
+          <div style={{
+            marginBottom: '28px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '10px',
+          }}>
+            <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
+              Sample Card Template Preview
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+            }}>
+              {/* Front side */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                <img
+                  src={template.frontImageUrl}
+                  alt="Card Front"
+                  style={{
+                    width: '220px',
+                    height: 'auto',
+                    borderRadius: '8px',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+                    objectFit: 'contain',
+                  }}
+                />
+                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Front</span>
+              </div>
+              {/* Back side (if template has back image) */}
+              {template.backImageUrl && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <img
+                    src={template.backImageUrl}
+                    alt="Card Back"
+                    style={{
+                      width: '220px',
+                      height: 'auto',
+                      borderRadius: '8px',
+                      border: '1px solid var(--glass-border)',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+                      objectFit: 'contain',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Back</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="alert alert-danger" style={{ marginBottom: '24px', display: 'flex', gap: '8px', alignItems: 'center' }}>

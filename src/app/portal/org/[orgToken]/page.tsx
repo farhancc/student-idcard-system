@@ -56,6 +56,8 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [copiedDeptToken, setCopiedDeptToken] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [togglingPreview, setTogglingPreview] = useState(false);
 
   const [client, setClient] = useState<any>(null);
   const [template, setTemplate] = useState<any>(null);
@@ -113,6 +115,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
       setClient(shareData.client);
       setTemplate(shareData.template);
       setEnrollToken(shareData.share.enrollToken);
+      setShowPreview(shareData.share.showPreview ?? false);
       setLatestApprovalJob(shareData.latestApprovalJob);
 
       // Parse fields
@@ -177,6 +180,25 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const togglePreview = async () => {
+    setTogglingPreview(true);
+    try {
+      const res = await fetch(`/api/portal/shares/${orgToken}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ showPreview: !showPreview }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShowPreview(data.showPreview);
+      }
+    } catch (err) {
+      console.error('Failed to toggle preview:', err);
+    } finally {
+      setTogglingPreview(false);
+    }
   };
 
 
@@ -568,14 +590,41 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
                   You can register cardholders manually or generate department links so department managers can handle registration.
                 </p>
               </div>
-              <a 
-                href={`/portal/enroll/${enrollToken}`} 
-                target="_blank" 
-                rel="noreferrer" 
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}
-              >
-                Open Global Enrollment Form <ExternalLink size={14} />
-              </a>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {/* Card Preview Toggle */}
+                <button
+                  type="button"
+                  onClick={togglePreview}
+                  disabled={togglingPreview}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 14px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    border: showPreview ? '1px solid rgba(16,185,129,0.7)' : '1px solid var(--glass-border)',
+                    background: showPreview ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.05)',
+                    color: showPreview ? '#10b981' : 'var(--muted)',
+                    cursor: togglingPreview ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    opacity: togglingPreview ? 0.6 : 1,
+                  }}
+                  title={showPreview ? 'Click to hide card preview on enrollment form' : 'Click to show card preview on enrollment form'}
+                >
+                  <Eye size={14} />
+                  {showPreview ? 'Preview: ON' : 'Preview: OFF'}
+                </button>
+                <a 
+                  href={`/portal/enroll/${enrollToken}`} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}
+                >
+                  Open Global Enrollment Form <ExternalLink size={14} />
+                </a>
+              </div>
             </div>
 
             {/* Toolbar & Search */}

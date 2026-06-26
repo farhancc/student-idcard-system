@@ -409,6 +409,7 @@ model ClientPortalShare {
   orgToken    String       @unique @map("org_token")
   enrollToken String       @unique @map("enroll_token")
   active      Boolean      @default(true)
+  showPreview Boolean      @default(false) @map("show_preview")
   createdAt   DateTime     @default(now()) @map("created_at")
 
   departments ClientDepartment[]

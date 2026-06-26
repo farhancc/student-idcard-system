@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -79,6 +79,10 @@ export default function TemplatesPage() {
   const [error, setError] = useState('');
   const [uploadingFront, setUploadingFront] = useState(false);
   const [uploadingBack, setUploadingBack] = useState(false);
+
+  // Grid overlay state
+  const [showGrid, setShowGrid] = useState(false);
+  const [gridSize, setGridSize] = useState(20);
 
   // Preview State
   const [previewId, setPreviewId] = useState<number | null>(null);
@@ -777,28 +781,70 @@ export default function TemplatesPage() {
                     <Sliders size={18} color="var(--primary)" />
                     Visual Interactive Designer
                   </h4>
-                  <label style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px', 
-                    fontSize: '0.8rem', 
-                    cursor: 'pointer', 
-                    background: showTestData ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)', 
-                    padding: '6px 12px', 
-                    borderRadius: '8px', 
-                    border: showTestData ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                    transition: 'all 0.2s',
-                    userSelect: 'none',
-                    fontWeight: 500,
-                  }}>
-                    <input 
-                      type="checkbox" 
-                      checked={showTestData} 
-                      onChange={e => setShowTestData(e.target.checked)} 
-                      style={{ cursor: 'pointer', margin: 0 }}
-                    />
-                    <span>Preview Test Data</span>
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Grid Toggle */}
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      cursor: 'pointer', 
+                      background: showGrid ? 'rgba(20, 184, 166, 0.15)' : 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: showGrid ? '1px solid rgba(20,184,166,0.7)' : '1px solid var(--glass-border)',
+                      transition: 'all 0.2s',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={showGrid} 
+                        onChange={e => setShowGrid(e.target.checked)} 
+                        style={{ cursor: 'pointer', margin: 0 }}
+                      />
+                      <Grid3x3 size={13} />
+                      <span>Grid</span>
+                    </label>
+                    {/* Grid Size Selector — only visible when grid is on */}
+                    {showGrid && (
+                      <select
+                        value={gridSize}
+                        onChange={e => setGridSize(Number(e.target.value))}
+                        className="form-input"
+                        style={{ padding: '5px 8px', fontSize: '0.75rem', width: 'auto', minWidth: '90px' }}
+                        title="Grid cell size (pixels in canvas space)"
+                      >
+                        <option value={10}>10 px fine</option>
+                        <option value={20}>20 px medium</option>
+                        <option value={50}>50 px coarse</option>
+                        <option value={100}>100 px macro</option>
+                      </select>
+                    )}
+                    {/* Test Data Toggle */}
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      cursor: 'pointer', 
+                      background: showTestData ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: showTestData ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                      transition: 'all 0.2s',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }}>
+                      <input 
+                        type="checkbox" 
+                        checked={showTestData} 
+                        onChange={e => setShowTestData(e.target.checked)} 
+                        style={{ cursor: 'pointer', margin: 0 }}
+                      />
+                      <span>Preview Test Data</span>
+                    </label>
+                  </div>
                 </div>
 
                 {showTestData && (
@@ -902,6 +948,75 @@ export default function TemplatesPage() {
                               boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
                             }}
                           >
+                            {/* Grid Overlay */}
+                            {showGrid && (() => {
+                              const scaledStep = gridSize * scale;
+                              const cols = Math.floor(editorWidth / scaledStep);
+                              const rows = Math.floor(editorHeight / scaledStep);
+                              return (
+                                <svg
+                                  style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    pointerEvents: 'none',
+                                    zIndex: 1,
+                                  }}
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  {/* Vertical lines */}
+                                  {Array.from({ length: cols - 1 }, (_, ci) => (
+                                    <line
+                                      key={`fv${ci}`}
+                                      x1={(ci + 1) * scaledStep}
+                                      y1={0}
+                                      x2={(ci + 1) * scaledStep}
+                                      y2={editorHeight}
+                                      stroke="rgba(255,255,255,0.25)"
+                                      strokeWidth="0.5"
+                                    />
+                                  ))}
+                                  {/* Horizontal lines */}
+                                  {Array.from({ length: rows - 1 }, (_, ri) => (
+                                    <line
+                                      key={`fh${ri}`}
+                                      x1={0}
+                                      y1={(ri + 1) * scaledStep}
+                                      x2={editorWidth}
+                                      y2={(ri + 1) * scaledStep}
+                                      stroke="rgba(255,255,255,0.25)"
+                                      strokeWidth="0.5"
+                                    />
+                                  ))}
+                                  {/* Ruler tick labels on top + left edges */}
+                                  {Array.from({ length: cols - 1 }, (_, ci) => (
+                                    <text
+                                      key={`fvl${ci}`}
+                                      x={(ci + 1) * scaledStep + 2}
+                                      y={9}
+                                      fill="rgba(255,255,255,0.45)"
+                                      fontSize="7"
+                                      fontFamily="monospace"
+                                    >
+                                      {(ci + 1) * gridSize}
+                                    </text>
+                                  ))}
+                                  {Array.from({ length: rows - 1 }, (_, ri) => (
+                                    <text
+                                      key={`fhl${ri}`}
+                                      x={2}
+                                      y={(ri + 1) * scaledStep - 2}
+                                      fill="rgba(255,255,255,0.45)"
+                                      fontSize="7"
+                                      fontFamily="monospace"
+                                    >
+                                      {(ri + 1) * gridSize}
+                                    </text>
+                                  ))}
+                                </svg>
+                              );
+                            })()}
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
                               const y = f.y * scale;
@@ -1047,6 +1162,72 @@ export default function TemplatesPage() {
                               boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
                             }}
                           >
+                            {/* Grid Overlay */}
+                            {showGrid && (() => {
+                              const scaledStep = gridSize * scale;
+                              const cols = Math.floor(editorWidth / scaledStep);
+                              const rows = Math.floor(editorHeight / scaledStep);
+                              return (
+                                <svg
+                                  style={{
+                                    position: 'absolute',
+                                    inset: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    pointerEvents: 'none',
+                                    zIndex: 1,
+                                  }}
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  {Array.from({ length: cols - 1 }, (_, ci) => (
+                                    <line
+                                      key={`bv${ci}`}
+                                      x1={(ci + 1) * scaledStep}
+                                      y1={0}
+                                      x2={(ci + 1) * scaledStep}
+                                      y2={editorHeight}
+                                      stroke="rgba(255,255,255,0.25)"
+                                      strokeWidth="0.5"
+                                    />
+                                  ))}
+                                  {Array.from({ length: rows - 1 }, (_, ri) => (
+                                    <line
+                                      key={`bh${ri}`}
+                                      x1={0}
+                                      y1={(ri + 1) * scaledStep}
+                                      x2={editorWidth}
+                                      y2={(ri + 1) * scaledStep}
+                                      stroke="rgba(255,255,255,0.25)"
+                                      strokeWidth="0.5"
+                                    />
+                                  ))}
+                                  {Array.from({ length: cols - 1 }, (_, ci) => (
+                                    <text
+                                      key={`bvl${ci}`}
+                                      x={(ci + 1) * scaledStep + 2}
+                                      y={9}
+                                      fill="rgba(255,255,255,0.45)"
+                                      fontSize="7"
+                                      fontFamily="monospace"
+                                    >
+                                      {(ci + 1) * gridSize}
+                                    </text>
+                                  ))}
+                                  {Array.from({ length: rows - 1 }, (_, ri) => (
+                                    <text
+                                      key={`bhl${ri}`}
+                                      x={2}
+                                      y={(ri + 1) * scaledStep - 2}
+                                      fill="rgba(255,255,255,0.45)"
+                                      fontSize="7"
+                                      fontFamily="monospace"
+                                    >
+                                      {(ri + 1) * gridSize}
+                                    </text>
+                                  ))}
+                                </svg>
+                              );
+                            })()}
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
                               const y = f.y * scale;
