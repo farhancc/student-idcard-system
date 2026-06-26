@@ -64,6 +64,11 @@ async function main() {
     'Support Lead',
     'Support@9999',
   );
+  await upsertSuperAdmin(
+    'superadmin@1234',
+    'Super Admin',
+    'SuperAdmin@321',
+  );
 
   // ── 2. PRESS (TENANT) ──────────────────────────────────────────────────────
   console.log('\n── Press Tenant ──');
