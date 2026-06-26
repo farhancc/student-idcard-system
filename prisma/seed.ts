@@ -65,7 +65,7 @@ async function main() {
     'Support@9999',
   );
   await upsertSuperAdmin(
-    'superadmin@1234',
+    'superadmin@idexo.in',
     'Super Admin',
     'SuperAdmin@321',
   );
