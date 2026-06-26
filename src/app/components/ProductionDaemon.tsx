@@ -231,6 +231,7 @@ export default function ProductionDaemon() {
     addLog(`Preparing Approval Proof Sheet PDF (#Job-${job.id})`);
 
     const clientTemplate = {
+      id: template.id,
       cardWidth: template.width || 1011,
       cardHeight: template.height || 638,
       frontImageUrl: template.frontImageUrl,
@@ -421,6 +422,7 @@ export default function ProductionDaemon() {
         const canvas = document.createElement('canvas');
         
         const clientTemplate = {
+          id: template.id,
           cardWidth: template.width || 1011,
           cardHeight: template.height || 638,
           frontImageUrl: template.frontImageUrl,

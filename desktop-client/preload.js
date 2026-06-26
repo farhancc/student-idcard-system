@@ -10,6 +10,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reloadApp: () => 
     ipcRenderer.invoke('reload-app'),
   runBackup: (data) =>
-    ipcRenderer.invoke('run-backup', data)
+    ipcRenderer.invoke('run-backup', data),
+  saveTemplateImage: (data) =>
+    ipcRenderer.invoke('save-template-image', data),
+  getLocalTemplatePath: (data) =>
+    ipcRenderer.invoke('get-local-template-path', data),
+  finalizeTemplateOriginals: (data) =>
+    ipcRenderer.invoke('finalize-template-originals', data),
 });
 

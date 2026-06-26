@@ -172,6 +172,7 @@ function computeYOffsets(
 export async function renderCardSideClient(
   canvas: HTMLCanvasElement,
   template: {
+    id?: number;
     cardWidth: number;
     cardHeight: number;
     frontImageUrl: string;
@@ -206,7 +207,23 @@ export async function renderCardSideClient(
 
   const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
   const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
-  const bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+  
+  let bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+
+  // Resolve local original path if running inside Electron
+  if (bgUrl && typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
+    try {
+      const localPath = await (window as any).electronAPI.getLocalTemplatePath({
+        templateId: template.id,
+        side
+      });
+      if (localPath) {
+        bgUrl = `local://${localPath}`;
+      }
+    } catch (err) {
+      console.error('Failed to get local template path:', err);
+    }
+  }
 
   // 2. Draw Background
   if (bgUrl) {

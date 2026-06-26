@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
-import CardPreview from '@/app/components/CardPreview';
+
 import {
   Users,
   Copy,
@@ -731,16 +731,19 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
           <div className="card" style={{ width: '100%', maxWidth: '480px', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
             <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>ID Card Preview</h3>
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>Previewing card for <strong>{previewCardholder.name}</strong></p>
-            <div style={{ borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)', background: '#111', padding: '16px', display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '260px', marginBottom: '20px' }}>
-              {template && (
-                <CardPreview
-                  template={template}
-                  cardholder={previewCardholder}
-                  side={previewSide}
-                  style={{ maxWidth: '100%', maxHeight: '360px', borderRadius: '8px', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}
-                  key={`${previewCardholder.id}-${previewSide}`}
-                />
+            <div style={{ borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'rgba(59,130,246,0.04)', padding: '24px', marginBottom: '20px', textAlign: 'left' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cardholder Details</div>
+              {previewCardholder.photoUrl && (
+                <div style={{ marginBottom: '12px' }}>
+                  <img src={previewCardholder.photoUrl} alt={previewCardholder.name} style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
+                </div>
               )}
+              <div style={{ fontWeight: '700', fontSize: '1.1rem', marginBottom: '4px' }}>{previewCardholder.name}</div>
+              {previewCardholder.designation && <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '4px' }}>{previewCardholder.designation}</div>}
+              {previewCardholder.uniqueKey && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {previewCardholder.uniqueKey}</div>}
+              <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--muted)', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
+                ℹ️ Card template preview is available in the Desktop App only.
+              </div>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
               {(() => {

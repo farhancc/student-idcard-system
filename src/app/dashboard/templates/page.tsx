@@ -49,11 +49,18 @@ export default function TemplatesPage() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isElectron, setIsElectron] = useState(true);
+  const [pressId, setPressId] = useState<number | null>(null);
 
   useEffect(() => {
     setIsElectron(typeof window !== 'undefined' && !!(window as any).electronAPI);
   }, []);
 
+  useEffect(() => {
+    fetch('/api/press/profile')
+      .then(r => r.json())
+      .then(d => { if (d.press?.id) setPressId(d.press.id); })
+      .catch(() => {});
+  }, []);
   // Form toggling
   const [showForm, setShowForm] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
@@ -62,6 +69,10 @@ export default function TemplatesPage() {
   const [cardHeight, setCardHeight] = useState(638);
   const [frontImageUrl, setFrontImageUrl] = useState('');
   const [backImageUrl, setBackImageUrl] = useState('');
+  const [frontLocalPath, setFrontLocalPath] = useState('');
+  const [backLocalPath, setBackLocalPath] = useState('');
+  const [frontWebUrl, setFrontWebUrl] = useState('');
+  const [backWebUrl, setBackWebUrl] = useState('');
   const [frontFields, setFrontFields] = useState<FieldCoordinate[]>([]);
   const [backFields, setBackFields] = useState<FieldCoordinate[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -195,25 +206,17 @@ export default function TemplatesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Automatically detect image dimensions for setting card width and height (especially for portrait mode)
+    // Automatically detect image dimensions for setting card width and height
     const isVector = file.type === 'application/pdf' || 
                      file.name.toLowerCase().endsWith('.pdf') || 
                      file.type === 'image/svg+xml' || 
                      file.name.toLowerCase().endsWith('.svg');
 
     if (isVector) {
-      if (side === 'front') {
-        setCardWidth(1011);
-        setCardHeight(638);
-      }
+      if (side === 'front') { setCardWidth(1011); setCardHeight(638); }
     } else {
       const img = new Image();
-      img.onload = () => {
-        if (side === 'front') {
-          setCardWidth(img.width);
-          setCardHeight(img.height);
-        }
-      };
+      img.onload = () => { if (side === 'front') { setCardWidth(img.width); setCardHeight(img.height); } };
       img.src = URL.createObjectURL(file);
     }
 
@@ -221,22 +224,116 @@ export default function TemplatesPage() {
     else setUploadingBack(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', 'template');
+      const electronAPI = (window as any).electronAPI;
+      if (electronAPI?.saveTemplateImage) {
+        // ── Electron path: save to local disk ──────────────────────
+        const arrayBuffer = await file.arrayBuffer();
+        const base64Data = Buffer.from(arrayBuffer).toString('base64');
+        const result = await electronAPI.saveTemplateImage({
+          pressId: pressId ?? 0,
+          fileName: file.name,
+          base64Data,
+          mimeType: file.type,
+        });
+        if (!result.success) throw new Error(result.error || 'Failed to save image locally');
+        
+        // Show high-res local preview instantly in editor
+        if (side === 'front') {
+          setFrontImageUrl(result.url);
+          setFrontLocalPath(result.localPath);
+          setFrontWebUrl(''); // Reset during upload
+        } else {
+          setBackImageUrl(result.url);
+          setBackLocalPath(result.localPath);
+          setBackWebUrl(''); // Reset during upload
+        }
 
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+        // Helper to generate a cheap low-res preview and upload it to the server
+        const createCheapCopyAndUpload = async (previewUrl: string, originalFileName: string): Promise<string> => {
+          return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = async () => {
+              try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Could not get canvas context');
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to upload image');
+                // Max dimensions for the cheap copy
+                const maxDim = 1000;
+                let width = img.width;
+                let height = img.height;
+                if (width > maxDim || height > maxDim) {
+                  if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                  } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                  }
+                }
 
-      if (side === 'front') {
-        setFrontImageUrl(data.url);
+                canvas.width = width;
+                canvas.height = height;
+                // Draw background white
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Compress to 60% quality jpeg
+                const cheapDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+                
+                // Convert to a File object
+                const response = await fetch(cheapDataUrl);
+                const blob = await response.blob();
+                const cheapFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_preview.jpg";
+                const cheapFile = new File([blob], cheapFileName, { type: 'image/jpeg' });
+
+                // Upload cheapFile to /api/upload
+                const formData = new FormData();
+                formData.append('file', cheapFile);
+                formData.append('type', 'template');
+
+                const uploadRes = await fetch('/api/upload', {
+                  method: 'POST',
+                  headers: {
+                    'x-press-id': String(pressId ?? 0),
+                  },
+                  body: formData,
+                });
+
+                const uploadJson = await uploadRes.json();
+                if (!uploadRes.ok) throw new Error(uploadJson.error || 'Failed to upload cheap copy');
+                resolve(uploadJson.url);
+              } catch (err) {
+                reject(err);
+              }
+            };
+            img.onerror = (err) => {
+              reject(new Error('Failed to load local template image for preview generation'));
+            };
+            img.src = previewUrl;
+          });
+        };
+
+        // Trigger upload in background
+        createCheapCopyAndUpload(result.url, file.name)
+          .then(webUrl => {
+            if (side === 'front') {
+              setFrontWebUrl(webUrl);
+            } else {
+              setBackWebUrl(webUrl);
+            }
+            toast(`Web preview uploaded successfully for ${side} side`, 'success');
+          })
+          .catch(err => {
+            console.error('Failed to upload cheap copy:', err);
+            toast(`Failed to upload ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
+          });
+
       } else {
-        setBackImageUrl(data.url);
+        // ── Web fallback: not supported for template images ─────────
+        throw new Error('Template image upload is only supported in the Desktop App.');
       }
     } catch (err: any) {
       toast(err.message || 'Failed to upload image', 'error');
@@ -444,7 +541,11 @@ export default function TemplatesPage() {
     setSubmitting(true);
 
     try {
-      if (!frontImageUrl) throw new Error('Front background image URL is required');
+      const electronAPI = (window as any).electronAPI;
+      const finalFrontWebUrl = frontWebUrl || (frontImageUrl.startsWith('local://') ? '' : frontImageUrl);
+      const finalBackWebUrl = backWebUrl || (backImageUrl.startsWith('local://') ? '' : backImageUrl);
+
+      if (!finalFrontWebUrl) throw new Error('Front background web preview is still uploading or missing.');
 
       const url = editingTemplateId ? `/api/templates/${editingTemplateId}` : '/api/templates';
       const method = editingTemplateId ? 'PUT' : 'POST';
@@ -456,8 +557,8 @@ export default function TemplatesPage() {
           name,
           cardWidth,
           cardHeight,
-          frontImageUrl,
-          backImageUrl: backImageUrl || null,
+          frontImageUrl: finalFrontWebUrl,
+          backImageUrl: finalBackWebUrl || null,
           frontFields: JSON.stringify(frontFields),
           backFields: JSON.stringify(backFields),
         }),
@@ -466,12 +567,25 @@ export default function TemplatesPage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to save template');
 
+      const savedTemplate = json.template;
+      if (electronAPI?.finalizeTemplateOriginals && savedTemplate?.id) {
+        await electronAPI.finalizeTemplateOriginals({
+          templateId: savedTemplate.id,
+          frontLocalPath,
+          backLocalPath
+        });
+      }
+
       // Reset
       setName('');
       setCardWidth(1011);
       setCardHeight(638);
       setFrontImageUrl('');
       setBackImageUrl('');
+      setFrontLocalPath('');
+      setBackLocalPath('');
+      setFrontWebUrl('');
+      setBackWebUrl('');
       setFrontFields([]);
       setBackFields([]);
       setShowForm(false);
@@ -492,6 +606,10 @@ export default function TemplatesPage() {
     setCardHeight(tmpl.cardHeight);
     setFrontImageUrl(tmpl.frontImageUrl);
     setBackImageUrl(tmpl.backImageUrl || '');
+    setFrontWebUrl(tmpl.frontImageUrl);
+    setBackWebUrl(tmpl.backImageUrl || '');
+    setFrontLocalPath('');
+    setBackLocalPath('');
     setFrontFields(JSON.parse(tmpl.frontFields || '[]'));
     setBackFields(JSON.parse(tmpl.backFields || '[]'));
     setShowForm(true);
@@ -628,11 +746,12 @@ export default function TemplatesPage() {
                     type="file" 
                     accept=".svg,.pdf,.png" 
                     className="form-input" 
-                    style={{ padding: '6px 12px' }}
+                    style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
                     onChange={e => handleFileUpload(e, 'front')} 
-                    disabled={uploadingFront}
+                    disabled={uploadingFront || !isElectron}
                   />
-                  {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Uploading to Cloudinary...</div>}
+                  {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
+                  {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
                   <input 
                     type="text" 
                     required 
@@ -651,11 +770,12 @@ export default function TemplatesPage() {
                     type="file" 
                     accept=".svg,.pdf,.png" 
                     className="form-input" 
-                    style={{ padding: '6px 12px' }}
+                    style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
                     onChange={e => handleFileUpload(e, 'back')} 
-                    disabled={uploadingBack}
+                    disabled={uploadingBack || !isElectron}
                   />
-                  {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Uploading to Cloudinary...</div>}
+                  {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
+                  {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
                   <input 
                     type="text" 
                     className="form-input" 

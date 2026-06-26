@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -144,6 +144,17 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Register local:// protocol to serve template images stored on disk
+  protocol.registerFileProtocol('local', (request, callback) => {
+    const url = request.url.replace('local://', '');
+    const decodedPath = decodeURIComponent(url);
+    try {
+      return callback(decodedPath);
+    } catch (err) {
+      console.error('local:// protocol error:', err);
+    }
+  });
+
   createWindow();
 
   app.on('activate', function () {
@@ -193,6 +204,116 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data }) => {
 // IPC handler to detect desktop context
 ipcMain.handle('is-desktop', () => {
   return true;
+});
+
+// IPC handler to save template image to local disk and return a local:// URL
+ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64Data, mimeType }) => {
+  try {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const safeExt = ['png', 'svg', 'pdf', 'jpg', 'jpeg'].includes(ext) ? ext : 'png';
+    const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`;
+    const dir = path.join(app.getPath('userData'), 'templates', String(pressId));
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const filePath = path.join(dir, uniqueName);
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(filePath, buffer);
+
+    // For PDFs: convert first page to PNG using pdftoppm
+    if (safeExt === 'pdf') {
+      const pngPrefix = filePath.replace('.pdf', '');
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const execAsync = promisify(exec);
+      try {
+        await execAsync(`pdftoppm -png -r 150 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        const generated = `${pngPrefix}-1.png`;
+        const target = `${pngPrefix}.png`;
+        if (fs.existsSync(generated)) fs.renameSync(generated, target);
+        return { success: true, url: `local://${target}`, localPath: target };
+      } catch (convErr) {
+        console.error('PDF conversion error:', convErr);
+        return { success: true, url: `local://${filePath}`, localPath: filePath };
+      }
+    }
+
+    return { success: true, url: `local://${filePath}`, localPath: filePath };
+  } catch (error) {
+    console.error('save-template-image error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC handler to search for original local template file
+ipcMain.handle('get-local-template-path', async (event, { templateId, side }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'templates');
+    if (!fs.existsSync(dir)) return null;
+
+    const files = fs.readdirSync(dir);
+    const prefix = `original_${templateId}_${side}.`;
+    const match = files.find(f => f.startsWith(prefix));
+    if (match) {
+      return path.join(dir, match);
+    }
+    
+    // Check in pressId subfolders as fallback
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isDirectory()) {
+        const subDir = path.join(dir, item.name);
+        const subFiles = fs.readdirSync(subDir);
+        const subMatch = subFiles.find(f => f.startsWith(prefix));
+        if (subMatch) {
+          return path.join(subDir, subMatch);
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('get-local-template-path error:', error);
+    return null;
+  }
+});
+
+// IPC handler to finalize template originals by copying temp uploads to permanent path
+ipcMain.handle('finalize-template-originals', async (event, { templateId, frontLocalPath, backLocalPath }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'templates');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    if (frontLocalPath) {
+      const cleanFrontPath = frontLocalPath.replace('local://', '');
+      const ext = path.extname(cleanFrontPath);
+      const targetPath = path.join(dir, `original_${templateId}_front${ext}`);
+      
+      if (fs.existsSync(targetPath)) {
+        try { fs.unlinkSync(targetPath); } catch (e) {}
+      }
+      if (fs.existsSync(cleanFrontPath)) {
+        fs.copyFileSync(cleanFrontPath, targetPath);
+        console.log(`Finalized front template: copied ${cleanFrontPath} to ${targetPath}`);
+      }
+    }
+
+    if (backLocalPath) {
+      const cleanBackPath = backLocalPath.replace('local://', '');
+      const ext = path.extname(cleanBackPath);
+      const targetPath = path.join(dir, `original_${templateId}_back${ext}`);
+      
+      if (fs.existsSync(targetPath)) {
+        try { fs.unlinkSync(targetPath); } catch (e) {}
+      }
+      if (fs.existsSync(cleanBackPath)) {
+        fs.copyFileSync(cleanBackPath, targetPath);
+        console.log(`Finalized back template: copied ${cleanBackPath} to ${targetPath}`);
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('finalize-template-originals error:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // IPC handler to get Portal URL for the offline page

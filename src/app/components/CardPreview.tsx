@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { renderCardSideClient } from '@/lib/pdf/card-renderer-client';
 
 interface CardTemplate {
+  id?: number;
   cardWidth: number;
   cardHeight: number;
   frontImageUrl: string;

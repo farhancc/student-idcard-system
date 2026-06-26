@@ -3,7 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/app/components/ImageCropper';
-import CardPreview from '@/app/components/CardPreview';
+
 import { Upload, Check, AlertCircle, Loader, CreditCard } from 'lucide-react';
 
 interface FieldCoordinate {
@@ -46,7 +46,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [activeCropField, setActiveCropField] = useState<string | null>(null);
 
-  // Live preview states
+  // Preview side state (kept for future use)
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
   const [hasBackFields, setHasBackFields] = useState(false);
 
@@ -471,78 +471,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           </button>
         </form>
 
-        {/* Live ID Card Preview */}
-        {template && (
-          <div style={{ marginTop: '32px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <CreditCard size={18} style={{ color: 'var(--primary)' }} />
-                <h3 style={{ fontSize: '1rem', fontWeight: '600' }}>Live ID Card Preview</h3>
-              </div>
-              {hasBackFields && (
-                <div style={{ display: 'flex', gap: '4px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px' }}>
-                  {(['front', 'back'] as const).map(s => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setPreviewSide(s)}
-                      style={{
-                        padding: '4px 12px',
-                        fontSize: '0.75rem',
-                        fontWeight: '500',
-                        borderRadius: '6px',
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: previewSide === s ? 'var(--primary)' : 'transparent',
-                        color: previewSide === s ? '#fff' : 'var(--muted)',
-                        transition: 'all 0.2s',
-                      }}
-                    >
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
-            <div style={{
-              borderRadius: '12px',
-              overflow: 'hidden',
-              border: '1px solid var(--glass-border)',
-              background: 'var(--card-bg)',
-              padding: '16px',
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              minHeight: '220px',
-              position: 'relative',
-            }}>
-              <CardPreview
-                template={template}
-                cardholder={{
-                  id: 0,
-                  name: name || 'Your Name',
-                  designation: designation || '',
-                  photoUrl: photoUrl || '',
-                  customFields: JSON.stringify(customFields),
-                  uniqueKey: uniqueKey || '',
-                  createdAt: new Date().toISOString(),
-                }}
-                side={previewSide}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '360px',
-                  borderRadius: '8px',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-                }}
-                key={`${name}-${designation}-${photoUrl}-${JSON.stringify(customFields)}-${uniqueKey}-${previewSide}`}
-              />
-            </div>
-            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'center', marginTop: '8px' }}>
-              Preview updates automatically as you type
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Image Cropper Modal */}
