@@ -1677,6 +1677,7 @@ export default function ClientDetailsPage() {
 
 // ── PORTAL SHARES PANEL ──────────────────────────────────────
 function PortalSharesPanel({ clientId }: { clientId: number }) {
+  const { toast } = useToast();
   const [shares, setShares] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
