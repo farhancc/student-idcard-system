@@ -89,11 +89,74 @@ export async function GET() {
             jobs: true,
           },
         },
+        clients: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            contactName: true,
+            contactEmail: true,
+            contactPhone: true,
+            createdAt: true,
+            orders: {
+              select: {
+                id: true,
+                status: true,
+                createdAt: true,
+                invoice: { select: { totalAmount: true } },
+                _count: { select: { cardholders: true } },
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ success: true, presses });
+    // Aggregate per-press stats
+    const pressesWithStats = presses.map(press => {
+      let totalCardsPrinted = 0;
+      let totalRevenue = 0;
+
+      const clients = press.clients.map(client => {
+        let clientCards = 0;
+        let clientRevenue = 0;
+
+        client.orders.forEach(order => {
+          const cards = order._count?.cardholders || 0;
+          clientCards += cards;
+          totalCardsPrinted += cards;
+
+          const amount = order.invoice ? Number(order.invoice.totalAmount) : 0;
+          clientRevenue += amount;
+          totalRevenue += amount;
+        });
+
+        return {
+          id: client.id,
+          name: client.name,
+          type: client.type,
+          contactName: client.contactName,
+          contactEmail: client.contactEmail,
+          contactPhone: client.contactPhone,
+          createdAt: client.createdAt,
+          totalOrders: client.orders.length,
+          totalCards: clientCards,
+          totalRevenue: clientRevenue,
+        };
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { clients: _c, ...pressBase } = press as any;
+      return {
+        ...pressBase,
+        totalCardsPrinted,
+        totalRevenue,
+        clients,
+      };
+    });
+
+    return NextResponse.json({ success: true, presses: pressesWithStats });
   } catch (error) {
     console.error('SuperAdmin get presses error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

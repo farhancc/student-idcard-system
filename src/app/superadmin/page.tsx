@@ -4,9 +4,23 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Building2, Users, FolderKanban, ShieldCheck, 
-  Power, Key, Edit, LogOut, Loader2, Sparkles, RefreshCw,
-  DollarSign, TrendingUp, BarChart3, Search, Plus
+  Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
+  DollarSign, TrendingUp, BarChart3, Search, Plus,
+  Eye, X, CreditCard, FileText
 } from 'lucide-react';
+
+interface PressClient {
+  id: number;
+  name: string;
+  type: string;
+  contactName: string | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  createdAt: string;
+  totalOrders: number;
+  totalCards: number;
+  totalRevenue: number;
+}
 
 interface Press {
   id: number;
@@ -19,6 +33,9 @@ interface Press {
   credits: number;
   trialEndsAt: string | null;
   createdAt: string;
+  totalCardsPrinted: number;
+  totalRevenue: number;
+  clients: PressClient[];
   _count: {
     users: number;
     clients: number;
@@ -67,6 +84,9 @@ export default function SuperAdminDashboard() {
   const [creditsAmount, setCreditsAmount] = useState('');
   const [creditsSuccessMessage, setCreditsSuccessMessage] = useState('');
   const [creditsSubmitting, setCreditsSubmitting] = useState(false);
+
+  // Press Detail Drawer
+  const [detailPress, setDetailPress] = useState<Press | null>(null);
 
   const handleOnboardPress = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -507,8 +527,10 @@ export default function SuperAdminDashboard() {
                     <tr>
                       <th>Press Details</th>
                       <th>Contact / City</th>
-                      <th>Usage Statistics</th>
-                      <th>Subscription Plan</th>
+                      <th>Cards Printed</th>
+                      <th>Revenue</th>
+                      <th>Usage</th>
+                      <th>Plan / Credits</th>
                       <th>Status</th>
                       <th>Actions</th>
                     </tr>
@@ -522,15 +544,27 @@ export default function SuperAdminDashboard() {
                           <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Joined {new Date(press.createdAt).toLocaleDateString()}</div>
                         </td>
                         <td>
-                          <div>{press.city}</div>
-                          <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>{press.phone}</div>
+                          <div>{press.city || '—'}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>{press.phone || '—'}</div>
                         </td>
                         <td>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px', fontSize: '0.8rem' }}>
-                            <div><Users size={12} style={{ display: 'inline', marginRight: '4px' }}/> Users: <strong>{press._count.users}</strong></div>
-                            <div><Building2 size={12} style={{ display: 'inline', marginRight: '4px' }}/> Clients: <strong>{press._count.clients}</strong></div>
-                            <div><FolderKanban size={12} style={{ display: 'inline', marginRight: '4px' }}/> Orders: <strong>{press._count.orders}</strong></div>
-                            <div><ShieldCheck size={12} style={{ display: 'inline', marginRight: '4px' }}/> PDF Jobs: <strong>{press._count.jobs}</strong></div>
+                          <div style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--primary)' }}>
+                            {press.totalCardsPrinted ?? 0}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>cards total</div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: '700', fontSize: '1rem', color: '#10b981' }}>
+                            Rs. {(press.totalRevenue ?? 0).toFixed(0)}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>invoiced</div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.8rem' }}>
+                            <div><Users size={11} style={{ display: 'inline', marginRight: '4px' }}/>Users: <strong>{press._count.users}</strong></div>
+                            <div><Building2 size={11} style={{ display: 'inline', marginRight: '4px' }}/>Clients: <strong>{press._count.clients}</strong></div>
+                            <div><FolderKanban size={11} style={{ display: 'inline', marginRight: '4px' }}/>Orders: <strong>{press._count.orders}</strong></div>
+                            <div><ShieldCheck size={11} style={{ display: 'inline', marginRight: '4px' }}/>Jobs: <strong>{press._count.jobs}</strong></div>
                           </div>
                         </td>
                         <td>
@@ -542,7 +576,6 @@ export default function SuperAdminDashboard() {
                               }`}>
                                 {press.plan}
                               </span>
-                              
                               <select 
                                 className="form-select" 
                                 style={{ padding: '4px 8px', fontSize: '0.8rem', width: 'auto', background: '#1e293b' }}
@@ -568,42 +601,39 @@ export default function SuperAdminDashboard() {
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              className={`btn ${press.isActive ? 'btn-danger' : 'btn-primary'}`}
-                              style={{ padding: '6px 12px', fontSize: '0.75rem' }}
-                              disabled={actionLoading === press.id}
-                              onClick={() => handleToggleStatus(press.id, press.isActive)}
-                            >
-                              <Power size={12} style={{ marginRight: '4px' }} />
-                              {press.isActive ? 'Suspend' : 'Activate'}
-                            </button>
-                            
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <button
                               className="btn btn-secondary"
-                              style={{ padding: '6px 12px', fontSize: '0.75rem', background: '#334155' }}
-                              onClick={() => {
-                                setResetPress(press);
-                                setResetModalOpen(true);
-                              }}
+                              style={{ padding: '6px 12px', fontSize: '0.75rem', background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', borderColor: 'rgba(99,102,241,0.3)' }}
+                              onClick={() => setDetailPress(press)}
                             >
-                              <Key size={12} style={{ marginRight: '4px' }} />
-                              Reset PW
+                              <Eye size={12} style={{ marginRight: '4px' }} /> View Details
                             </button>
-                            
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '6px 12px', fontSize: '0.75rem', background: 'rgba(251, 191, 36, 0.15)', color: 'var(--warning)', borderColor: 'rgba(251, 191, 36, 0.3)' }}
-                              onClick={() => {
-                                setSelectedCreditsPress(press);
-                                setCreditsModalOpen(true);
-                                setCreditsAmount('');
-                                setCreditsSuccessMessage('');
-                              }}
-                            >
-                              <DollarSign size={12} style={{ marginRight: '4px' }} />
-                              Credits
-                            </button>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                className={`btn ${press.isActive ? 'btn-danger' : 'btn-primary'}`}
+                                style={{ padding: '5px 10px', fontSize: '0.72rem', flex: 1 }}
+                                disabled={actionLoading === press.id}
+                                onClick={() => handleToggleStatus(press.id, press.isActive)}
+                              >
+                                <Power size={11} style={{ marginRight: '3px' }} />
+                                {press.isActive ? 'Suspend' : 'Activate'}
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '5px 10px', fontSize: '0.72rem', background: '#334155' }}
+                                onClick={() => { setResetPress(press); setResetModalOpen(true); }}
+                              >
+                                <Key size={11} />
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '5px 10px', fontSize: '0.72rem', background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', borderColor: 'rgba(251,191,36,0.3)' }}
+                                onClick={() => { setSelectedCreditsPress(press); setCreditsModalOpen(true); setCreditsAmount(''); setCreditsSuccessMessage(''); }}
+                              >
+                                <CreditCard size={11} />
+                              </button>
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -766,6 +796,98 @@ export default function SuperAdminDashboard() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── Press Detail Modal ─────────────────────────────────────── */}
+      {detailPress && (
+        <div
+          onClick={() => setDetailPress(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(3,4,7,0.82)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '3px solid var(--primary)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                  <Building2 size={22} color="var(--primary)" />
+                  <h2 style={{ fontSize: '1.4rem' }}>{detailPress.name}</h2>
+                  <span className={`badge ${detailPress.isActive ? 'badge-success' : 'badge-danger'}`}>{detailPress.isActive ? 'Active' : 'Suspended'}</span>
+                  <span className="badge badge-primary">{detailPress.plan}</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{detailPress.email} · {detailPress.city} · {detailPress.phone}</div>
+              </div>
+              <button onClick={() => setDetailPress(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Stats Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' }}>
+              {[
+                { label: 'Total Cards Printed', value: detailPress.totalCardsPrinted ?? 0, color: 'var(--primary)', icon: <FileText size={18} /> },
+                { label: 'Total Revenue', value: `Rs. ${(detailPress.totalRevenue ?? 0).toFixed(0)}`, color: '#10b981', icon: <TrendingUp size={18} /> },
+                { label: 'Total Clients', value: detailPress._count.clients, color: '#f59e0b', icon: <Users size={18} /> },
+                { label: 'Remaining Credits', value: detailPress.credits, color: '#f59e0b', icon: <DollarSign size={18} /> },
+              ].map(stat => (
+                <div key={stat.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.75rem', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: stat.color }}>{stat.icon}</span> {stat.label}
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '700', color: stat.color }}>{stat.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Clients Table */}
+            <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Building2 size={16} color="var(--primary)" /> Clients & Their Orders
+            </h3>
+            {detailPress.clients.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '32px', color: 'var(--muted)', background: 'rgba(255,255,255,0.02)', borderRadius: '8px' }}>No clients yet for this press.</div>
+            ) : (
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Client Name</th>
+                      <th>Type</th>
+                      <th>Contact</th>
+                      <th>Orders</th>
+                      <th>Cards Printed</th>
+                      <th>Revenue Charged</th>
+                      <th>Joined</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailPress.clients.map(client => (
+                      <tr key={client.id}>
+                        <td style={{ fontWeight: '600' }}>{client.name}</td>
+                        <td><span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{client.type}</span></td>
+                        <td>
+                          <div style={{ fontSize: '0.85rem' }}>{client.contactName || '—'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{client.contactEmail || ''}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{client.contactPhone || ''}</div>
+                        </td>
+                        <td style={{ textAlign: 'center' }}><strong>{client.totalOrders}</strong></td>
+                        <td>
+                          <strong style={{ color: 'var(--primary)' }}>{client.totalCards}</strong>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>cards</div>
+                        </td>
+                        <td>
+                          <strong style={{ color: '#10b981' }}>Rs. {client.totalRevenue.toFixed(0)}</strong>
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{new Date(client.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Password Reset Modal */}
