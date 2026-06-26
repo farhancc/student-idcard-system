@@ -96,14 +96,14 @@ export async function generateApprovalPdfClient(
         const yOffset = (isPortraitTemplate ? 770 : 740) - rowIdx * rowStep;
 
         // Render Front Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts);
+        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts, 3);
         const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (!frontBlob) throw new Error('Failed to render front side');
         const frontBytes = await frontBlob.arrayBuffer();
         const frontImg = await pdfDoc.embedPng(frontBytes);
 
         // Render Back Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'back', parsedValidTill, pressFonts);
+        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'back', parsedValidTill, pressFonts, 3);
         const backBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (!backBlob) throw new Error('Failed to render back side');
         const backBytes = await backBlob.arrayBuffer();
@@ -191,7 +191,7 @@ export async function generateApprovalPdfClient(
         const xOffset = colIdx === 0 ? 50 : 270;
 
         // Render Front Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts);
+        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts, 3);
         const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
         if (!frontBlob) throw new Error('Failed to render front side');
         const frontBytes = await frontBlob.arrayBuffer();

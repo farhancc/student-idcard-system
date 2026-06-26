@@ -442,7 +442,8 @@ export default function ProductionDaemon() {
           clientCardholder,
           'front',
           template.validTillDate ? new Date(template.validTillDate) : null,
-          pressFonts
+          pressFonts,
+          3 // High-DPI scale factor for production printing sharpness
         );
 
         const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
@@ -461,7 +462,8 @@ export default function ProductionDaemon() {
             clientCardholder,
             'back',
             template.validTillDate ? new Date(template.validTillDate) : null,
-            pressFonts
+            pressFonts,
+            3 // High-DPI scale factor for production printing sharpness
           );
 
           const backBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));

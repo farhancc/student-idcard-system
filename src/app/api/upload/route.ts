@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       if (fileExtension.toLowerCase() === '.pdf') {
         // Generate PNG preview using pdftoppm
         const pngPrefix = filePath.substring(0, filePath.lastIndexOf('.'));
-        const cmd = `pdftoppm -png -r 150 -f 1 -l 1 "${filePath}" "${pngPrefix}"`;
+        const cmd = `pdftoppm -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`;
         try {
           const { exec } = require('child_process');
           const { promisify } = require('util');

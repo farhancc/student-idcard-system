@@ -66,10 +66,10 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
 /**
  * Generates a QR Code as a Data URL in the browser.
  */
-async function generateQrCode(text: string): Promise<string> {
+async function generateQrCode(text: string, width: number = 256): Promise<string> {
   return QRCode.toDataURL(text, {
     margin: 1,
-    width: 256,
+    width: width,
     color: {
       dark: '#000000',
       light: '#ffffff',
@@ -80,10 +80,14 @@ async function generateQrCode(text: string): Promise<string> {
 /**
  * Generates a Barcode on an offscreen canvas.
  */
-function generateBarcodeCanvas(text: string, width: number, height: number): HTMLCanvasElement {
+function generateBarcodeCanvas(text: string, width: number, height: number, scale: number = 1): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext('2d');
+  if (ctx && scale > 1) {
+    ctx.scale(scale, scale);
+  }
   try {
     JsBarcode(canvas, text, {
       format: 'CODE128',
@@ -92,7 +96,6 @@ function generateBarcodeCanvas(text: string, width: number, height: number): HTM
     });
   } catch (err) {
     console.error('Barcode generation error:', err);
-    const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 2;
@@ -190,16 +193,21 @@ export async function renderCardSideClient(
   },
   side: 'front' | 'back',
   validTillDate: Date | null,
-  pressFonts: Array<{ name: string; fileUrl: string }> = []
+  pressFonts: Array<{ name: string; fileUrl: string }> = [],
+  scale: number = 1
 ): Promise<void> {
   const width = template.cardWidth;
   const height = template.cardHeight;
 
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+
+  if (scale > 1) {
+    ctx.scale(scale, scale);
+  }
 
   // 1. Draw solid white background
   ctx.fillStyle = '#FFFFFF';
@@ -475,7 +483,8 @@ export async function renderCardSideClient(
       case 'qr': {
         if (!rawValue) continue;
         try {
-          const qrDataUrl = await generateQrCode(String(rawValue));
+          const qrSize = Math.max(256, Math.round(f.width * scale));
+          const qrDataUrl = await generateQrCode(String(rawValue), qrSize);
           const qrImg = await loadImageClient(qrDataUrl);
           ctx.drawImage(qrImg, f.x, f.y, f.width, f.height);
         } catch (err) {
@@ -487,7 +496,7 @@ export async function renderCardSideClient(
       case 'barcode': {
         if (!rawValue) continue;
         try {
-          const barcodeCanvas = generateBarcodeCanvas(String(rawValue), f.width, f.height);
+          const barcodeCanvas = generateBarcodeCanvas(String(rawValue), f.width, f.height, scale);
           ctx.drawImage(barcodeCanvas, f.x, f.y, f.width, f.height);
         } catch (err) {
           console.error('Barcode browser render error:', err);

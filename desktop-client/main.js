@@ -226,7 +226,7 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
       const { promisify } = require('util');
       const execAsync = promisify(exec);
       try {
-        await execAsync(`pdftoppm -png -r 150 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        await execAsync(`pdftoppm -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
