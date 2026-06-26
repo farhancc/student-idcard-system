@@ -248,12 +248,12 @@ export default function TemplatesPage() {
           setBackWebUrl(''); // Reset during upload
         }
 
-        // Helper to generate a cheap low-res preview and upload it to the server
-        const createCheapCopyAndUpload = async (previewUrl: string, originalFileName: string): Promise<string> => {
+        // Helper to generate a cheap low-res preview as a compressed base64 data URI
+        const createCheapCopyBase64 = async (previewUrl: string): Promise<string> => {
           return new Promise((resolve, reject) => {
             const img = new Image();
             img.crossOrigin = 'anonymous';
-            img.onload = async () => {
+            img.onload = () => {
               try {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
@@ -282,53 +282,31 @@ export default function TemplatesPage() {
 
                 // Compress to 60% quality jpeg
                 const cheapDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-                
-                // Convert to a File object
-                const response = await fetch(cheapDataUrl);
-                const blob = await response.blob();
-                const cheapFileName = originalFileName.replace(/\.[^/.]+$/, "") + "_preview.jpg";
-                const cheapFile = new File([blob], cheapFileName, { type: 'image/jpeg' });
-
-                // Upload cheapFile to /api/upload
-                const formData = new FormData();
-                formData.append('file', cheapFile);
-                formData.append('type', 'template');
-
-                const uploadRes = await fetch('/api/upload', {
-                  method: 'POST',
-                  headers: {
-                    'x-press-id': String(pressId ?? 0),
-                  },
-                  body: formData,
-                });
-
-                const uploadJson = await uploadRes.json();
-                if (!uploadRes.ok) throw new Error(uploadJson.error || 'Failed to upload cheap copy');
-                resolve(uploadJson.url);
+                resolve(cheapDataUrl);
               } catch (err) {
                 reject(err);
               }
             };
-            img.onerror = (err) => {
+            img.onerror = () => {
               reject(new Error('Failed to load local template image for preview generation'));
             };
             img.src = previewUrl;
           });
         };
 
-        // Trigger upload in background
-        createCheapCopyAndUpload(result.url, file.name)
+        // Trigger base64 preview generation in background
+        createCheapCopyBase64(result.url)
           .then(webUrl => {
             if (side === 'front') {
               setFrontWebUrl(webUrl);
             } else {
               setBackWebUrl(webUrl);
             }
-            toast(`Web preview uploaded successfully for ${side} side`, 'success');
+            toast(`Web preview prepared successfully for ${side} side`, 'success');
           })
           .catch(err => {
-            console.error('Failed to upload cheap copy:', err);
-            toast(`Failed to upload ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
+            console.error('Failed to generate cheap copy base64:', err);
+            toast(`Failed to prepare ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
           });
 
       } else {
