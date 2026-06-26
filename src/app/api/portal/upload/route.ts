@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
-import fs from 'fs';
-import path from 'path';
 import { prisma } from '@/lib/prisma';
 
-const isCloudinaryConfigured = 
-  process.env.CLOUDINARY_CLOUD_NAME && 
-  process.env.CLOUDINARY_API_KEY && 
+const isCloudinaryConfigured =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
 if (isCloudinaryConfigured) {
@@ -67,6 +65,7 @@ export async function POST(request: Request) {
     const buffer = Buffer.from(bytes);
 
     if (isCloudinaryConfigured) {
+      // ── Cloudinary path ───────────────────────────────────────────────────
       const uploadResult = await new Promise<any>((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
@@ -80,26 +79,23 @@ export async function POST(request: Request) {
         ).end(buffer);
       });
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         url: uploadResult.secure_url,
-        provider: 'cloudinary'
+        provider: 'cloudinary',
       });
     } else {
-      const uploadDir = path.join(process.cwd(), 'public', 'uploads', String(pressId), `${type}s`);
-      fs.mkdirSync(uploadDir, { recursive: true });
+      // ── Fallback: base64 data URI (no filesystem writes) ──────────────────
+      // Vercel's /var/task is read-only — we cannot write to public/uploads.
+      // Instead, encode the photo as a data URI and store it directly in the DB.
+      const mimeType = file.type || 'image/jpeg';
+      const base64 = buffer.toString('base64');
+      const dataUri = `data:${mimeType};base64,${base64}`;
 
-      const fileExtension = path.extname(file.name) || '.png';
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${fileExtension}`;
-      const filePath = path.join(uploadDir, fileName);
-
-      fs.writeFileSync(filePath, buffer);
-      const localUrl = `/uploads/${pressId}/${type}s/${fileName}`;
-
-      return NextResponse.json({ 
-        success: true, 
-        url: localUrl,
-        provider: 'local_fallback'
+      return NextResponse.json({
+        success: true,
+        url: dataUri,
+        provider: 'base64',
       });
     }
   } catch (error: any) {
