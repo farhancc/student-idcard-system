@@ -55,9 +55,9 @@ export const enrollSchema = z.object({
     .min(1, 'Name is required')
     .max(150, 'Name is too long'),
   designation: z.string().max(150).nullable().optional(),
-  photoUrl: z.string().url('Invalid photo URL').nullable().optional(),
+  photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional(),
   uniqueKey: z.string().max(100).nullable().optional(),
-  customFields: z.record(z.string(), z.string().max(500)).optional(),
+  customFields: z.record(z.string(), z.string().max(10 * 1024 * 1024, 'Custom field data is too large')).optional(),
 });
 
 export type EnrollInput = z.infer<typeof enrollSchema>;
