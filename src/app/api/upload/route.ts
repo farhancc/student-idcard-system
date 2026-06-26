@@ -4,9 +4,9 @@ import fs from 'fs';
 import path from 'path';
 
 // Configure Cloudinary if environment variables are set
-const isCloudinaryConfigured = 
-  process.env.CLOUDINARY_CLOUD_NAME && 
-  process.env.CLOUDINARY_API_KEY && 
+const isCloudinaryConfigured =
+  process.env.CLOUDINARY_CLOUD_NAME &&
+  process.env.CLOUDINARY_API_KEY &&
   process.env.CLOUDINARY_API_SECRET;
 
 if (isCloudinaryConfigured) {
@@ -15,6 +15,89 @@ if (isCloudinaryConfigured) {
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
   });
+}
+
+/** Upload a raw Buffer to Cloudinary and return the secure URL. */
+async function uploadBufferToCloudinary(
+  buffer: Buffer,
+  folder: string,
+  resourceType: 'auto' | 'image' | 'raw' = 'auto',
+  publicIdSuffix?: string
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const opts: any = { folder, resource_type: resourceType };
+    if (publicIdSuffix) opts.public_id = publicIdSuffix;
+    cloudinary.uploader
+      .upload_stream(opts, (error, result) => {
+        if (error) reject(error);
+        else resolve(result!.secure_url);
+      })
+      .end(buffer);
+  });
+}
+
+/**
+ * Convert a PDF buffer to a 150-DPI JPEG WebP/JPEG preview buffer
+ * using Cloudinary's built-in PDF rendering by re-fetching the
+ * uploaded original with transformation parameters.
+ *
+ * We do this server-side via sharp (if available) + pdftoppm, then
+ * upload the resulting JPEG as the preview image.
+ */
+async function generatePreviewBuffer(
+  originalBuffer: Buffer,
+  fileExtension: string
+): Promise<Buffer | null> {
+  try {
+    if (fileExtension === '.pdf') {
+      // Write temp file, run pdftoppm, read back
+      const { exec } = require('child_process');
+      const { promisify } = require('util');
+      const os = require('os');
+      const execAsync = promisify(exec);
+
+      const tmpDir = os.tmpdir();
+      const tmpPdf = path.join(tmpDir, `preview_${Date.now()}.pdf`);
+      const tmpPrefix = path.join(tmpDir, `preview_${Date.now()}`);
+      fs.writeFileSync(tmpPdf, originalBuffer);
+
+      // 150 DPI — fast, small, good enough for web preview
+      await execAsync(`pdftoppm -png -r 150 -f 1 -l 1 "${tmpPdf}" "${tmpPrefix}"`);
+
+      const generated = `${tmpPrefix}-1.png`;
+      if (fs.existsSync(generated)) {
+        const png = fs.readFileSync(generated);
+        fs.unlinkSync(generated);
+        fs.unlinkSync(tmpPdf);
+        // Convert to JPEG 80% for smaller file
+        try {
+          const sharp = require('sharp');
+          return await sharp(png).jpeg({ quality: 80 }).toBuffer();
+        } catch {
+          return png; // return raw PNG if sharp not available
+        }
+      }
+      fs.unlinkSync(tmpPdf);
+      return null;
+    }
+
+    if (fileExtension === '.svg') {
+      try {
+        const sharp = require('sharp');
+        // 150 DPI, JPEG preview for SVG
+        return await sharp(originalBuffer, { density: 150 })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+      } catch {
+        return null;
+      }
+    }
+
+    return null; // raster images don't need a separate preview
+  } catch (err) {
+    console.error('Preview generation error:', err);
+    return null;
+  }
 }
 
 export async function POST(request: Request) {
@@ -27,7 +110,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const type = formData.get('type') as string || 'template'; // template | photo
+    const type = (formData.get('type') as string) || 'template'; // template | photo
 
     if (!file) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
@@ -35,75 +118,87 @@ export async function POST(request: Request) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+    const fileExtension = path.extname(file.name).toLowerCase();
+    const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
 
     if (isCloudinaryConfigured) {
-      console.log(`Uploading to Cloudinary for Press #${pressId}...`);
-      // Upload directly to Cloudinary
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-          {
-            folder: `press_${pressId}/${type}s`,
-            resource_type: 'auto',
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        ).end(buffer);
-      });
+      const folder = `press_${pressId}/${type}s`;
 
-      return NextResponse.json({ 
-        success: true, 
-        url: uploadResult.secure_url,
-        provider: 'cloudinary'
-      });
+      if (isVectorOrPdf && type === 'template') {
+        // ── Dual-upload strategy for PDF/SVG templates ──────────────
+        // 1. Upload the original file (for Electron renderer fallback)
+        console.log(`Uploading original ${fileExtension} to Cloudinary (press #${pressId})…`);
+        const originalUrl = await uploadBufferToCloudinary(buffer, `${folder}/originals`, 'auto');
+
+        // 2. Generate lightweight preview and upload it
+        console.log('Generating 150 DPI preview…');
+        const previewBuffer = await generatePreviewBuffer(buffer, fileExtension);
+
+        let previewUrl = originalUrl; // safe fallback if preview generation fails
+        if (previewBuffer) {
+          previewUrl = await uploadBufferToCloudinary(
+            previewBuffer,
+            `${folder}/previews`,
+            'image'
+          );
+        }
+
+        return NextResponse.json({
+          success: true,
+          url: previewUrl,         // lightweight display image (stored in frontImageUrl)
+          originalUrl,             // high-res original (stored in frontOriginalUrl)
+          provider: 'cloudinary',
+        });
+      } else {
+        // ── Single-upload for raster images and non-template types ──
+        console.log(`Uploading to Cloudinary for Press #${pressId}…`);
+        const url = await uploadBufferToCloudinary(buffer, folder, 'auto');
+        return NextResponse.json({ success: true, url, provider: 'cloudinary' });
+      }
     } else {
-      console.log(`Cloudinary credentials missing. Falling back to local upload for Press #${pressId}...`);
-      // Fallback: Save locally
+      // ── Local fallback (dev / no Cloudinary) ────────────────────
+      console.log(`Cloudinary not configured. Falling back to local upload for Press #${pressId}…`);
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', String(pressId), `${type}s`);
       fs.mkdirSync(uploadDir, { recursive: true });
 
-      const fileExtension = path.extname(file.name) || '.png';
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}${fileExtension}`;
       const filePath = path.join(uploadDir, fileName);
-
       fs.writeFileSync(filePath, buffer);
 
-      if (fileExtension.toLowerCase() === '.pdf') {
-        // Generate PNG preview using pdftoppm
-        const pngPrefix = filePath.substring(0, filePath.lastIndexOf('.'));
-        const cmd = `pdftoppm -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`;
+      let originalLocalUrl: string | null = null;
+
+      if (fileExtension === '.pdf') {
+        // Generate 600 DPI PNG for local Electron rendering (stored alongside original)
+        const pngPrefix = filePath.replace('.pdf', '');
         try {
           const { exec } = require('child_process');
           const { promisify } = require('util');
           const execAsync = promisify(exec);
-          await execAsync(cmd);
-          // pdftoppm generates prefix-1.png. Move it to prefix.png
-          const generatedPngPath = `${pngPrefix}-1.png`;
-          const targetPngPath = `${pngPrefix}.png`;
-          if (fs.existsSync(generatedPngPath)) {
-            fs.renameSync(generatedPngPath, targetPngPath);
-          }
+          await execAsync(`pdftoppm -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+          const generated = `${pngPrefix}-1.png`;
+          if (fs.existsSync(generated)) fs.renameSync(generated, `${pngPrefix}.png`);
         } catch (err) {
-          console.error('pdftoppm conversion error:', err);
+          console.error('pdftoppm error:', err);
         }
-      } else if (fileExtension.toLowerCase() === '.svg') {
-        // Generate PNG preview from SVG using sharp at high density (300 DPI) for print quality
-        const pngPath = filePath.substring(0, filePath.lastIndexOf('.')) + '.png';
+        originalLocalUrl = `/uploads/${pressId}/${type}s/${fileName}`;
+      } else if (fileExtension === '.svg') {
         try {
           const sharp = require('sharp');
+          const pngPath = filePath.replace('.svg', '.png');
           await sharp(buffer, { density: 300 }).png().toFile(pngPath);
         } catch (err) {
-          console.error('Sharp SVG to PNG conversion error:', err);
+          console.error('Sharp SVG error:', err);
         }
+        originalLocalUrl = `/uploads/${pressId}/${type}s/${fileName}`;
       }
 
       const localUrl = `/uploads/${pressId}/${type}s/${fileName}`;
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
         url: localUrl,
-        provider: 'local_fallback'
+        originalUrl: originalLocalUrl ?? undefined,
+        provider: 'local_fallback',
       });
     }
   } catch (error: any) {

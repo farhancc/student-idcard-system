@@ -104,26 +104,29 @@ model Cardholder {
 // ── CARD TEMPLATES ────────────────────────────────────────
 
 model CardTemplate {
-  id            Int      @id @default(autoincrement())
-  pressId       Int      @map("press_id")
-  press         Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
-  clientId      Int?     @map("client_id") // Optional link to specific client
-  name          String
-  cardWidth     Int      @default(1011) @map("card_width") // pixels at 300 DPI (85.6mm)
-  cardHeight    Int      @default(638) @map("card_height") // pixels at 300 DPI (54mm)
-  frontImageUrl String   @map("front_image_url")
-  backImageUrl  String?  @map("back_image_url") // null = blank white back
-  frontFields   String   @map("front_fields") // JSON coordinate map
-  backFields    String   @default("[]") @map("back_fields") // JSON coordinate map
-  version       Int      @default(1)
-  parentId      Int?     @map("parent_id") // Reference to parent template version
-  isLatest      Boolean  @default(true) @map("is_latest")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id              Int      @id @default(autoincrement())
+  pressId         Int      @map("press_id")
+  press           Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  clientId        Int?     @map("client_id") // Optional link to specific client
+  name            String
+  cardWidth       Int      @default(1011) @map("card_width") // pixels at 300 DPI (85.6mm)
+  cardHeight      Int      @default(638) @map("card_height") // pixels at 300 DPI (54mm)
+  frontImageUrl   String   @map("front_image_url")           // Low-res WebP/JPEG preview (Cloudinary)
+  backImageUrl    String?  @map("back_image_url")            // Low-res WebP/JPEG preview (Cloudinary)
+  frontOriginalUrl String? @map("front_original_url")        // Original PDF/SVG on Cloudinary (for Electron renderer fallback)
+  backOriginalUrl  String? @map("back_original_url")         // Original PDF/SVG on Cloudinary (for Electron renderer fallback)
+  frontFields     String   @map("front_fields") // JSON coordinate map
+  backFields      String   @default("[]") @map("back_fields") // JSON coordinate map
+  version         Int      @default(1)
+  parentId        Int?     @map("parent_id") // Reference to parent template version
+  isLatest        Boolean  @default(true) @map("is_latest")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   orders        CardOrder[]
 
   @@map("card_templates")
 }
+
 
 // ── CARD ORDERS ───────────────────────────────────────────
 

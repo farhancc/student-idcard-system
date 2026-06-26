@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontFields, backFields, clientId } = await request.json();
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = await request.json();
 
     if (!name || !frontImageUrl) {
       return NextResponse.json({ error: 'Template name and Front Image URL are required' }, { status: 400 });
@@ -44,6 +44,8 @@ export async function POST(request: Request) {
         cardHeight: cardHeight ? Number(cardHeight) : 638,
         frontImageUrl,
         backImageUrl,
+        frontOriginalUrl: frontOriginalUrl || null,
+        backOriginalUrl: backOriginalUrl || null,
         frontFields: frontFields || '[]',
         backFields: backFields || '[]',
         version: 1,

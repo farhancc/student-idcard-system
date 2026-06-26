@@ -180,6 +180,8 @@ export async function renderCardSideClient(
     cardHeight: number;
     frontImageUrl: string;
     backImageUrl: string | null;
+    frontOriginalUrl?: string | null;
+    backOriginalUrl?: string | null;
     frontFields: string;
     backFields: string;
   },
@@ -217,19 +219,27 @@ export async function renderCardSideClient(
   const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
   
   let bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+  // For Electron: prefer the locally-cached original file (highest quality)
+  // Fallback 1: Cloudinary original URL (PDF/SVG uploaded at full resolution)
+  // Fallback 2: Cloudinary display/preview URL (low-res WebP)
+  const originalUrl = side === 'front' ? template.frontOriginalUrl : template.backOriginalUrl;
 
-  // Resolve local original path if running inside Electron
+  // Try to resolve a local cached file first (Electron)
   if (bgUrl && typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
     try {
       const localPath = await (window as any).electronAPI.getLocalTemplatePath({
         templateId: template.id,
-        side
+        side,
       });
       if (localPath) {
         bgUrl = `local://${localPath}`;
+      } else if (originalUrl) {
+        // No local cache → fall back to Cloudinary original (high-res)
+        bgUrl = originalUrl;
       }
     } catch (err) {
       console.error('Failed to get local template path:', err);
+      if (originalUrl) bgUrl = originalUrl;
     }
   }
 

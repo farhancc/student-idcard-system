@@ -97,6 +97,8 @@ export async function GET(request: Request) {
         height: order.template.cardHeight,
         frontImageUrl: order.template.frontImageUrl,
         backImageUrl: order.template.backImageUrl,
+        frontOriginalUrl: order.template.frontOriginalUrl,
+        backOriginalUrl: order.template.backOriginalUrl,
         isDoubleSided: !!order.template.backImageUrl,
         frontFields: order.template.frontFields,
         backFields: order.template.backFields,

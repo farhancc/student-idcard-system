@@ -69,6 +69,8 @@ export default function TemplatesPage() {
   const [cardHeight, setCardHeight] = useState(638);
   const [frontImageUrl, setFrontImageUrl] = useState('');
   const [backImageUrl, setBackImageUrl] = useState('');
+  const [frontOriginalUrl, setFrontOriginalUrl] = useState('');
+  const [backOriginalUrl, setBackOriginalUrl] = useState('');
   const [frontLocalPath, setFrontLocalPath] = useState('');
   const [backLocalPath, setBackLocalPath] = useState('');
   const [frontWebUrl, setFrontWebUrl] = useState('');
@@ -313,6 +315,25 @@ export default function TemplatesPage() {
             toast(`Failed to prepare ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
           });
 
+        // Upload original to Cloudinary in the background for high-res Electron fallback
+        const arrayBufferForUpload = await file.arrayBuffer();
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', new Blob([arrayBufferForUpload], { type: file.type }), file.name);
+        uploadFormData.append('type', 'template');
+        fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'x-press-id': String(pressId ?? 0) },
+          body: uploadFormData,
+        })
+          .then(r => r.json())
+          .then(result => {
+            if (result.originalUrl) {
+              if (side === 'front') setFrontOriginalUrl(result.originalUrl);
+              else setBackOriginalUrl(result.originalUrl);
+            }
+          })
+          .catch(err => console.error('Background Cloudinary original upload failed:', err));
+
       } else {
         // ── Web fallback: not supported for template images ─────────
         throw new Error('Template image upload is only supported in the Desktop App.');
@@ -541,6 +562,8 @@ export default function TemplatesPage() {
           cardHeight,
           frontImageUrl: finalFrontWebUrl,
           backImageUrl: finalBackWebUrl || null,
+          frontOriginalUrl: frontOriginalUrl || null,
+          backOriginalUrl: backOriginalUrl || null,
           frontFields: JSON.stringify(frontFields),
           backFields: JSON.stringify(backFields),
         }),
@@ -564,6 +587,8 @@ export default function TemplatesPage() {
       setCardHeight(638);
       setFrontImageUrl('');
       setBackImageUrl('');
+      setFrontOriginalUrl('');
+      setBackOriginalUrl('');
       setFrontLocalPath('');
       setBackLocalPath('');
       setFrontWebUrl('');
@@ -588,6 +613,8 @@ export default function TemplatesPage() {
     setCardHeight(tmpl.cardHeight);
     setFrontImageUrl(tmpl.frontImageUrl);
     setBackImageUrl(tmpl.backImageUrl || '');
+    setFrontOriginalUrl(tmpl.frontOriginalUrl || '');
+    setBackOriginalUrl(tmpl.backOriginalUrl || '');
     setFrontWebUrl(tmpl.frontImageUrl);
     setBackWebUrl(tmpl.backImageUrl || '');
     setFrontLocalPath('');

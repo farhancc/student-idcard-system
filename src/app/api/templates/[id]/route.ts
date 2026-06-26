@@ -51,7 +51,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontFields, backFields, clientId } = await request.json();
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = await request.json();
 
     // 1. Transaction to handle versioning
     const newTemplate = await prisma.$transaction(async (tx) => {
@@ -71,6 +71,8 @@ export async function PUT(
           cardHeight: cardHeight ? Number(cardHeight) : oldTemplate.cardHeight,
           frontImageUrl: frontImageUrl || oldTemplate.frontImageUrl,
           backImageUrl: backImageUrl !== undefined ? backImageUrl : oldTemplate.backImageUrl,
+          frontOriginalUrl: frontOriginalUrl !== undefined ? frontOriginalUrl : oldTemplate.frontOriginalUrl,
+          backOriginalUrl: backOriginalUrl !== undefined ? backOriginalUrl : oldTemplate.backOriginalUrl,
           frontFields: frontFields || oldTemplate.frontFields,
           backFields: backFields || oldTemplate.backFields,
           version: oldTemplate.version + 1,
