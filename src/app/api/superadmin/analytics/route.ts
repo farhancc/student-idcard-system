@@ -9,6 +9,7 @@ export async function GET() {
         orders: {
           include: {
             invoice: true,
+            _count: { select: { cardholders: true } }
           }
         }
       },
@@ -21,13 +22,7 @@ export async function GET() {
       const revenueByMonth: Record<string, number> = {};
 
       client.orders.forEach(order => {
-        let count = 0;
-        try {
-          const ids = JSON.parse(order.cardholderIds || '[]');
-          count = Array.isArray(ids) ? ids.length : 0;
-        } catch {
-          count = 0;
-        }
+        const count = order._count?.cardholders || 0;
         totalCards += count;
 
         if (order.invoice) {

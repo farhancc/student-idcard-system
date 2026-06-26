@@ -15,11 +15,21 @@ export async function GET(request: Request) {
         client: true,
         template: true,
         invoice: true,
+        cardholders: {
+          select: {
+            cardholderId: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({ success: true, orders });
+    const ordersWithLegacyField = orders.map(ord => ({
+      ...ord,
+      cardholderIds: JSON.stringify(ord.cardholders.map(oc => oc.cardholderId)),
+    }));
+
+    return NextResponse.json({ success: true, orders: ordersWithLegacyField });
   } catch (error) {
     console.error('Get orders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -30,11 +40,13 @@ export async function POST(request: Request) {
   try {
     const pressIdStr = request.headers.get('x-press-id');
     const userIdStr = request.headers.get('x-user-id');
+    const userNameHeader = request.headers.get('x-user-name');
     if (!pressIdStr || !userIdStr) {
       return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
     }
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
+    const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
 
     const { clientId, templateId, cardholderIds, validTill, pricePerCard, status } = await request.json();
 
@@ -60,10 +72,18 @@ export async function POST(request: Request) {
           clientId: Number(clientId),
           templateId: Number(templateId),
           status: status || 'DRAFT',
-          cardholderIds: JSON.stringify(cardholderIds),
           validTill: validTillDate,
           templateVersion: template.version,
         },
+      });
+
+      // Link cardholders via the join table
+      await tx.orderCardholder.createMany({
+        data: (cardholderIds as number[]).map((chId: number) => ({
+          orderId: order.id,
+          cardholderId: chId,
+        })),
+        skipDuplicates: true,
       });
 
       // M1 Order Pricing / Invoice calculation
@@ -95,7 +115,7 @@ export async function POST(request: Request) {
           orderId: order.id,
           pressId,
           actorId: userId,
-          actorName: 'Operator',
+          actorName,
           action: 'ORDER_CREATED',
           fromStatus: null,
           toStatus: 'DRAFT',

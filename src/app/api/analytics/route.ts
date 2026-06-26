@@ -15,22 +15,22 @@ export async function GET(request: Request) {
 
     // ── Core Metrics ───────────────────────────────────────────────────────────
 
-    // Cards generated this month (from completed production jobs' cardholderIds)
+    // Cards generated this month (from completed production jobs' cardholders)
     const productionJobsThisMonth = await prisma.pdfJob.findMany({
       where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfMonth } },
-      include: { order: { select: { cardholderIds: true } } },
+      include: { order: { include: { _count: { select: { cardholders: true } } } } },
     });
     const cardsGenerated = productionJobsThisMonth.reduce((acc: number, job: any) => {
-      try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
+      return acc + (job.order?._count?.cardholders || 0);
     }, 0);
 
     // Cards last month
     const productionJobsLastMonth = await prisma.pdfJob.findMany({
       where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfLastMonth, lt: startOfMonth } },
-      include: { order: { select: { cardholderIds: true } } },
+      include: { order: { include: { _count: { select: { cardholders: true } } } } },
     });
     const cardsLastMonth = productionJobsLastMonth.reduce((acc: number, job: any) => {
-      try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
+      return acc + (job.order?._count?.cardholders || 0);
     }, 0);
 
     // PDFs generated this month
@@ -116,7 +116,11 @@ export async function GET(request: Request) {
       where: { pressId },
       orderBy: { createdAt: 'desc' },
       take: 5,
-      include: { client: { select: { name: true } }, template: { select: { name: true } } },
+      include: {
+        client: { select: { name: true } },
+        template: { select: { name: true } },
+        _count: { select: { cardholders: true } }
+      },
     });
 
     // ── Monthly production trend (last 6 months) ──────────────────────────────
@@ -127,10 +131,10 @@ export async function GET(request: Request) {
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       const jobs = await prisma.pdfJob.findMany({
         where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: start, lt: end } },
-        include: { order: { select: { cardholderIds: true } } },
+        include: { order: { include: { _count: { select: { cardholders: true } } } } },
       });
       const cards = jobs.reduce((acc: number, job: any) => {
-        try { return acc + (JSON.parse(job.order?.cardholderIds || '[]') as number[]).length; } catch { return acc; }
+        return acc + (job.order?._count?.cardholders || 0);
       }, 0);
       monthlyTrend.push({
         month: start.toLocaleString('default', { month: 'short' }),
@@ -175,7 +179,7 @@ export async function GET(request: Request) {
         templateName: o.template.name,
         status: o.status,
         createdAt: o.createdAt,
-        cardCount: JSON.parse(o.cardholderIds || '[]').length,
+        cardCount: o._count.cardholders,
       })),
       monthlyTrend,
     });

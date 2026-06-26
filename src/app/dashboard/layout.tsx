@@ -17,6 +17,7 @@ import {
   Printer,
   CreditCard
 } from 'lucide-react';
+import { ToastProvider } from '@/components/ui/toast';
 
 export default function DashboardLayout({
   children,
@@ -90,6 +91,7 @@ export default function DashboardLayout({
   ];
 
   return (
+    <ToastProvider>
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-gradient)' }}>
       {/* Sidebar Nav */}
       <aside style={{
@@ -247,5 +249,6 @@ export default function DashboardLayout({
       </main>
       <ProductionDaemon />
     </div>
+    </ToastProvider>
   );
 }

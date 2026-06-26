@@ -293,7 +293,7 @@ export default function OrdersPage() {
             </thead>
             <tbody>
               {orders.map((ord: any) => {
-                const cardholderCount = JSON.parse(ord.cardholderIds || '[]').length;
+                const cardholderCount = ord._count?.cardholders ?? (ord.cardholders?.length ?? 0);
                 const totalInvoiceAmount = ord.invoice ? `Rs. ${Number(ord.invoice.totalAmount).toFixed(2)}` : '—';
                 const paymentStatus = ord.invoice ? (
                   ord.invoice.paymentStatus === 'PAID' ? (

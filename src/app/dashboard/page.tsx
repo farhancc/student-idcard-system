@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useToast } from '@/components/ui/toast';
 import {
   Users, FileText, Layers, TrendingUp, ArrowRight, PlusCircle,
   FileSpreadsheet, Zap, CheckCircle, AlertCircle, Clock, CreditCard,
@@ -70,6 +71,7 @@ function timeAgo(date: string) {
 }
 
 export default function DashboardPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -137,7 +139,7 @@ export default function DashboardPage() {
           }
 
           if (totalPurged > 0) {
-            alert(`[IDexo Storage Management]: Automatically backed up and archived ${totalPurged} old records (exceeding 90 days) to your Documents/IDexo_Backups directory. Server storage has been successfully freed up.`);
+            toast(`Storage: Archived ${totalPurged} expired records (>90 days) to Documents/IDexo_Backups. Server storage freed.`, 'success', 8000);
             fetchAnalytics();
           }
         }

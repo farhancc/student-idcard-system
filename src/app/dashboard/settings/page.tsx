@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import { 
   Key, 
@@ -21,6 +22,7 @@ import {
 } from 'lucide-react';
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [keys, setKeys] = useState<any[]>([]);
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [newGeneratedKey, setNewGeneratedKey] = useState('');
@@ -342,7 +344,7 @@ export default function SettingsPage() {
                     className="btn btn-secondary" 
                     onClick={() => {
                       navigator.clipboard.writeText(newGeneratedKey);
-                      alert('API key copied to clipboard.');
+                      toast('API key copied to clipboard.', 'success');
                     }}
                   >
                     <Copy size={16} />

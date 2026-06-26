@@ -1,17 +1,39 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { signupSchema } from '@/lib/schemas';
 
 export async function POST(request: Request) {
-  try {
-    const { pressName, ownerName, email, password, phone, city } = await request.json();
+  // ── Rate limiting: 5 signups per hour per IP ──────────────────────────────
+  const ip = getClientIp(request);
+  const rl = rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many registration attempts. Please wait before trying again.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
 
-    if (!pressName || !ownerName || !email || !password || !phone) {
-      return NextResponse.json(
-        { error: 'Press Name, Owner Name, Email, Mobile Number, and Password are required' },
-        { status: 400 }
-      );
+  try {
+    // ── Input validation ────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
+
+    const parsed = signupSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid input';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { pressName, ownerName, email, password, phone, city } = parsed.data;
 
     // Check if email already exists in press users
     const existingUser = await prisma.pressUser.findUnique({

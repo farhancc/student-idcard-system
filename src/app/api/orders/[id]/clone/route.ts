@@ -8,11 +8,13 @@ export async function POST(
   try {
     const pressIdStr = request.headers.get('x-press-id');
     const userIdStr = request.headers.get('x-user-id');
+    const userNameHeader = request.headers.get('x-user-name');
     if (!pressIdStr || !userIdStr) {
       return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
     }
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
+    const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
     const { id } = await params;
     const orderId = Number(id);
 
@@ -35,7 +37,7 @@ export async function POST(
           clientId: originalOrder.clientId,
           templateId: originalOrder.templateId,
           status: 'DRAFT',
-          cardholderIds: '[]', // Reset cardholders (fresh import required)
+          // cardholders join rows start empty — fresh import required
           validTill: originalOrder.validTill,
           templateVersion: originalOrder.templateVersion,
           notes: `Cloned from Order #${originalOrder.id}.`,
@@ -66,7 +68,7 @@ export async function POST(
           orderId: newOrder.id,
           pressId,
           actorId: userId,
-          actorName: 'Operator',
+          actorName,
           action: 'ORDER_CLONED',
           note: `Cloned from Order #${originalOrder.id}.`,
         },

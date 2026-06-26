@@ -22,14 +22,16 @@ export async function POST(request: Request) {
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: Number(orderId), pressId },
+      include: {
+        _count: { select: { cardholders: true } }
+      }
     });
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const cardholderIds: number[] = JSON.parse(order.cardholderIds || '[]');
-    const cardCount = cardholderIds.length;
+    const cardCount = order._count.cardholders;
     if (cardCount === 0) {
       return NextResponse.json({ error: 'Order does not contain any cardholders' }, { status: 400 });
     }

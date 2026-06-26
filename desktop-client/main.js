@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -6,6 +6,13 @@ const XLSX = require('xlsx');
 const AdmZip = require('adm-zip');
 
 let mainWindow;
+
+function getPortalUrl() {
+  if (app.isPackaged) {
+    return 'https://idexocards.vercel.app';
+  }
+  return process.env.PORTAL_URL || 'https://idexocards.vercel.app';
+}
 
 // Configure Auto-Updater targeting secure CDN release path
 autoUpdater.autoDownload = true;
@@ -44,7 +51,7 @@ function isVersionOutdated(current, minimum) {
 }
 
 async function checkCloudVersionCompat() {
-  const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
+  const portalUrl = getPortalUrl();
   const appVersion = app.getVersion();
   
   try {
@@ -67,11 +74,14 @@ async function checkCloudVersionCompat() {
 }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, 'icon.png');
+  const appIcon = nativeImage.createFromPath(iconPath);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     title: "IDexo Press Client",
-    icon: path.join(__dirname, 'icon.png'),
+    icon: appIcon,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -79,14 +89,43 @@ function createWindow() {
     },
   });
 
-  const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
-  console.log('Loading startup URL:', `${portalUrl}/dashboard`);
-  mainWindow.loadURL(`${portalUrl}/dashboard`);
+  // Enable F12 and Ctrl+Shift+I to toggle DevTools for easy troubleshooting
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type === 'keyDown') {
+      const isDevToolsCombo = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
+      const isF12 = input.key === 'F12';
+      if (isDevToolsCombo || isF12) {
+        mainWindow.webContents.toggleDevTools();
+        event.preventDefault();
+      }
+    }
+  });
+
+  // Log renderer console messages directly to terminal stdout
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR'];
+    console.log(`[Renderer Console - ${levels[level] || 'LOG'}] ${message} (at ${path.basename(sourceId)}:${line})`);
+  });
+
+  const portalUrl = getPortalUrl();
+  const startUrl = `${portalUrl}/login`;
+  console.log('Loading startup URL:', startUrl);
+  
+  // Track page loading status
+  mainWindow.webContents.on('did-start-loading', () => {
+    console.log('Page loading started...');
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('Page loaded successfully.');
+  });
+
+  mainWindow.loadURL(startUrl);
 
   // Handle page load failures gracefully by showing our native-looking offline view
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (isMainFrame && !validatedURL.includes('offline.html')) {
-      console.log(`Connection failed: ${validatedURL} (Error: ${errorCode} - ${errorDescription})`);
+      console.error(`Connection failed: ${validatedURL} (Error: ${errorCode} - ${errorDescription})`);
       mainWindow.loadFile(path.join(__dirname, 'offline.html'));
     }
   });
@@ -110,6 +149,14 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+});
+
+app.on('render-process-gone', (event, webContents, details) => {
+  console.error('Render process crashed or terminated:', details);
+});
+
+app.on('child-process-gone', (event, details) => {
+  console.error('Child process terminated:', details);
 });
 
 app.on('window-all-closed', function () {
@@ -150,13 +197,13 @@ ipcMain.handle('is-desktop', () => {
 
 // IPC handler to get Portal URL for the offline page
 ipcMain.handle('get-portal-url', () => {
-  return process.env.PORTAL_URL || 'https://idexocards.vercel.app';
+  return getPortalUrl();
 });
 
 // IPC handler to reload / reconnect the app
 ipcMain.handle('reload-app', () => {
   if (mainWindow) {
-    const portalUrl = process.env.PORTAL_URL || 'https://idexocards.vercel.app';
+    const portalUrl = getPortalUrl();
     console.log(`Reconnecting to server at: ${portalUrl}/dashboard`);
     mainWindow.loadURL(`${portalUrl}/dashboard`);
   }

@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import Papa from 'papaparse';
 
 export async function POST(request: Request) {
@@ -70,10 +70,24 @@ export async function POST(request: Request) {
       const parseResult = Papa.parse(csvText, { header: true, skipEmptyLines: true });
       rawData = parseResult.data;
     } else if (excelName.endsWith('.xlsx') || excelName.endsWith('.xls')) {
-      const workbook = XLSX.read(excelBuffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[sheetName];
-      rawData = XLSX.utils.sheet_to_json(worksheet);
+      const workbook = new ExcelJS.Workbook();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await workbook.xlsx.load(Buffer.from(excelBuffer) as any);
+      const sheet = workbook.worksheets[0];
+      if (!sheet) {
+        return NextResponse.json({ error: 'XLSX file contains no sheets.' }, { status: 400 });
+      }
+      const headerRow = sheet.getRow(1).values as (string | undefined)[];
+      const headers = headerRow.slice(1);
+      sheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const rowObj: Record<string, any> = {};
+        (row.values as any[]).slice(1).forEach((cell, idx) => {
+          const key = headers[idx];
+          if (key) rowObj[key] = cell?.text ?? cell ?? '';
+        });
+        rawData.push(rowObj);
+      });
     } else {
       return NextResponse.json({ error: 'Unsupported spreadsheet format. Please upload CSV or XLSX.' }, { status: 400 });
     }
@@ -279,10 +293,18 @@ export async function POST(request: Request) {
         clientId,
         templateId,
         status: 'DRAFT',
-        cardholderIds: JSON.stringify(cardholderIds),
         validTill: validTillDate,
         templateVersion: template.version,
       },
+    });
+
+    // Link cardholders via the join table
+    await prisma.orderCardholder.createMany({
+      data: cardholderIds.map((chId: number) => ({
+        orderId: order.id,
+        cardholderId: chId,
+      })),
+      skipDuplicates: true,
     });
 
     const cardCount = cardholderIds.length;

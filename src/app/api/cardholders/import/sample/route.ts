@@ -1,18 +1,22 @@
 import { NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export async function GET() {
   try {
-    const data = [
-      { name: 'John Doe', designation: 'Student', uniqueKey: 'STU-001', admissionNo: '2026-001' },
-      { name: 'Jane Smith', designation: 'Teacher', uniqueKey: 'TCH-102', employeeId: 'EMP-102' }
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Cardholders');
+
+    sheet.columns = [
+      { header: 'name', key: 'name', width: 25 },
+      { header: 'designation', key: 'designation', width: 20 },
+      { header: 'uniqueKey', key: 'uniqueKey', width: 15 },
+      { header: 'admissionNo', key: 'admissionNo', width: 15 },
     ];
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Cardholders');
+    sheet.addRow({ name: 'John Doe', designation: 'Student', uniqueKey: 'STU-001', admissionNo: '2026-001' });
+    sheet.addRow({ name: 'Jane Smith', designation: 'Teacher', uniqueKey: 'TCH-102', admissionNo: 'EMP-102' });
 
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
     return new Response(buffer, {
       headers: {

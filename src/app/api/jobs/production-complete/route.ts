@@ -100,7 +100,10 @@ export async function POST(request: Request) {
 
         // Transition order status if PRODUCTION
         if (job.pdfType === 'PRODUCTION') {
-          const order = await tx.cardOrder.findUnique({ where: { id: job.orderId } });
+          const order = await tx.cardOrder.findUnique({
+            where: { id: job.orderId },
+            include: { cardholders: true }
+          });
           if (order) {
             await tx.cardOrder.update({
               where: { id: job.orderId },
@@ -108,11 +111,10 @@ export async function POST(request: Request) {
             });
 
             // Record print logs
-            const cardholderIds: number[] = JSON.parse(order.cardholderIds || '[]');
-            for (const chId of cardholderIds) {
+            for (const ch of order.cardholders) {
               await tx.cardPrintRecord.create({
                 data: {
-                  cardholderId: chId,
+                  cardholderId: ch.cardholderId,
                   pressId,
                   orderId: order.id,
                   status: 'PRINTED',

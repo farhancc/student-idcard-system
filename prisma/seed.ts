@@ -3,38 +3,76 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('Seeding database...');
+// ─── helpers ─────────────────────────────────────────────────────────────────
 
-  // 1. Seed Super Admin
-  const adminEmail = 'admin@studentidsystem.com';
-  const existingAdmin = await prisma.superAdmin.findUnique({
-    where: { email: adminEmail },
+async function upsertSuperAdmin(
+  email: string,
+  name: string,
+  password: string,
+) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.superAdmin.upsert({
+    where: { email },
+    update: { name, passwordHash },
+    create: { email, name, passwordHash },
   });
+  console.log(`✅  SuperAdmin upserted : ${email}  (pw: ${password})`);
+}
 
-  if (!existingAdmin) {
-    const adminPasswordHash = await bcrypt.hash('superadminpassword', 10);
-    await prisma.superAdmin.create({
-      data: {
-        email: adminEmail,
-        passwordHash: adminPasswordHash,
-        name: 'Platform Admin',
-      },
+async function upsertPressUser(
+  pressId: number,
+  email: string,
+  name: string,
+  password: string,
+  role: 'OWNER' | 'OPERATOR' | 'DESIGNER',
+) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  const existing = await prisma.pressUser.findUnique({ where: { email } });
+  if (existing) {
+    await prisma.pressUser.update({
+      where: { email },
+      data: { name, passwordHash, role, pressId, active: true },
     });
-    console.log(`✅ Super Admin created: ${adminEmail}`);
+    console.log(`🔄  PressUser updated  : ${email}  role: ${role}  (pw: ${password})`);
   } else {
-    console.log(`ℹ️ Super Admin ${adminEmail} already exists`);
+    await prisma.pressUser.create({
+      data: { pressId, email, name, passwordHash, role, active: true },
+    });
+    console.log(`✅  PressUser created  : ${email}  role: ${role}  (pw: ${password})`);
   }
+}
 
-  // 2. Seed a test Press tenant
+// ─── main ─────────────────────────────────────────────────────────────────────
+
+async function main() {
+  console.log('\n🌱  Seeding database…\n');
+
+  // ── 1. SUPER ADMINS ────────────────────────────────────────────────────────
+  console.log('── Super Admins ──');
+  await upsertSuperAdmin(
+    'admin@idexo.app',
+    'Platform Admin',
+    'Admin@1234',
+  );
+  await upsertSuperAdmin(
+    'ops@idexo.app',
+    'Ops Manager',
+    'Ops@5678',
+  );
+  await upsertSuperAdmin(
+    'support@idexo.app',
+    'Support Lead',
+    'Support@9999',
+  );
+
+  // ── 2. PRESS (TENANT) ──────────────────────────────────────────────────────
+  console.log('\n── Press Tenant ──');
   const pressEmail = 'contact@springfieldpress.com';
-  let press = await prisma.press.findUnique({
-    where: { email: pressEmail },
-  });
+  let press = await prisma.press.findUnique({ where: { email: pressEmail } });
 
   if (!press) {
     const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 30); // 30 days trial for test seed
+    trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
     press = await prisma.press.create({
       data: {
@@ -44,84 +82,114 @@ async function main() {
         city: 'Bangalore',
         plan: 'PRO',
         isActive: true,
+        credits: 500,
         trialEndsAt,
       },
     });
-    console.log(`✅ Press Tenant created: ${press.name}`);
+    console.log(`✅  Press created       : ${press.name}  (id: ${press.id})`);
   } else {
-    console.log(`ℹ️ Press Tenant ${press.name} already exists`);
+    // Make sure press is active
+    press = await prisma.press.update({
+      where: { id: press.id },
+      data: { isActive: true },
+    });
+    console.log(`ℹ️   Press updated/active: ${press.name}  (id: ${press.id})`);
   }
 
-  // 3. Seed an OWNER user for the press
-  const ownerEmail = 'ravi@springfieldpress.com';
-  const existingOwner = await prisma.pressUser.findUnique({
-    where: { email: ownerEmail },
-  });
+  // Press owner & staff logins
+  await upsertPressUser(
+    press.id,
+    'ravi@springfieldpress.com',
+    'Ravi Kumar',
+    'Press@Owner1',
+    'OWNER',
+  );
 
-  if (!existingOwner) {
-    const ownerPasswordHash = await bcrypt.hash('presspassword', 10);
-    await prisma.pressUser.create({
+  await upsertPressUser(
+    press.id,
+    'staff@springfieldpress.com',
+    'Amit Singh',
+    'staffpassword',
+    'OPERATOR',
+  );
+
+  await upsertPressUser(
+    press.id,
+    'designer@springfieldpress.com',
+    'Neha Roy',
+    'designerpassword',
+    'DESIGNER',
+  );
+
+  // ── 3. CLIENTS ────────────────────────────────────────────────────────────
+  console.log('\n── Clients ──');
+
+  // — Client A: School ———————————————————————————————————————————————————————
+  const schoolName = 'Greenwood Public School';
+  let school = await prisma.client.findFirst({
+    where: { pressId: press.id, name: schoolName },
+  });
+  if (!school) {
+    school = await prisma.client.create({
       data: {
         pressId: press.id,
-        name: 'Ravi Kumar',
-        email: ownerEmail,
-        passwordHash: ownerPasswordHash,
-        role: 'OWNER',
-        active: true,
+        name: schoolName,
+        type: 'SCHOOL',
+        contactName: 'Mrs. Priya Sharma',
+        contactPhone: '+91 80123 45678',
+        contactEmail: 'principal@greenwoodschool.edu.in',
+        address: '12 MG Road, Bengaluru, Karnataka – 560001',
       },
     });
-    console.log(`✅ Press OWNER user created: ${ownerEmail}`);
+    console.log(`✅  Client created      : ${school.name}  type: SCHOOL  (id: ${school.id})`);
   } else {
-    console.log(`ℹ️ Press OWNER user ${ownerEmail} already exists`);
+    console.log(`ℹ️   Client exists       : ${school.name}  (id: ${school.id})`);
   }
 
-  // 4. Seed an OPERATOR user for the press
-  const operatorEmail = 'staff@springfieldpress.com';
-  const existingOperator = await prisma.pressUser.findUnique({
-    where: { email: operatorEmail },
+  // — Client B: NGO ——————————————————————————————————————————————————————————
+  const ngoName = 'Asha Kiran Foundation';
+  let ngo = await prisma.client.findFirst({
+    where: { pressId: press.id, name: ngoName },
   });
-
-  if (!existingOperator) {
-    const operatorPasswordHash = await bcrypt.hash('staffpassword', 10);
-    await prisma.pressUser.create({
+  if (!ngo) {
+    ngo = await prisma.client.create({
       data: {
         pressId: press.id,
-        name: 'Amit Singh',
-        email: operatorEmail,
-        passwordHash: operatorPasswordHash,
-        role: 'OPERATOR',
-        active: true,
+        name: ngoName,
+        type: 'NGO',
+        contactName: 'Mr. Arun Mehta',
+        contactPhone: '+91 99887 76655',
+        contactEmail: 'info@ashakiran.org',
+        address: '45 Nehru Nagar, Pune, Maharashtra – 411001',
       },
     });
-    console.log(`✅ Press OPERATOR user created: ${operatorEmail}`);
+    console.log(`✅  Client created      : ${ngo.name}  type: NGO  (id: ${ngo.id})`);
   } else {
-    console.log(`ℹ️ Press OPERATOR user ${operatorEmail} already exists`);
+    console.log(`ℹ️   Client exists       : ${ngo.name}  (id: ${ngo.id})`);
   }
 
-  // 5. Seed a DESIGNER user for the press
-  const designerEmail = 'designer@springfieldpress.com';
-  const existingDesigner = await prisma.pressUser.findUnique({
-    where: { email: designerEmail },
-  });
+  // ── SUMMARY ────────────────────────────────═══════════════════════════════
+  console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║                     SEED CREDENTIALS                        ║
+╠══════════════════════════════════════════════════════════════╣
+║  SUPER ADMIN PORTAL (/superadmin/login)                      ║
+║  admin@idexo.app          pw: Admin@1234                     ║
+║  ops@idexo.app            pw: Ops@5678                       ║
+║  support@idexo.app        pw: Support@9999                   ║
+╠══════════════════════════════════════════════════════════════╣
+║  PRESS TENANT PORTAL (/login)                                ║
+║  ravi@springfieldpress.com  pw: Press@Owner1  role: OWNER    ║
+║  staff@springfieldpress.com pw: staffpassword role: OPERATOR ║
+║  designer@springfieldpress.com pw: designerpassword DESIGNER ║
+╠══════════════════════════════════════════════════════════════╣
+║  CLIENTS (under Springfield Press)                           ║
+║  • Greenwood Public School  (type: SCHOOL)                   ║
+║  • Asha Kiran Foundation    (type: NGO)                      ║
+╚══════════════════════════════════════════════════════════════╝
+`);
 
-  if (!existingDesigner) {
-    const designerPasswordHash = await bcrypt.hash('designerpassword', 10);
-    await prisma.pressUser.create({
-      data: {
-        pressId: press.id,
-        name: 'Neha Roy',
-        email: designerEmail,
-        passwordHash: designerPasswordHash,
-        role: 'DESIGNER',
-        active: true,
-      },
-    });
-    console.log(`✅ Press DESIGNER user created: ${designerEmail}`);
-  } else {
-    console.log(`ℹ️ Press DESIGNER user ${designerEmail} already exists`);
-  }
-
-  console.log('Seeding completed successfully! 🎉');
+  console.log('🎉  Seeding completed!\n');
 }
 
 main()

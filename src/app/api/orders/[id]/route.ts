@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { updateOrderSchema } from '@/lib/schemas';
 
 export async function GET(
   request: Request,
@@ -24,6 +25,11 @@ export async function GET(
         notesHistory: { orderBy: { createdAt: 'desc' } },
         activities: { orderBy: { createdAt: 'desc' } },
         pdfJobs: { orderBy: { generatedAt: 'desc' } },
+        cardholders: {
+          include: {
+            cardholder: true
+          }
+        }
       },
     });
 
@@ -31,9 +37,15 @@ export async function GET(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
+    const cardholderIds = order.cardholders.map(oc => oc.cardholderId);
+    const orderWithLegacyField = {
+      ...order,
+      cardholderIds: JSON.stringify(cardholderIds)
+    };
+
     return NextResponse.json({
       success: true,
-      order,
+      order: orderWithLegacyField,
       logs: order.activities.map(a => ({
         id: a.id,
         timestamp: a.createdAt,
@@ -61,18 +73,32 @@ export async function PUT(
   try {
     const pressIdStr = request.headers.get('x-press-id');
     const userIdStr = request.headers.get('x-user-id');
+    const userNameHeader = request.headers.get('x-user-name');
     if (!pressIdStr || !userIdStr) {
       return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
     }
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
+    const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
     const { id } = await params;
     const orderId = Number(id);
 
-    const { status, notes, validTill, deliveredTo, deliveredBy, deliveryRemarks, paymentStatus, paymentMethod } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const parsed = updateOrderSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid input';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+    const { status, notes, validTill, deliveredTo, deliveredBy, deliveryRemarks, paymentStatus, paymentMethod } = parsed.data;
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: orderId, pressId },
+      include: { cardholders: true }
     });
 
     if (!order) {
@@ -118,7 +144,7 @@ export async function PUT(
             orderId,
             pressId,
             actorId: userId,
-            actorName: 'Operator',
+            actorName,
             action: 'STATUS_CHANGED',
             fromStatus,
             toStatus,
@@ -129,7 +155,7 @@ export async function PUT(
 
       // 3. M13: Create delivery record if state becomes DELIVERED
       if (toStatus === 'DELIVERED' && fromStatus !== 'DELIVERED') {
-        const cardIds = JSON.parse(order.cardholderIds || '[]');
+        const cardCount = order.cardholders.length;
         await tx.deliveryRecord.create({
           data: {
             orderId,
@@ -137,7 +163,7 @@ export async function PUT(
             deliveredTo: deliveredTo || 'Client Office',
             deliveredBy: deliveredBy || 'Courier Agent',
             deliveredAt: new Date(),
-            cardCount: cardIds.length,
+            cardCount,
             remarks: deliveryRemarks || 'Delivered securely.',
           },
         });

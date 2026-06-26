@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import {
   Building2,
@@ -28,6 +29,7 @@ export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = Number(params.id);
+  const { toast } = useToast();
 
   const [client, setClient] = useState<any>(null);
   const [cardholders, setCardholders] = useState<any[]>([]);
@@ -173,7 +175,7 @@ export default function ClientDetailsPage() {
 
       setPhotoUrl(data.url);
     } catch (err: any) {
-      alert(err.message || 'Failed to upload photo');
+      toast(err.message || 'Failed to upload photo', 'error');
     } finally {
       setUploadingPhoto(false);
     }
@@ -434,7 +436,7 @@ export default function ClientDetailsPage() {
 
       setEditPhotoUrl(data.url);
     } catch (err: any) {
-      alert(err.message || 'Failed to upload photo');
+      toast(err.message || 'Failed to upload photo', 'error');
     } finally {
       setUploadingEditPhoto(false);
     }
@@ -521,7 +523,7 @@ export default function ClientDetailsPage() {
       
       window.dispatchEvent(new Event('refresh-profile'));
     } catch (e: any) {
-      alert(e.message || 'Compile failed');
+      toast(e.message || 'Compile failed', 'error');
     } finally {
       setQCompiling(null);
     }
@@ -572,7 +574,7 @@ export default function ClientDetailsPage() {
         body: JSON.stringify({ remarks: reason }),
       });
       if (res.ok) {
-        alert('Card marked as LOST. Print cache marked stale for future individual re-printing.');
+        toast('Card marked as LOST. Print cache stale for future individual re-printing.', 'warning');
         fetchData();
       }
     } catch (err) {
@@ -617,7 +619,7 @@ export default function ClientDetailsPage() {
         : filteredCardholders;
 
       if (exportList.length === 0) {
-        alert('No cardholders to export.');
+        toast('No cardholders to export.', 'warning');
         return;
       }
 
@@ -633,7 +635,7 @@ export default function ClientDetailsPage() {
 
       if (!deductRes.ok) {
         const deductData = await deductRes.json();
-        alert(deductData.error || 'Failed to deduct credits for Excel export.');
+        toast(deductData.error || 'Failed to deduct credits for Excel export.', 'error');
         return;
       }
 
@@ -674,7 +676,7 @@ export default function ClientDetailsPage() {
       XLSX.writeFile(workbook, fileName);
     } catch (err: any) {
       console.error('Failed to export Excel:', err);
-      alert('Error exporting Excel: ' + err.message);
+      toast('Error exporting Excel: ' + err.message, 'error');
     }
   };
 
@@ -878,7 +880,7 @@ export default function ClientDetailsPage() {
                       style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px' }}
                       onClick={() => {
                         if (filteredCardholders.length === 0) {
-                          alert('No cardholders to compile.');
+                          toast('No cardholders to compile.', 'warning');
                           return;
                         }
                         setSelectedIds(filteredCardholders.map((c: any) => c.id));
@@ -1910,7 +1912,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
 
   const handleBatchCompile = async (type: 'APPROVAL' | 'PRODUCTION') => {
     if (selectedCardholderIds.length === 0) {
-      alert('Please select at least one cardholder to compile.');
+      toast('Please select at least one cardholder to compile.', 'warning');
       return;
     }
     setBatchPdfLoading(type);
@@ -1973,12 +1975,12 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
       window.dispatchEvent(new Event('refresh-profile'));
 
       if (isProduction) {
-        alert(`Production print job #${jobId} queued successfully!`);
+        toast(`Production print job #${jobId} queued successfully!`, 'success');
       } else {
-        alert(`Approval draft job #${jobId} queued successfully!`);
+        toast(`Approval draft job #${jobId} queued successfully!`, 'success');
       }
     } catch (e: any) {
-      alert(e.message || 'Error occurred during batch compilation');
+      toast(e.message || 'Error occurred during batch compilation', 'error');
     } finally {
       setBatchPdfLoading(null);
     }

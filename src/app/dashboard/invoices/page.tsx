@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useToast } from '@/components/ui/toast';
 import { 
   CreditCard, 
   Search, 
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function InvoicesPage() {
+  const { toast } = useToast();
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -95,7 +97,7 @@ export default function InvoicesPage() {
                   ...prev,
                   [orderId]: { status: 'FAILED', progress: 0 }
                 }));
-                alert(`PDF compilation failed: ${job.errorMsg || 'Unknown error'}`);
+                toast(`PDF compilation failed: ${job.errorMsg || 'Unknown error'}`, 'error');
               } else {
                 setPdfJobProgress(prev => ({
                   ...prev,
@@ -140,7 +142,7 @@ export default function InvoicesPage() {
         [orderId]: { status: 'PROCESSING', progress: 0, jobId: data.jobId }
       }));
     } catch (err: any) {
-      alert(err.message || 'Error occurred starting PDF generation');
+      toast(err.message || 'Error occurred starting PDF generation', 'error');
       setPdfJobProgress(prev => {
         const next = { ...prev };
         delete next[orderId];
@@ -214,7 +216,7 @@ export default function InvoicesPage() {
 
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Error occurred updating payment status');
+      toast(err.message || 'Error occurred updating payment status', 'error');
     }
   };
 

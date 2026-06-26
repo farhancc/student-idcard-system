@@ -32,19 +32,20 @@ export async function POST(request: Request) {
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: Number(orderId), pressId },
+      include: { _count: { select: { cardholders: true } } },
     });
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const cardholderIds: number[] = JSON.parse(order.cardholderIds || '[]');
-    if (cardholderIds.length === 0) {
+    const cardCount = order._count.cardholders;
+    if (cardCount === 0) {
       return NextResponse.json({ error: 'Order does not contain any cardholders' }, { status: 400 });
     }
 
     // 2. Subscription & Trial Limit checks
-    const limitCheck = await verifySubscriptionLimits(pressId, cardholderIds.length, pdfType);
+    const limitCheck = await verifySubscriptionLimits(pressId, cardCount, pdfType);
     if (!limitCheck.allowed) {
       return NextResponse.json({ error: limitCheck.reason }, { status: 403 });
     }
@@ -80,7 +81,6 @@ export async function POST(request: Request) {
       });
       
       if (!existingInvoice) {
-        const cardCount = cardholderIds.length;
         const pricePerCard = 50.0; // Default ₹50 per card
         const subtotal = cardCount * pricePerCard;
         const taxPercent = 18.0;   // Default 18% GST

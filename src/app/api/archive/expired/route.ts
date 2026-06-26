@@ -61,8 +61,10 @@ export async function GET(request: Request) {
           where: {
             pressId,
             clientId: ch.clientId,
-            cardholderIds: {
-              contains: String(ch.id),
+            cardholders: {
+              some: {
+                cardholderId: ch.id,
+              },
             },
           },
         });

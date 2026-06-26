@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 export async function GET(
   request: Request,
@@ -120,11 +120,19 @@ export async function GET(
       return row;
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Cardholders');
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Cardholders');
 
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    if (data.length > 0) {
+      sheet.columns = Object.keys(data[0]).map(key => ({
+        header: key,
+        key,
+        width: 20,
+      }));
+    }
+    data.forEach(row => sheet.addRow(row));
+
+    const buffer = await workbook.xlsx.writeBuffer();
 
     return new Response(buffer, {
       headers: {

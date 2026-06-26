@@ -93,6 +93,7 @@ model Cardholder {
 
   cardAsset    CardAsset?
   printRecords CardPrintRecord[]
+  orderCards   OrderCardholder[]
 
   @@unique([clientId, uniqueKey])
   @@index([pressId])
@@ -136,7 +137,6 @@ model CardOrder {
   template        CardTemplate @relation(fields: [templateId], references: [id])
   status          String   @default("DRAFT") // DRAFT | APPROVAL_PDF_GENERATED | APPROVAL_PDF_SENT | APPROVED | PRINTING | DELIVERED
   notes           String?
-  cardholderIds   String   @map("cardholder_ids") // JSON array: [1, 2, 3...]
   validTill       DateTime? @map("valid_till")
   templateVersion Int      @default(1) @map("template_version")
   createdAt       DateTime @default(now()) @map("created_at")
@@ -148,9 +148,25 @@ model CardOrder {
   notesHistory    OrderNote[]
   activities      OrderActivityLog[]
   printRecs       CardPrintRecord[]
+  cardholders     OrderCardholder[]
 
   @@index([pressId, clientId])
   @@map("card_orders")
+}
+
+// ── ORDER ↔ CARDHOLDER JOIN ───────────────────────────────
+
+model OrderCardholder {
+  id           Int        @id @default(autoincrement())
+  orderId      Int        @map("order_id")
+  order        CardOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  cardholderId Int        @map("cardholder_id")
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  addedAt      DateTime   @default(now()) @map("added_at")
+
+  @@unique([orderId, cardholderId])
+  @@index([cardholderId])
+  @@map("order_cardholders")
 }
 
 // ── CARD ASSET CACHE ──────────────────────────────────────

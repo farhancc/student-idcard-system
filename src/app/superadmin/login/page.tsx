@@ -2,12 +2,13 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Mail, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 export default function SuperAdminLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -48,19 +49,16 @@ export default function SuperAdminLoginPage() {
     }}>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', borderTop: '2px solid var(--danger)' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '56px',
-            height: '56px',
-            borderRadius: '12px',
-            background: 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)',
-            marginBottom: '16px',
-            boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)'
-          }}>
-            <ShieldAlert size={32} color="#fff" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="IDexo Logo"
+            style={{
+              width: '64px',
+              height: '64px',
+              objectFit: 'contain',
+              marginBottom: '16px'
+            }}
+          />
           <h2>Super Admin Portal</h2>
           <p style={{ marginTop: '8px' }}>Log in to platform administration panel</p>
         </div>
@@ -119,14 +117,35 @@ export default function SuperAdminLoginPage() {
               }} size={18} />
               <input
                 id="password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 className="form-input"
-                style={{ paddingLeft: '48px' }}
+                style={{ paddingLeft: '48px', paddingRight: '48px' }}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: 'absolute',
+                  right: '16px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0
+                }}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 

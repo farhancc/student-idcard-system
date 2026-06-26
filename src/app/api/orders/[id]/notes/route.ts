@@ -33,11 +33,13 @@ export async function POST(
   try {
     const pressIdStr = request.headers.get('x-press-id');
     const userIdStr = request.headers.get('x-user-id');
+    const userNameHeader = request.headers.get('x-user-name');
     if (!pressIdStr || !userIdStr) {
       return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
     }
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
+    const authorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
     const { id } = await params;
     const orderId = Number(id);
 
@@ -56,10 +58,7 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const user = await prisma.pressUser.findUnique({
-      where: { id: userId },
-    });
-    const authorName = user ? user.name : 'Unknown User';
+    // Author name is retrieved from headers
 
     const createdNote = await prisma.orderNote.create({
       data: {

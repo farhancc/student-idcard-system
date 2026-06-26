@@ -1,10 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { enrollSchema } from '@/lib/schemas';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ enrollToken: string }> }
 ) {
+  // ── Rate limiting: 20 submissions per hour per IP ─────────────────────────
+  const ip = getClientIp(request);
+  const rl = rateLimit(`enroll:${ip}`, 20, 60 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many submissions. Please wait before trying again.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
+
   try {
     const { enrollToken } = await params;
 
@@ -28,21 +43,30 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    const { name, designation, photoUrl, customFields, uniqueKey } = await request.json();
-
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    // ── Input validation ────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
+    const parsed = enrollSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid input';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { name, designation, photoUrl, customFields, uniqueKey } = parsed.data;
+
     // Automatically fall back to custom fields for uniqueKey if not provided
-    let finalUniqueKey = uniqueKey;
+    let finalUniqueKey = uniqueKey ?? null;
     if (!finalUniqueKey && customFields) {
-      const parsedFields = typeof customFields === 'string' ? JSON.parse(customFields) : customFields;
-      const keys = Object.keys(parsedFields || {});
+      const keys = Object.keys(customFields);
       const possibleUniqueKeys = ['rollNo', 'roll_no', 'empId', 'employeeId', 'uniqueKey', 'id'];
       const match = keys.find(k => possibleUniqueKeys.some(p => k.toLowerCase() === p.toLowerCase()));
       if (match) {
-        finalUniqueKey = parsedFields[match];
+        finalUniqueKey = customFields[match] ?? null;
       }
     }
 
@@ -52,7 +76,10 @@ export async function POST(
         where: { clientId: share.clientId, uniqueKey: finalUniqueKey },
       });
       if (existing) {
-        return NextResponse.json({ error: `Cardholder with Unique Key/Roll Number '${finalUniqueKey}' already exists.` }, { status: 400 });
+        return NextResponse.json(
+          { error: `Cardholder with Unique Key/Roll Number '${finalUniqueKey}' already exists.` },
+          { status: 400 }
+        );
       }
     }
 
@@ -64,9 +91,9 @@ export async function POST(
         pressId: share.pressId,
         clientId: share.clientId,
         name,
-        designation,
-        photoUrl,
-        customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
+        designation: designation ?? null,
+        photoUrl: photoUrl ?? null,
+        customFields: customFields ? JSON.stringify(customFields) : null,
         uniqueKey: finalUniqueKey || null,
         cardSerial,
         enrollToken, // Stores either the global enrollToken or the department enrollToken

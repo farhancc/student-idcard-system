@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/toast';
 import { 
   FileText, 
   ArrowLeft, 
@@ -28,6 +29,7 @@ export default function OrderDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = Number(params.id);
+  const { toast } = useToast();
 
   const [order, setOrder] = useState<any>(null);
   const [logs, setLogs] = useState<any[]>([]);
@@ -99,7 +101,7 @@ export default function OrderDetailsPage() {
       setShowInvoiceEdit(false);
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Update failed');
+      toast(err.message || 'Update failed', 'error');
     } finally {
       setInvSubmitting(false);
     }
@@ -299,7 +301,7 @@ export default function OrderDetailsPage() {
 
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Status transition error');
+      toast(err.message || 'Status transition error', 'error');
     } finally {
       setTransitioning(false);
     }
@@ -343,17 +345,17 @@ export default function OrderDetailsPage() {
       
       window.dispatchEvent(new Event('refresh-profile'));
 
-      const cardCount = order?.cardholderIds ? JSON.parse(order.cardholderIds).length : 0;
+      const cardCount = order?._count?.cardholders ?? order?.cardholders?.length ?? 0;
       if (type === 'PRODUCTION') {
-        alert(`Production print job #${data.jobId} queued successfully! It will compile on your Desktop App. Locked ${cardCount} credits.`);
+        toast(`Production job #${data.jobId} queued! Compiling on Desktop App. Locked ${cardCount} credits.`, 'success');
       } else if (type === 'INVOICE') {
-        alert(`Invoice compilation job #${data.jobId} queued successfully! It will compile on your Desktop App.`);
+        toast(`Invoice job #${data.jobId} queued! Compiling on Desktop App.`, 'success');
       } else {
-        alert(`Approval draft job #${data.jobId} queued successfully! It will compile on your Desktop App.`);
+        toast(`Approval draft job #${data.jobId} queued! Compiling on Desktop App.`, 'success');
       }
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Error compiling PDF');
+      toast(err.message || 'Error compiling PDF', 'error');
     } finally {
       setPdfLoading(null);
     }
@@ -368,7 +370,7 @@ export default function OrderDetailsPage() {
 
       window.open(data.whatsappUrl, '_blank');
     } catch (err: any) {
-      alert(err.message || 'Error occurred');
+      toast(err.message || 'Error occurred', 'error');
     }
   };
 
@@ -380,10 +382,10 @@ export default function OrderDetailsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Clone failed');
 
-      alert('Order cloned successfully!');
+      toast('Order cloned successfully!', 'success');
       router.push(`/dashboard/orders/${data.order.id}`);
     } catch (err: any) {
-      alert(err.message || 'Clone error');
+      toast(err.message || 'Clone error', 'error');
     }
   };
 
@@ -436,7 +438,7 @@ export default function OrderDetailsPage() {
   ];
 
   const currentStep = getStatusStep();
-  const cardholderCount = JSON.parse(order?.cardholderIds || '[]').length;
+  const cardholderCount = order?._count?.cardholders ?? (order?.cardholders?.length ?? 0);
 
   return (
     <div>
@@ -836,7 +838,7 @@ export default function OrderDetailsPage() {
                               if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
                               fetchData();
                             } catch (err: any) {
-                              alert(err.message || 'Error updating payment status');
+                              toast(err.message || 'Error updating payment status', 'error');
                             } finally {
                               setTransitioning(false);
                             }
@@ -877,7 +879,7 @@ export default function OrderDetailsPage() {
                               if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
                               fetchData();
                             } catch (err: any) {
-                              alert(err.message || 'Error updating payment status');
+                              toast(err.message || 'Error updating payment status', 'error');
                             } finally {
                               setTransitioning(false);
                             }

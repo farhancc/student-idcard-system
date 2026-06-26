@@ -30,6 +30,11 @@ export async function GET(request: Request) {
         template: true,
         client: true,
         invoice: true,
+        cardholders: {
+          include: {
+            cardholder: true
+          }
+        }
       },
     });
 
@@ -45,13 +50,7 @@ export async function GET(request: Request) {
       where: { pressId },
     });
 
-    // Parse cardholders
-    const cardholderIds: number[] = JSON.parse(order.cardholderIds || '[]');
-    const cardholders = await prisma.cardholder.findMany({
-      where: {
-        id: { in: cardholderIds },
-      },
-    });
+    const cardholders = order.cardholders.map(oc => oc.cardholder);
 
     return NextResponse.json({
       success: true,

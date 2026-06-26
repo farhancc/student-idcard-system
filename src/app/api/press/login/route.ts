@@ -1,17 +1,39 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, signUserToken } from '@/lib/auth';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { loginSchema } from '@/lib/schemas';
 
 export async function POST(request: Request) {
-  try {
-    const { email, password } = await request.json();
+  // ── Rate limiting: 10 attempts per 15 minutes per IP ─────────────────────
+  const ip = getClientIp(request);
+  const rl = rateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many login attempts. Please wait before trying again.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Email and Password are required' },
-        { status: 400 }
-      );
+  try {
+    // ── Input validation ────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
+
+    const parsed = loginSchema.safeParse(body);
+    if (!parsed.success) {
+      const message = parsed.error.issues[0]?.message ?? 'Invalid input';
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    const { email, password } = parsed.data;
 
     const user = await prisma.pressUser.findUnique({
       where: { email },

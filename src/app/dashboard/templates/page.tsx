@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
 
@@ -44,6 +45,7 @@ interface FieldCoordinate {
 }
 
 export default function TemplatesPage() {
+  const { toast } = useToast();
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isElectron, setIsElectron] = useState(true);
@@ -237,7 +239,7 @@ export default function TemplatesPage() {
         setBackImageUrl(data.url);
       }
     } catch (err: any) {
-      alert(err.message || 'Failed to upload image');
+      toast(err.message || 'Failed to upload image', 'error');
     } finally {
       if (side === 'front') setUploadingFront(false);
       else setUploadingBack(false);
@@ -506,8 +508,8 @@ export default function TemplatesPage() {
         try {
           const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
           if (res.ok) { fetchTemplates(); }
-          else { const data = await res.json(); alert(data.error || 'Failed to delete template'); }
-        } catch (err) { console.error(err); alert('Error deleting template'); }
+          else { const data = await res.json(); toast(data.error || 'Failed to delete template', 'error'); }
+        } catch (err) { console.error(err); toast('Error deleting template', 'error'); }
       },
     });
   };
