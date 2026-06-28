@@ -67,8 +67,12 @@ export async function GET(
     // Fetch Client and Template details
     const client = await prisma.client.findUnique({
       where: { id: share.clientId },
-      select: { id: true, name: true, type: true },
+      select: { id: true, name: true, type: true, pressId: true },
     });
+
+    if (!client) {
+      return NextResponse.json({ error: 'Client not found' }, { status: 404 });
+    }
 
     const template = await prisma.cardTemplate.findUnique({
       where: { id: share.templateId },
@@ -82,6 +86,11 @@ export async function GET(
         frontFields: true,
         backFields: true,
       },
+    });
+
+    const pressFonts = await prisma.pressFont.findMany({
+      where: { pressId: client.pressId },
+      select: { name: true, fileUrl: true },
     });
 
     // Fetch latest approval job
@@ -110,6 +119,7 @@ export async function GET(
       template,
       departmentName,
       latestApprovalJob,
+      pressFonts,
       share: {
         id: share.id,
         enrollToken: enrollToken || share.enrollToken,

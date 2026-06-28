@@ -85,3 +85,61 @@ export const updateOrderSchema = z.object({
 });
 
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
+
+// ── Clients ───────────────────────────────────────────────────────────────────
+
+export const clientSchema = z.object({
+  name: z.string({ message: 'Name is required' }).min(1, 'Name is required').max(150, 'Name is too long'),
+  type: z.string({ message: 'Type is required' }).max(50),
+  contactName: z.string().max(150).nullable().optional(),
+  contactPhone: z.string().max(20).nullable().optional(),
+  contactEmail: z.union([z.string().email('Invalid email address').max(255), z.literal(''), z.null()]).optional(),
+  address: z.string().max(500).nullable().optional(),
+});
+
+export const updateClientSchema = clientSchema.partial();
+
+export type ClientInput = z.infer<typeof clientSchema>;
+export type UpdateClientInput = z.infer<typeof updateClientSchema>;
+
+// ── Templates ─────────────────────────────────────────────────────────────────
+
+export const templateSchema = z.object({
+  name: z.string({ message: 'Template name is required' }).min(1, 'Template name is required').max(150),
+  cardWidth: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
+  cardHeight: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
+  frontImageUrl: z.string({ message: 'Front Image URL is required' }).url('Invalid front image URL'),
+  backImageUrl: z.string().url('Invalid back image URL').nullable().optional().or(z.literal('')),
+  frontOriginalUrl: z.string().url('Invalid front original URL').nullable().optional().or(z.literal('')),
+  backOriginalUrl: z.string().url('Invalid back original URL').nullable().optional().or(z.literal('')),
+  frontFields: z.string().max(10 * 1024 * 1024).optional().or(z.array(z.any())).transform(val => typeof val === 'string' ? val : JSON.stringify(val)),
+  backFields: z.string().max(10 * 1024 * 1024).optional().or(z.array(z.any())).transform(val => typeof val === 'string' ? val : JSON.stringify(val)),
+  clientId: z.union([z.number(), z.string()]).transform(val => val ? Number(val) : null).nullable().optional(),
+});
+
+export type TemplateInput = z.infer<typeof templateSchema>;
+export const updateTemplateSchema = templateSchema.partial();
+export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
+
+// ── Cardholders ───────────────────────────────────────────────────────────────
+
+export const cardholderUpdateSchema = z.object({
+  name: z.string().min(1, 'Name cannot be empty').max(150).optional(),
+  designation: z.string().max(150).nullable().optional(),
+  photoUrl: z.string().max(1000).nullable().optional().or(z.literal('')),
+  uniqueKey: z.string().max(100).nullable().optional(),
+  customFields: z.record(z.string(), z.any()).nullable().optional(),
+  active: z.boolean().optional(),
+});
+
+export type CardholderUpdateInput = z.infer<typeof cardholderUpdateSchema>;
+
+// ── SuperAdmin ────────────────────────────────────────────────────────────────
+
+export const creditUpdateSchema = z.object({
+  pressId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  amount: z.union([z.number(), z.string()]).transform(val => Number(val)),
+});
+
+export type CreditUpdateInput = z.infer<typeof creditUpdateSchema>;
+

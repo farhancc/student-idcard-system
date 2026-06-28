@@ -36,6 +36,7 @@ interface CardPreviewProps {
   validTill?: Date | string | null;
   className?: string;
   style?: React.CSSProperties;
+  forceWeb?: boolean;
 }
 
 export default function CardPreview({
@@ -46,6 +47,7 @@ export default function CardPreview({
   validTill,
   className = '',
   style = {},
+  forceWeb = false,
 }: CardPreviewProps) {
   const [isElectron, setIsElectron] = useState(true);
 
@@ -82,7 +84,7 @@ export default function CardPreview({
       })();
 
   useEffect(() => {
-    if (!isElectron) return;
+    if (!isElectron && !forceWeb) return;
     let isMounted = true;
 
     async function draw() {
@@ -115,9 +117,9 @@ export default function CardPreview({
     return () => {
       isMounted = false;
     };
-  }, [template, cardholder, side, pressFonts, validTill, isElectron]);
+  }, [template, cardholder, side, pressFonts, validTill, isElectron, forceWeb]);
 
-  if (!isElectron) {
+  if (!isElectron && !forceWeb) {
     return (
       <div 
         className={`relative flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 p-6 rounded-lg text-center bg-muted/20 ${className}`} 

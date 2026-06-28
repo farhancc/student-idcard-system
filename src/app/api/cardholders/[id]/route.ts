@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { cardholderUpdateSchema } from '@/lib/schemas';
 
 export async function PUT(
   request: Request,
@@ -14,7 +15,13 @@ export async function PUT(
     const { id } = await params;
     const cardholderId = Number(id);
 
-    const { name, designation, photoUrl, customFields, uniqueKey, active } = await request.json();
+    const body = await request.json();
+    const result = cardholderUpdateSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
+    }
+
+    const { name, designation, photoUrl, customFields, uniqueKey, active } = result.data;
 
     const cardholder = await prisma.cardholder.findFirst({
       where: { id: cardholderId, pressId },

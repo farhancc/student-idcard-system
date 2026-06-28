@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { updateClientSchema } from '@/lib/schemas';
 
 export async function GET(
   request: Request,
@@ -42,7 +43,13 @@ export async function PUT(
     const { id } = await params;
     const clientId = Number(id);
 
-    const { name, type, contactName, contactPhone, contactEmail, address } = await request.json();
+    const body = await request.json();
+    const result = updateClientSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
+    }
+
+    const { name, type, contactName, contactPhone, contactEmail, address } = result.data;
 
     const client = await prisma.client.findFirst({
       where: { id: clientId, pressId },

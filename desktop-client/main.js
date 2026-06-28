@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol } = require('e
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 
 let mainWindow;
@@ -357,12 +357,16 @@ ipcMain.handle('run-backup', async (event, { clientName, templateName, templateF
       return row;
     });
 
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-    XLSX.utils.book_append_sheet(wb, ws, 'Backup_Data');
-    
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Backup_Data');
+
+    sheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
+    rows.forEach(r => {
+      sheet.addRow(r);
+    });
+
     const excelPath = path.join(targetDir, 'backup_data.xlsx');
-    XLSX.writeFile(wb, excelPath);
+    await workbook.xlsx.writeFile(excelPath);
 
     // 2. Download photos and package them into ZIP
     const zip = new AdmZip();

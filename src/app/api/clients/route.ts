@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { clientSchema } from '@/lib/schemas';
 
 export async function GET(request: Request) {
   try {
@@ -37,11 +38,13 @@ export async function POST(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    const { name, type, contactName, contactPhone, contactEmail, address } = await request.json();
-
-    if (!name || !type) {
-      return NextResponse.json({ error: 'Name and Type are required' }, { status: 400 });
+    const body = await request.json();
+    const result = clientSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
+
+    const { name, type, contactName, contactPhone, contactEmail, address } = result.data;
 
     const client = await prisma.client.create({
       data: {

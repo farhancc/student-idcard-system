@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/app/components/ImageCropper';
+import CardPreview from '@/app/components/CardPreview';
 
 import { Upload, Check, AlertCircle, Loader, CreditCard } from 'lucide-react';
 
@@ -26,6 +27,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [departmentName, setDepartmentName] = useState<string | null>(null);
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<any[]>([]);
+  const [pressFonts, setPressFonts] = useState<any[]>([]);
 
   // Field visibility states
   const [hasName, setHasName] = useState(true);
@@ -63,6 +65,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setTemplate(data.template);
         setDepartmentName(data.departmentName || null);
         setShowPreview(data.share?.showPreview ?? false);
+        setPressFonts(data.pressFonts || []);
 
         // Parse fields
         const front = JSON.parse(data.template.frontFields || '[]');
@@ -338,61 +341,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Fill in details to generate your ID Card</p>
         </div>
 
-        {/* Card Template Preview */}
-        {showPreview && template && (
-          <div style={{
-            marginBottom: '28px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '10px',
-          }}>
-            <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
-              Sample Card Template Preview
-            </p>
-            <div style={{
-              display: 'flex',
-              gap: '12px',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-            }}>
-              {/* Front side */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                <img
-                  src={template.frontImageUrl}
-                  alt="Card Front"
-                  style={{
-                    width: '220px',
-                    height: 'auto',
-                    borderRadius: '8px',
-                    border: '1px solid var(--glass-border)',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-                    objectFit: 'contain',
-                  }}
-                />
-                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Front</span>
-              </div>
-              {/* Back side (if template has back image) */}
-              {template.backImageUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <img
-                    src={template.backImageUrl}
-                    alt="Card Back"
-                    style={{
-                      width: '220px',
-                      height: 'auto',
-                      borderRadius: '8px',
-                      border: '1px solid var(--glass-border)',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
-                      objectFit: 'contain',
-                    }}
-                  />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Back</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+
 
         {error && (
           <div className="alert alert-danger" style={{ marginBottom: '24px', display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -529,7 +478,76 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           </button>
         </form>
 
+        {/* Real-time Preview */}
+        {showPreview && template && (
+          <div style={{
+            marginTop: '32px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '16px',
+            width: '100%',
+          }}>
+            <p style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
+              Live ID Card Preview
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '24px',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              width: '100%',
+            }}>
+              {/* Front Side Preview */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <CardPreview
+                  template={template}
+                  cardholder={{
+                    name: name || 'Full Name',
+                    designation: designation || 'Designation',
+                    photoUrl: photoUrl || null,
+                    cardSerial: 'STU-0000',
+                    customFields: JSON.stringify(customFields),
+                  }}
+                  side="front"
+                  pressFonts={pressFonts}
+                  forceWeb={true}
+                  style={{
+                    width: '240px',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                    borderRadius: '12px',
+                  }}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Front View</span>
+              </div>
 
+              {/* Back Side Preview */}
+              {template.backImageUrl && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <CardPreview
+                    template={template}
+                    cardholder={{
+                      name: name || 'Full Name',
+                      designation: designation || 'Designation',
+                      photoUrl: photoUrl || null,
+                      cardSerial: 'STU-0000',
+                      customFields: JSON.stringify(customFields),
+                    }}
+                    side="back"
+                    pressFonts={pressFonts}
+                    forceWeb={true}
+                    style={{
+                      width: '240px',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                      borderRadius: '12px',
+                    }}
+                  />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Back View</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Image Cropper Modal */}

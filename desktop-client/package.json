@@ -10,11 +10,11 @@
   "dependencies": {
     "adm-zip": "^0.5.17",
     "electron-updater": "^6.2.1",
-    "xlsx": "^0.18.5"
+    "exceljs": "^4.4.0"
   },
   "devDependencies": {
-    "electron": "^30.0.1",
-    "electron-builder": "^24.13.3"
+    "electron": "^41.7.0",
+    "electron-builder": "^26.15.0"
   },
   "build": {
     "appId": "com.studentidsystem.pressclient",

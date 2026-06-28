@@ -667,13 +667,34 @@ export default function ClientDetailsPage() {
         return row;
       });
 
-      const XLSX = await import('xlsx');
-      const worksheet = XLSX.utils.json_to_sheet(formattedData);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Cardholders');
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Cardholders');
+
+      // Define columns dynamically based on the first object's keys
+      const sample = formattedData[0] || {};
+      sheet.columns = Object.keys(sample).map(key => ({
+        header: key,
+        key: key,
+        width: 20
+      }));
+
+      // Add rows
+      formattedData.forEach(row => {
+        sheet.addRow(row);
+      });
+
+      // Write workbook to a buffer/array
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
       const fileName = `Cardholders_${(client?.name || 'export').replace(/\s+/g, '_')}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Failed to export Excel:', err);
       toast('Error exporting Excel: ' + err.message, 'error');

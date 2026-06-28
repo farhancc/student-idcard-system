@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { templateSchema } from '@/lib/schemas';
 
 export async function GET(request: Request) {
   try {
@@ -29,11 +30,13 @@ export async function POST(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = await request.json();
-
-    if (!name || !frontImageUrl) {
-      return NextResponse.json({ error: 'Template name and Front Image URL are required' }, { status: 400 });
+    const body = await request.json();
+    const result = templateSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
+
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = result.data;
 
     const template = await prisma.cardTemplate.create({
       data: {

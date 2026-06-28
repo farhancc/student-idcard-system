@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { creditUpdateSchema } from '@/lib/schemas';
 
 export async function POST(request: Request) {
   try {
-    const { pressId, amount } = await request.json();
-
-    if (!pressId || amount === undefined || isNaN(Number(amount))) {
-      return NextResponse.json({ error: 'Press ID and valid amount are required' }, { status: 400 });
+    const body = await request.json();
+    const result = creditUpdateSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
 
+    const { pressId, amount } = result.data;
+
     const press = await prisma.press.findUnique({
-      where: { id: Number(pressId) },
+      where: { id: pressId },
     });
 
     if (!press) {
@@ -18,10 +21,10 @@ export async function POST(request: Request) {
     }
 
     const updatedPress = await prisma.press.update({
-      where: { id: Number(pressId) },
+      where: { id: pressId },
       data: {
         credits: {
-          increment: Number(amount),
+          increment: amount,
         },
       },
     });

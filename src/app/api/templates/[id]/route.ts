@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { updateTemplateSchema } from '@/lib/schemas';
 
 export async function GET(
   request: Request,
@@ -51,7 +52,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = await request.json();
+    const body = await request.json();
+    const result = updateTemplateSchema.safeParse(body);
+    if (!result.success) {
+      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
+    }
+
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = result.data;
 
     // 1. Transaction to handle versioning
     const newTemplate = await prisma.$transaction(async (tx) => {
