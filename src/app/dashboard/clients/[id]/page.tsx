@@ -142,7 +142,10 @@ export default function ClientDetailsPage() {
       const res = await fetch('/api/templates');
       if (res.ok) {
         const json = await res.json();
-        const list = json.templates || [];
+        const list = [
+          ...(json.templates || []),
+          ...(json.globalTemplates || []).map((t: any) => ({ ...t, name: `⭐ ${t.name} (Starter)` }))
+        ];
         setQuickTemplates(list);
         if (list.length > 0) setQTemplateId(String(list[0].id));
       }

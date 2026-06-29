@@ -47,6 +47,8 @@ interface FieldCoordinate {
 export default function TemplatesPage() {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<any[]>([]);
+  const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
+  const [viewTab, setViewTab] = useState<'my' | 'starter'>('my');
   const [loading, setLoading] = useState(true);
   const [isElectron, setIsElectron] = useState(true);
   const [pressId, setPressId] = useState<number | null>(null);
@@ -121,10 +123,42 @@ export default function TemplatesPage() {
       if (res.ok) {
         const json = await res.json();
         setTemplates(json.templates || []);
+        setGlobalTemplates(json.globalTemplates || []);
       }
     } catch (err) {
       console.error(err);
     } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloneTemplate = async (tmpl: any) => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${tmpl.name} (Copy)`,
+          cardWidth: tmpl.cardWidth,
+          cardHeight: tmpl.cardHeight,
+          frontImageUrl: tmpl.frontImageUrl,
+          backImageUrl: tmpl.backImageUrl || null,
+          frontOriginalUrl: tmpl.frontOriginalUrl || null,
+          backOriginalUrl: tmpl.backOriginalUrl || null,
+          frontFields: tmpl.frontFields,
+          backFields: tmpl.backFields,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to clone template');
+
+      toast(`Successfully cloned "${tmpl.name}" to your library!`, 'success');
+      setViewTab('my');
+      fetchTemplates();
+    } catch (err: any) {
+      toast(err.message || 'Error cloning template', 'error');
       setLoading(false);
     }
   };
@@ -657,6 +691,8 @@ export default function TemplatesPage() {
       },
     });
   };
+
+  const currentTemplates = viewTab === 'my' ? templates : globalTemplates;
 
   return (
     <div>
@@ -1775,16 +1811,53 @@ export default function TemplatesPage() {
         </div>
       )}
 
+      {/* Tabs for Template view */}
+      <div style={{
+        display: 'flex',
+        gap: '8px',
+        marginBottom: '24px',
+        borderBottom: '1px solid var(--glass-border)'
+      }}>
+        <button 
+          className={`btn ${viewTab === 'my' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ 
+            padding: '10px 20px', 
+            borderRadius: '8px 8px 0 0', 
+            borderBottom: 'none',
+            background: viewTab === 'my' ? undefined : 'transparent' 
+          }}
+          onClick={() => setViewTab('my')}
+        >
+          My Templates ({templates.length})
+        </button>
+        <button 
+          className={`btn ${viewTab === 'starter' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ 
+            padding: '10px 20px', 
+            borderRadius: '8px 8px 0 0', 
+            borderBottom: 'none',
+            background: viewTab === 'starter' ? undefined : 'transparent' 
+          }}
+          onClick={() => setViewTab('starter')}
+        >
+          Starter Templates ({globalTemplates.length})
+        </button>
+      </div>
+
       {/* Templates List */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '50px 0' }}>
           <div className="spinner"></div>
         </div>
-      ) : templates.length === 0 ? (
+      ) : currentTemplates.length === 0 ? (
         <div className="glass-panel" style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)' }}>
           <LayoutGrid size={40} style={{ marginBottom: '16px' }} />
-          <h3>No Templates Created</h3>
-          <p style={{ marginTop: '8px' }}>Create a template and map card details coordinates to begin layouts previews.</p>
+          <h3>{viewTab === 'my' ? 'No Templates Created' : 'No Starter Templates Available'}</h3>
+          <p style={{ marginTop: '8px' }}>
+            {viewTab === 'my' 
+              ? 'Create a template and map card details coordinates to begin layouts previews.'
+              : 'Starter templates uploaded by the Super Admin will appear here.'}
+          </p>
         </div>
       ) : (
         <div style={{
@@ -1792,14 +1865,14 @@ export default function TemplatesPage() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
           gap: '24px'
         }}>
-          {templates.map((tmpl) => (
+          {currentTemplates.map((tmpl) => (
             <div key={tmpl.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '1.1rem', margin: 0 }}>{tmpl.name}</h3>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                     <span className="badge badge-primary">v{tmpl.version}</span>
-                    {isElectron && (
+                    {viewTab === 'my' && isElectron && (
                       <>
                         <button 
                           className="btn btn-secondary" 
@@ -1847,12 +1920,17 @@ export default function TemplatesPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('front'); }}>
+                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('front'); }}>
                   <Eye size={14} /> Preview Front
                 </button>
                 {tmpl.backImageUrl && (
-                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('back'); }}>
+                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('back'); }}>
                     <Eye size={14} /> Preview Back
+                  </button>
+                )}
+                {viewTab === 'starter' && (
+                  <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: tmpl.backImageUrl ? '33%' : '66%' }} onClick={() => handleCloneTemplate(tmpl)}>
+                    Use Template
                   </button>
                 )}
               </div>
@@ -1880,7 +1958,7 @@ export default function TemplatesPage() {
             <h3 style={{ marginBottom: '16px' }}>Template Visual Preview ({previewSide.toUpperCase()})</h3>
             
             {(() => {
-              const tmpl = templates.find((t) => t.id === previewId);
+              const tmpl = templates.find((t) => t.id === previewId) || globalTemplates.find((t) => t.id === previewId);
               if (!tmpl) return <p>Template not found</p>;
               return (
                 <div style={{

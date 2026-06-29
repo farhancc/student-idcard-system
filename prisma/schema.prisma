@@ -105,8 +105,8 @@ model Cardholder {
 
 model CardTemplate {
   id              Int      @id @default(autoincrement())
-  pressId         Int      @map("press_id")
-  press           Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  pressId         Int?     @map("press_id")
+  press           Press?   @relation(fields: [pressId], references: [id], onDelete: Cascade)
   clientId        Int?     @map("client_id") // Optional link to specific client
   name            String
   cardWidth       Int      @default(1011) @map("card_width") // pixels at 300 DPI (85.6mm)

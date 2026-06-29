@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideClient } from '@/lib/pdf/card-renderer-client';
+import { renderCardSideToPdfBytesClient } from '@/lib/pdf/card-renderer-client';
 
 export default function ProductionDaemon() {
   const [isDesktop, setIsDesktop] = useState(false);
@@ -221,7 +221,7 @@ export default function ProductionDaemon() {
     }
 
     addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'COMPLETED');
+    await updateProgress(job.id, 100, 'PROCESSING');
     await reportJobComplete(job.id, true, undefined, base64Data);
   };
 
@@ -283,7 +283,7 @@ export default function ProductionDaemon() {
     }
 
     addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'COMPLETED');
+    await updateProgress(job.id, 100, 'PROCESSING');
     await reportJobComplete(job.id, true, undefined, base64Data);
   };
 
@@ -417,16 +417,17 @@ export default function ProductionDaemon() {
           backsY = 2 * centerY - frontsY - cHeight;
         }
 
-        // Render card front side PNG buffer client-side using canvas
+        // ── Render front side as vector PDF ──
         addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Front)`);
-        const canvas = document.createElement('canvas');
-        
+
         const clientTemplate = {
           id: template.id,
           cardWidth: template.width || 1011,
           cardHeight: template.height || 638,
           frontImageUrl: template.frontImageUrl,
           backImageUrl: template.backImageUrl,
+          frontOriginalUrl: template.frontOriginalUrl || null,
+          backOriginalUrl: template.backOriginalUrl || null,
           frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
           backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
         };
@@ -436,43 +437,33 @@ export default function ProductionDaemon() {
           customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
         };
 
-        await renderCardSideClient(
-          canvas,
+        const frontPdfBytes = await renderCardSideToPdfBytesClient(
           clientTemplate,
           clientCardholder,
           'front',
           template.validTillDate ? new Date(template.validTillDate) : null,
-          pressFonts,
-          3 // High-DPI scale factor for production printing sharpness
+          pressFonts
         );
+        const frontCardDoc = await PDFDocument.load(frontPdfBytes);
+        const [frontEmbedded] = await pdfDoc.embedPdf(frontCardDoc, [0]);
+        page.drawPage(frontEmbedded, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
 
-        const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!frontBlob) throw new Error(`Failed to render front side for ${ch.name}`);
-        const frontBytes = await frontBlob.arrayBuffer();
-        const frontImg = await pdfDoc.embedPng(frontBytes);
-        page.drawImage(frontImg, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
-
-        // If double-sided, fetch back side
+        // If double-sided, render back side
         if (!isSingleSided && backsY !== null) {
           addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Back)`);
-          
-          await renderCardSideClient(
-            canvas,
+
+          const backPdfBytes = await renderCardSideToPdfBytesClient(
             clientTemplate,
             clientCardholder,
             'back',
             template.validTillDate ? new Date(template.validTillDate) : null,
-            pressFonts,
-            3 // High-DPI scale factor for production printing sharpness
+            pressFonts
           );
+          const backCardDoc = await PDFDocument.load(backPdfBytes);
+          const [backEmbedded] = await pdfDoc.embedPdf(backCardDoc, [0]);
 
-          const backBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-          if (!backBlob) throw new Error(`Failed to render back side for ${ch.name}`);
-          const backBytes = await backBlob.arrayBuffer();
-          const backImg = await pdfDoc.embedPng(backBytes);
-          
           // Draw back image rotated 180 degrees
-          page.drawImage(backImg, {
+          page.drawPage(backEmbedded, {
             x: xPos + cWidth,
             y: backsY + cHeight,
             width: cWidth,
@@ -521,7 +512,7 @@ export default function ProductionDaemon() {
     }
 
     addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'COMPLETED');
+    await updateProgress(job.id, 100, 'PROCESSING');
     await reportJobComplete(job.id, true, undefined, base64Data);
   };
 

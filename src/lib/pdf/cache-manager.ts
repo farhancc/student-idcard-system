@@ -93,8 +93,15 @@ export async function getOrRenderCard(
   // 3. Render cards dynamically
   const frontBuffer = await renderCardSide(template, cardholder, 'front', validTill, pressFonts);
   const backBuffer = await renderCardSide(template, cardholder, 'back', validTill, pressFonts);
-  const frontPdfBuffer = await renderCardSideToPdfBytes(template, cardholder, 'front', validTill, pressFonts);
-  const backPdfBuffer = await renderCardSideToPdfBytes(template, cardholder, 'back', validTill, pressFonts);
+
+  // Pass original URLs so the PDF renderer can embed the vector background directly
+  const templateWithOriginals = {
+    ...template,
+    frontOriginalUrl: (template as any).frontOriginalUrl ?? null,
+    backOriginalUrl: (template as any).backOriginalUrl ?? null,
+  };
+  const frontPdfBuffer = await renderCardSideToPdfBytes(templateWithOriginals, cardholder, 'front', validTill, pressFonts);
+  const backPdfBuffer = await renderCardSideToPdfBytes(templateWithOriginals, cardholder, 'back', validTill, pressFonts);
 
   // Save to local cache path (writeable even in serverless if in /tmp)
   fs.writeFileSync(frontCachePath, frontBuffer);

@@ -579,6 +579,8 @@ export async function renderCardSideToPdfBytes(
     cardHeight: number;
     frontImageUrl: string;
     backImageUrl: string | null;
+    frontOriginalUrl?: string | null;
+    backOriginalUrl?: string | null;
     frontFields: string;
     backFields: string;
   },
@@ -603,7 +605,15 @@ export async function renderCardSideToPdfBytes(
 
   const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
   const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
-  const bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+
+  // Prefer the original high-res vector/PDF asset over the display preview image
+  const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
+  const previewUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+
+  // Use original if it is a PDF (true vector), otherwise fall back to preview
+  const bgUrl = (originalUrl && originalUrl.toLowerCase().endsWith('.pdf'))
+    ? originalUrl
+    : previewUrl;
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([widthPt, heightPt]);
@@ -617,13 +627,13 @@ export async function renderCardSideToPdfBytes(
     color: rgb(1, 1, 1),
   });
 
-  // 2. Draw Background
+  // 2. Draw Background — embed as vector PDF page when possible, else raster image
   if (bgUrl) {
     try {
-      const targetBgUrl = bgUrl.toLowerCase().endsWith('.svg') ? resolveSvgToPng(bgUrl, 3000) : bgUrl;
-      const bgBuffer = await getFileBuffer(targetBgUrl);
-      if (targetBgUrl.toLowerCase().endsWith('.pdf')) {
-        // Load template PDF
+      const lowerBg = bgUrl.toLowerCase();
+      if (lowerBg.endsWith('.pdf')) {
+        // ── Vector path: embed the PDF page directly (preserves all vector paths) ──
+        const bgBuffer = await getFileBuffer(bgUrl);
         const bgPdf = await PDFDocument.load(bgBuffer);
         const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
         page.drawPage(embeddedPage, {
@@ -633,7 +643,9 @@ export async function renderCardSideToPdfBytes(
           height: heightPt,
         });
       } else {
-        // Embed image background
+        // ── Raster fallback: embed PNG / JPEG preview ──
+        const targetBgUrl = lowerBg.endsWith('.svg') ? resolveSvgToPng(bgUrl, 3000) : bgUrl;
+        const bgBuffer = await getFileBuffer(targetBgUrl);
         let bgImg;
         if (targetBgUrl.toLowerCase().endsWith('.png')) {
           bgImg = await pdfDoc.embedPng(bgBuffer);

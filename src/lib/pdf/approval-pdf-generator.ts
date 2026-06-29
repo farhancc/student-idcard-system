@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideClient } from './card-renderer-client';
+import { renderCardSideToPdfBytesClient } from './card-renderer-client';
 
 export async function generateApprovalPdfClient(
   clientName: string,
@@ -40,6 +40,7 @@ export async function generateApprovalPdfClient(
   const scaledHeight = isPortraitTemplate ? 158.6 : 126;
 
   const canvas = document.createElement('canvas');
+  void canvas; // retained only for potential fallback; not used in PDF path
 
   // Convert template fields to string if they are parsed objects
   const clientTemplate = {
@@ -96,22 +97,16 @@ export async function generateApprovalPdfClient(
         const yOffset = (isPortraitTemplate ? 770 : 740) - rowIdx * rowStep;
 
         // Render Front Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts, 3);
-        const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!frontBlob) throw new Error('Failed to render front side');
-        const frontBytes = await frontBlob.arrayBuffer();
-        const frontImg = await pdfDoc.embedPng(frontBytes);
+        const frontPdfBytes = await renderCardSideToPdfBytesClient(clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts);
+        const frontDoc = await pdfDoc.embedPdf(await PDFDocument.load(frontPdfBytes), [0]);
 
         // Render Back Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'back', parsedValidTill, pressFonts, 3);
-        const backBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!backBlob) throw new Error('Failed to render back side');
-        const backBytes = await backBlob.arrayBuffer();
-        const backImg = await pdfDoc.embedPng(backBytes);
+        const backPdfBytes = await renderCardSideToPdfBytesClient(clientTemplate, clientCardholder, 'back', parsedValidTill, pressFonts);
+        const backDoc = await pdfDoc.embedPdf(await PDFDocument.load(backPdfBytes), [0]);
 
         // Draw Pages
-        page.drawImage(frontImg, { x: 50, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
-        page.drawImage(backImg, { x: 270, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
+        page.drawPage(frontDoc[0], { x: 50, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
+        page.drawPage(backDoc[0], { x: 270, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
 
         // Draw diagonal watermark "ONLY FOR VALIDATION"
         const wmText = 'ONLY FOR VALIDATION';
@@ -191,13 +186,10 @@ export async function generateApprovalPdfClient(
         const xOffset = colIdx === 0 ? 50 : 270;
 
         // Render Front Side
-        await renderCardSideClient(canvas, clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts, 3);
-        const frontBlob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        if (!frontBlob) throw new Error('Failed to render front side');
-        const frontBytes = await frontBlob.arrayBuffer();
-        const frontImg = await pdfDoc.embedPng(frontBytes);
+        const frontPdfBytes = await renderCardSideToPdfBytesClient(clientTemplate, clientCardholder, 'front', parsedValidTill, pressFonts);
+        const [frontEmbedded] = await pdfDoc.embedPdf(await PDFDocument.load(frontPdfBytes), [0]);
 
-        page.drawImage(frontImg, { x: xOffset, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
+        page.drawPage(frontEmbedded, { x: xOffset, y: yOffset - scaledHeight, width: scaledWidth, height: scaledHeight });
 
         // Draw diagonal watermark "ONLY FOR VALIDATION"
         const wmText = 'ONLY FOR VALIDATION';

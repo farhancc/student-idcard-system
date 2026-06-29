@@ -23,11 +23,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
+    let targetStatus = status || job.status;
+    if (targetStatus === 'COMPLETED' || targetStatus === 'FAILED') {
+      targetStatus = 'PROCESSING';
+    }
+
     const updatedJob = await prisma.pdfJob.update({
       where: { id: job.id },
       data: {
         progress: progress !== undefined ? Number(progress) : job.progress,
-        status: status || job.status,
+        status: targetStatus,
       },
     });
 

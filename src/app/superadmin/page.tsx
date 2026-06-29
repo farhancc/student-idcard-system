@@ -52,12 +52,33 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics'>('presses');
+  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates'>('presses');
   
   // Analytics State
   const [analytics, setAnalytics] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Starter Templates State
+  const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any | null>(null);
+  
+  // Template Form Fields
+  const [tmplName, setTmplName] = useState('');
+  const [tmplWidth, setTmplWidth] = useState('1011');
+  const [tmplHeight, setTmplHeight] = useState('638');
+  const [tmplFrontImageUrl, setTmplFrontImageUrl] = useState('');
+  const [tmplBackImageUrl, setTmplBackImageUrl] = useState('');
+  const [tmplFrontOriginalUrl, setTmplFrontOriginalUrl] = useState('');
+  const [tmplBackOriginalUrl, setTmplBackOriginalUrl] = useState('');
+  const [tmplFrontFields, setTmplFrontFields] = useState('[]');
+  const [tmplBackFields, setTmplBackFields] = useState('[]');
+  
+  const [uploadingFront, setUploadingFront] = useState(false);
+  const [uploadingBack, setUploadingBack] = useState(false);
+  const [templateSubmitting, setTemplateSubmitting] = useState(false);
 
   // Onboarding Modal State
   const [onboardModalOpen, setOnboardModalOpen] = useState(false);
@@ -176,6 +197,8 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
+    } else if (activeTab === 'templates') {
+      fetchGlobalTemplates();
     }
   }, [activeTab]);
 
@@ -306,6 +329,155 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const fetchGlobalTemplates = async () => {
+    setTemplatesLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/superadmin/templates');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch global templates');
+      setGlobalTemplates(data.templates || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load global templates.');
+    } finally {
+      setTemplatesLoading(false);
+    }
+  };
+
+  const handleTemplateFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (side === 'front') setUploadingFront(true);
+    else setUploadingBack(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/superadmin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload file');
+
+      if (side === 'front') {
+        setTmplFrontImageUrl(data.url);
+        setTmplFrontOriginalUrl(data.originalUrl || '');
+      } else {
+        setTmplBackImageUrl(data.url);
+        setTmplBackOriginalUrl(data.originalUrl || '');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload template file.');
+    } finally {
+      if (side === 'front') setUploadingFront(false);
+      else setUploadingBack(false);
+    }
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setTemplateSubmitting(true);
+
+    try {
+      // Validate JSON
+      try {
+        JSON.parse(tmplFrontFields);
+      } catch {
+        throw new Error('Front Fields is not a valid JSON array');
+      }
+      if (tmplBackFields.trim()) {
+        try {
+          JSON.parse(tmplBackFields);
+        } catch {
+          throw new Error('Back Fields is not a valid JSON array');
+        }
+      }
+
+      const payload = {
+        name: tmplName,
+        cardWidth: Number(tmplWidth) || 1011,
+        cardHeight: Number(tmplHeight) || 638,
+        frontImageUrl: tmplFrontImageUrl,
+        backImageUrl: tmplBackImageUrl || null,
+        frontOriginalUrl: tmplFrontOriginalUrl || null,
+        backOriginalUrl: tmplBackOriginalUrl || null,
+        frontFields: tmplFrontFields,
+        backFields: tmplBackFields || '[]',
+      };
+
+      const url = selectedTemplate 
+        ? `/api/superadmin/templates/${selectedTemplate.id}`
+        : '/api/superadmin/templates';
+      
+      const method = selectedTemplate ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save template');
+
+      // Reset & Refresh
+      setTemplateModalOpen(false);
+      setSelectedTemplate(null);
+      setTmplName('');
+      setTmplWidth('1011');
+      setTmplHeight('638');
+      setTmplFrontImageUrl('');
+      setTmplBackImageUrl('');
+      setTmplFrontOriginalUrl('');
+      setTmplBackOriginalUrl('');
+      setTmplFrontFields('[]');
+      setTmplBackFields('[]');
+      
+      fetchGlobalTemplates();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save template.');
+    } finally {
+      setTemplateSubmitting(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this global template? This action cannot be undone.')) return;
+    
+    setError('');
+    try {
+      const res = await fetch(`/api/superadmin/templates/${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete template');
+
+      fetchGlobalTemplates();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete template.');
+    }
+  };
+
+  const handleEditTemplateClick = (tmpl: any) => {
+    setSelectedTemplate(tmpl);
+    setTmplName(tmpl.name);
+    setTmplWidth(String(tmpl.cardWidth));
+    setTmplHeight(String(tmpl.cardHeight));
+    setTmplFrontImageUrl(tmpl.frontImageUrl);
+    setTmplBackImageUrl(tmpl.backImageUrl || '');
+    setTmplFrontOriginalUrl(tmpl.frontOriginalUrl || '');
+    setTmplBackOriginalUrl(tmpl.backOriginalUrl || '');
+    setTmplFrontFields(tmpl.frontFields || '[]');
+    setTmplBackFields(tmpl.backFields || '[]');
+    setTemplateModalOpen(true);
+  };
+
   // Presses Stats
   const totalPresses = presses.length;
   const activePresses = presses.filter(p => p.isActive).length;
@@ -358,9 +530,31 @@ export default function SuperAdminDashboard() {
               Onboard Press
             </button>
           )}
+          {activeTab === 'templates' && (
+            <button 
+              className="btn btn-primary" 
+              onClick={() => {
+                setSelectedTemplate(null);
+                setTmplName('');
+                setTmplWidth('1011');
+                setTmplHeight('638');
+                setTmplFrontImageUrl('');
+                setTmplBackImageUrl('');
+                setTmplFrontOriginalUrl('');
+                setTmplBackOriginalUrl('');
+                setTmplFrontFields('[]');
+                setTmplBackFields('[]');
+                setTemplateModalOpen(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Plus size={16} />
+              Add Starter Template
+            </button>
+          )}
           <button 
             className="btn btn-secondary" 
-            onClick={activeTab === 'presses' ? fetchPresses : fetchAnalytics}
+            onClick={activeTab === 'presses' ? fetchPresses : activeTab === 'analytics' ? fetchAnalytics : fetchGlobalTemplates}
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <RefreshCw size={16} />
@@ -436,6 +630,27 @@ export default function SuperAdminDashboard() {
           }}
         >
           <BarChart3 size={16} /> Client Financial & Print Analytics ({totalClients})
+        </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('templates')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'templates' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'templates' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'templates' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <FileText size={16} /> Starter Templates ({globalTemplates.length})
         </button>
       </div>
 
@@ -644,7 +859,7 @@ export default function SuperAdminDashboard() {
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === 'analytics' ? (
         <>
           {/* Client Analytics Stats Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
@@ -795,6 +1010,71 @@ export default function SuperAdminDashboard() {
               </div>
             )}
           </div>
+        </>
+      ) : (
+        <>
+          {/* Starter Templates Grid */}
+          {templatesLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', flexDirection: 'column', gap: '12px' }}>
+              <Loader2 size={36} className="spinner" />
+              <p>Loading starter templates...</p>
+            </div>
+          ) : globalTemplates.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)', border: '1px dashed var(--glass-border)', borderRadius: '12px' }}>
+              No starter templates uploaded yet. Click "Add Starter Template" to create one.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '24px' }}>
+              {globalTemplates.map((tmpl) => (
+                <div key={tmpl.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', border: '1px solid var(--glass-border)' }}>
+                  {/* Preview Image */}
+                  <div style={{
+                    width: '100%',
+                    paddingTop: '63%',
+                    backgroundImage: `url(${tmpl.frontImageUrl})`,
+                    backgroundSize: 'contain',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    backgroundColor: 'rgba(0,0,0,0.3)',
+                    borderRadius: '8px',
+                    marginBottom: '12px',
+                    position: 'relative'
+                  }}>
+                    {tmpl.backImageUrl && (
+                      <span className="badge badge-primary" style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.75rem' }}>
+                        Dual-Sided
+                      </span>
+                    )}
+                    <span className="badge badge-secondary" style={{ position: 'absolute', top: '8px', left: '8px', fontSize: '0.75rem' }}>
+                      v{tmpl.version}
+                    </span>
+                  </div>
+
+                  <h4 style={{ fontWeight: '600', fontSize: '1rem', color: '#ffffff', marginBottom: '4px' }}>{tmpl.name}</h4>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '12px' }}>
+                    Size: {tmpl.cardWidth}x{tmpl.cardHeight}px ({Math.round(tmpl.cardWidth * 0.264583)}x{Math.round(tmpl.cardHeight * 0.264583)}mm)
+                  </p>
+
+                  <div style={{ marginTop: 'auto', display: 'flex', gap: '10px' }}>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ flex: 1, padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', borderColor: 'rgba(99,102,241,0.3)' }}
+                      onClick={() => handleEditTemplateClick(tmpl)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{ flex: 1, padding: '6px 12px', fontSize: '0.8rem' }}
+                      onClick={() => handleDeleteTemplate(tmpl.id)}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 
@@ -1235,6 +1515,203 @@ export default function SuperAdminDashboard() {
                   disabled={onboardSubmitting}
                 >
                   {onboardSubmitting ? 'Onboarding...' : 'Onboard Press'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Starter Template Create/Edit Modal */}
+      {templateModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          backdropFilter: 'blur(4px)',
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={20} color="var(--primary)" />
+              {selectedTemplate ? 'Edit Starter Template' : 'Add New Starter Template'}
+            </h3>
+            <p style={{ marginBottom: '20px', fontSize: '0.9rem', color: 'var(--muted)' }}>
+              Configure a global master template available for all presses to clone and use.
+            </p>
+
+            <form onSubmit={handleSaveTemplate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="tmplName">Template Name</label>
+                <input
+                  id="tmplName"
+                  type="text"
+                  required
+                  placeholder="e.g. Classic School ID Horizontal"
+                  className="form-input"
+                  value={tmplName}
+                  onChange={(e) => setTmplName(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="tmplWidth">Card Width (pixels)</label>
+                  <input
+                    id="tmplWidth"
+                    type="number"
+                    required
+                    placeholder="1011"
+                    className="form-input"
+                    value={tmplWidth}
+                    onChange={(e) => setTmplWidth(e.target.value)}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px', display: 'block' }}>
+                    Standard CR80 (85.6mm) at 300 DPI = 1011px
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" htmlFor="tmplHeight">Card Height (pixels)</label>
+                  <input
+                    id="tmplHeight"
+                    type="number"
+                    required
+                    placeholder="638"
+                    className="form-input"
+                    value={tmplHeight}
+                    onChange={(e) => setTmplHeight(e.target.value)}
+                  />
+                  <span style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px', display: 'block' }}>
+                    Standard CR80 (54mm) at 300 DPI = 638px
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {/* Front Upload */}
+                <div style={{ border: '1px solid var(--glass-border)', padding: '12px', borderRadius: '8px' }}>
+                  <label className="form-label" style={{ fontWeight: '600' }}>Front Background (PDF/SVG/PNG)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.svg,.png,.jpg,.jpeg"
+                    className="form-input"
+                    style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                    onChange={(e) => handleTemplateFileUpload(e, 'front')}
+                    required={!tmplFrontImageUrl}
+                  />
+                  {uploadingFront && <p style={{ fontSize: '0.8rem', color: 'var(--primary)', marginTop: '4px' }}>Uploading & converting front...</p>}
+                  {tmplFrontImageUrl && (
+                    <div style={{ marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Uploaded!</span>
+                      <div style={{
+                        width: '100%',
+                        height: '100px',
+                        backgroundImage: `url(${tmplFrontImageUrl})`,
+                        backgroundSize: 'contain',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        borderRadius: '4px',
+                        marginTop: '4px'
+                      }} />
+                    </div>
+                  )}
+                </div>
+
+                {/* Back Upload */}
+                <div style={{ border: '1px solid var(--glass-border)', padding: '12px', borderRadius: '8px' }}>
+                  <label className="form-label" style={{ fontWeight: '600' }}>Back Background (Optional)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.svg,.png,.jpg,.jpeg"
+                    className="form-input"
+                    style={{ padding: '4px 8px', fontSize: '0.85rem' }}
+                    onChange={(e) => handleTemplateFileUpload(e, 'back')}
+                  />
+                  {uploadingBack && <p style={{ fontSize: '0.8rem', color: 'var(--primary)', marginTop: '4px' }}>Uploading & converting back...</p>}
+                  {tmplBackImageUrl && (
+                    <div style={{ marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--success)' }}>Uploaded!</span>
+                      <div style={{
+                        width: '100%',
+                        height: '100px',
+                        backgroundImage: `url(${tmplBackImageUrl})`,
+                        backgroundSize: 'contain',
+                        backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        borderRadius: '4px',
+                        marginTop: '4px'
+                      }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Coordinates JSON */}
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label className="form-label" htmlFor="tmplFrontFields" style={{ margin: 0 }}>Front Coordinate Mapping (JSON Array)</label>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Tip: copy from a press template</span>
+                </div>
+                <textarea
+                  id="tmplFrontFields"
+                  className="form-input"
+                  style={{ fontFamily: 'monospace', fontSize: '0.8rem', minHeight: '120px', background: '#0f172a', borderColor: '#334155' }}
+                  value={tmplFrontFields}
+                  onChange={(e) => setTmplFrontFields(e.target.value)}
+                  placeholder="[{ 'name': 'studentName', 'type': 'text', 'x': 50, ... }]"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="tmplBackFields">Back Coordinate Mapping (JSON Array)</label>
+                <textarea
+                  id="tmplBackFields"
+                  className="form-input"
+                  style={{ fontFamily: 'monospace', fontSize: '0.8rem', minHeight: '100px', background: '#0f172a', borderColor: '#334155' }}
+                  value={tmplBackFields}
+                  onChange={(e) => setTmplBackFields(e.target.value)}
+                  placeholder="[]"
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setTemplateModalOpen(false);
+                    setSelectedTemplate(null);
+                    setTmplName('');
+                    setTmplWidth('1011');
+                    setTmplHeight('638');
+                    setTmplFrontImageUrl('');
+                    setTmplBackImageUrl('');
+                    setTmplFrontOriginalUrl('');
+                    setTmplBackOriginalUrl('');
+                    setTmplFrontFields('[]');
+                    setTmplBackFields('[]');
+                  }}
+                  disabled={templateSubmitting || uploadingFront || uploadingBack}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={templateSubmitting || uploadingFront || uploadingBack}
+                >
+                  {templateSubmitting ? 'Saving...' : selectedTemplate ? 'Save Changes' : 'Create Template'}
                 </button>
               </div>
             </form>

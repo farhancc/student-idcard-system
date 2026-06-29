@@ -40,8 +40,12 @@ export default function OrdersPage() {
       const templatesRes = await fetch('/api/templates');
       if (templatesRes.ok) {
         const json = await templatesRes.json();
-        setTemplates(json.templates || []);
-        if (json.templates?.length > 0) setTemplateId(String(json.templates[0].id));
+        const allTemplates = [
+          ...(json.templates || []),
+          ...(json.globalTemplates || []).map((t: any) => ({ ...t, name: `⭐ ${t.name} (Starter)` }))
+        ];
+        setTemplates(allTemplates);
+        if (allTemplates.length > 0) setTemplateId(String(allTemplates[0].id));
       }
     } catch (err) {
       console.error(err);

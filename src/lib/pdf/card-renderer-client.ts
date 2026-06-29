@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
@@ -515,4 +516,321 @@ export async function renderCardSideClient(
       }
     }
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Vector-native client-side PDF renderer
+// Produces a single-card PDF buffer directly from the template assets and
+// cardholder data, keeping the background vector and text as native PDF objects.
+// Only the photograph (image field) is embedded as a raster image.
+// ──────────────────────────────────────────────────────────────────────────────
+
+/** Helper: fetch a URL and return its raw ArrayBuffer. */
+async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch failed for ${url}: ${res.statusText}`);
+  return res.arrayBuffer();
+}
+
+/** Convert a hex color string to pdf-lib rgb(). */
+function hexToRgbClient(hex?: string) {
+  if (!hex) return rgb(0, 0, 0);
+  const clean = hex.replace('#', '');
+  const parse = (s: string) => parseInt(s, 16) / 255;
+  if (clean.length === 3) {
+    return rgb(parse(clean[0].repeat(2)), parse(clean[1].repeat(2)), parse(clean[2].repeat(2)));
+  }
+  return rgb(parse(clean.slice(0, 2)), parse(clean.slice(2, 4)), parse(clean.slice(4, 6)));
+}
+
+/** Wrap text into lines that fit within maxWidth, measured with measureFn. */
+function wrapWordsPdf(text: string, maxWidth: number, measureFn: (s: string) => number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (let i = 0; i < words.length; i++) {
+    const test = current ? current + ' ' + words[i] : words[i];
+    if (measureFn(test) > maxWidth && i > 0) {
+      lines.push(current);
+      current = words[i];
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+/**
+ * Renders a card side as a single-page PDF buffer using pdf-lib directly.
+ * The background template PDF page is embedded as a vector Form XObject,
+ * text fields are drawn as native PDF text operators,
+ * and only photograph images are embedded as raster PNG/JPEG.
+ *
+ * @param template    Card template metadata (original URLs preferred for vector)
+ * @param cardholder  Cardholder data object
+ * @param side        'front' | 'back'
+ * @param validTillDate Optional expiry date
+ * @param pressFonts  List of custom press fonts
+ * @returns           Uint8Array PDF bytes for this single card page
+ */
+export async function renderCardSideToPdfBytesClient(
+  template: {
+    id?: number;
+    cardWidth: number;
+    cardHeight: number;
+    frontImageUrl: string;
+    backImageUrl: string | null;
+    frontOriginalUrl?: string | null;
+    backOriginalUrl?: string | null;
+    frontFields: string;
+    backFields: string;
+  },
+  cardholder: {
+    id?: number;
+    name: string;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
+    customFields?: string | null;
+  },
+  side: 'front' | 'back',
+  validTillDate: Date | null,
+  pressFonts: Array<{ name: string; fileUrl: string }> = []
+): Promise<Uint8Array> {
+  const widthPx = template.cardWidth;
+  const heightPx = template.cardHeight;
+  const PX_TO_PT = 0.24; // 300 DPI: 1 px = 72/300 pt
+  const widthPt = widthPx * PX_TO_PT;
+  const heightPt = heightPx * PX_TO_PT;
+
+  const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
+  const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
+
+  // Prefer original PDF for vector fidelity, fall back to preview image
+  const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
+  const previewUrl  = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+  const bgUrl = (originalUrl && originalUrl.toLowerCase().endsWith('.pdf')) ? originalUrl : previewUrl;
+
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([widthPt, heightPt]);
+
+  // ── 1. White background ──────────────────────────────────────────────────
+  page.drawRectangle({ x: 0, y: 0, width: widthPt, height: heightPt, color: rgb(1, 1, 1) });
+
+  // ── 2. Background template ───────────────────────────────────────────────
+  if (bgUrl) {
+    try {
+      const lowerBg = bgUrl.toLowerCase();
+      if (lowerBg.endsWith('.pdf')) {
+        // Vector path: embed the PDF template page directly
+        const bgBytes = await fetchArrayBuffer(bgUrl);
+        const bgPdf = await PDFDocument.load(bgBytes);
+        const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
+        page.drawPage(embeddedPage, { x: 0, y: 0, width: widthPt, height: heightPt });
+      } else {
+        // Raster fallback: resolve SVG → PNG via Cloudinary transform if needed
+        let resolvedUrl = bgUrl;
+        if (lowerBg.endsWith('.svg')) {
+          if (bgUrl.includes('/image/upload/')) {
+            resolvedUrl = bgUrl.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png');
+          } else {
+            resolvedUrl = bgUrl.replace('.svg', '.png');
+          }
+        }
+        const bgBytes = await fetchArrayBuffer(resolvedUrl);
+        const lowerResolved = resolvedUrl.toLowerCase();
+        const bgImg = lowerResolved.endsWith('.png')
+          ? await pdfDoc.embedPng(bgBytes)
+          : await pdfDoc.embedJpg(bgBytes);
+        page.drawImage(bgImg, { x: 0, y: 0, width: widthPt, height: heightPt });
+      }
+    } catch (err) {
+      console.error(`[renderCardSideToPdfBytesClient] Background load error from ${bgUrl}:`, err);
+    }
+  }
+
+  // ── 3. Prepare data ──────────────────────────────────────────────────────
+  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+
+  let formattedValidTill = '';
+  if (validTillDate) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    formattedValidTill = `${months[validTillDate.getMonth()]} ${validTillDate.getFullYear()}`;
+  }
+
+  const data: Record<string, any> = {
+    name: cardholder.name,
+    designation: cardholder.designation || '',
+    photo: cardholder.photoUrl || '',
+    cardSerial: cardholder.cardSerial || '',
+    validTill: formattedValidTill,
+    ...customData,
+  };
+
+  // Cache for embedded fonts within this document
+  const fontCache = new Map<string, any>();
+
+  const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (match) {
+        const cacheKey = match.fileUrl;
+        if (!fontCache.has(cacheKey)) {
+          try {
+            const fontBytes = await fetchArrayBuffer(match.fileUrl);
+            fontCache.set(cacheKey, await pdfDoc.embedFont(fontBytes));
+          } catch (err) {
+            console.error(`[PDF client] Font load failed for ${match.name}:`, err);
+          }
+        }
+        if (fontCache.has(cacheKey)) return fontCache.get(cacheKey);
+      }
+    }
+    // Fall back to Helvetica variant
+    const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+    const isItalic = f.fontStyle === 'italic';
+    const stdFont =
+      isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+      : isBold           ? StandardFonts.HelveticaBold
+      : isItalic         ? StandardFonts.HelveticaOblique
+      :                    StandardFonts.Helvetica;
+    if (!fontCache.has(stdFont)) {
+      fontCache.set(stdFont, await pdfDoc.embedFont(stdFont));
+    }
+    return fontCache.get(stdFont);
+  };
+
+  // ── 4. Draw fields ───────────────────────────────────────────────────────
+  for (let fi = 0; fi < fields.length; fi++) {
+    const f = fields[fi];
+    let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
+
+    // Photo field fallback
+    if (f.type === 'image' && !rawValue) {
+      const isProfile = ['photo','avatar','image','profile'].includes(f.field);
+      const isOnlyImg = fields.filter(x => x.type === 'image').length === 1;
+      if (isProfile || isOnlyImg) rawValue = cardholder.photoUrl || '';
+    }
+    if (rawValue === undefined || rawValue === null) continue;
+
+    const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
+    const xPt = f.x * PX_TO_PT;
+    const yPt = (heightPx - f.y - f.height) * PX_TO_PT;
+    const wPt = f.width  * PX_TO_PT;
+    const hPt = f.height * PX_TO_PT;
+
+    switch (f.type) {
+      case 'id':
+      case 'text': {
+        try {
+          const embeddedFont = await getEmbeddedFont(f);
+          const fontSizePt = (f.fontSize || 20) * PX_TO_PT;
+          const letterSpacingPt = (f.letterSpacing || 0) * PX_TO_PT;
+          const opacity = f.opacity != null ? f.opacity : 1.0;
+
+          let processedValue = valueStr;
+          if (f.textTransform === 'uppercase') processedValue = valueStr.toUpperCase();
+          else if (f.textTransform === 'lowercase') processedValue = valueStr.toLowerCase();
+          else if (f.textTransform === 'capitalize') processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+
+          const measureFn = (s: string) => {
+            if (!letterSpacingPt) return embeddedFont.widthOfTextAtSize(s, fontSizePt);
+            let w = 0;
+            for (let ci = 0; ci < s.length; ci++) {
+              w += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
+              if (ci < s.length - 1) w += letterSpacingPt;
+            }
+            return w;
+          };
+
+          const lines = wrapWordsPdf(processedValue, wPt, measureFn);
+          const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
+          let currentYPt = yPt + hPt - fontSizePt;
+
+          for (const lineText of lines) {
+            if (currentYPt < yPt) break;
+            const textWidth = measureFn(lineText);
+            let lineDrawX = xPt;
+            if (f.align === 'center') lineDrawX = xPt + (wPt - textWidth) / 2;
+            else if (f.align === 'right') lineDrawX = xPt + wPt - textWidth;
+
+            if (letterSpacingPt) {
+              let charX = lineDrawX;
+              for (let ci = 0; ci < lineText.length; ci++) {
+                const ch = lineText[ci];
+                page.drawText(ch, { x: charX, y: currentYPt, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+                charX += embeddedFont.widthOfTextAtSize(ch, fontSizePt) + letterSpacingPt;
+              }
+            } else {
+              page.drawText(lineText, { x: lineDrawX, y: currentYPt, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+            }
+
+            // Text decoration
+            if (f.textDecoration && f.textDecoration !== 'none') {
+              const offsetPt = f.textDecoration === 'underline' ? fontSizePt * 0.05 : fontSizePt * 0.45;
+              page.drawLine({
+                start: { x: lineDrawX, y: currentYPt + offsetPt },
+                end:   { x: lineDrawX + textWidth, y: currentYPt + offsetPt },
+                thickness: Math.max(0.5, fontSizePt * 0.08),
+                color: hexToRgbClient(f.color),
+                opacity,
+              });
+            }
+
+            currentYPt -= lineHeightPt;
+          }
+        } catch (err) {
+          console.error(`[PDF client] Text field error for ${f.field}:`, err);
+        }
+        break;
+      }
+
+      case 'image': {
+        if (!rawValue) continue;
+        try {
+          const imgBytes = await fetchArrayBuffer(String(rawValue));
+          const lowerImgUrl = String(rawValue).toLowerCase();
+          const img = lowerImgUrl.endsWith('.png')
+            ? await pdfDoc.embedPng(imgBytes)
+            : await pdfDoc.embedJpg(imgBytes);
+          page.drawImage(img, { x: xPt, y: yPt, width: wPt, height: hPt });
+        } catch (err) {
+          console.error(`[PDF client] Image field error for ${f.field}:`, err);
+        }
+        break;
+      }
+
+      case 'qr': {
+        if (!rawValue) continue;
+        try {
+          const qrDataUrl = await generateQrCode(String(rawValue), 512);
+          const qrBase64 = qrDataUrl.split(',')[1];
+          const qrBytes = Uint8Array.from(atob(qrBase64), c => c.charCodeAt(0));
+          const qrImg = await pdfDoc.embedPng(qrBytes);
+          page.drawImage(qrImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+        } catch (err) {
+          console.error('[PDF client] QR field error:', err);
+        }
+        break;
+      }
+
+      case 'barcode': {
+        if (!rawValue) continue;
+        try {
+          // Render barcode onto an offscreen canvas then embed as PNG
+          const barcodeCanvas = generateBarcodeCanvas(String(rawValue), f.width, f.height, 3);
+          const blob: Blob = await new Promise(resolve => barcodeCanvas.toBlob(b => resolve(b!), 'image/png'));
+          const barcodeBytes = await blob.arrayBuffer();
+          const barcodeImg = await pdfDoc.embedPng(barcodeBytes);
+          page.drawImage(barcodeImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+        } catch (err) {
+          console.error('[PDF client] Barcode field error:', err);
+        }
+        break;
+      }
+    }
+  }
+
+  return pdfDoc.save();
 }

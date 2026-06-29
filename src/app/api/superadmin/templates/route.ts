@@ -2,51 +2,34 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { templateSchema } from '@/lib/schemas';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
-
     const templates = await prisma.cardTemplate.findMany({
-      where: { pressId, isLatest: true },
-      orderBy: { name: 'asc' },
-    });
-
-    const globalTemplates = await prisma.cardTemplate.findMany({
       where: { pressId: null, isLatest: true },
       orderBy: { name: 'asc' },
     });
 
-    return NextResponse.json({ success: true, templates, globalTemplates });
+    return NextResponse.json({ success: true, templates });
   } catch (error) {
-    console.error('Get templates error:', error);
+    console.error('Superadmin get templates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
-
     const body = await request.json();
     const result = templateSchema.safeParse(body);
     if (!result.success) {
       return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = result.data;
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields } = result.data;
 
     const template = await prisma.cardTemplate.create({
       data: {
-        pressId,
-        clientId: clientId ? Number(clientId) : null,
+        pressId: null, // Global template
+        clientId: null,
         name,
         cardWidth: cardWidth ? Number(cardWidth) : 1011,
         cardHeight: cardHeight ? Number(cardHeight) : 638,
@@ -63,7 +46,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, template });
   } catch (error) {
-    console.error('Create template error:', error);
+    console.error('Superadmin create template error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

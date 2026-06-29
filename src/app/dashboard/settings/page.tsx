@@ -18,7 +18,10 @@ import {
   Mail,
   MapPin,
   Phone,
-  Save
+  Save,
+  Type,
+  Upload,
+  FileType
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -52,6 +55,15 @@ export default function SettingsPage() {
   const [cleanupResult, setCleanupResult] = useState<any>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
 
+  // Fonts state
+  const [fonts, setFonts] = useState<any[]>([]);
+  const [fontName, setFontName] = useState('');
+  const [fontLanguage, setFontLanguage] = useState('en');
+  const [fontFile, setFontFile] = useState<File | null>(null);
+  const [fontUploading, setFontUploading] = useState(false);
+  const [fontError, setFontError] = useState('');
+  const [showFontForm, setShowFontForm] = useState(false);
+
   // Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -74,6 +86,13 @@ export default function SettingsPage() {
       if (vendorsRes.ok) {
         const json = await vendorsRes.json();
         setVendors(json.vendors || []);
+      }
+
+      // Fetch Press Fonts
+      const fontsRes = await fetch('/api/fonts');
+      if (fontsRes.ok) {
+        const json = await fontsRes.json();
+        setFonts(json.fonts || []);
       }
 
       // Fetch Press Profile
@@ -204,6 +223,53 @@ export default function SettingsPage() {
         try {
           const res = await fetch(`/api/print-vendors/${id}`, { method: 'DELETE' });
           if (res.ok) fetchData();
+        } catch (err) { console.error(err); }
+      },
+    });
+  };
+
+  // Upload font
+  const handleUploadFont = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!fontFile || !fontName.trim()) return;
+    setFontUploading(true);
+    setFontError('');
+    try {
+      const fd = new FormData();
+      fd.append('file', fontFile);
+      fd.append('name', fontName.trim());
+      fd.append('language', fontLanguage);
+      const res = await fetch('/api/fonts', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (res.ok) {
+        setFontName('');
+        setFontLanguage('en');
+        setFontFile(null);
+        setShowFontForm(false);
+        toast(`Font "${data.font.name}" uploaded successfully.`, 'success');
+        fetchData();
+      } else {
+        setFontError(data.error || 'Upload failed.');
+      }
+    } catch (err: any) {
+      setFontError(err.message || 'Unexpected error.');
+    } finally {
+      setFontUploading(false);
+    }
+  };
+
+  // Delete font
+  const handleDeleteFont = (id: number, name: string) => {
+    showConfirm({
+      title: 'Remove Font',
+      message: `Remove "${name}" from your press font library? Templates using this font will fall back to the default Helvetica.`,
+      confirmLabel: 'Remove Font',
+      variant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await fetch(`/api/fonts/${id}`, { method: 'DELETE' });
+          if (res.ok) { toast(`Font "${name}" removed.`, 'success'); fetchData(); }
         } catch (err) { console.error(err); }
       },
     });
@@ -421,6 +487,177 @@ export default function SettingsPage() {
             >
               <Trash2 size={16} /> {cleanupLoading ? 'Cleaning up...' : 'Purge Expired PDF Files & Logs'}
             </button>
+          </div>
+
+          {/* ── Custom Fonts Library ─────────────────────────────────────── */}
+          <div className="glass-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Type size={18} color="var(--primary)" /> Custom Font Library
+              </h3>
+              <button
+                id="add-font-btn"
+                className="btn btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '0.75rem' }}
+                onClick={() => { setShowFontForm(f => !f); setFontError(''); }}
+              >
+                <Plus size={12} /> {showFontForm ? 'Close' : 'Add Font'}
+              </button>
+            </div>
+            <p style={{ fontSize: '0.8rem', marginBottom: '16px', color: 'var(--muted)' }}>
+              Upload custom TTF / OTF / WOFF / WOFF2 fonts. These are available in the template editor field properties and embedded into generated PDFs.
+            </p>
+
+            {showFontForm && (
+              <form
+                id="font-upload-form"
+                onSubmit={handleUploadFont}
+                style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid var(--glass-border)' }}
+              >
+                {fontError && (
+                  <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', color: 'var(--danger)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem' }}>
+                    {fontError}
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Display Name</label>
+                  <input
+                    id="font-name-input"
+                    type="text"
+                    required
+                    className="form-input"
+                    placeholder="e.g. Noto Sans Devanagari"
+                    value={fontName}
+                    onChange={e => setFontName(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Script / Language</label>
+                    <select
+                      id="font-language-select"
+                      className="form-input"
+                      value={fontLanguage}
+                      onChange={e => setFontLanguage(e.target.value)}
+                    >
+                      <option value="en">Latin / English</option>
+                      <option value="hi">Hindi (Devanagari)</option>
+                      <option value="ur">Urdu (Nastaliq)</option>
+                      <option value="ar">Arabic</option>
+                      <option value="ta">Tamil</option>
+                      <option value="te">Telugu</option>
+                      <option value="bn">Bengali</option>
+                      <option value="gu">Gujarati</option>
+                      <option value="pa">Punjabi (Gurmukhi)</option>
+                      <option value="ml">Malayalam</option>
+                      <option value="kn">Kannada</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Font File</label>
+                    <input
+                      id="font-file-input"
+                      type="file"
+                      required
+                      accept=".ttf,.otf,.woff,.woff2"
+                      className="form-input"
+                      style={{ padding: '6px', cursor: 'pointer' }}
+                      onChange={e => setFontFile(e.target.files?.[0] ?? null)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowFontForm(false)}>Cancel</button>
+                  <button id="font-upload-submit" type="submit" className="btn btn-primary" disabled={fontUploading} style={{ gap: '8px' }}>
+                    <Upload size={14} /> {fontUploading ? 'Uploading...' : 'Upload Font'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {fonts.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                <FileType size={32} style={{ marginBottom: '8px', opacity: 0.3 }} />
+                <p>No custom fonts uploaded yet.</p>
+                <p style={{ fontSize: '0.75rem', marginTop: '4px' }}>Add fonts to unlock multilingual text fields in your card templates.</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {fonts.map((f: any) => {
+                  const langLabels: Record<string, string> = {
+                    en: 'Latin', hi: 'Hindi', ur: 'Urdu', ar: 'Arabic',
+                    ta: 'Tamil', te: 'Telugu', bn: 'Bengali', gu: 'Gujarati',
+                    pa: 'Punjabi', ml: 'Malayalam', kn: 'Kannada', other: 'Other',
+                  };
+                  const langColors: Record<string, string> = {
+                    en: '#6366f1', hi: '#f59e0b', ur: '#10b981', ar: '#ef4444',
+                    ta: '#8b5cf6', te: '#ec4899', bn: '#14b8a6', gu: '#f97316',
+                    pa: '#a78bfa', ml: '#34d399', kn: '#fb923c', other: '#94a3b8',
+                  };
+                  const color = langColors[f.language] ?? '#94a3b8';
+                  return (
+                    <div
+                      key={f.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '12px 14px',
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: '8px',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          width: '36px', height: '36px', borderRadius: '8px',
+                          background: `${color}22`,
+                          border: `1px solid ${color}44`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexShrink: 0,
+                        }}>
+                          <Type size={16} color={color} />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: '600', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.name}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                            <span style={{
+                              fontSize: '0.65rem', fontWeight: '600', padding: '2px 7px',
+                              borderRadius: '4px', background: `${color}22`,
+                              color: color, border: `1px solid ${color}44`,
+                              letterSpacing: '0.04em',
+                            }}>
+                              {langLabels[f.language] ?? f.language}
+                            </span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
+                              {f.fileUrl.split('/').pop()?.replace(/_\d+\./, '.') ?? f.fileUrl}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        id={`delete-font-${f.id}`}
+                        className="btn btn-danger"
+                        style={{ padding: '6px', flexShrink: 0 }}
+                        onClick={() => handleDeleteFont(f.id, f.name)}
+                        title="Remove font"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
