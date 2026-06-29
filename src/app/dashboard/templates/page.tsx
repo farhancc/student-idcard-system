@@ -52,6 +52,25 @@ export default function TemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [isElectron, setIsElectron] = useState(true);
   const [pressId, setPressId] = useState<number | null>(null);
+  const [pressFonts, setPressFonts] = useState<any[]>([]);
+
+  const fetchFonts = async () => {
+    try {
+      const res = await fetch('/api/fonts');
+      if (res.ok) {
+        const json = await res.json();
+        setPressFonts(json.fonts || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch press fonts:', err);
+    }
+  };
+
+  const getFontFamily = (family?: string) => {
+    if (!family) return 'sans-serif';
+    const isCustom = pressFonts.some(pf => pf.name.toLowerCase() === family.toLowerCase());
+    return isCustom ? family.replace(/\s+/g, '_') : family;
+  };
 
   useEffect(() => {
     setIsElectron(typeof window !== 'undefined' && !!(window as any).electronAPI);
@@ -165,7 +184,28 @@ export default function TemplatesPage() {
 
   useEffect(() => {
     fetchTemplates();
+    fetchFonts();
   }, []);
+
+  // Load custom fonts in browser for real-time designer preview
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    pressFonts.forEach(font => {
+      const familyName = font.name.replace(/\s+/g, '_');
+      const isLoaded = Array.from(document.fonts.values()).some(
+        (f: any) => f.family === familyName
+      );
+      if (!isLoaded && font.fileUrl) {
+        const fontFace = new FontFace(familyName, `url(${font.fileUrl})`);
+        fontFace.load().then(loadedFace => {
+          document.fonts.add(loadedFace);
+          console.log(`Loaded custom font in browser: ${familyName}`);
+        }).catch(err => {
+          console.error(`Failed to load font ${font.name} in browser:`, err);
+        });
+      }
+    });
+  }, [pressFonts]);
 
   const handleAddField = (side: 'front' | 'back') => {
     const defaultField = 'rollNo';
@@ -1113,7 +1153,7 @@ export default function TemplatesPage() {
                               const testDataStyle: React.CSSProperties = (showTestData && isTextLike) ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
-                                fontFamily: f.fontFamily || 'sans-serif',
+                                fontFamily: getFontFamily(f.fontFamily),
                                 fontWeight: f.fontWeight || 'normal',
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
@@ -1331,7 +1371,7 @@ export default function TemplatesPage() {
                               const testDataStyle: React.CSSProperties = (showTestData && isTextLike) ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
-                                fontFamily: f.fontFamily || 'sans-serif',
+                                fontFamily: getFontFamily(f.fontFamily),
                                 fontWeight: f.fontWeight || 'normal',
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
@@ -1508,7 +1548,16 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 2: Font family & Basic Styles */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: f.fontFamily || 'sans-serif' }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('front', i, 'fontFamily', e.target.value)}>
+                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: getFontFamily(f.fontFamily) }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('front', i, 'fontFamily', e.target.value)}>
+                                        {pressFonts.length > 0 && (
+                                          <optgroup label="── Custom Fonts">
+                                            {pressFonts.map(pf => (
+                                              <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                                                {pf.name}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
                                         <optgroup label="── System">
                                           <option value="sans-serif">Default Sans</option>
                                           <option value="serif">Default Serif</option>
@@ -1679,7 +1728,16 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 2: Font family & Basic Styles */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
-                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: f.fontFamily || 'sans-serif' }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('back', i, 'fontFamily', e.target.value)}>
+                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: getFontFamily(f.fontFamily) }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('back', i, 'fontFamily', e.target.value)}>
+                                        {pressFonts.length > 0 && (
+                                          <optgroup label="── Custom Fonts">
+                                            {pressFonts.map(pf => (
+                                              <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                                                {pf.name}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
                                         <optgroup label="── System">
                                           <option value="sans-serif">Default Sans</option>
                                           <option value="serif">Default Serif</option>
@@ -1973,6 +2031,7 @@ export default function TemplatesPage() {
                   <CardPreview
                     template={tmpl}
                     side={previewSide}
+                    pressFonts={pressFonts}
                     style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px' }}
                   />
                 </div>
