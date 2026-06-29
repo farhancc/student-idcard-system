@@ -36,6 +36,13 @@ function hexToRgb(hex?: string) {
 
 // Helper to load file (local or HTTP) as a Buffer
 async function getFileBuffer(fileUrl: string): Promise<Buffer> {
+  if (fileUrl.startsWith('data:')) {
+    const commaIndex = fileUrl.indexOf(',');
+    if (commaIndex !== -1) {
+      const base64Data = fileUrl.substring(commaIndex + 1);
+      return Buffer.from(base64Data, 'base64');
+    }
+  }
   if (fileUrl.startsWith('/')) {
     const filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
     return fs.readFileSync(filePath);
@@ -89,13 +96,28 @@ export async function ensureFontRegistered(fontName: string, fontUrl: string): P
   }
 
   try {
-    // If the fontUrl is a relative path (local file), use it directly
     let filePath = fontUrl;
-    if (fontUrl.startsWith('/')) {
+    
+    if (fontUrl.startsWith('data:')) {
+      const cacheDir = path.join('/tmp', 'idexo', 'fonts');
+      fs.mkdirSync(cacheDir, { recursive: true });
+      
+      const mime = fontUrl.split(';')[0]?.split(':')[1] || '';
+      const ext = mime.includes('otf') ? 'otf' : mime.includes('woff2') ? 'woff2' : mime.includes('woff') ? 'woff' : 'ttf';
+      filePath = path.join(cacheDir, `${familyName}.${ext}`);
+
+      if (!fs.existsSync(filePath)) {
+        const commaIndex = fontUrl.indexOf(',');
+        if (commaIndex !== -1) {
+          const base64Data = fontUrl.substring(commaIndex + 1);
+          fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+        }
+      }
+    } else if (fontUrl.startsWith('/')) {
       filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fontUrl);
     } else if (fontUrl.startsWith('http')) {
-      // In production, we'd download the font file from S3 to a local cache directory
-      const cacheDir = path.join(/*turbopackIgnore: true*/ process.cwd(), 'tmp', 'fonts');
+      // In production (e.g. Vercel), download font to writeable /tmp cache directory to prevent EROFS
+      const cacheDir = path.join('/tmp', 'idexo', 'fonts');
       fs.mkdirSync(cacheDir, { recursive: true });
       filePath = path.join(cacheDir, `${familyName}.ttf`);
 

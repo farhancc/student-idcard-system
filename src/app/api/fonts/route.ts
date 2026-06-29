@@ -85,15 +85,31 @@ export async function POST(request: Request) {
         ).end(buffer);
       });
     } else {
-      // Local fallback
-      const uploadDir = path.join(
-        process.cwd(), 'public', 'uploads', String(pressId), 'fonts'
-      );
-      fs.mkdirSync(uploadDir, { recursive: true });
-      const fileName = `${Date.now()}_${name.replace(/\s+/g, '_')}${ext}`;
-      const filePath = path.join(uploadDir, fileName);
-      fs.writeFileSync(filePath, buffer);
-      fileUrl = `/uploads/${pressId}/fonts/${fileName}`;
+      // Local fallback: if running in a serverless environment (Vercel) or if local write fails,
+      // save as a base64 data URI to persist in DB without filesystem writes.
+      const isServerless = !!process.env.VERCEL || process.env.NODE_ENV === 'production';
+      
+      if (isServerless) {
+        const mimeType = ext === '.ttf' ? 'font/ttf' : ext === '.otf' ? 'font/otf' : ext === '.woff' ? 'font/woff' : 'font/woff2';
+        const base64 = buffer.toString('base64');
+        fileUrl = `data:${mimeType};base64,${base64}`;
+      } else {
+        try {
+          const uploadDir = path.join(
+            process.cwd(), 'public', 'uploads', String(pressId), 'fonts'
+          );
+          fs.mkdirSync(uploadDir, { recursive: true });
+          const fileName = `${Date.now()}_${name.replace(/\s+/g, '_')}${ext}`;
+          const filePath = path.join(uploadDir, fileName);
+          fs.writeFileSync(filePath, buffer);
+          fileUrl = `/uploads/${pressId}/fonts/${fileName}`;
+        } catch (dirErr) {
+          console.warn('Local filesystem write failed for font, falling back to base64:', dirErr);
+          const mimeType = ext === '.ttf' ? 'font/ttf' : ext === '.otf' ? 'font/otf' : ext === '.woff' ? 'font/woff' : 'font/woff2';
+          const base64 = buffer.toString('base64');
+          fileUrl = `data:${mimeType};base64,${base64}`;
+        }
+      }
     }
 
     const font = await prisma.pressFont.create({

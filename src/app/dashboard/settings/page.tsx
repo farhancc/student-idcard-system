@@ -638,7 +638,9 @@ export default function SettingsPage() {
                               {langLabels[f.language] ?? f.language}
                             </span>
                             <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-                              {f.fileUrl.split('/').pop()?.replace(/_\d+\./, '.') ?? f.fileUrl}
+                              {f.fileUrl.startsWith('data:') 
+                                ? 'Embedded (Base64)' 
+                                : (f.fileUrl.split('/').pop()?.replace(/_\d+\./, '.') ?? f.fileUrl)}
                             </span>
                           </div>
                         </div>
