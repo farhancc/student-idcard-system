@@ -15,7 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-template-image', data),
   getLocalTemplatePath: (data) =>
     ipcRenderer.invoke('get-local-template-path', data),
-  finalizeTemplateOriginals: (data) =>
-    ipcRenderer.invoke('finalize-template-originals', data),
+  saveCredentials: (email, password) =>
+    ipcRenderer.invoke('save-credentials', { email, password }),
+  loadCredentials: () =>
+    ipcRenderer.invoke('load-credentials'),
+  clearCredentials: () =>
+    ipcRenderer.invoke('clear-credentials'),
 });
 

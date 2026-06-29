@@ -1,0 +1,23 @@
+diff --git a/node_modules/app-builder-lib/out/targets/blockmap/blockmap.js b/node_modules/app-builder-lib/out/targets/blockmap/blockmap.js
+index 2492bc7..cdc44a0 100644
+--- a/node_modules/app-builder-lib/out/targets/blockmap/blockmap.js
++++ b/node_modules/app-builder-lib/out/targets/blockmap/blockmap.js
+@@ -5,7 +5,7 @@ const crypto_1 = require("crypto");
+ const fs_1 = require("fs");
+ const promises_1 = require("fs/promises");
+ const zlib = require("zlib");
+-const blake2_js_1 = require("@noble/hashes/blake2.js");
++let blake2_js_1 = null;
+ // Rabin fingerprinting constants from github.com/aclements/go-rabin:
+ //   Poly64 = 0xbfe6b8a5bf378d83 (degree-63 irreducible polynomial over GF(2))
+ //   Window = 64 bytes, Avg = 16 KB, Min = 8 KB, Max = 32 KB
+@@ -47,6 +47,9 @@ function compress(data, format) {
+  * Returned `sha512` is SHA-512 of the full file as it exists after the call.
+  */
+ async function buildBlockMap(inFile, compressionFormat, outFile) {
++    if (!blake2_js_1) {
++        blake2_js_1 = await import("@noble/hashes/blake2.js");
++    }
+     const fileHash = (0, crypto_1.createHash)("sha512");
+     const checksums = [];
+     const sizes = [];

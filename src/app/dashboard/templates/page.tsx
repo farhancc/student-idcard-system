@@ -384,11 +384,23 @@ export default function TemplatesPage() {
     const field = { ...fields[dragState.index] };
 
     if (dragState.type === 'move') {
-      field.x = Math.max(0, Math.round(dragState.origX + dx));
-      field.y = Math.max(0, Math.round(dragState.origY + dy));
+      let targetX = dragState.origX + dx;
+      let targetY = dragState.origY + dy;
+      if (showGrid) {
+        targetX = Math.round(targetX / gridSize) * gridSize;
+        targetY = Math.round(targetY / gridSize) * gridSize;
+      }
+      field.x = Math.max(0, Math.round(targetX));
+      field.y = Math.max(0, Math.round(targetY));
     } else {
-      field.width = Math.max(10, Math.round(dragState.origW + dx));
-      field.height = Math.max(10, Math.round(dragState.origH + dy));
+      let targetW = dragState.origW + dx;
+      let targetH = dragState.origH + dy;
+      if (showGrid) {
+        targetW = Math.round(targetW / gridSize) * gridSize;
+        targetH = Math.round(targetH / gridSize) * gridSize;
+      }
+      field.width = Math.max(10, Math.round(targetW));
+      field.height = Math.max(10, Math.round(targetH));
     }
 
     fields[dragState.index] = field;
@@ -419,7 +431,7 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragState, frontFields, backFields, cardWidth]);
+  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize]);
 
   const handleEditorMouseDown = (e: React.MouseEvent<HTMLDivElement>, side: 'front' | 'back') => {
     if (e.target !== e.currentTarget) return;
@@ -428,8 +440,13 @@ export default function TemplatesPage() {
     const rect = e.currentTarget.getBoundingClientRect();
     const scale = 480 / cardWidth;
     
-    const startCardX = Math.round((e.clientX - rect.left) / scale);
-    const startCardY = Math.round((e.clientY - rect.top) / scale);
+    let startCardX = Math.round((e.clientX - rect.left) / scale);
+    let startCardY = Math.round((e.clientY - rect.top) / scale);
+
+    if (showGrid) {
+      startCardX = Math.round(startCardX / gridSize) * gridSize;
+      startCardY = Math.round(startCardY / gridSize) * gridSize;
+    }
 
     const newIndex = side === 'front' ? frontFields.length : backFields.length;
     const newField: FieldCoordinate = {
@@ -988,7 +1005,7 @@ export default function TemplatesPage() {
                                     width: '100%',
                                     height: '100%',
                                     pointerEvents: 'none',
-                                    zIndex: 1,
+                                    zIndex: 150,
                                   }}
                                   xmlns="http://www.w3.org/2000/svg"
                                 >
@@ -1000,8 +1017,9 @@ export default function TemplatesPage() {
                                       y1={0}
                                       x2={(ci + 1) * scaledStep}
                                       y2={editorHeight}
-                                      stroke="rgba(255,255,255,0.25)"
-                                      strokeWidth="0.5"
+                                      stroke="rgba(20, 184, 166, 0.5)"
+                                      strokeWidth="0.75"
+                                      strokeDasharray="2,2"
                                     />
                                   ))}
                                   {/* Horizontal lines */}
@@ -1012,8 +1030,9 @@ export default function TemplatesPage() {
                                       y1={(ri + 1) * scaledStep}
                                       x2={editorWidth}
                                       y2={(ri + 1) * scaledStep}
-                                      stroke="rgba(255,255,255,0.25)"
-                                      strokeWidth="0.5"
+                                      stroke="rgba(20, 184, 166, 0.5)"
+                                      strokeWidth="0.75"
+                                      strokeDasharray="2,2"
                                     />
                                   ))}
                                   {/* Ruler tick labels on top + left edges */}
@@ -1022,9 +1041,10 @@ export default function TemplatesPage() {
                                       key={`fvl${ci}`}
                                       x={(ci + 1) * scaledStep + 2}
                                       y={9}
-                                      fill="rgba(255,255,255,0.45)"
+                                      fill="rgba(20, 184, 166, 0.95)"
                                       fontSize="7"
                                       fontFamily="monospace"
+                                      fontWeight="bold"
                                     >
                                       {(ci + 1) * gridSize}
                                     </text>
@@ -1034,9 +1054,10 @@ export default function TemplatesPage() {
                                       key={`fhl${ri}`}
                                       x={2}
                                       y={(ri + 1) * scaledStep - 2}
-                                      fill="rgba(255,255,255,0.45)"
+                                      fill="rgba(20, 184, 166, 0.95)"
                                       fontSize="7"
                                       fontFamily="monospace"
+                                      fontWeight="bold"
                                     >
                                       {(ri + 1) * gridSize}
                                     </text>
@@ -1202,10 +1223,11 @@ export default function TemplatesPage() {
                                     width: '100%',
                                     height: '100%',
                                     pointerEvents: 'none',
-                                    zIndex: 1,
+                                    zIndex: 150,
                                   }}
                                   xmlns="http://www.w3.org/2000/svg"
                                 >
+                                  {/* Vertical lines */}
                                   {Array.from({ length: cols - 1 }, (_, ci) => (
                                     <line
                                       key={`bv${ci}`}
@@ -1213,10 +1235,12 @@ export default function TemplatesPage() {
                                       y1={0}
                                       x2={(ci + 1) * scaledStep}
                                       y2={editorHeight}
-                                      stroke="rgba(255,255,255,0.25)"
-                                      strokeWidth="0.5"
+                                      stroke="rgba(20, 184, 166, 0.5)"
+                                      strokeWidth="0.75"
+                                      strokeDasharray="2,2"
                                     />
                                   ))}
+                                  {/* Horizontal lines */}
                                   {Array.from({ length: rows - 1 }, (_, ri) => (
                                     <line
                                       key={`bh${ri}`}
@@ -1224,18 +1248,21 @@ export default function TemplatesPage() {
                                       y1={(ri + 1) * scaledStep}
                                       x2={editorWidth}
                                       y2={(ri + 1) * scaledStep}
-                                      stroke="rgba(255,255,255,0.25)"
-                                      strokeWidth="0.5"
+                                      stroke="rgba(20, 184, 166, 0.5)"
+                                      strokeWidth="0.75"
+                                      strokeDasharray="2,2"
                                     />
                                   ))}
+                                  {/* Ruler tick labels */}
                                   {Array.from({ length: cols - 1 }, (_, ci) => (
                                     <text
                                       key={`bvl${ci}`}
                                       x={(ci + 1) * scaledStep + 2}
                                       y={9}
-                                      fill="rgba(255,255,255,0.45)"
+                                      fill="rgba(20, 184, 166, 0.95)"
                                       fontSize="7"
                                       fontFamily="monospace"
+                                      fontWeight="bold"
                                     >
                                       {(ci + 1) * gridSize}
                                     </text>
@@ -1245,9 +1272,10 @@ export default function TemplatesPage() {
                                       key={`bhl${ri}`}
                                       x={2}
                                       y={(ri + 1) * scaledStep - 2}
-                                      fill="rgba(255,255,255,0.45)"
+                                      fill="rgba(20, 184, 166, 0.95)"
                                       fontSize="7"
                                       fontFamily="monospace"
+                                      fontWeight="bold"
                                     >
                                       {(ri + 1) * gridSize}
                                     </text>

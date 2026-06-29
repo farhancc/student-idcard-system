@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -8,9 +8,6 @@ const AdmZip = require('adm-zip');
 let mainWindow;
 
 function getPortalUrl() {
-  if (app.isPackaged) {
-    return 'https://idexocards.vercel.app';
-  }
   return process.env.PORTAL_URL || 'https://idexocards.vercel.app';
 }
 
@@ -82,6 +79,7 @@ function createWindow() {
     height: 800,
     title: "IDexo Press Client",
     icon: appIcon,
+    show: false, // Hide initially to ensure focus event fires cleanly on show
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -89,15 +87,24 @@ function createWindow() {
     },
   });
 
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+    mainWindow.focus();
+  });
+
   // Enable F12 and Ctrl+Shift+I to toggle DevTools for easy troubleshooting
   mainWindow.webContents.on('before-input-event', (event, input) => {
-    if (input.type === 'keyDown') {
-      const isDevToolsCombo = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
-      const isF12 = input.key === 'F12';
-      if (isDevToolsCombo || isF12) {
-        mainWindow.webContents.toggleDevTools();
-        event.preventDefault();
+    try {
+      if (input && input.type === 'keyDown' && typeof input.key === 'string') {
+        const isDevToolsCombo = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
+        const isF12 = input.key === 'F12';
+        if (isDevToolsCombo || isF12) {
+          mainWindow.webContents.toggleDevTools();
+          event.preventDefault();
+        }
       }
+    } catch (err) {
+      console.error('Error in before-input-event handler:', err);
     }
   });
 
@@ -405,6 +412,82 @@ ipcMain.handle('run-backup', async (event, { clientName, templateName, templateF
     return { success: true, savedIds, path: targetDir };
   } catch (error) {
     console.error('Failed to execute backup:', error);
+  }
+});
+
+// IPC handlers for secure credentials storage
+ipcMain.handle('save-credentials', async (event, { email, password }) => {
+  try {
+    const data = JSON.stringify({ email, password });
+    const dir = app.getPath('userData');
+    if (safeStorage && safeStorage.isEncryptionAvailable()) {
+      const encrypted = safeStorage.encryptString(data);
+      const hex = encrypted.toString('hex');
+      const filePath = path.join(dir, 'credentials.enc');
+      fs.writeFileSync(filePath, hex, 'utf8');
+      // Clean up fallback file if it exists
+      const fallbackPath = path.join(dir, 'credentials.json');
+      if (fs.existsSync(fallbackPath)) {
+        try { fs.unlinkSync(fallbackPath); } catch (e) {}
+      }
+      return { success: true };
+    } else {
+      const filePath = path.join(dir, 'credentials.json');
+      fs.writeFileSync(filePath, data, 'utf8');
+      // Clean up encrypted file if it exists
+      const encPath = path.join(dir, 'credentials.enc');
+      if (fs.existsSync(encPath)) {
+        try { fs.unlinkSync(encPath); } catch (e) {}
+      }
+      return { success: true };
+    }
+  } catch (error) {
+    console.error('save-credentials error:', error);
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('load-credentials', async (event) => {
+  try {
+    const dir = app.getPath('userData');
+    const encPath = path.join(dir, 'credentials.enc');
+    const jsonPath = path.join(dir, 'credentials.json');
+
+    if (fs.existsSync(encPath)) {
+      const hex = fs.readFileSync(encPath, 'utf8');
+      const buffer = Buffer.from(hex, 'hex');
+      if (safeStorage && safeStorage.isEncryptionAvailable()) {
+        const decrypted = safeStorage.decryptString(buffer);
+        return JSON.parse(decrypted);
+      }
+    }
+    
+    if (fs.existsSync(jsonPath)) {
+      const data = fs.readFileSync(jsonPath, 'utf8');
+      return JSON.parse(data);
+    }
+    return null;
+  } catch (error) {
+    console.error('load-credentials error:', error);
+    return null;
+  }
+});
+
+ipcMain.handle('clear-credentials', async (event) => {
+  try {
+    const dir = app.getPath('userData');
+    const encPath = path.join(dir, 'credentials.enc');
+    const jsonPath = path.join(dir, 'credentials.json');
+    if (fs.existsSync(encPath)) {
+      try { fs.unlinkSync(encPath); } catch (e) {}
+    }
+    if (fs.existsSync(jsonPath)) {
+      try { fs.unlinkSync(jsonPath); } catch (e) {}
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('clear-credentials error:', error);
+    return { success: false, error: error.message };
+  }
+});
+

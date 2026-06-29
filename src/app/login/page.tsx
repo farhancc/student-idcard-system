@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Lock, Mail, AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, AlertTriangle, Eye, EyeOff, Key } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -11,6 +11,39 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const [rememberMe, setRememberMe] = useState(true);
+  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [isElectron, setIsElectron] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      setIsElectron(true);
+      (window as any).electronAPI.loadCredentials().then((creds: any) => {
+        if (creds && creds.email && creds.password) {
+          setHasSavedCredentials(true);
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  const handleAutofill = async () => {
+    setError('');
+    if (typeof window !== 'undefined' && (window as any).electronAPI) {
+      try {
+        const creds = await (window as any).electronAPI.loadCredentials();
+        if (creds && creds.email && creds.password) {
+          setEmail(creds.email);
+          setPassword(creds.password);
+        } else {
+          setError('No saved credentials found. Please log in with "Remember Credentials" checked to save them.');
+        }
+      } catch (err) {
+        console.error('Failed to load credentials for autofill:', err);
+        setError('Failed to load credentials.');
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,6 +60,15 @@ export default function LoginPage() {
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Authentication failed');
+      }
+
+      // If running inside Electron, handle credentials saving/clearing
+      if (typeof window !== 'undefined' && (window as any).electronAPI) {
+        if (rememberMe) {
+          await (window as any).electronAPI.saveCredentials(email, password);
+        } else {
+          await (window as any).electronAPI.clearCredentials();
+        }
       }
 
       // Successful login -> Redirect to dashboard
@@ -148,6 +190,62 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          {isElectron && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginTop: '-8px',
+              marginBottom: '4px'
+            }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                fontSize: '0.875rem',
+                color: 'var(--muted)',
+                userSelect: 'none'
+              }}>
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  style={{
+                    accentColor: 'var(--primary)',
+                    width: '16px',
+                    height: '16px',
+                    cursor: 'pointer'
+                  }}
+                />
+                Remember Credentials
+              </label>
+
+              <button
+                type="button"
+                onClick={handleAutofill}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--primary)',
+                  cursor: 'pointer',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  opacity: hasSavedCredentials ? 1 : 0.6,
+                  transition: 'all 0.2s',
+                }}
+              >
+                <Key size={14} />
+                Autofill Saved
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
