@@ -15,6 +15,7 @@ export interface FieldCoordinate {
   fontFamily?: string; // Arial | Georgia | Verdana | custom press font name
   color?: string;      // hex color code e.g. #000000
   align?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'center' | 'bottom';
   borderRadius?: number; // px — for image fields
   prefix?: string; // e.g. "Roll No: "
   suffix?: string; // e.g. " (A+)"
@@ -23,6 +24,7 @@ export interface FieldCoordinate {
   textDecoration?: string;
   textTransform?: string;
   opacity?: number;
+  staticValue?: string;
 }
 
 // Map to keep track of loaded font families in the browser
@@ -386,11 +388,19 @@ export async function renderCardSideClient(
         const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
         const renderedHeight = lines.length * lineHeight;
 
+        // Calculate starting Y based on vertical alignment
+        let startY = effectiveY;
+        if (f.verticalAlign === 'center') {
+          startY = effectiveY + (f.height - renderedHeight) / 2;
+        } else if (f.verticalAlign === 'bottom') {
+          startY = effectiveY + f.height - renderedHeight;
+        }
+
         ctx.beginPath();
-        ctx.rect(f.x, effectiveY, f.width, renderedHeight);
+        ctx.rect(f.x, effectiveY, f.width, f.height);
         ctx.clip();
 
-        let currentY = effectiveY;
+        let currentY = startY;
         lines.forEach(lineText => {
           let lineDrawX = f.x;
           const lineWidth = measureTextSpacing(lineText);
@@ -746,7 +756,17 @@ export async function renderCardSideToPdfBytesClient(
 
           const lines = wrapWordsPdf(processedValue, wPt, measureFn);
           const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
-          let currentYPt = yPt + hPt - fontSizePt;
+          const renderedHeightPt = lines.length * lineHeightPt;
+
+          // Adjust starting Y based on vertical alignment
+          let startYPt = yPt + hPt - fontSizePt;
+          if (f.verticalAlign === 'center') {
+            startYPt -= (hPt - renderedHeightPt) / 2;
+          } else if (f.verticalAlign === 'bottom') {
+            startYPt -= (hPt - renderedHeightPt);
+          }
+
+          let currentYPt = startYPt;
 
           for (const lineText of lines) {
             if (currentYPt < yPt) break;

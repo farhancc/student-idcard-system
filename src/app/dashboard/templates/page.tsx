@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3 } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -30,18 +30,20 @@ interface FieldCoordinate {
   height: number;
   fontSize?: number;
   fontWeight?: string;
-  fontStyle?: 'normal' | 'italic';
-  fontFamily?: string;
+  fontStyle?: string;
   color?: string;
   align?: 'left' | 'center' | 'right';
-  borderRadius?: number;
+  verticalAlign?: 'top' | 'center' | 'bottom';
   prefix?: string;
   suffix?: string;
+  borderRadius?: number;
+  fontFamily?: string;
   letterSpacing?: number;
   lineHeight?: number;
   textDecoration?: 'none' | 'underline' | 'line-through';
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   opacity?: number;
+  staticValue?: string;
 }
 
 export default function TemplatesPage() {
@@ -106,6 +108,11 @@ export default function TemplatesPage() {
   // Grid overlay state
   const [showGrid, setShowGrid] = useState(false);
   const [gridSize, setGridSize] = useState(20);
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [snapToGuides, setSnapToGuides] = useState(true);
+  const [frontGuides, setFrontGuides] = useState<{ id: string; type: 'horizontal' | 'vertical'; value: number }[]>([]);
+  const [backGuides, setBackGuides] = useState<{ id: string; type: 'horizontal' | 'vertical'; value: number }[]>([]);
+  const [activeGuideDrag, setActiveGuideDrag] = useState<{ id: string; side: 'front' | 'back'; type: 'horizontal' | 'vertical'; isNew?: boolean } | null>(null);
 
   // Preview State
   const [previewId, setPreviewId] = useState<number | null>(null);
@@ -457,24 +464,145 @@ export default function TemplatesPage() {
     const fields = dragState.side === 'front' ? [...frontFields] : [...backFields];
     const field = { ...fields[dragState.index] };
 
+    const threshold = 6; // Snap threshold in pixels
+
     if (dragState.type === 'move') {
       let targetX = dragState.origX + dx;
       let targetY = dragState.origY + dy;
-      if (showGrid) {
-        targetX = Math.round(targetX / gridSize) * gridSize;
-        targetY = Math.round(targetY / gridSize) * gridSize;
+
+      // ── Vertical Snapping (X axis) ──
+      let snappedX = targetX;
+      let minDiffX = threshold;
+
+      if (snapToGuides) {
+        const guides = dragState.side === 'front' ? frontGuides : backGuides;
+        for (const g of guides) {
+          if (g.type === 'vertical') {
+            // Left edge
+            const diffLeft = Math.abs(targetX - g.value);
+            if (diffLeft < minDiffX) {
+              minDiffX = diffLeft;
+              snappedX = g.value;
+            }
+            // Right edge
+            const diffRight = Math.abs((targetX + field.width) - g.value);
+            if (diffRight < minDiffX) {
+              minDiffX = diffRight;
+              snappedX = g.value - field.width;
+            }
+            // Center
+            const diffCenter = Math.abs((targetX + field.width / 2) - g.value);
+            if (diffCenter < minDiffX) {
+              minDiffX = diffCenter;
+              snappedX = g.value - field.width / 2;
+            }
+          }
+        }
       }
-      field.x = Math.max(0, Math.round(targetX));
-      field.y = Math.max(0, Math.round(targetY));
+
+      if (snapToGrid && showGrid && minDiffX === threshold) {
+        const gridX = Math.round(targetX / gridSize) * gridSize;
+        const diffGrid = Math.abs(targetX - gridX);
+        if (diffGrid < threshold) {
+          snappedX = gridX;
+        }
+      }
+      field.x = Math.max(0, Math.round(snappedX));
+
+      // ── Horizontal Snapping (Y axis) ──
+      let snappedY = targetY;
+      let minDiffY = threshold;
+
+      if (snapToGuides) {
+        const guides = dragState.side === 'front' ? frontGuides : backGuides;
+        for (const g of guides) {
+          if (g.type === 'horizontal') {
+            // Top edge
+            const diffTop = Math.abs(targetY - g.value);
+            if (diffTop < minDiffY) {
+              minDiffY = diffTop;
+              snappedY = g.value;
+            }
+            // Bottom edge
+            const diffBottom = Math.abs((targetY + field.height) - g.value);
+            if (diffBottom < minDiffY) {
+              minDiffY = diffBottom;
+              snappedY = g.value - field.height;
+            }
+            // Center
+            const diffCenter = Math.abs((targetY + field.height / 2) - g.value);
+            if (diffCenter < minDiffY) {
+              minDiffY = diffCenter;
+              snappedY = g.value - field.height / 2;
+            }
+          }
+        }
+      }
+
+      if (snapToGrid && showGrid && minDiffY === threshold) {
+        const gridY = Math.round(targetY / gridSize) * gridSize;
+        const diffGrid = Math.abs(targetY - gridY);
+        if (diffGrid < threshold) {
+          snappedY = gridY;
+        }
+      }
+      field.y = Math.max(0, Math.round(snappedY));
+
     } else {
       let targetW = dragState.origW + dx;
       let targetH = dragState.origH + dy;
-      if (showGrid) {
-        targetW = Math.round(targetW / gridSize) * gridSize;
-        targetH = Math.round(targetH / gridSize) * gridSize;
+
+      // ── Resize Snapping (Width) ──
+      let snappedW = targetW;
+      let minDiffW = threshold;
+
+      if (snapToGuides) {
+        const guides = dragState.side === 'front' ? frontGuides : backGuides;
+        for (const g of guides) {
+          if (g.type === 'vertical') {
+            const diff = Math.abs((field.x + targetW) - g.value);
+            if (diff < minDiffW) {
+              minDiffW = diff;
+              snappedW = g.value - field.x;
+            }
+          }
+        }
       }
-      field.width = Math.max(10, Math.round(targetW));
-      field.height = Math.max(10, Math.round(targetH));
+
+      if (snapToGrid && showGrid && minDiffW === threshold) {
+        const gridW = Math.round(targetW / gridSize) * gridSize;
+        const diffGrid = Math.abs(targetW - gridW);
+        if (diffGrid < threshold) {
+          snappedW = gridW;
+        }
+      }
+      field.width = Math.max(10, Math.round(snappedW));
+
+      // ── Resize Snapping (Height) ──
+      let snappedH = targetH;
+      let minDiffH = threshold;
+
+      if (snapToGuides) {
+        const guides = dragState.side === 'front' ? frontGuides : backGuides;
+        for (const g of guides) {
+          if (g.type === 'horizontal') {
+            const diff = Math.abs((field.y + targetH) - g.value);
+            if (diff < minDiffH) {
+              minDiffH = diff;
+              snappedH = g.value - field.y;
+            }
+          }
+        }
+      }
+
+      if (snapToGrid && showGrid && minDiffH === threshold) {
+        const gridH = Math.round(targetH / gridSize) * gridSize;
+        const diffGrid = Math.abs(targetH - gridH);
+        if (diffGrid < threshold) {
+          snappedH = gridH;
+        }
+      }
+      field.height = Math.max(10, Math.round(snappedH));
     }
 
     fields[dragState.index] = field;
@@ -505,7 +633,172 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize]);
+  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides]);
+
+  // ── Guide Dragging Effect ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeGuideDrag) return;
+
+    const scale = 480 / cardWidth;
+    const canvasEl = document.getElementById(`designer-canvas-${activeGuideDrag.side}`);
+    if (!canvasEl) return;
+
+    const rect = canvasEl.getBoundingClientRect();
+
+    const onMouseMove = (e: MouseEvent) => {
+      let val = 0;
+      if (activeGuideDrag.type === 'horizontal') {
+        val = Math.round((e.clientY - rect.top) / scale);
+      } else {
+        val = Math.round((e.clientX - rect.left) / scale);
+      }
+
+      if (activeGuideDrag.side === 'front') {
+        setFrontGuides(prev => prev.map(g => g.id === activeGuideDrag.id ? { ...g, value: val } : g));
+      } else {
+        setBackGuides(prev => prev.map(g => g.id === activeGuideDrag.id ? { ...g, value: val } : g));
+      }
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      let val = 0;
+      const limit = activeGuideDrag.type === 'horizontal' ? cardHeight : cardWidth;
+      if (activeGuideDrag.type === 'horizontal') {
+        val = (e.clientY - rect.top) / scale;
+      } else {
+        val = (e.clientX - rect.left) / scale;
+      }
+
+      // Dragged off canvas or back to ruler → Delete
+      const isOff = val < -25 || val > limit + 25;
+
+      if (isOff) {
+        if (activeGuideDrag.side === 'front') {
+          setFrontGuides(prev => prev.filter(g => g.id !== activeGuideDrag.id));
+        } else {
+          setBackGuides(prev => prev.filter(g => g.id !== activeGuideDrag.id));
+        }
+      }
+
+      setActiveGuideDrag(null);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [activeGuideDrag, cardWidth, cardHeight]);
+
+  // ── Photoshop-style Rulers ────────────────────────────────────────────
+  const renderRuler = (side: 'front' | 'back', type: 'horizontal' | 'vertical') => {
+    const isHoriz = type === 'horizontal';
+    const length = isHoriz ? cardWidth : cardHeight;
+    const displayLength = isHoriz ? 480 : (480 / cardWidth) * cardHeight;
+    const scale = 480 / cardWidth;
+
+    const ticks = [];
+    const step = 10;
+    for (let i = 0; i <= length; i += step) {
+      const pos = i * scale;
+      const isMajor = i % 50 === 0;
+      const isMedium = i % 10 === 0 && !isMajor;
+      
+      ticks.push({
+        val: i,
+        pos,
+        isMajor,
+        isMedium
+      });
+    }
+
+    return (
+      <div
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const id = `guide_${Date.now()}`;
+          const newGuide = { id, type, value: 0 };
+          if (side === 'front') {
+            setFrontGuides(prev => [...prev, newGuide]);
+          } else {
+            setBackGuides(prev => [...prev, newGuide]);
+          }
+          setActiveGuideDrag({ id, side, type, isNew: true });
+        }}
+        style={{
+          position: 'absolute',
+          left: isHoriz ? '20px' : '0',
+          top: isHoriz ? '0' : '20px',
+          width: isHoriz ? `${displayLength}px` : '20px',
+          height: isHoriz ? '20px' : `${displayLength}px`,
+          background: '#0f172a',
+          borderBottom: isHoriz ? '1px solid #334155' : 'none',
+          borderRight: !isHoriz ? '1px solid #334155' : 'none',
+          cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+          userSelect: 'none',
+          zIndex: 400
+        }}
+        title={`Drag down to create a ${isHoriz ? 'horizontal' : 'vertical'} guideline`}
+      >
+        <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+          {ticks.map((t, idx) => {
+            if (isHoriz) {
+              return (
+                <React.Fragment key={idx}>
+                  <line
+                    x1={t.pos}
+                    y1={t.isMajor ? 4 : (t.isMedium ? 10 : 14)}
+                    x2={t.pos}
+                    y2={20}
+                    stroke="#475569"
+                    strokeWidth="1"
+                  />
+                  {t.isMajor && (
+                    <text
+                      x={t.pos + 2}
+                      y={10}
+                      fill="#94a3b8"
+                      fontSize="7px"
+                      fontFamily="monospace"
+                    >
+                      {t.val}
+                    </text>
+                  )}
+                </React.Fragment>
+              );
+            } else {
+              return (
+                <React.Fragment key={idx}>
+                  <line
+                    x1={t.isMajor ? 4 : (t.isMedium ? 10 : 14)}
+                    y1={t.pos}
+                    x2={20}
+                    y2={t.pos}
+                    stroke="#475569"
+                    strokeWidth="1"
+                  />
+                  {t.isMajor && (
+                    <text
+                      x={2}
+                      y={t.pos - 2}
+                      fill="#94a3b8"
+                      fontSize="7px"
+                      fontFamily="monospace"
+                      style={{ transform: `rotate(-90deg)`, transformOrigin: `2px ${t.pos - 2}px` }}
+                    >
+                      {t.val}
+                    </text>
+                  )}
+                </React.Fragment>
+              );
+            }
+          })}
+        </svg>
+      </div>
+    );
+  };
 
   const handleEditorMouseDown = (e: React.MouseEvent<HTMLDivElement>, side: 'front' | 'back') => {
     if (e.target !== e.currentTarget) return;
@@ -598,6 +891,733 @@ export default function TemplatesPage() {
       opacity: f.opacity != null ? f.opacity : undefined,
     };
   };
+
+  const renderFieldTooltip = (side: 'front' | 'back', index: number, f: FieldCoordinate, scale: number) => {
+    const isTextLike = f.type === 'text' || f.type === 'id';
+    const fields = side === 'front' ? frontFields : backFields;
+    const setFields = side === 'front' ? setFrontFields : setBackFields;
+
+    const updateField = (updatedProps: Partial<FieldCoordinate>) => {
+      const updated = [...fields];
+      updated[index] = { ...updated[index], ...updatedProps };
+      setFields(updated);
+    };
+
+    const deleteField = () => {
+      const updated = fields.filter((_, i) => i !== index);
+      setFields(updated);
+      setSelectedFieldIndex(null);
+    };
+
+    const x = f.x * scale;
+    const y = f.y * scale;
+    const h = f.height * scale;
+    const isLowerHalf = y > (cardHeight * scale) / 2;
+
+    const tooltipLeft = Math.max(0, Math.min(x, 480 - 320)); // 320px width
+
+    const handleStaticImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          updateField({ staticValue: event.target.result as string });
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+
+    return (
+      <div
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          left: `${tooltipLeft}px`,
+          ...(isLowerHalf ? {
+            top: `${y - 8}px`,
+            transform: 'translateY(-100%)',
+          } : {
+            top: `${y + h + 8}px`,
+          }),
+          width: '320px',
+          background: 'rgba(15, 23, 42, 0.96)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          borderRadius: '8px',
+          padding: '12px',
+          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+          color: '#f8fafc',
+          zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '0.8rem',
+        }}
+      >
+        {/* Header / Title / Delete Row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px' }}>
+          <span style={{ fontWeight: 600, color: '#38bdf8' }}>Edit Field #{index + 1}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button 
+              type="button" 
+              onClick={deleteField}
+              style={{ 
+                background: '#ef4444', 
+                border: 'none', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '2px 6px', 
+                fontSize: '0.7rem', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontWeight: 500
+              }}
+            >
+              <Trash2 size={10} /> Delete
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setSelectedFieldIndex(null)}
+              style={{ 
+                background: 'rgba(255,255,255,0.1)', 
+                border: 'none', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '2px 6px', 
+                fontSize: '0.7rem', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontWeight: 500
+              }}
+              title="Close Editor"
+            >
+              <X size={12} /> Close
+            </button>
+          </div>
+        </div>
+
+        {/* Field Name & Type Row */}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Field Name</label>
+            <input 
+              type="text" 
+              value={f.field} 
+              onChange={(e) => updateField({ field: e.target.value })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px 6px', 
+                fontSize: '0.75rem' 
+              }}
+            />
+          </div>
+          <div style={{ width: '110px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Type</label>
+            <select 
+              value={f.type} 
+              onChange={(e) => {
+                const newType = e.target.value as any;
+                const updates: Partial<FieldCoordinate> = { type: newType };
+                if (newType === 'image') {
+                  updates.borderRadius = 0;
+                }
+                updateField(updates);
+              }}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px 6px', 
+                fontSize: '0.75rem',
+                width: '100%'
+              }}
+            >
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="text">Text</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="image">Image</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="qr">QR Code</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="barcode">Barcode</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="id">ID/Serial</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Dimensions & Position Row (X, Y, Width, Height) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>X (px)</label>
+            <input 
+              type="number" 
+              value={Math.round(f.x)} 
+              onChange={(e) => updateField({ x: Number(e.target.value) })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px', 
+                fontSize: '0.75rem',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Y (px)</label>
+            <input 
+              type="number" 
+              value={Math.round(f.y)} 
+              onChange={(e) => updateField({ y: Number(e.target.value) })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px', 
+                fontSize: '0.75rem',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>W (px)</label>
+            <input 
+              type="number" 
+              value={Math.round(f.width)} 
+              onChange={(e) => updateField({ width: Number(e.target.value) })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px', 
+                fontSize: '0.75rem',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>H (px)</label>
+            <input 
+              type="number" 
+              value={Math.round(f.height)} 
+              onChange={(e) => updateField({ height: Number(e.target.value) })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px', 
+                fontSize: '0.75rem',
+                width: '100%',
+                textAlign: 'center'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Static Value Toggle & Input */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <input 
+              type="checkbox" 
+              id={`static-toggle-${side}-${index}`}
+              checked={f.staticValue !== undefined && f.staticValue !== null}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  updateField({ staticValue: f.type === 'image' ? '' : 'Static Text' });
+                } else {
+                  const updated = { ...f };
+                  delete updated.staticValue;
+                  const newFields = [...fields];
+                  newFields[index] = updated;
+                  setFields(newFields);
+                }
+              }}
+              style={{ cursor: 'pointer' }}
+            />
+            <label htmlFor={`static-toggle-${side}-${index}`} style={{ fontSize: '0.7rem', color: '#e2e8f0', fontWeight: 500, cursor: 'pointer' }}>
+              Static / Non-Editable Content
+            </label>
+          </div>
+
+          {f.staticValue !== undefined && f.staticValue !== null && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {f.type === 'image' ? (
+                <>
+                  <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Static Image Source</label>
+                  <input 
+                    type="text" 
+                    value={f.staticValue} 
+                    onChange={(e) => updateField({ staticValue: e.target.value })}
+                    placeholder="Paste image URL..."
+                    style={{ 
+                      background: '#1e293b', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '4px', 
+                      color: '#ffffff', 
+                      padding: '4px 6px', 
+                      fontSize: '0.75rem' 
+                    }}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                    <span style={{ fontSize: '0.65rem', color: '#64748b' }}>Or upload:</span>
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      onChange={handleStaticImageUpload}
+                      style={{ fontSize: '0.65rem', color: '#94a3b8', width: '150px' }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Static Text Value</label>
+                  <input 
+                    type="text" 
+                    value={f.staticValue} 
+                    onChange={(e) => updateField({ staticValue: e.target.value })}
+                    placeholder="Enter static text..."
+                    style={{ 
+                      background: '#1e293b', 
+                      border: '1px solid rgba(255,255,255,0.1)', 
+                      borderRadius: '4px', 
+                      color: '#ffffff', 
+                      padding: '4px 6px', 
+                      fontSize: '0.75rem' 
+                    }}
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Typography Styles (Only for Text / ID) */}
+        {isTextLike && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+            {/* Font Family */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Font Family</label>
+              <select
+                value={f.fontFamily || 'sans-serif'}
+                onChange={(e) => updateField({ fontFamily: e.target.value })}
+                style={{ 
+                  background: '#1e293b', 
+                  border: '1px solid rgba(255,255,255,0.1)', 
+                  borderRadius: '4px', 
+                  color: '#ffffff', 
+                  padding: '4px 6px', 
+                  fontSize: '0.75rem',
+                  width: '100%'
+                }}
+              >
+                <optgroup label="System Fonts" style={{ background: '#1e293b', color: '#ffffff' }}>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="sans-serif">Sans-Serif</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="serif">Serif</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="monospace">Monospace</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="Arial">Arial</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="Times New Roman">Times New Roman</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="Courier New">Courier New</option>
+                </optgroup>
+                {pressFonts && pressFonts.length > 0 && (
+                  <optgroup label="Custom Fonts" style={{ background: '#1e293b', color: '#ffffff' }}>
+                    {pressFonts.map((pf) => (
+                      <option 
+                        key={pf.id} 
+                        style={{ background: '#1e293b', color: '#ffffff' }} 
+                        value={pf.fontFamily}
+                      >
+                        {pf.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+
+            {/* Font Size & Weight */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Font Size (pt)</label>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ fontSize: Math.max(6, (f.fontSize || 18) - 1) })}
+                    style={{
+                      background: '#334155',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px 0 0 4px',
+                      color: '#ffffff',
+                      width: '24px',
+                      height: '24px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    value={f.fontSize || 18}
+                    onChange={(e) => updateField({ fontSize: Number(e.target.value) })}
+                    style={{
+                      background: '#1e293b',
+                      borderTop: '1px solid rgba(255,255,255,0.1)',
+                      borderBottom: '1px solid rgba(255,255,255,0.1)',
+                      borderLeft: 'none',
+                      borderRight: 'none',
+                      color: '#ffffff',
+                      width: '36px',
+                      height: '24px',
+                      textAlign: 'center',
+                      fontSize: '0.75rem',
+                      MozAppearance: 'textfield'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => updateField({ fontSize: (f.fontSize || 18) + 1 })}
+                    style={{
+                      background: '#334155',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '0 4px 4px 0',
+                      color: '#ffffff',
+                      width: '24px',
+                      height: '24px',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ width: '110px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Weight</label>
+                <select
+                  value={f.fontWeight || 'normal'}
+                  onChange={(e) => updateField({ fontWeight: e.target.value as any })}
+                  style={{ 
+                    background: '#1e293b', 
+                    border: '1px solid rgba(255,255,255,0.1)', 
+                    borderRadius: '4px', 
+                    color: '#ffffff', 
+                    padding: '4px 6px', 
+                    fontSize: '0.75rem',
+                    width: '100%'
+                  }}
+                >
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="normal">Normal</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="bold">Bold</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="300">Light</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="500">Medium</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="600">Semi-Bold</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Alignment & Color */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Color</label>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <input
+                    type="color"
+                    value={f.color || '#000000'}
+                    onChange={(e) => updateField({ color: e.target.value })}
+                    style={{
+                      width: '28px',
+                      height: '24px',
+                      border: 'none',
+                      padding: 0,
+                      background: 'transparent',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <input
+                    type="text"
+                    value={f.color || '#000000'}
+                    onChange={(e) => updateField({ color: e.target.value })}
+                    style={{
+                      background: '#1e293b',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      color: '#ffffff',
+                      padding: '3px 6px',
+                      fontSize: '0.7rem',
+                      width: '60px',
+                      textTransform: 'uppercase'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>H Align</label>
+                <div style={{ display: 'flex', background: '#1e293b', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', padding: '2px' }}>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ align: 'left' })}
+                    style={{
+                      background: f.align === 'left' || !f.align ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <AlignLeft size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ align: 'center' })}
+                    style={{
+                      background: f.align === 'center' ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <AlignCenter size={12} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ align: 'right' })}
+                    style={{
+                      background: f.align === 'right' ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <AlignRight size={12} />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>V Align</label>
+                <div style={{ display: 'flex', background: '#1e293b', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', padding: '2px' }}>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ verticalAlign: 'top' })}
+                    style={{
+                      background: f.verticalAlign === 'top' ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="Align Top"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="3" y1="3" x2="21" y2="3" />
+                      <rect x="6" y="8" width="12" height="13" rx="2" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ verticalAlign: 'center' })}
+                    style={{
+                      background: f.verticalAlign === 'center' || !f.verticalAlign ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="Align Center"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="3" y1="12" x2="21" y2="12" />
+                      <rect x="6" y="5" width="12" height="4" rx="1" />
+                      <rect x="6" y="15" width="12" height="4" rx="1" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateField({ verticalAlign: 'bottom' })}
+                    style={{
+                      background: f.verticalAlign === 'bottom' ? '#3b82f6' : 'transparent',
+                      border: 'none',
+                      borderRadius: '2px',
+                      color: '#ffffff',
+                      padding: '2px 6px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                    title="Align Bottom"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="3" y1="21" x2="21" y2="21" />
+                      <rect x="6" y="3" width="12" height="13" rx="2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Text Style Toggles */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', background: '#1e293b', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', padding: '2px', width: '100%', justifyContent: 'space-around' }}>
+                <button
+                  type="button"
+                  onClick={() => updateField({ fontStyle: f.fontStyle === 'italic' ? 'normal' : 'italic' })}
+                  style={{
+                    background: f.fontStyle === 'italic' ? '#3b82f6' : 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    fontWeight: 'italic',
+                    flex: 1,
+                    textAlign: 'center'
+                  }}
+                >
+                  Italic
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField({ textDecoration: f.textDecoration === 'underline' ? 'none' : 'underline' })}
+                  style={{
+                    background: f.textDecoration === 'underline' ? '#3b82f6' : 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    textDecoration: 'underline',
+                    flex: 1,
+                    textAlign: 'center'
+                  }}
+                >
+                  Underline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateField({ textTransform: f.textTransform === 'uppercase' ? 'none' : 'uppercase' })}
+                  style={{
+                    background: f.textTransform === 'uppercase' ? '#3b82f6' : 'transparent',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    flex: 1,
+                    textAlign: 'center'
+                  }}
+                >
+                  Uppercase
+                </button>
+              </div>
+            </div>
+
+            {/* Prefix/Suffix */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Prefix</label>
+                <input 
+                  type="text" 
+                  value={f.prefix || ''} 
+                  onChange={(e) => updateField({ prefix: e.target.value })}
+                  placeholder="e.g. Roll No: "
+                  style={{ 
+                    background: '#1e293b', 
+                    border: '1px solid rgba(255,255,255,0.1)', 
+                    borderRadius: '4px', 
+                    color: '#ffffff', 
+                    padding: '4px 6px', 
+                    fontSize: '0.75rem' 
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Suffix</label>
+                <input 
+                  type="text" 
+                  value={f.suffix || ''} 
+                  onChange={(e) => updateField({ suffix: e.target.value })}
+                  placeholder="e.g. /-"
+                  style={{ 
+                    background: '#1e293b', 
+                    border: '1px solid rgba(255,255,255,0.1)', 
+                    borderRadius: '4px', 
+                    color: '#ffffff', 
+                    padding: '4px 6px', 
+                    fontSize: '0.75rem' 
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Image Corner Radius (Only for Image) */}
+        {f.type === 'image' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '8px' }}>
+            <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Corner Radius (px)</label>
+            <input 
+              type="number" 
+              value={f.borderRadius || 0} 
+              onChange={(e) => updateField({ borderRadius: Number(e.target.value) })}
+              style={{ 
+                background: '#1e293b', 
+                border: '1px solid rgba(255,255,255,0.1)', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '4px 6px', 
+                fontSize: '0.75rem' 
+              }}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const getFieldDefaultValue = (fieldName: string, fieldType: string) => {
     const nameLower = fieldName.toLowerCase();
     if (fieldType === 'id') {
@@ -941,6 +1961,58 @@ export default function TemplatesPage() {
                         <option value={100}>100 px macro</option>
                       </select>
                     )}
+
+                    {/* Snap to Grid */}
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      cursor: 'pointer', 
+                      background: snapToGrid ? 'rgba(20, 184, 166, 0.15)' : 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: snapToGrid ? '1px solid rgba(20,184,166,0.7)' : '1px solid var(--glass-border)',
+                      transition: 'all 0.2s',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }} title="Snap fields to grid intersections when dragging or resizing">
+                      <input 
+                        type="checkbox" 
+                        checked={snapToGrid} 
+                        onChange={e => setSnapToGrid(e.target.checked)} 
+                        style={{ cursor: 'pointer', margin: 0 }}
+                      />
+                      <span>Snap to Grid</span>
+                    </label>
+
+                    {/* Snap to Guides */}
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      cursor: 'pointer', 
+                      background: snapToGuides ? 'rgba(20, 184, 166, 0.15)' : 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: snapToGuides ? '1px solid rgba(20,184,166,0.7)' : '1px solid var(--glass-border)',
+                      transition: 'all 0.2s',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }} title="Snap fields to custom guidelines when dragging or resizing">
+                      <input 
+                        type="checkbox" 
+                        checked={snapToGuides} 
+                        onChange={e => setSnapToGuides(e.target.checked)} 
+                        style={{ cursor: 'pointer', margin: 0 }}
+                      />
+                      <span>Snap to Guides</span>
+                    </label>
+
+                    <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '6px' }}>
+                      💡 Drag from rulers to place custom guides.
+                    </span>
                     {/* Test Data Toggle */}
                     <label style={{ 
                       display: 'flex', 
@@ -1052,95 +2124,110 @@ export default function TemplatesPage() {
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
-                          <div 
-                            onMouseDown={(e) => handleEditorMouseDown(e, 'front')}
-                            style={{
-                              width: `${editorWidth}px`,
-                              height: `${editorHeight}px`,
-                              backgroundImage: `url(${getOptimizedImageUrl(frontImageUrl)})`,
-                              backgroundSize: '100% 100%',
-                              backgroundPosition: 'center',
-                              borderRadius: '8px',
-                              border: '1.5px solid var(--glass-border)',
-                              position: 'relative',
-                              overflow: 'hidden',
-                              cursor: 'crosshair',
-                              boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
-                            }}
-                          >
-                            {/* Grid Overlay */}
-                            {showGrid && (() => {
-                              const scaledStep = gridSize * scale;
-                              const cols = Math.floor(editorWidth / scaledStep);
-                              const rows = Math.floor(editorHeight / scaledStep);
-                              return (
-                                <svg
-                                  style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    pointerEvents: 'none',
-                                    zIndex: 150,
-                                  }}
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  {/* Vertical lines */}
-                                  {Array.from({ length: cols - 1 }, (_, ci) => (
-                                    <line
-                                      key={`fv${ci}`}
-                                      x1={(ci + 1) * scaledStep}
-                                      y1={0}
-                                      x2={(ci + 1) * scaledStep}
-                                      y2={editorHeight}
-                                      stroke="rgba(20, 184, 166, 0.5)"
-                                      strokeWidth="0.75"
-                                      strokeDasharray="2,2"
-                                    />
-                                  ))}
-                                  {/* Horizontal lines */}
-                                  {Array.from({ length: rows - 1 }, (_, ri) => (
-                                    <line
-                                      key={`fh${ri}`}
-                                      x1={0}
-                                      y1={(ri + 1) * scaledStep}
-                                      x2={editorWidth}
-                                      y2={(ri + 1) * scaledStep}
-                                      stroke="rgba(20, 184, 166, 0.5)"
-                                      strokeWidth="0.75"
-                                      strokeDasharray="2,2"
-                                    />
-                                  ))}
-                                  {/* Ruler tick labels on top + left edges */}
-                                  {Array.from({ length: cols - 1 }, (_, ci) => (
-                                    <text
-                                      key={`fvl${ci}`}
-                                      x={(ci + 1) * scaledStep + 2}
-                                      y={9}
-                                      fill="rgba(20, 184, 166, 0.95)"
-                                      fontSize="7"
-                                      fontFamily="monospace"
-                                      fontWeight="bold"
-                                    >
-                                      {(ci + 1) * gridSize}
-                                    </text>
-                                  ))}
-                                  {Array.from({ length: rows - 1 }, (_, ri) => (
-                                    <text
-                                      key={`fhl${ri}`}
-                                      x={2}
-                                      y={(ri + 1) * scaledStep - 2}
-                                      fill="rgba(20, 184, 166, 0.95)"
-                                      fontSize="7"
-                                      fontFamily="monospace"
-                                      fontWeight="bold"
-                                    >
-                                      {(ri + 1) * gridSize}
-                                    </text>
-                                  ))}
-                                </svg>
-                              );
-                            })()}
+                          <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* Rulers */}
+                            {renderRuler('front', 'horizontal')}
+                            {renderRuler('front', 'vertical')}
+                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>px</div>
+
+                            <div 
+                              id="designer-canvas-front"
+                              onMouseDown={(e) => handleEditorMouseDown(e, 'front')}
+                              style={{
+                                width: `${editorWidth}px`,
+                                height: `${editorHeight}px`,
+                                backgroundImage: `url(${getOptimizedImageUrl(frontImageUrl)})`,
+                                backgroundSize: '100% 100%',
+                                backgroundPosition: 'center',
+                                position: 'relative',
+                                overflow: 'visible',
+                                cursor: 'crosshair',
+                                boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
+                              }}
+                            >
+                              {/* Grid Overlay */}
+                              {showGrid && (() => {
+                                const scaledStep = gridSize * scale;
+                                const cols = Math.floor(editorWidth / scaledStep);
+                                const rows = Math.floor(editorHeight / scaledStep);
+                                return (
+                                  <svg
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      pointerEvents: 'none',
+                                      zIndex: 150,
+                                    }}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    {/* Vertical lines */}
+                                    {Array.from({ length: cols - 1 }, (_, ci) => {
+                                      const isMajor = (ci + 1) % 5 === 0;
+                                      return (
+                                        <line
+                                          key={`fv${ci}`}
+                                          x1={(ci + 1) * scaledStep}
+                                          y1={0}
+                                          x2={(ci + 1) * scaledStep}
+                                          y2={editorHeight}
+                                          stroke={isMajor ? "rgba(20, 184, 166, 0.45)" : "rgba(20, 184, 166, 0.18)"}
+                                          strokeWidth={isMajor ? "1" : "0.75"}
+                                          strokeDasharray={isMajor ? "none" : "2,2"}
+                                        />
+                                      );
+                                    })}
+                                    {/* Horizontal lines */}
+                                    {Array.from({ length: rows - 1 }, (_, ri) => {
+                                      const isMajor = (ri + 1) % 5 === 0;
+                                      return (
+                                        <line
+                                          key={`fh${ri}`}
+                                          x1={0}
+                                          y1={(ri + 1) * scaledStep}
+                                          x2={editorWidth}
+                                          y2={(ri + 1) * scaledStep}
+                                          stroke={isMajor ? "rgba(20, 184, 166, 0.45)" : "rgba(20, 184, 166, 0.18)"}
+                                          strokeWidth={isMajor ? "1" : "0.75"}
+                                          strokeDasharray={isMajor ? "none" : "2,2"}
+                                        />
+                                      );
+                                    })}
+                                  </svg>
+                                );
+                              })()}
+
+                              {/* Photoshop-style Draggable Guidelines */}
+                              {frontGuides.map((g) => {
+                                const isHoriz = g.type === 'horizontal';
+                                const pos = g.value * scale;
+                                return (
+                                  <div
+                                    key={g.id}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setActiveGuideDrag({ id: g.id, side: 'front', type: g.type });
+                                    }}
+                                    style={{
+                                      position: 'absolute',
+                                      left: isHoriz ? '0' : `${pos}px`,
+                                      top: isHoriz ? `${pos}px` : '0',
+                                      width: isHoriz ? '100%' : '2px',
+                                      height: isHoriz ? '2px' : '100%',
+                                      cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                      borderTop: isHoriz ? '1.5px dashed #06b6d4' : 'none',
+                                      borderLeft: !isHoriz ? '1.5px dashed #06b6d4' : 'none',
+                                      zIndex: 350,
+                                      padding: isHoriz ? '4px 0' : '0 4px',
+                                      margin: isHoriz ? '-4px 0 0 0' : '0 0 0 -4px',
+                                      background: 'transparent'
+                                    }}
+                                    title="Drag to move, drag off canvas/ruler to delete"
+                                  />
+                                );
+                              })}
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
                               const y = f.y * scale;
@@ -1158,6 +2245,7 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
+                                 alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
@@ -1170,72 +2258,86 @@ export default function TemplatesPage() {
                               } : {};
 
                               return (
-                                <div
-                                  key={i}
-                                  onMouseDown={(e) => handleMouseDown(e, 'front', i, 'move', scale)}
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${x}px`,
-                                    top: `${y}px`,
-                                    width: `${w}px`,
-                                    height: `${h}px`,
-                                    cursor: 'move',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '0.65rem',
-                                    color: '#ffffff',
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-                                    userSelect: 'none',
-                                    textAlign: 'center',
-                                    wordBreak: 'break-all',
-                                    ...style,
-                                    ...testDataStyle
-                                  }}
-                                >
-                                  {showTestData ? (
-                                    f.type === 'image' ? (
-                                      <img 
-                                        src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
-                                        alt="Test Avatar" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
-                                        draggable={false}
-                                      />
-                                    ) : f.type === 'qr' ? (
-                                      <img 
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(testData[f.field] || 'https://student-id-pdf-system.com')}`} 
-                                        alt="Test QR" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                                        draggable={false}
-                                      />
-                                    ) : f.type === 'barcode' ? (
-                                      <div style={{ width: '100%', height: '100%', background: '#ffffff repeating-linear-gradient(90deg, #000000, #000000 2px, #ffffff 2px, #ffffff 6px)', padding: '4px' }} />
-                                    ) : (
-                                      getTestDataValue(f)
-                                    )
-                                  ) : (
-                                    f.field
-                                  )}
-                                  
-                                  {/* Resize Handle */}
+                                <React.Fragment key={i}>
                                   <div
-                                    onMouseDown={(e) => handleMouseDown(e, 'front', i, 'resize', scale)}
+                                    onMouseDown={(e) => handleMouseDown(e, 'front', i, 'move', scale)}
                                     style={{
                                       position: 'absolute',
-                                      right: '0',
-                                      bottom: '0',
-                                      width: '10px',
-                                      height: '10px',
-                                      cursor: 'se-resize',
-                                      background: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
-                                      borderRadius: '50%',
-                                      margin: '2px',
-                                      boxShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                      left: `${x}px`,
+                                      top: `${y}px`,
+                                      width: `${w}px`,
+                                      height: `${h}px`,
+                                      cursor: 'move',
+                                      display: 'flex',
+                                      alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                      justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
+                                      fontSize: '0.65rem',
+                                      color: '#ffffff',
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                                      userSelect: 'none',
+                                      textAlign: f.align || 'center',
+                                      wordBreak: 'break-all',
+                                      ...style,
+                                      ...testDataStyle
                                     }}
-                                  />
-                                </div>
+                                  >
+                                    {f.staticValue !== undefined && f.staticValue !== null ? (
+                                      f.type === 'image' ? (
+                                        <img 
+                                          src={f.staticValue || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          alt="Static Image"
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }}
+                                          draggable={false}
+                                        />
+                                      ) : (
+                                        `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`
+                                      )
+                                    ) : showTestData ? (
+                                      f.type === 'image' ? (
+                                        <img 
+                                          src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          alt="Test Avatar" 
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
+                                          draggable={false}
+                                        />
+                                      ) : f.type === 'qr' ? (
+                                        <img 
+                                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(testData[f.field] || 'https://student-id-pdf-system.com')}`} 
+                                          alt="Test QR" 
+                                          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                          draggable={false}
+                                        />
+                                      ) : f.type === 'barcode' ? (
+                                        <div style={{ width: '100%', height: '100%', background: '#ffffff repeating-linear-gradient(90deg, #000000, #000000 2px, #ffffff 2px, #ffffff 6px)', padding: '4px' }} />
+                                      ) : (
+                                        getTestDataValue(f)
+                                      )
+                                    ) : (
+                                      f.field
+                                    )}
+                                    
+                                    {/* Resize Handle */}
+                                    <div
+                                      onMouseDown={(e) => handleMouseDown(e, 'front', i, 'resize', scale)}
+                                      style={{
+                                        position: 'absolute',
+                                        right: '0',
+                                        bottom: '0',
+                                        width: '10px',
+                                        height: '10px',
+                                        cursor: 'se-resize',
+                                        background: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                                        borderRadius: '50%',
+                                        margin: '2px',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                      }}
+                                    />
+                                  </div>
+                                  {isSelected && renderFieldTooltip('front', i, f, scale)}
+                                </React.Fragment>
                               );
                             })}
+                            </div>
                           </div>
                         );
                       })()
@@ -1270,95 +2372,110 @@ export default function TemplatesPage() {
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
-                          <div 
-                            onMouseDown={(e) => handleEditorMouseDown(e, 'back')}
-                            style={{
-                              width: `${editorWidth}px`,
-                              height: `${editorHeight}px`,
-                              backgroundImage: `url(${getOptimizedImageUrl(backImageUrl)})`,
-                              backgroundSize: '100% 100%',
-                              backgroundPosition: 'center',
-                              borderRadius: '8px',
-                              border: '1.5px solid var(--glass-border)',
-                              position: 'relative',
-                              overflow: 'hidden',
-                              cursor: 'crosshair',
-                              boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
-                            }}
-                          >
-                            {/* Grid Overlay */}
-                            {showGrid && (() => {
-                              const scaledStep = gridSize * scale;
-                              const cols = Math.floor(editorWidth / scaledStep);
-                              const rows = Math.floor(editorHeight / scaledStep);
-                              return (
-                                <svg
-                                  style={{
-                                    position: 'absolute',
-                                    inset: 0,
-                                    width: '100%',
-                                    height: '100%',
-                                    pointerEvents: 'none',
-                                    zIndex: 150,
-                                  }}
-                                  xmlns="http://www.w3.org/2000/svg"
-                                >
-                                  {/* Vertical lines */}
-                                  {Array.from({ length: cols - 1 }, (_, ci) => (
-                                    <line
-                                      key={`bv${ci}`}
-                                      x1={(ci + 1) * scaledStep}
-                                      y1={0}
-                                      x2={(ci + 1) * scaledStep}
-                                      y2={editorHeight}
-                                      stroke="rgba(20, 184, 166, 0.5)"
-                                      strokeWidth="0.75"
-                                      strokeDasharray="2,2"
-                                    />
-                                  ))}
-                                  {/* Horizontal lines */}
-                                  {Array.from({ length: rows - 1 }, (_, ri) => (
-                                    <line
-                                      key={`bh${ri}`}
-                                      x1={0}
-                                      y1={(ri + 1) * scaledStep}
-                                      x2={editorWidth}
-                                      y2={(ri + 1) * scaledStep}
-                                      stroke="rgba(20, 184, 166, 0.5)"
-                                      strokeWidth="0.75"
-                                      strokeDasharray="2,2"
-                                    />
-                                  ))}
-                                  {/* Ruler tick labels */}
-                                  {Array.from({ length: cols - 1 }, (_, ci) => (
-                                    <text
-                                      key={`bvl${ci}`}
-                                      x={(ci + 1) * scaledStep + 2}
-                                      y={9}
-                                      fill="rgba(20, 184, 166, 0.95)"
-                                      fontSize="7"
-                                      fontFamily="monospace"
-                                      fontWeight="bold"
-                                    >
-                                      {(ci + 1) * gridSize}
-                                    </text>
-                                  ))}
-                                  {Array.from({ length: rows - 1 }, (_, ri) => (
-                                    <text
-                                      key={`bhl${ri}`}
-                                      x={2}
-                                      y={(ri + 1) * scaledStep - 2}
-                                      fill="rgba(20, 184, 166, 0.95)"
-                                      fontSize="7"
-                                      fontFamily="monospace"
-                                      fontWeight="bold"
-                                    >
-                                      {(ri + 1) * gridSize}
-                                    </text>
-                                  ))}
-                                </svg>
-                              );
-                            })()}
+                          <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
+                            {/* Rulers */}
+                            {renderRuler('back', 'horizontal')}
+                            {renderRuler('back', 'vertical')}
+                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>px</div>
+
+                            <div 
+                              id="designer-canvas-back"
+                              onMouseDown={(e) => handleEditorMouseDown(e, 'back')}
+                              style={{
+                                width: `${editorWidth}px`,
+                                height: `${editorHeight}px`,
+                                backgroundImage: `url(${getOptimizedImageUrl(backImageUrl)})`,
+                                backgroundSize: '100% 100%',
+                                backgroundPosition: 'center',
+                                position: 'relative',
+                                overflow: 'visible',
+                                cursor: 'crosshair',
+                                boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
+                              }}
+                            >
+                              {/* Grid Overlay */}
+                              {showGrid && (() => {
+                                const scaledStep = gridSize * scale;
+                                const cols = Math.floor(editorWidth / scaledStep);
+                                const rows = Math.floor(editorHeight / scaledStep);
+                                return (
+                                  <svg
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      pointerEvents: 'none',
+                                      zIndex: 150,
+                                    }}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    {/* Vertical lines */}
+                                    {Array.from({ length: cols - 1 }, (_, ci) => {
+                                      const isMajor = (ci + 1) % 5 === 0;
+                                      return (
+                                        <line
+                                          key={`bv${ci}`}
+                                          x1={(ci + 1) * scaledStep}
+                                          y1={0}
+                                          x2={(ci + 1) * scaledStep}
+                                          y2={editorHeight}
+                                          stroke={isMajor ? "rgba(20, 184, 166, 0.45)" : "rgba(20, 184, 166, 0.18)"}
+                                          strokeWidth={isMajor ? "1" : "0.75"}
+                                          strokeDasharray={isMajor ? "none" : "2,2"}
+                                        />
+                                      );
+                                    })}
+                                    {/* Horizontal lines */}
+                                    {Array.from({ length: rows - 1 }, (_, ri) => {
+                                      const isMajor = (ri + 1) % 5 === 0;
+                                      return (
+                                        <line
+                                          key={`bh${ri}`}
+                                          x1={0}
+                                          y1={(ri + 1) * scaledStep}
+                                          x2={editorWidth}
+                                          y2={(ri + 1) * scaledStep}
+                                          stroke={isMajor ? "rgba(20, 184, 166, 0.45)" : "rgba(20, 184, 166, 0.18)"}
+                                          strokeWidth={isMajor ? "1" : "0.75"}
+                                          strokeDasharray={isMajor ? "none" : "2,2"}
+                                        />
+                                      );
+                                    })}
+                                  </svg>
+                                );
+                              })()}
+
+                              {/* Photoshop-style Draggable Guidelines */}
+                              {backGuides.map((g) => {
+                                const isHoriz = g.type === 'horizontal';
+                                const pos = g.value * scale;
+                                return (
+                                  <div
+                                    key={g.id}
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setActiveGuideDrag({ id: g.id, side: 'back', type: g.type });
+                                    }}
+                                    style={{
+                                      position: 'absolute',
+                                      left: isHoriz ? '0' : `${pos}px`,
+                                      top: isHoriz ? `${pos}px` : '0',
+                                      width: isHoriz ? '100%' : '2px',
+                                      height: isHoriz ? '2px' : '100%',
+                                      cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                      borderTop: isHoriz ? '1.5px dashed #06b6d4' : 'none',
+                                      borderLeft: !isHoriz ? '1.5px dashed #06b6d4' : 'none',
+                                      zIndex: 350,
+                                      padding: isHoriz ? '4px 0' : '0 4px',
+                                      margin: isHoriz ? '-4px 0 0 0' : '0 0 0 -4px',
+                                      background: 'transparent'
+                                    }}
+                                    title="Drag to move, drag off canvas/ruler to delete"
+                                  />
+                                );
+                              })}
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
                               const y = f.y * scale;
@@ -1376,6 +2493,7 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
+                                 alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
@@ -1388,72 +2506,86 @@ export default function TemplatesPage() {
                               } : {};
 
                               return (
-                                <div
-                                  key={i}
-                                  onMouseDown={(e) => handleMouseDown(e, 'back', i, 'move', scale)}
-                                  style={{
-                                    position: 'absolute',
-                                    left: `${x}px`,
-                                    top: `${y}px`,
-                                    width: `${w}px`,
-                                    height: `${h}px`,
-                                    cursor: 'move',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontSize: '0.65rem',
-                                    color: '#ffffff',
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-                                    userSelect: 'none',
-                                    textAlign: 'center',
-                                    wordBreak: 'break-all',
-                                    ...style,
-                                    ...testDataStyle
-                                  }}
-                                >
-                                  {showTestData ? (
-                                    f.type === 'image' ? (
-                                      <img 
-                                        src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
-                                        alt="Test Avatar" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
-                                        draggable={false}
-                                      />
-                                    ) : f.type === 'qr' ? (
-                                      <img 
-                                        src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(testData[f.field] || 'https://student-id-pdf-system.com')}`} 
-                                        alt="Test QR" 
-                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
-                                        draggable={false}
-                                      />
-                                    ) : f.type === 'barcode' ? (
-                                      <div style={{ width: '100%', height: '100%', background: '#ffffff repeating-linear-gradient(90deg, #000000, #000000 2px, #ffffff 2px, #ffffff 6px)', padding: '4px' }} />
-                                    ) : (
-                                      getTestDataValue(f)
-                                    )
-                                  ) : (
-                                    f.field
-                                  )}
-                                  
-                                  {/* Resize Handle */}
+                                <React.Fragment key={i}>
                                   <div
-                                    onMouseDown={(e) => handleMouseDown(e, 'back', i, 'resize', scale)}
+                                    onMouseDown={(e) => handleMouseDown(e, 'back', i, 'move', scale)}
                                     style={{
                                       position: 'absolute',
-                                      right: '0',
-                                      bottom: '0',
-                                      width: '10px',
-                                      height: '10px',
-                                      cursor: 'se-resize',
-                                      background: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
-                                      borderRadius: '50%',
-                                      margin: '2px',
-                                      boxShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                      left: `${x}px`,
+                                      top: `${y}px`,
+                                      width: `${w}px`,
+                                      height: `${h}px`,
+                                      cursor: 'move',
+                                      display: 'flex',
+                                      alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                      justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
+                                      fontSize: '0.65rem',
+                                      color: '#ffffff',
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                                      userSelect: 'none',
+                                      textAlign: f.align || 'center',
+                                      wordBreak: 'break-all',
+                                      ...style,
+                                      ...testDataStyle
                                     }}
-                                  />
-                                </div>
+                                  >
+                                    {f.staticValue !== undefined && f.staticValue !== null ? (
+                                      f.type === 'image' ? (
+                                        <img 
+                                          src={f.staticValue || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          alt="Static Image"
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }}
+                                          draggable={false}
+                                        />
+                                      ) : (
+                                        `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`
+                                      )
+                                    ) : showTestData ? (
+                                      f.type === 'image' ? (
+                                        <img 
+                                          src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          alt="Test Avatar" 
+                                          style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
+                                          draggable={false}
+                                        />
+                                      ) : f.type === 'qr' ? (
+                                        <img 
+                                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(testData[f.field] || 'https://student-id-pdf-system.com')}`} 
+                                          alt="Test QR" 
+                                          style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                          draggable={false}
+                                        />
+                                      ) : f.type === 'barcode' ? (
+                                        <div style={{ width: '100%', height: '100%', background: '#ffffff repeating-linear-gradient(90deg, #000000, #000000 2px, #ffffff 2px, #ffffff 6px)', padding: '4px' }} />
+                                      ) : (
+                                        getTestDataValue(f)
+                                      )
+                                    ) : (
+                                      f.field
+                                    )}
+                                    
+                                    {/* Resize Handle */}
+                                    <div
+                                      onMouseDown={(e) => handleMouseDown(e, 'back', i, 'resize', scale)}
+                                      style={{
+                                        position: 'absolute',
+                                        right: '0',
+                                        bottom: '0',
+                                        width: '10px',
+                                        height: '10px',
+                                        cursor: 'se-resize',
+                                        background: isSelected ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                                        borderRadius: '50%',
+                                        margin: '2px',
+                                        boxShadow: '0 1px 3px rgba(0,0,0,0.5)'
+                                      }}
+                                    />
+                                  </div>
+                                  {isSelected && renderFieldTooltip('back', i, f, scale)}
+                                </React.Fragment>
                               );
                             })}
+                            </div>
                           </div>
                         );
                       })()
@@ -1537,13 +2669,18 @@ export default function TemplatesPage() {
                                 {(f.type === 'text' || f.type === 'id') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
-                                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                                       <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '44px' }} placeholder="Sz" value={f.fontSize || 16} onChange={e => handleFieldChange('front', i, 'fontSize', Number(e.target.value))} />
                                       <input type="color" title="Text colour" style={{ padding: '2px', height: '28px', width: '36px', border: '1px solid var(--glass-border)', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }} value={f.color || '#000000'} onChange={e => handleFieldChange('front', i, 'color', e.target.value)} />
-                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', width: '72px' }} value={f.align || 'left'} onChange={e => handleFieldChange('front', i, 'align', e.target.value)}>
+                                      <select className="form-select" title="Horizontal Align" style={{ padding: '4px', fontSize: '0.75rem', width: '72px' }} value={f.align || 'left'} onChange={e => handleFieldChange('front', i, 'align', e.target.value)}>
                                         <option value="left">Left</option>
                                         <option value="center">Center</option>
                                         <option value="right">Right</option>
+                                      </select>
+                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'center'} onChange={e => handleFieldChange('front', i, 'verticalAlign', e.target.value)}>
+                                        <option value="top">Top</option>
+                                        <option value="center">Center</option>
+                                        <option value="bottom">Bottom</option>
                                       </select>
                                     </div>
                                     {/* Row 2: Font family & Basic Styles */}
@@ -1717,13 +2854,18 @@ export default function TemplatesPage() {
                                 {(f.type === 'text' || f.type === 'id') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
-                                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                                       <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '44px' }} placeholder="Sz" value={f.fontSize || 16} onChange={e => handleFieldChange('back', i, 'fontSize', Number(e.target.value))} />
                                       <input type="color" title="Text colour" style={{ padding: '2px', height: '28px', width: '36px', border: '1px solid var(--glass-border)', borderRadius: '4px', background: 'transparent', cursor: 'pointer' }} value={f.color || '#000000'} onChange={e => handleFieldChange('back', i, 'color', e.target.value)} />
-                                      <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', width: '72px' }} value={f.align || 'left'} onChange={e => handleFieldChange('back', i, 'align', e.target.value)}>
+                                      <select className="form-select" title="Horizontal Align" style={{ padding: '4px', fontSize: '0.75rem', width: '72px' }} value={f.align || 'left'} onChange={e => handleFieldChange('back', i, 'align', e.target.value)}>
                                         <option value="left">Left</option>
                                         <option value="center">Center</option>
                                         <option value="right">Right</option>
+                                      </select>
+                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'center'} onChange={e => handleFieldChange('back', i, 'verticalAlign', e.target.value)}>
+                                        <option value="top">Top</option>
+                                        <option value="center">Center</option>
+                                        <option value="bottom">Bottom</option>
                                       </select>
                                     </div>
                                     {/* Row 2: Font family & Basic Styles */}

@@ -31,8 +31,8 @@ export async function POST(request: Request) {
         pressId: null, // Global template
         clientId: null,
         name,
-        cardWidth: cardWidth ? Number(cardWidth) : 1011,
-        cardHeight: cardHeight ? Number(cardHeight) : 638,
+        cardWidth: cardWidth ? Number(cardWidth) : 673,
+        cardHeight: cardHeight ? Number(cardHeight) : 1039,
         frontImageUrl,
         backImageUrl,
         frontOriginalUrl: frontOriginalUrl || null,

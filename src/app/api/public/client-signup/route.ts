@@ -68,8 +68,8 @@ export async function POST(request: Request) {
         data: {
           pressId: Number(pressId),
           name: 'Default ID Template',
-          cardWidth: 1011,
-          cardHeight: 638,
+          cardWidth: 673,
+          cardHeight: 1039,
           frontImageUrl: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1000',
           frontFields: '[]',
           backFields: '[]',

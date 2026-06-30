@@ -109,8 +109,8 @@ model CardTemplate {
   press           Press?   @relation(fields: [pressId], references: [id], onDelete: Cascade)
   clientId        Int?     @map("client_id") // Optional link to specific client
   name            String
-  cardWidth       Int      @default(1011) @map("card_width") // pixels at 300 DPI (85.6mm)
-  cardHeight      Int      @default(638) @map("card_height") // pixels at 300 DPI (54mm)
+  cardWidth       Int      @default(673) @map("card_width") // pixels at 300 DPI (57mm)
+  cardHeight      Int      @default(1039) @map("card_height") // pixels at 300 DPI (88mm)
   frontImageUrl   String   @map("front_image_url")           // Low-res WebP/JPEG preview (Cloudinary)
   backImageUrl    String?  @map("back_image_url")            // Low-res WebP/JPEG preview (Cloudinary)
   frontOriginalUrl String? @map("front_original_url")        // Original PDF/SVG on Cloudinary (for Electron renderer fallback)

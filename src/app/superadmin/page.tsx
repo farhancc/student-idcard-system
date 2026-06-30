@@ -67,8 +67,8 @@ export default function SuperAdminDashboard() {
   
   // Template Form Fields
   const [tmplName, setTmplName] = useState('');
-  const [tmplWidth, setTmplWidth] = useState('1011');
-  const [tmplHeight, setTmplHeight] = useState('638');
+  const [tmplWidth, setTmplWidth] = useState('673');
+  const [tmplHeight, setTmplHeight] = useState('1039');
   const [tmplFrontImageUrl, setTmplFrontImageUrl] = useState('');
   const [tmplBackImageUrl, setTmplBackImageUrl] = useState('');
   const [tmplFrontOriginalUrl, setTmplFrontOriginalUrl] = useState('');
@@ -400,8 +400,8 @@ export default function SuperAdminDashboard() {
 
       const payload = {
         name: tmplName,
-        cardWidth: Number(tmplWidth) || 1011,
-        cardHeight: Number(tmplHeight) || 638,
+        cardWidth: Number(tmplWidth) || 673,
+        cardHeight: Number(tmplHeight) || 1039,
         frontImageUrl: tmplFrontImageUrl,
         backImageUrl: tmplBackImageUrl || null,
         frontOriginalUrl: tmplFrontOriginalUrl || null,
@@ -429,8 +429,8 @@ export default function SuperAdminDashboard() {
       setTemplateModalOpen(false);
       setSelectedTemplate(null);
       setTmplName('');
-      setTmplWidth('1011');
-      setTmplHeight('638');
+      setTmplWidth('673');
+      setTmplHeight('1039');
       setTmplFrontImageUrl('');
       setTmplBackImageUrl('');
       setTmplFrontOriginalUrl('');
@@ -536,8 +536,8 @@ export default function SuperAdminDashboard() {
               onClick={() => {
                 setSelectedTemplate(null);
                 setTmplName('');
-                setTmplWidth('1011');
-                setTmplHeight('638');
+                setTmplWidth('673');
+                setTmplHeight('1039');
                 setTmplFrontImageUrl('');
                 setTmplBackImageUrl('');
                 setTmplFrontOriginalUrl('');
@@ -1568,13 +1568,13 @@ export default function SuperAdminDashboard() {
                     id="tmplWidth"
                     type="number"
                     required
-                    placeholder="1011"
+                    placeholder="673"
                     className="form-input"
                     value={tmplWidth}
                     onChange={(e) => setTmplWidth(e.target.value)}
                   />
                   <span style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px', display: 'block' }}>
-                    Standard CR80 (85.6mm) at 300 DPI = 1011px
+                    Standard CR80 (57mm) at 300 DPI = 673px
                   </span>
                 </div>
 
@@ -1584,16 +1584,30 @@ export default function SuperAdminDashboard() {
                     id="tmplHeight"
                     type="number"
                     required
-                    placeholder="638"
+                    placeholder="1039"
                     className="form-input"
                     value={tmplHeight}
                     onChange={(e) => setTmplHeight(e.target.value)}
                   />
                   <span style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px', display: 'block' }}>
-                    Standard CR80 (54mm) at 300 DPI = 638px
+                    Standard CR80 (88mm) at 300 DPI = 1039px
                   </span>
                 </div>
               </div>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 12px', marginTop: '-8px', marginBottom: '8px' }}
+                onClick={() => {
+                  const w = tmplWidth;
+                  const h = tmplHeight;
+                  setTmplWidth(h);
+                  setTmplHeight(w);
+                }}
+              >
+                <RefreshCw size={14} /> Make {Number(tmplWidth) > Number(tmplHeight) ? 'Portrait' : 'Landscape'}
+              </button>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 {/* Front Upload */}
@@ -1693,8 +1707,8 @@ export default function SuperAdminDashboard() {
                     setTemplateModalOpen(false);
                     setSelectedTemplate(null);
                     setTmplName('');
-                    setTmplWidth('1011');
-                    setTmplHeight('638');
+                    setTmplWidth('673');
+                    setTmplHeight('1039');
                     setTmplFrontImageUrl('');
                     setTmplBackImageUrl('');
                     setTmplFrontOriginalUrl('');

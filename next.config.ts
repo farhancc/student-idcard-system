@@ -3,7 +3,7 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   /* config options here */
-  serverExternalPackages: ['canvas', 'sharp'],
+  serverExternalPackages: ['canvas', 'sharp', 'pdfjs-dist'],
   outputFileTracingExcludes: {
     '*': [
       './node_modules/canvas/**/*',

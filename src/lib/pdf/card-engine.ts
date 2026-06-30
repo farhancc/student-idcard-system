@@ -73,6 +73,7 @@ export interface FieldCoordinate {
   fontFamily?: string; // Arial | Georgia | Verdana | custom press font name
   color?: string;      // hex color code e.g. #000000
   align?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'center' | 'bottom';
   borderRadius?: number; // px — for image fields
   prefix?: string; // e.g. "Roll No: "
   suffix?: string; // e.g. " (A+)"
@@ -81,6 +82,7 @@ export interface FieldCoordinate {
   textDecoration?: string;
   textTransform?: string;
   opacity?: number;
+  staticValue?: string; // For non-editable constant text or static image URLs/base64
 }
 
 // Map to keep track of registered font families to prevent double registration warnings
@@ -356,6 +358,9 @@ export async function renderCardSide(
   // We need a temporary canvas ctx to measure text widths per field
   const tempCtx = createCanvas(1, 1).getContext('2d');
   const getCanvasValueStr = (f: FieldCoordinate) => {
+    if (f.staticValue !== undefined && f.staticValue !== null) {
+      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+    }
     let rv = f.type === 'id' ? cardholder.id : data[f.field];
     if (f.type === 'image' && !rv) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
@@ -377,7 +382,7 @@ export async function renderCardSide(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
+    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? cardholder.id : data[f.field]);
     if (f.type === 'image' && !rawValue) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
       const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
@@ -447,12 +452,20 @@ export async function renderCardSide(
         const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
         const renderedHeight = lines.length * lineHeight;
 
-        // Clip to the actual rendered area (not the original declared box)
+        // Calculate starting Y based on vertical alignment
+        let startY = effectiveY;
+        if (f.verticalAlign === 'center') {
+          startY = effectiveY + (f.height - renderedHeight) / 2;
+        } else if (f.verticalAlign === 'bottom') {
+          startY = effectiveY + f.height - renderedHeight;
+        }
+
+        // Clip to the bounding box of the text field
         ctx.beginPath();
-        ctx.rect(f.x, effectiveY, f.width, renderedHeight);
+        ctx.rect(f.x, effectiveY, f.width, f.height);
         ctx.clip();
 
-        let currentY = effectiveY;
+        let currentY = startY;
         lines.forEach(lineText => {
           let lineDrawX = f.x;
           const lineWidth = measureTextSpacing(lineText);
@@ -707,6 +720,9 @@ export async function renderCardSideToPdfBytes(
 
   // 4. Pre-compute Y offsets so wrapped text fields push down fields below them
   const getPdfValueStr = (f: FieldCoordinate) => {
+    if (f.staticValue !== undefined && f.staticValue !== null) {
+      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+    }
     let rv = f.type === 'id' ? cardholder.id : data[f.field];
     if (f.type === 'image' && !rv) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
@@ -729,7 +745,7 @@ export async function renderCardSideToPdfBytes(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
+    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? cardholder.id : data[f.field]);
     if (f.type === 'image' && !rawValue) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
       const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
