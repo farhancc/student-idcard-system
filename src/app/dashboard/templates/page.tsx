@@ -2333,6 +2333,54 @@ export default function TemplatesPage() {
                                       }}
                                     />
                                   </div>
+                                  {/* Tooltip Toggle Button on Top Right (Outside) */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isSelected) {
+                                        setSelectedFieldIndex(null);
+                                      } else {
+                                        setSelectedFieldIndex(i);
+                                        setSelectedSide('front');
+                                      }
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    style={{
+                                      position: 'absolute',
+                                      left: `${x + w}px`,
+                                      top: `${y}px`,
+                                      transform: 'translate(-50%, -50%)',
+                                      width: '18px',
+                                      height: '18px',
+                                      borderRadius: '50%',
+                                      background: isSelected ? '#ef4444' : '#3b82f6',
+                                      border: '1px solid rgba(255,255,255,0.3)',
+                                      color: '#ffffff',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                      zIndex: 1001,
+                                    }}
+                                    title={isSelected ? "Close Editor" : "Open Editor"}
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      {isSelected ? (
+                                        <>
+                                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <path d="M12 20h9"></path>
+                                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                        </>
+                                      )}
+                                    </svg>
+                                  </button>
                                   {isSelected && renderFieldTooltip('front', i, f, scale)}
                                 </React.Fragment>
                               );
@@ -2581,6 +2629,54 @@ export default function TemplatesPage() {
                                       }}
                                     />
                                   </div>
+                                  {/* Tooltip Toggle Button on Top Right (Outside) */}
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isSelected) {
+                                        setSelectedFieldIndex(null);
+                                      } else {
+                                        setSelectedFieldIndex(i);
+                                        setSelectedSide('back');
+                                      }
+                                    }}
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    style={{
+                                      position: 'absolute',
+                                      left: `${x + w}px`,
+                                      top: `${y}px`,
+                                      transform: 'translate(-50%, -50%)',
+                                      width: '18px',
+                                      height: '18px',
+                                      borderRadius: '50%',
+                                      background: isSelected ? '#ef4444' : '#3b82f6',
+                                      border: '1px solid rgba(255,255,255,0.3)',
+                                      color: '#ffffff',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      cursor: 'pointer',
+                                      padding: 0,
+                                      boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                      zIndex: 1001,
+                                    }}
+                                    title={isSelected ? "Close Editor" : "Open Editor"}
+                                  >
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                      {isSelected ? (
+                                        <>
+                                          <line x1="18" y1="6" x2="6" y2="18"></line>
+                                          <line x1="6" y1="6" x2="18" y2="18"></line>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <path d="M12 20h9"></path>
+                                          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                        </>
+                                      )}
+                                    </svg>
+                                  </button>
                                   {isSelected && renderFieldTooltip('back', i, f, scale)}
                                 </React.Fragment>
                               );
