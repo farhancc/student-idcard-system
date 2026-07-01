@@ -139,7 +139,7 @@ export default function ClientDetailsPage() {
 
   const fetchQuickTemplates = async () => {
     try {
-      const res = await fetch('/api/templates');
+      const res = await fetch(`/api/templates?_t=${Date.now()}`);
       if (res.ok) {
         const json = await res.json();
         const list = [
@@ -1752,7 +1752,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
 
   const fetchShares = async () => {
     try {
-      const res = await fetch(`/api/clients/${clientId}/shares`);
+      const res = await fetch(`/api/clients/${clientId}/shares?_t=${Date.now()}`);
       const data = await res.json();
       if (data.success) {
         setShares(data.shares);

@@ -105,7 +105,10 @@ async function flushQueueToServer(portalUrl, authToken) {
 let mainWindow;
 
 function getPortalUrl() {
-  return process.env.PORTAL_URL || 'https://idexocards.vercel.app';
+  if (process.env.PORTAL_URL) {
+    return process.env.PORTAL_URL;
+  }
+  return app.isPackaged ? 'https://idexocards.vercel.app' : 'http://localhost:3000';
 }
 
 // Configure Auto-Updater targeting secure CDN release path

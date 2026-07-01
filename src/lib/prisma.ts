@@ -31,7 +31,7 @@ export const prisma = (basePrisma.$extends({
           'PressUser', 'Client', 'Cardholder', 'CardTemplate', 'CardOrder',
           'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
           'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
-          'PressApiKey', 'PrintVendor', 'ClientPortalShare', 'ClientDepartment'
+          'PressApiKey', 'PrintVendor', 'ClientPortalShare'
         ];
 
         if (!tenantModels.includes(model)) {

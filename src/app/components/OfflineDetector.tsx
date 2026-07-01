@@ -54,8 +54,12 @@ export default function OfflineDetector() {
         setOfflineType('server');
         return false;
       }
-    } catch (error) {
-      console.warn('Health check failed:', error);
+    } catch (error: any) {
+      if (error?.name === 'AbortError') {
+        console.warn('Health check timed out or was aborted');
+      } else {
+        console.warn('Health check failed:', error);
+      }
       setIsOffline(true);
       setOfflineType('server');
       return false;

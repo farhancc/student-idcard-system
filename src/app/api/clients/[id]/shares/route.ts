@@ -72,13 +72,7 @@ export async function GET(
         isLatest: true,
         OR: [
           { pressId: null },
-          {
-            pressId,
-            OR: [
-              { clientId: null },
-              { clientId }
-            ]
-          }
+          { pressId }
         ]
       },
       select: { id: true, name: true, frontImageUrl: true },
