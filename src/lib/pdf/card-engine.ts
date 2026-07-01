@@ -230,7 +230,7 @@ function computeYOffsets(
   // Process fields in top-to-bottom order of their *original* Y
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id')
     .sort((a, b) => a.f.y - b.f.y);
 
   // Track overflow added by each field so we can shift later fields
@@ -238,7 +238,7 @@ function computeYOffsets(
   const effectiveY = fields.map((f) => f.y); // copy
 
   for (const { f, i } of sorted) {
-    const lineHeight = (f.fontSize || 20) * 1.2;
+    const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
     const valueStr = getValueStr(f);
     const lines = wrapWords(valueStr, f.width, (s) => measureFn(f, s));
     const renderedHeight = lines.length * lineHeight;
@@ -355,6 +355,21 @@ export async function renderCardSide(
   };
 
   // 3. Pre-compute Y offsets to reflow fields that wrap beyond their declared height
+  // Pre-register fonts first to ensure accurate text width measurements
+  for (const f of fields) {
+    if (f.type !== 'text' && f.type !== 'id') continue;
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (matchingFont) {
+        try {
+          await ensureFontRegistered(matchingFont.name, matchingFont.fileUrl);
+        } catch (err) {
+          console.error(`Error pre-registering font ${matchingFont.name}:`, err);
+        }
+      }
+    }
+  }
+
   // We need a temporary canvas ctx to measure text widths per field
   const tempCtx = createCanvas(1, 1).getContext('2d');
   const getCanvasValueStr = (f: FieldCoordinate) => {
@@ -373,8 +388,30 @@ export async function renderCardSide(
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
   const canvasMeasure = (f: FieldCoordinate, s: string) => {
-    tempCtx.font = `${f.fontWeight || 'normal'} ${f.fontSize || 20}px sans-serif`;
-    return tempCtx.measureText(s).width;
+    let fontName = 'sans-serif';
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (matchingFont) {
+        fontName = matchingFont.name;
+      } else {
+        fontName = f.fontFamily;
+      }
+    }
+    const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+    const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+    tempCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+
+    const spacing = f.letterSpacing || 0;
+    if (!spacing) return tempCtx.measureText(s).width;
+
+    let totalWidth = 0;
+    for (let charIndex = 0; charIndex < s.length; charIndex++) {
+      totalWidth += tempCtx.measureText(s[charIndex]).width;
+      if (charIndex < s.length - 1) {
+        totalWidth += spacing;
+      }
+    }
+    return totalWidth;
   };
   const yOffsets = computeYOffsets(fields, canvasMeasure, getCanvasValueStr);
 
@@ -718,7 +755,45 @@ export async function renderCardSideToPdfBytes(
     ...customData,
   };
 
-  // 4. Pre-compute Y offsets so wrapped text fields push down fields below them
+  // 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets
+  const fontCache = new Map<string, any>();
+
+  const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (match) {
+        const cacheKey = match.fileUrl;
+        if (!fontCache.has(cacheKey)) {
+          try {
+            const fontBuffer = await getFileBuffer(match.fileUrl);
+            fontCache.set(cacheKey, await pdfDoc.embedFont(fontBuffer));
+          } catch (err) {
+            console.error(`[PDF server] Font load failed for ${match.name}:`, err);
+          }
+        }
+        if (fontCache.has(cacheKey)) return fontCache.get(cacheKey);
+      }
+    }
+    // Fall back to Helvetica variant
+    const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+    const isItalic = f.fontStyle === 'italic';
+    const stdFont =
+      isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+      : isBold           ? StandardFonts.HelveticaBold
+      : isItalic         ? StandardFonts.HelveticaOblique
+      :                    StandardFonts.Helvetica;
+    if (!fontCache.has(stdFont)) {
+      fontCache.set(stdFont, await pdfDoc.embedFont(stdFont));
+    }
+    return fontCache.get(stdFont);
+  };
+
+  // Pre-load all unique fonts used by text/id fields beforehand
+  for (const f of fields) {
+    if (f.type !== 'text' && f.type !== 'id') continue;
+    await getEmbeddedFont(f);
+  }
+
   const getPdfValueStr = (f: FieldCoordinate) => {
     if (f.staticValue !== undefined && f.staticValue !== null) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
@@ -734,11 +809,40 @@ export async function renderCardSideToPdfBytes(
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
-  // Use a simple pixel-space proxy for PDF width measurement (we'll refine per field below)
+
   const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
-    // Approximate: average char width ≈ fontSize * 0.55 (conservative for Helvetica)
-    return s.length * (f.fontSize || 20) * 0.55;
+    // Get preloaded font from cache
+    let embeddedFont;
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (match) embeddedFont = fontCache.get(match.fileUrl);
+    }
+    if (!embeddedFont) {
+      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+      const isItalic = f.fontStyle === 'italic';
+      const stdFont =
+        isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+        : isBold           ? StandardFonts.HelveticaBold
+        : isItalic         ? StandardFonts.HelveticaOblique
+        :                    StandardFonts.Helvetica;
+      embeddedFont = fontCache.get(stdFont);
+    }
+    const fontSizePt = (f.fontSize || 20) * 0.24;
+    if (!embeddedFont) return s.length * fontSizePt * 0.55 / 0.24;
+
+    const letterSpacingPt = (f.letterSpacing || 0) * 0.24;
+    let wPt = 0;
+    if (!letterSpacingPt) {
+      wPt = embeddedFont.widthOfTextAtSize(s, fontSizePt);
+    } else {
+      for (let ci = 0; ci < s.length; ci++) {
+        wPt += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
+        if (ci < s.length - 1) wPt += letterSpacingPt;
+      }
+    }
+    return wPt / 0.24;
   };
+
   const pdfYOffsets = computeYOffsets(fields, pdfMeasureProxy, getPdfValueStr);
 
   // 5. Draw fields
@@ -768,24 +872,7 @@ export async function renderCardSideToPdfBytes(
       case 'id':
       case 'text': {
         try {
-          let embeddedFont;
-          if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-            const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
-            if (matchingFont) {
-              const fontBuffer = await getFileBuffer(matchingFont.fileUrl);
-              embeddedFont = await pdfDoc.embedFont(fontBuffer);
-            }
-          }
-          if (!embeddedFont) {
-            const isBold = f.fontWeight === 'bold' || (f.fontWeight && !isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
-            const isItalic = f.fontStyle === 'italic';
-            const stdFont =
-              isBold && isItalic ? StandardFonts.HelveticaBoldOblique
-              : isBold ? StandardFonts.HelveticaBold
-              : isItalic ? StandardFonts.HelveticaOblique
-              : StandardFonts.Helvetica;
-            embeddedFont = await pdfDoc.embedFont(stdFont);
-          }
+          const embeddedFont = await getEmbeddedFont(f);
 
           const fontSizePt = (f.fontSize || 20) * 0.24;
           const letterSpacingPt = (f.letterSpacing || 0) * 0.24;

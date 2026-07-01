@@ -117,7 +117,7 @@ function generateBarcodeCanvas(text: string, width: number, height: number, scal
 /**
  * Helper to wrap text.
  */
-function wrapWords(text: string, maxWidth: number, measureFn: (s: string) => number): string[] {
+export function wrapWords(text: string, maxWidth: number, measureFn: (s: string) => number): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
   let current = '';
@@ -134,7 +134,7 @@ function wrapWords(text: string, maxWidth: number, measureFn: (s: string) => num
   return lines;
 }
 
-function computeYOffsets(
+export function computeYOffsets(
   fields: FieldCoordinate[],
   measureFn: (f: FieldCoordinate, text: string) => number,
   getValueStr: (f: FieldCoordinate) => string
@@ -144,13 +144,13 @@ function computeYOffsets(
 
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id')
     .sort((a, b) => a.f.y - b.f.y);
 
   const effectiveY = fields.map((f) => f.y);
 
   for (const { f, i } of sorted) {
-    const lineHeight = (f.fontSize || 20) * 1.2;
+    const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
     const valueStr = getValueStr(f);
     const lines = wrapWords(valueStr, f.width, (s) => measureFn(f, s));
     const renderedHeight = lines.length * lineHeight;
@@ -313,8 +313,26 @@ export async function renderCardSideClient(
 
   const clientMeasure = (f: FieldCoordinate, s: string) => {
     if (!tempCtx) return 0;
-    tempCtx.font = `${f.fontWeight || 'normal'} ${f.fontSize || 20}px sans-serif`;
-    return tempCtx.measureText(s).width;
+    let fontName = 'sans-serif';
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const familyName = f.fontFamily.replace(/\s+/g, '_');
+      fontName = familyName;
+    }
+    const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+    const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+    tempCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+
+    const spacing = f.letterSpacing || 0;
+    if (!spacing) return tempCtx.measureText(s).width;
+
+    let totalWidth = 0;
+    for (let charIndex = 0; charIndex < s.length; charIndex++) {
+      totalWidth += tempCtx.measureText(s[charIndex]).width;
+      if (charIndex < s.length - 1) {
+        totalWidth += spacing;
+      }
+    }
+    return totalWidth;
   };
 
   const yOffsets = computeYOffsets(fields, clientMeasure, getClientValueStr);
@@ -678,6 +696,7 @@ export async function renderCardSideToPdfBytesClient(
     ...customData,
   };
 
+  // ── 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets ──
   // Cache for embedded fonts within this document
   const fontCache = new Map<string, any>();
 
@@ -711,9 +730,67 @@ export async function renderCardSideToPdfBytesClient(
     return fontCache.get(stdFont);
   };
 
-  // ── 4. Draw fields ───────────────────────────────────────────────────────
+  // Embed all unique fonts used by text/id fields beforehand so computeYOffsets is fast and synchronous
+  for (const f of fields) {
+    if (f.type !== 'text' && f.type !== 'id') continue;
+    await getEmbeddedFont(f);
+  }
+
+  const getPdfValueStr = (f: FieldCoordinate) => {
+    if (f.staticValue !== undefined && f.staticValue !== null) {
+      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+    }
+    let rv = f.type === 'id' ? cardholder.id : data[f.field];
+    if (f.type === 'image' && !rv) {
+      const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
+      const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
+      if (isProfileField || isOnlyImageField) {
+        rv = cardholder.photoUrl || '';
+      }
+    }
+    if (rv === undefined || rv === null) return '';
+    return `${f.prefix || ''}${rv}${f.suffix || ''}`;
+  };
+
+  const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
+    // Get preloaded font from cache
+    let embeddedFont;
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (match) embeddedFont = fontCache.get(match.fileUrl);
+    }
+    if (!embeddedFont) {
+      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+      const isItalic = f.fontStyle === 'italic';
+      const stdFont =
+        isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+        : isBold           ? StandardFonts.HelveticaBold
+        : isItalic         ? StandardFonts.HelveticaOblique
+        :                    StandardFonts.Helvetica;
+      embeddedFont = fontCache.get(stdFont);
+    }
+    const fontSizePt = (f.fontSize || 20) * PX_TO_PT;
+    if (!embeddedFont) return s.length * fontSizePt * 0.55 / PX_TO_PT;
+
+    const letterSpacingPt = (f.letterSpacing || 0) * PX_TO_PT;
+    let wPt = 0;
+    if (!letterSpacingPt) {
+      wPt = embeddedFont.widthOfTextAtSize(s, fontSizePt);
+    } else {
+      for (let ci = 0; ci < s.length; ci++) {
+        wPt += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
+        if (ci < s.length - 1) wPt += letterSpacingPt;
+      }
+    }
+    return wPt / PX_TO_PT;
+  };
+
+  const pdfYOffsets = computeYOffsets(fields, pdfMeasureProxy, getPdfValueStr);
+
+  // ── 5. Draw fields ───────────────────────────────────────────────────────
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
+    const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
 
     // Photo field fallback
@@ -726,7 +803,7 @@ export async function renderCardSideToPdfBytesClient(
 
     const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
     const xPt = f.x * PX_TO_PT;
-    const yPt = (heightPx - f.y - f.height) * PX_TO_PT;
+    const yPt = (heightPx - f.y - f.height) * PX_TO_PT - yOffsetPx * PX_TO_PT;
     const wPt = f.width  * PX_TO_PT;
     const hPt = f.height * PX_TO_PT;
 

@@ -5,6 +5,7 @@ import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, Refr
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
+import { computeYOffsets, wrapWords } from '@/lib/pdf/card-renderer-client';
 
 const getOptimizedImageUrl = (url: string) => {
   if (!url) return '';
@@ -971,8 +972,11 @@ export default function TemplatesPage() {
     };
 
     const x = f.x * scale;
-    const y = f.y * scale;
-    const h = f.height * scale;
+    const yOffsets = side === 'front' ? frontYOffsets : backYOffsets;
+    const yOffset = yOffsets.get(index) ?? 0;
+    const y = (f.y + yOffset) * scale;
+    const selfOverflow = getFieldSelfOverflow(f);
+    const h = (f.height + selfOverflow) * scale;
     const isLowerHalf = y > (cardHeight * scale) / 2;
 
     const tooltipLeft = Math.max(0, Math.min(x, 480 - 320)); // 320px width
@@ -1820,6 +1824,108 @@ export default function TemplatesPage() {
 
   const currentTemplates = viewTab === 'my' ? templates : globalTemplates;
 
+  // Pre-calculate designer Y offsets for front and back sides
+  const getDesignerYOffsets = (fields: FieldCoordinate[]) => {
+    if (typeof window === 'undefined') return new Map<number, number>();
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return new Map<number, number>();
+
+    const getValueStr = (f: FieldCoordinate) => {
+      if (f.staticValue !== undefined && f.staticValue !== null) {
+        return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+      }
+      if (showTestData) {
+        const customVal = testData[f.field];
+        const val = (customVal !== undefined && customVal !== '') ? customVal : getFieldDefaultValue(f.field, f.type);
+        return `${f.prefix || ''}${val}${f.suffix || ''}`;
+      }
+      return f.field;
+    };
+
+    const measureFn = (f: FieldCoordinate, s: string) => {
+      let fontName = 'sans-serif';
+      if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+        const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+        if (matchingFont) {
+          fontName = matchingFont.name.replace(/\s+/g, '_');
+        } else {
+          fontName = f.fontFamily;
+        }
+      }
+      const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+      const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+      ctx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+
+      const spacing = f.letterSpacing || 0;
+      if (!spacing) return ctx.measureText(s).width;
+
+      let totalWidth = 0;
+      for (let ci = 0; ci < s.length; ci++) {
+        totalWidth += ctx.measureText(s[ci]).width;
+        if (ci < s.length - 1) totalWidth += spacing;
+      }
+      return totalWidth;
+    };
+
+    return computeYOffsets(fields as any, measureFn as any, getValueStr as any);
+  };
+
+  const frontYOffsets = getDesignerYOffsets(frontFields);
+  const backYOffsets = getDesignerYOffsets(backFields);
+
+  const getFieldSelfOverflow = (f: FieldCoordinate) => {
+    if (typeof window === 'undefined') return 0;
+    if (f.type !== 'text' && f.type !== 'id') return 0;
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return 0;
+
+    const getValueStr = (f: FieldCoordinate) => {
+      if (f.staticValue !== undefined && f.staticValue !== null) {
+        return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+      }
+      if (showTestData) {
+        const customVal = testData[f.field];
+        const val = (customVal !== undefined && customVal !== '') ? customVal : getFieldDefaultValue(f.field, f.type);
+        return `${f.prefix || ''}${val}${f.suffix || ''}`;
+      }
+      return f.field;
+    };
+
+    let fontName = 'sans-serif';
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      if (matchingFont) {
+        fontName = matchingFont.name.replace(/\s+/g, '_');
+      } else {
+        fontName = f.fontFamily;
+      }
+    }
+    const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+    const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+    ctx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+
+    const measureWidth = (s: string) => {
+      const spacing = f.letterSpacing || 0;
+      if (!spacing) return ctx.measureText(s).width;
+      let totalWidth = 0;
+      for (let ci = 0; ci < s.length; ci++) {
+        totalWidth += ctx.measureText(s[ci]).width;
+        if (ci < s.length - 1) totalWidth += spacing;
+      }
+      return totalWidth;
+    };
+
+    const valueStr = getValueStr(f);
+    const lines = wrapWords(valueStr, f.width, measureWidth);
+    const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
+    const renderedHeight = lines.length * lineHeight;
+    return Math.max(0, renderedHeight - f.height);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
@@ -2388,9 +2494,11 @@ export default function TemplatesPage() {
                               })}
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
-                              const y = f.y * scale;
+                              const yOffset = frontYOffsets.get(i) ?? 0;
+                              const y = (f.y + yOffset) * scale;
                               const w = f.width * scale;
-                              const h = f.height * scale;
+                              const selfOverflow = getFieldSelfOverflow(f);
+                              const h = (f.height + selfOverflow) * scale;
                               const isSelected = selectedFieldIndex === i && selectedSide === 'front';
                               const style = getBoxStyle(f, isSelected, scale);
 
@@ -2407,7 +2515,7 @@ export default function TemplatesPage() {
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
-                                whiteSpace: 'nowrap',
+                                whiteSpace: 'pre-wrap',
                                 letterSpacing: f.letterSpacing ? `${f.letterSpacing * scale}px` : undefined,
                                 lineHeight: f.lineHeight ? f.lineHeight : undefined,
                                 textDecoration: f.textDecoration ? f.textDecoration : undefined,
@@ -2731,9 +2839,11 @@ export default function TemplatesPage() {
                               })}
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
-                              const y = f.y * scale;
+                              const yOffset = backYOffsets.get(i) ?? 0;
+                              const y = (f.y + yOffset) * scale;
                               const w = f.width * scale;
-                              const h = f.height * scale;
+                              const selfOverflow = getFieldSelfOverflow(f);
+                              const h = (f.height + selfOverflow) * scale;
                               const isSelected = selectedFieldIndex === i && selectedSide === 'back';
                               const style = getBoxStyle(f, isSelected, scale);
 
@@ -2750,7 +2860,7 @@ export default function TemplatesPage() {
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
-                                whiteSpace: 'nowrap',
+                                whiteSpace: 'pre-wrap',
                                 letterSpacing: f.letterSpacing ? `${f.letterSpacing * scale}px` : undefined,
                                 lineHeight: f.lineHeight ? f.lineHeight : undefined,
                                 textDecoration: f.textDecoration ? f.textDecoration : undefined,
