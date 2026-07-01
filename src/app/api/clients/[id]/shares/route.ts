@@ -68,7 +68,19 @@ export async function GET(
 
     // Also get list of templates for selection in UI
     const templates = await prisma.cardTemplate.findMany({
-      where: { pressId, isLatest: true },
+      where: {
+        isLatest: true,
+        OR: [
+          { pressId: null },
+          {
+            pressId,
+            OR: [
+              { clientId: null },
+              { clientId }
+            ]
+          }
+        ]
+      },
       select: { id: true, name: true, frontImageUrl: true },
     });
 
