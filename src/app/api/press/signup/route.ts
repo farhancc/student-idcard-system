@@ -7,7 +7,7 @@ import { signupSchema } from '@/lib/schemas';
 export async function POST(request: Request) {
   // ── Rate limiting: 5 signups per hour per IP ──────────────────────────────
   const ip = getClientIp(request);
-  const rl = rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+  const rl = await rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many registration attempts. Please wait before trying again.' },

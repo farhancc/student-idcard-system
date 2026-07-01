@@ -33,7 +33,12 @@ export async function getOrRenderCard(
   if (!cardholder) throw new Error(`Cardholder #${cardholderId} not found`);
 
   const pressFonts = await prisma.pressFont.findMany({
-    where: { pressId },
+    where: {
+      OR: [
+        { pressId },
+        { pressId: null }
+      ]
+    },
   });
 
   // Calculate current template layout hash to check if cache is stale

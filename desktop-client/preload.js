@@ -21,5 +21,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('load-credentials'),
   clearCredentials: () =>
     ipcRenderer.invoke('clear-credentials'),
+  // Offline print queue
+  queuePrintLog: (payload) =>
+    ipcRenderer.invoke('queue-print-log', { payload }),
+  flushPrintQueue: (authToken) =>
+    ipcRenderer.invoke('flush-print-queue', { authToken }),
+  getQueueStatus: () =>
+    ipcRenderer.invoke('get-queue-status'),
 });
-

@@ -644,14 +644,21 @@ export default function ClientDetailsPage() {
 
       window.dispatchEvent(new CustomEvent('refresh-profile'));
 
+      const escapeFormula = (val: any): any => {
+        if (typeof val === 'string' && /^[=\+\-\@\t\r\n]/.test(val)) {
+          return `'${val}`;
+        }
+        return val;
+      };
+
       // Format data for Excel
       const formattedData = exportList.map((ch: any) => {
         const row: any = {
-          'Name': ch.name,
-          'ID / Unique Key': ch.uniqueKey || '',
+          'Name': escapeFormula(ch.name),
+          'ID / Unique Key': escapeFormula(ch.uniqueKey || ''),
           'Date of Adding': ch.createdAt ? new Date(ch.createdAt).toLocaleDateString() : '',
-          'Template Name': ch.templateName || '',
-          'Photo URL': ch.photoUrl || '',
+          'Template Name': escapeFormula(ch.templateName || ''),
+          'Photo URL': escapeFormula(ch.photoUrl || ''),
         };
 
         // Flatten custom fields
@@ -660,7 +667,7 @@ export default function ClientDetailsPage() {
             const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
             if (parsed && typeof parsed === 'object') {
               Object.entries(parsed).forEach(([key, val]) => {
-                row[`Field: ${key}`] = val;
+                row[`Field: ${key}`] = escapeFormula(val);
               });
             }
           } catch (e) {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { generateSignedUrl, validateSignedUrl } from '@/lib/signed-url';
 import fs from 'fs';
 import path from 'path';
 
@@ -34,45 +35,59 @@ export async function GET(
       return new Response('This download link has expired. PDF jobs expire 7 days after generation.', { status: 410 });
     }
 
-    // 3. Resolve absolute path or fetch from remote URL
+    // 3. Resolve and serve file
     let fileBuffer: Buffer;
 
-    if (job.downloadUrl.startsWith('http')) {
+    if (job.downloadUrl.startsWith('http') && job.downloadUrl.includes('cloudinary.com')) {
+      // Cloudinary asset: redirect to a fresh signed URL
+      const signedUrl = generateSignedUrl(job.downloadUrl);
+      const ipAddress = request.headers.get('x-forwarded-for') || '127.0.0.1';
+      await prisma.pdfDownloadLog.create({
+        data: { pdfJobId: jobId, pressId, downloadedBy: userId, ipAddress },
+      });
+      return NextResponse.redirect(signedUrl, { status: 302 });
+
+    } else if (job.downloadUrl.startsWith('http')) {
+      // Other remote URL: validate signed token if present
+      const { searchParams } = new URL(request.url);
+      const sig = searchParams.get('sig');
+      const exp = searchParams.get('exp');
+      if (sig && exp && !validateSignedUrl(job.downloadUrl, sig, exp)) {
+        return new Response('Download link has expired or is invalid.', { status: 403 });
+      }
       const res = await fetch(job.downloadUrl);
-      if (!res.ok) {
-        return new Response('PDF file was not found on remote storage.', { status: 404 });
-      }
-      const arrayBuffer = await res.arrayBuffer();
-      fileBuffer = Buffer.from(arrayBuffer);
+      if (!res.ok) return new Response('PDF file was not found on remote storage.', { status: 404 });
+      fileBuffer = Buffer.from(await res.arrayBuffer());
+
     } else {
-      const relativePath = job.downloadUrl.replace(/^\//, ''); // strip leading slash
-      
-      // Check /tmp first (production writeable folder), then fallback to public/uploads
-      const tmpPath = path.join('/tmp', 'idexo', relativePath);
-      const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', relativePath);
+      // Local file: validate HMAC signed token
+      const { searchParams } = new URL(request.url);
+      const sig = searchParams.get('sig');
+      const exp = searchParams.get('exp');
+      const isDev = process.env.NODE_ENV === 'development';
+      const hasSigningSecret = !!(process.env.SIGNED_URL_SECRET || process.env.NEXTAUTH_SECRET);
 
-      let finalPath = '';
-      if (fs.existsSync(tmpPath)) {
-        finalPath = tmpPath;
-      } else if (fs.existsSync(publicPath)) {
-        finalPath = publicPath;
-      } else {
-        return new Response('PDF file was not found on server storage.', { status: 404 });
+      if (!isDev || hasSigningSecret) {
+        if (!sig || !exp) {
+          return new Response('Missing download authorization token.', { status: 403 });
+        }
+        if (!validateSignedUrl(job.downloadUrl, sig, exp)) {
+          return new Response('Download link has expired or is invalid.', { status: 403 });
+        }
       }
 
+      const relativePath = job.downloadUrl.replace(/^\//, '');
+      const tmpPath = path.join('/tmp', 'idexo', relativePath);
+      const publicPath = path.join(process.cwd(), 'public', relativePath);
+      const finalPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
+      if (!finalPath) return new Response('PDF file was not found on server storage.', { status: 404 });
       fileBuffer = fs.readFileSync(finalPath);
     }
 
-    // 4. Log Download event (R4)
+    // 4. Log download event
     const ipAddress = request.headers.get('x-forwarded-for') || '127.0.0.1';
-
     await prisma.pdfDownloadLog.create({
-      data: {
-        pdfJobId: jobId,
-        pressId,
-        downloadedBy: userId,
-        ipAddress,
-      },
+      data: { pdfJobId: jobId, pressId, downloadedBy: userId, ipAddress },
     });
 
     const { searchParams } = new URL(request.url);
@@ -85,6 +100,7 @@ export async function GET(
           ? `inline; filename="${job.fileName}"`
           : `attachment; filename="${job.fileName}"`,
         'Content-Length': String(fileBuffer.length),
+        'Cache-Control': 'private, no-store',
       },
     });
   } catch (error) {

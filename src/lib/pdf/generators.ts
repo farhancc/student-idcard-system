@@ -52,7 +52,14 @@ export class IndividualPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({ where: { pressId } });
+    const pressFonts = await prisma.pressFont.findMany({
+      where: {
+        OR: [
+          { pressId },
+          { pressId: null }
+        ]
+      }
+    });
 
     // CR-80 Standard Dimensions: 85.6mm x 53.98mm -> 242.6 pt x 153 pt
     const isPortraitTemplate = (order.template?.cardWidth || 1011) < (order.template?.cardHeight || 638);
@@ -117,7 +124,14 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({ where: { pressId } });
+    const pressFonts = await prisma.pressFont.findMany({
+      where: {
+        OR: [
+          { pressId },
+          { pressId: null }
+        ]
+      }
+    });
 
     // A4 Portrait Size: 595.27 pt x 841.89 pt
     const pageWidth = 595.27;
@@ -344,7 +358,14 @@ export class ProductionPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({ where: { pressId } });
+    const pressFonts = await prisma.pressFont.findMany({
+      where: {
+        OR: [
+          { pressId },
+          { pressId: null }
+        ]
+      }
+    });
 
     // Page dimensions in points
     // A3 Portrait: 841.89 pt x 1190.55 pt

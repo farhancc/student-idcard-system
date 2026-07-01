@@ -320,8 +320,8 @@ model OrderActivityLog {
 
 model PressFont {
   id       Int    @id @default(autoincrement())
-  pressId  Int    @map("press_id")
-  press    Press  @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  pressId  Int?   @map("press_id")
+  press    Press? @relation(fields: [pressId], references: [id], onDelete: Cascade)
   name     String
   fileUrl  String @map("file_url")
   language String // "hi" | "ta" | "ar" | "ur" | "en"
@@ -430,4 +430,33 @@ model ClientDepartment {
   createdAt     DateTime          @default(now()) @map("created_at")
 
   @@map("client_departments")
+}
+
+// ── SYSTEM AUDIT LOG ─────────────────────────────────────────
+// Records all configuration changes, security events, and
+// administrative actions for compliance and forensics.
+
+model SystemAuditLog {
+  id           Int      @id @default(autoincrement())
+  pressId      Int?     @map("press_id")       // null = Super Admin action
+  actorId      Int?     @map("actor_id")
+  actorType    String   @map("actor_type")     // PRESS_USER | SUPER_ADMIN | SYSTEM
+  actorName    String   @map("actor_name")
+  action       String                          // e.g. TEMPLATE_UPDATED, API_KEY_CREATED
+  category     String                          // TEMPLATE | SECURITY | BILLING | USER | PORTAL | SYSTEM
+  resourceType String?  @map("resource_type")  // CardTemplate | PressApiKey | etc.
+  resourceId   String?  @map("resource_id")
+  description  String                          // Human-readable description
+  oldValue     String?  @map("old_value")      // JSON snippet of what changed
+  newValue     String?  @map("new_value")      // JSON snippet of the new state
+  ipAddress    String   @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  severity     String   @default("INFO")       // INFO | WARN | CRITICAL
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([pressId])
+  @@index([action])
+  @@index([category])
+  @@index([createdAt])
+  @@map("system_audit_logs")
 }

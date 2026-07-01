@@ -1,5 +1,22 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const productionRequestSchema = z.object({
+  orderId: z.union([z.number(), z.string().transform(Number)]),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL']),
+  paperSize: z.string().optional().default('A3'),
+  orientation: z.string().optional().default('PORTRAIT'),
+  bleed: z.union([z.number(), z.string().transform(Number)]).optional().default(0),
+  cropMarks: z.boolean().optional().default(false),
+  foldLine: z.boolean().optional().default(false),
+  marginLeft: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginTop: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginRight: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginBottom: z.union([z.number(), z.string().transform(Number)]).optional(),
+  colGap: z.union([z.number(), z.string().transform(Number)]).optional(),
+  rowGap: z.union([z.number(), z.string().transform(Number)]).optional(),
+});
 
 export async function POST(request: Request) {
   try {
@@ -11,14 +28,23 @@ export async function POST(request: Request) {
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
 
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
+    }
+
+    const validation = productionRequestSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request parameters', details: validation.error.format() }, { status: 400 });
+    }
+
     const {
       orderId, pdfType, paperSize, orientation, bleed, cropMarks, foldLine,
       marginLeft, marginTop, marginRight, marginBottom, colGap, rowGap
-    } = await request.json();
+    } = validation.data;
 
-    if (!orderId || !pdfType) {
-      return NextResponse.json({ error: 'Order ID and PDF Type are required' }, { status: 400 });
-    }
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: Number(orderId), pressId },

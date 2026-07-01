@@ -9,7 +9,9 @@ export default function ProductionDaemon() {
   const [activeJob, setActiveJob] = useState<any>(null);
   const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string[]>([]);
+  const [offlineQueueCount, setOfflineQueueCount] = useState(0);
   const isProcessingRef = useRef(false);
+  const wasOfflineRef = useRef(false);
 
   // Check if running inside Electron desktop client
   useEffect(() => {
@@ -39,12 +41,29 @@ export default function ProductionDaemon() {
         const res = await fetch('/api/jobs/production-poll', { credentials: 'same-origin' });
         if (!res.ok) {
           if (res.status === 401) {
-            // Unauthorized (e.g. user logged out or session expired)
             return;
           }
           throw new Error(`Polling request failed: ${res.statusText}`);
         }
         
+        // ── Online: flush any queued print logs ─────────────────────
+        if (wasOfflineRef.current) {
+          wasOfflineRef.current = false;
+          addLog('Connection restored. Flushing offline print queue...');
+          try {
+            const electronAPI = (window as any).electronAPI;
+            if (electronAPI?.flushPrintQueue) {
+              const flushResult = await electronAPI.flushPrintQueue('');
+              if (flushResult?.flushed > 0) {
+                addLog(`Sync complete: ${flushResult.flushed} queued record(s) sent to server.`);
+              }
+              setOfflineQueueCount(flushResult?.remaining ?? 0);
+            }
+          } catch (flushErr: any) {
+            addLog(`Offline queue flush error: ${flushErr.message}`);
+          }
+        }
+
         const data = await res.json();
         if (data.success && data.job) {
           addLog(`Found pending print job #${data.job.id} (${data.job.pdfType}). Starting compilation...`);
@@ -52,7 +71,6 @@ export default function ProductionDaemon() {
           setActiveJob(data.job);
           setProgress(0);
           
-          // Run compilation inside async IIFE to not block polling interval
           (async () => {
             try {
               await processJob(data);
@@ -67,11 +85,30 @@ export default function ProductionDaemon() {
           })();
         }
       } catch (err: any) {
+        // Mark as offline for next successful poll
+        wasOfflineRef.current = true;
         console.error('Local poll error:', err);
       }
-    }, 4000); // Poll every 4 seconds
+    }, 4000);
 
     return () => clearInterval(pollInterval);
+  }, [isDesktop]);
+
+  // Periodically refresh the queue count display
+  useEffect(() => {
+    if (!isDesktop) return;
+    const statusInterval = setInterval(async () => {
+      try {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.getQueueStatus) {
+          const status = await electronAPI.getQueueStatus();
+          setOfflineQueueCount(status?.queueLength ?? 0);
+        }
+      } catch (err) {
+        // Silently ignore
+      }
+    }, 30000);
+    return () => clearInterval(statusInterval);
   }, [isDesktop]);
 
   const updateProgress = async (jobId: number, currentProgress: number, status = 'PROCESSING') => {
@@ -96,7 +133,7 @@ export default function ProductionDaemon() {
         body: JSON.stringify({ jobId, success, errorMsg, pdfBase64 }),
         credentials: 'same-origin'
       });
-      const result = await res.json();
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
       if (success) {
         addLog(`Successfully completed compilation for job #${jobId}`);
       } else {
@@ -104,7 +141,19 @@ export default function ProductionDaemon() {
       }
       window.dispatchEvent(new Event('refresh-profile'));
     } catch (err: any) {
-      addLog(`Failed to report job completion/failure for job #${jobId}: ${err.message}`);
+      addLog(`Network error reporting job #${jobId}. Queuing for offline sync...`);
+      // Fallback: queue the completion payload locally
+      try {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.queuePrintLog) {
+          const result = await electronAPI.queuePrintLog({ jobId, success, errorMsg, pdfBase64: undefined });
+          setOfflineQueueCount(result?.queueLength ?? 0);
+          addLog(`Queued offline. Total pending: ${result?.queueLength ?? '?'}`);
+          wasOfflineRef.current = true;
+        }
+      } catch (queueErr: any) {
+        addLog(`Failed to queue offline: ${queueErr.message}`);
+      }
     }
   };
 
@@ -546,6 +595,19 @@ export default function ProductionDaemon() {
         }} />
         <span style={{ fontWeight: '600' }}>Compiler Engine</span>
         <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>Active</span>
+        {offlineQueueCount > 0 && (
+          <span title={`${offlineQueueCount} print log(s) pending sync`} style={{
+            background: 'rgba(239,68,68,0.2)',
+            border: '1px solid rgba(239,68,68,0.6)',
+            color: '#f87171',
+            borderRadius: '10px',
+            padding: '1px 7px',
+            fontSize: '0.65rem',
+            fontWeight: 700,
+          }}>
+            {offlineQueueCount} queued
+          </span>
+        )}
       </div>
 
       {activeJob ? (

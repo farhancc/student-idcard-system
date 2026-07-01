@@ -92,7 +92,7 @@ export default function SettingsPage() {
       const fontsRes = await fetch('/api/fonts');
       if (fontsRes.ok) {
         const json = await fontsRes.json();
-        setFonts(json.fonts || []);
+        setFonts((json.fonts || []).filter((f: any) => f.pressId !== null));
       }
 
       // Fetch Press Profile

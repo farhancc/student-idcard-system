@@ -17,41 +17,24 @@ if (isCloudinaryConfigured) {
   });
 }
 
-// GET /api/fonts — list all press fonts
+// GET /api/superadmin/fonts — list all global (system-wide) fonts
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-
     const fonts = await prisma.pressFont.findMany({
-      where: {
-        OR: [
-          { pressId },
-          { pressId: null }
-        ]
-      },
+      where: { pressId: null },
       orderBy: { name: 'asc' },
     });
 
     return NextResponse.json({ success: true, fonts });
   } catch (err: any) {
-    console.error('GET /api/fonts error:', err);
+    console.error('GET /api/superadmin/fonts error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
-// POST /api/fonts — upload a new font (multipart/form-data)
+// POST /api/superadmin/fonts — upload a global (system-wide) font (multipart/form-data)
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-
     const formData = await request.formData();
     const file     = formData.get('file') as File | null;
     const name     = (formData.get('name') as string || '').trim();
@@ -79,7 +62,7 @@ export async function POST(request: Request) {
       fileUrl = await new Promise<string>((resolve, reject) => {
         cloudinary.uploader.upload_stream(
           {
-            folder: `press_${pressId}/fonts`,
+            folder: 'global/fonts',
             resource_type: 'raw',
             public_id: `${name.replace(/\s+/g, '_')}_${Date.now()}`,
           },
@@ -101,13 +84,13 @@ export async function POST(request: Request) {
       } else {
         try {
           const uploadDir = path.join(
-            process.cwd(), 'public', 'uploads', String(pressId), 'fonts'
+            process.cwd(), 'public', 'uploads', 'global', 'fonts'
           );
           fs.mkdirSync(uploadDir, { recursive: true });
           const fileName = `${Date.now()}_${name.replace(/\s+/g, '_')}${ext}`;
           const filePath = path.join(uploadDir, fileName);
           fs.writeFileSync(filePath, buffer);
-          fileUrl = `/uploads/${pressId}/fonts/${fileName}`;
+          fileUrl = `/uploads/global/fonts/${fileName}`;
         } catch (dirErr) {
           console.warn('Local filesystem write failed for font, falling back to base64:', dirErr);
           const mimeType = ext === '.ttf' ? 'font/ttf' : ext === '.otf' ? 'font/otf' : ext === '.woff' ? 'font/woff' : 'font/woff2';
@@ -118,12 +101,12 @@ export async function POST(request: Request) {
     }
 
     const font = await prisma.pressFont.create({
-      data: { pressId, name, fileUrl, language },
+      data: { pressId: null, name, fileUrl, language },
     });
 
     return NextResponse.json({ success: true, font });
   } catch (err: any) {
-    console.error('POST /api/fonts error:', err);
+    console.error('POST /api/superadmin/fonts error:', err);
     return NextResponse.json({ error: err.message || 'Failed to upload font' }, { status: 500 });
   }
 }

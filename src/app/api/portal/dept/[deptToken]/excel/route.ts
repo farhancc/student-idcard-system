@@ -87,6 +87,13 @@ export async function GET(
       seen.add(f.field);
     });
 
+    const escapeFormula = (val: any): any => {
+      if (typeof val === 'string' && /^[=\+\-\@\t\r\n]/.test(val)) {
+        return `'${val}`;
+      }
+      return val;
+    };
+
     // Map cardholder details to Excel rows matching table columns exactly
     const data = cardholders.map(ch => {
       let parsedCustom: Record<string, string> = {};
@@ -102,15 +109,15 @@ export async function GET(
         const label = tf.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
         
         if (tf.isMainPhoto) {
-          row[label] = ch.photoUrl || '';
+          row[label] = escapeFormula(ch.photoUrl || '');
         } else if (tf.isName) {
-          row[label] = ch.name;
+          row[label] = escapeFormula(ch.name);
         } else if (tf.field === 'designation' || tf.field === 'role') {
-          row[label] = ch.designation || '';
+          row[label] = escapeFormula(ch.designation || '');
         } else if (tf.field === 'uniqueKey') {
-          row[label] = ch.uniqueKey || '';
+          row[label] = escapeFormula(ch.uniqueKey || '');
         } else {
-          row[label] = parsedCustom[tf.field] || '';
+          row[label] = escapeFormula(parsedCustom[tf.field] || '');
         }
       });
 

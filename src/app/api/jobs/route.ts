@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
+import { processPdfJobInBackground } from '@/lib/pdf/job-processor';
 
 export async function POST(request: Request) {
   try {
@@ -106,6 +107,13 @@ export async function POST(request: Request) {
 
     const fileName = `${pdfType.toLowerCase()}_order_${order.id}_v${nextVersion}.pdf`;
 
+    // Fetch the actual cardholder IDs to process the job
+    const orderCardholders = await prisma.orderCardholder.findMany({
+      where: { orderId: order.id },
+      select: { cardholderId: true },
+    });
+    const cardholderIds = orderCardholders.map(oc => oc.cardholderId);
+
     const job = await prisma.pdfJob.create({
       data: {
         pressId,
@@ -122,7 +130,23 @@ export async function POST(request: Request) {
       },
     });
 
-    // 3. Delegation: The local Electron daemon will poll and process the PENDING job.
+    // Delegate execution to background using Next.js 'after' API to prevent serverless container freeze
+    after(async () => {
+      try {
+        console.log(`[Background Job] Starting PDF generation for Job #${job.id}`);
+        await processPdfJobInBackground(
+          job.id,
+          pressId,
+          order.id,
+          cardholderIds,
+          pdfType,
+          jobOptions,
+          userId
+        );
+      } catch (error) {
+        console.error(`[Background Job] Failed to run PDF generation for Job #${job.id}:`, error);
+      }
+    });
 
 
     return NextResponse.json({

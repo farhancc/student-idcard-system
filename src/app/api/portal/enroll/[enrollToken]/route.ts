@@ -9,7 +9,7 @@ export async function POST(
 ) {
   // ── Rate limiting: 20 submissions per hour per IP ─────────────────────────
   const ip = getClientIp(request);
-  const rl = rateLimit(`enroll:${ip}`, 20, 60 * 60 * 1000);
+  const rl = await rateLimit(`enroll:${ip}`, 20, 60 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many submissions. Please wait before trying again.' },
@@ -41,6 +41,13 @@ export async function POST(
 
     if (!share) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
+
+    // Enforce 30-day expiration policy for security
+    const expirationPeriod = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const isExpired = Date.now() - new Date(share.createdAt).getTime() > expirationPeriod;
+    if (isExpired) {
+      return NextResponse.json({ error: 'This enrollment link has expired (expired after 30 days)' }, { status: 410 });
     }
 
     // ── Input validation ────────────────────────────────────────────────────

@@ -5,6 +5,98 @@ const { autoUpdater } = require('electron-updater');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 
+// ── Offline Print Queue ────────────────────────────────────────────────────
+// Uses a JSON file as a durable local queue. No native modules required.
+function getQueueFilePath() {
+  return path.join(app.getPath('userData'), 'offline_print_queue.json');
+}
+
+function readQueue() {
+  try {
+    const queuePath = getQueueFilePath();
+    if (!fs.existsSync(queuePath)) return [];
+    const raw = fs.readFileSync(queuePath, 'utf8');
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('[OfflineQueue] Failed to read queue file:', err);
+    return [];
+  }
+}
+
+function writeQueue(queue) {
+  try {
+    const queuePath = getQueueFilePath();
+    // Atomic write: write to .tmp then rename to avoid corruption
+    const tmpPath = queuePath + '.tmp';
+    fs.writeFileSync(tmpPath, JSON.stringify(queue, null, 2), 'utf8');
+    fs.renameSync(tmpPath, queuePath);
+  } catch (err) {
+    console.error('[OfflineQueue] Failed to write queue file:', err);
+  }
+}
+
+function enqueuePrintLog(entry) {
+  const queue = readQueue();
+  queue.push({ ...entry, queuedAt: new Date().toISOString(), retries: 0 });
+  writeQueue(queue);
+  console.log(`[OfflineQueue] Enqueued print log. Queue length: ${queue.length}`);
+  return queue.length;
+}
+
+async function flushQueueToServer(portalUrl, authToken) {
+  const queue = readQueue();
+  if (queue.length === 0) return { flushed: 0, failed: 0, remaining: 0 };
+
+  const surviving = [];
+  let flushed = 0;
+  let failed = 0;
+
+  for (const entry of queue) {
+    try {
+      const res = await fetch(`${portalUrl}/api/jobs/production-complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(entry.payload),
+        signal: AbortSignal.timeout(10000), // 10s timeout
+      });
+
+      if (res.ok) {
+        flushed++;
+        console.log(`[OfflineQueue] Flushed entry for job #${entry.payload?.jobId}`);
+      } else {
+        const errText = await res.text();
+        console.warn(`[OfflineQueue] Server rejected entry (${res.status}): ${errText}`);
+        // Server rejected (4xx): discard — do not retry bad data
+        if (res.status >= 400 && res.status < 500) {
+          failed++;
+        } else {
+          // 5xx server error: keep in queue for next attempt
+          entry.retries = (entry.retries || 0) + 1;
+          surviving.push(entry);
+          failed++;
+        }
+      }
+    } catch (fetchErr) {
+      // Network error: keep in queue
+      console.warn(`[OfflineQueue] Network error flushing entry:`, fetchErr.message);
+      entry.retries = (entry.retries || 0) + 1;
+      // Discard after 10 retries to prevent infinite accumulation
+      if ((entry.retries || 0) < 10) {
+        surviving.push(entry);
+      } else {
+        console.warn(`[OfflineQueue] Discarding entry after 10 retries.`);
+        failed++;
+      }
+    }
+  }
+
+  writeQueue(surviving);
+  return { flushed, failed, remaining: surviving.length };
+}
+
 let mainWindow;
 
 function getPortalUrl() {
@@ -491,3 +583,46 @@ ipcMain.handle('clear-credentials', async (event) => {
   }
 });
 
+// ── Offline Print Queue IPC Handlers ─────────────────────────────────────
+
+// Queue a print log entry for later sync when offline
+ipcMain.handle('queue-print-log', async (event, { payload }) => {
+  try {
+    const queueLength = enqueuePrintLog({ payload });
+    return { success: true, queueLength };
+  } catch (error) {
+    console.error('queue-print-log error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Attempt to flush the offline queue to the server
+ipcMain.handle('flush-print-queue', async (event, { authToken }) => {
+  try {
+    const portalUrl = getPortalUrl();
+    const result = await flushQueueToServer(portalUrl, authToken);
+    return { success: true, ...result };
+  } catch (error) {
+    console.error('flush-print-queue error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get the current offline queue status
+ipcMain.handle('get-queue-status', async (event) => {
+  try {
+    const queue = readQueue();
+    return {
+      success: true,
+      queueLength: queue.length,
+      entries: queue.map(e => ({
+        jobId: e.payload?.jobId,
+        queuedAt: e.queuedAt,
+        retries: e.retries || 0,
+      })),
+    };
+  } catch (error) {
+    console.error('get-queue-status error:', error);
+    return { success: false, queueLength: 0, entries: [] };
+  }
+});

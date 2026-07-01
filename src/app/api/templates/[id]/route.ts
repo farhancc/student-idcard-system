@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateTemplateSchema } from '@/lib/schemas';
+import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 
 export async function GET(
   request: Request,
@@ -18,10 +19,7 @@ export async function GET(
     const template = await prisma.cardTemplate.findFirst({
       where: {
         id: templateId,
-        OR: [
-          { pressId },
-          { pressId: null }
-        ]
+        OR: [{ pressId }, { pressId: null }],
       },
     });
 
@@ -49,6 +47,7 @@ export async function PUT(
     const pressId = Number(pressIdStr);
     const { id } = await params;
     const templateId = Number(id);
+    const actor = getActorFromRequest(request);
 
     const oldTemplate = await prisma.cardTemplate.findFirst({
       where: { id: templateId, pressId },
@@ -68,13 +67,11 @@ export async function PUT(
 
     // 1. Transaction to handle versioning
     const newTemplate = await prisma.$transaction(async (tx) => {
-      // Mark older version as not latest
       await tx.cardTemplate.update({
         where: { id: templateId },
         data: { isLatest: false },
       });
 
-      // Create new version
       return tx.cardTemplate.create({
         data: {
           pressId,
@@ -95,10 +92,23 @@ export async function PUT(
       });
     });
 
-    // 2. Mark any cached CardAssets as stale because coordinates changed
+    // 2. Mark any cached CardAssets as stale
     await prisma.cardAsset.updateMany({
       where: { templateId: oldTemplate.id },
       data: { isStale: true },
+    });
+
+    // 3. Audit log
+    writeAuditLog({
+      ...actor,
+      action: AuditActions.TEMPLATE_UPDATED,
+      category: 'TEMPLATE',
+      resourceType: 'CardTemplate',
+      resourceId: newTemplate.id,
+      description: `Template "${newTemplate.name}" updated to v${newTemplate.version}`,
+      oldValue: { name: oldTemplate.name, version: oldTemplate.version },
+      newValue: { name: newTemplate.name, version: newTemplate.version, id: newTemplate.id },
+      severity: 'INFO',
     });
 
     return NextResponse.json({
@@ -124,6 +134,7 @@ export async function DELETE(
     const pressId = Number(pressIdStr);
     const { id } = await params;
     const templateId = Number(id);
+    const actor = getActorFromRequest(request);
 
     const template = await prisma.cardTemplate.findFirst({
       where: { id: templateId, pressId },
@@ -133,15 +144,21 @@ export async function DELETE(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    // Delete (historical versions can be deleted or kept. Let's delete this specific latest version)
-    await prisma.cardTemplate.delete({
-      where: { id: templateId },
+    await prisma.cardTemplate.delete({ where: { id: templateId } });
+
+    // Audit log
+    writeAuditLog({
+      ...actor,
+      action: AuditActions.TEMPLATE_DELETED,
+      category: 'TEMPLATE',
+      resourceType: 'CardTemplate',
+      resourceId: templateId,
+      description: `Template "${template.name}" (v${template.version}) deleted`,
+      oldValue: { name: template.name, version: template.version },
+      severity: 'WARN',
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Template deleted successfully',
-    });
+    return NextResponse.json({ success: true, message: 'Template deleted successfully' });
   } catch (error) {
     console.error('Delete template error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

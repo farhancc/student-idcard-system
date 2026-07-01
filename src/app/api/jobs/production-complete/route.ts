@@ -1,5 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { z } from 'zod';
+
+const productionCompleteSchema = z.object({
+  jobId: z.union([z.number(), z.string().transform(Number)]),
+  success: z.boolean(),
+  errorMsg: z.string().optional(),
+  pdfBase64: z.string().optional(),
+});
 
 export async function POST(request: Request) {
   try {
@@ -11,11 +19,20 @@ export async function POST(request: Request) {
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
 
-    const { jobId, success, errorMsg, pdfBase64 } = await request.json();
-
-    if (!jobId) {
-      return NextResponse.json({ error: 'Job ID is required' }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
     }
+
+    const validation = productionCompleteSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json({ error: 'Invalid request parameters', details: validation.error.format() }, { status: 400 });
+    }
+
+    const { jobId, success, errorMsg, pdfBase64 } = validation.data;
+
 
     // Process the entire completion flow inside an interactive transaction to prevent race conditions / double refunds
     const result = await prisma.$transaction(async (tx) => {

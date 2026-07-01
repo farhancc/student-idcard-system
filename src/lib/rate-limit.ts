@@ -1,15 +1,11 @@
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+
 /**
- * Edge-compatible in-memory rate limiter.
+ * Edge-compatible in-memory rate limiter / Upstash distributed rate limiter fallback.
  *
- * Uses a sliding window strategy stored in a module-level Map.
- * Works correctly on single-instance deployments (local dev, single Vercel region).
- *
- * ⚠ For multi-instance production (Vercel Serverless / Edge with multiple cold-start
- *   replicas), upgrade to @upstash/ratelimit + Vercel KV for shared state.
- *
- * Usage:
- *   const result = rateLimit(ip, 5, 60_000); // 5 requests per 60 seconds
- *   if (!result.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+ * Uses Upstash Redis if UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are set.
+ * Otherwise, falls back to sliding window strategy stored in a module-level Map.
  */
 
 interface RateLimitEntry {
@@ -17,8 +13,32 @@ interface RateLimitEntry {
   windowStart: number;
 }
 
-// Stored per-key sliding window data
+// Stored per-key sliding window data for local fallback
 const store = new Map<string, RateLimitEntry>();
+
+// Cache for dynamic Upstash Ratelimit instances
+const ratelimitCache = new Map<string, Ratelimit>();
+
+function getUpstashRatelimit(maxHits: number, windowMs: number): Ratelimit | null {
+  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return null;
+  }
+  const cacheKey = `${maxHits}:${windowMs}`;
+  if (!ratelimitCache.has(cacheKey)) {
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    });
+    const limiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(maxHits, `${windowMs} ms`),
+      analytics: true,
+      prefix: '@upstash/ratelimit/idexo',
+    });
+    ratelimitCache.set(cacheKey, limiter);
+  }
+  return ratelimitCache.get(cacheKey)!;
+}
 
 // Periodic sweep to prevent memory growth — run every 10 minutes
 let lastCleanup = Date.now();
@@ -41,11 +61,34 @@ export interface RateLimitResult {
 }
 
 /**
+ * Perform rate limiting check for a given key.
+ *
  * @param key        Unique identifier (e.g., IP address or `ip:route`)
  * @param maxHits    Maximum number of requests allowed within the window
  * @param windowMs   Window duration in milliseconds
  */
-export function rateLimit(key: string, maxHits: number, windowMs: number): RateLimitResult {
+export async function rateLimit(
+  key: string,
+  maxHits: number,
+  windowMs: number
+): Promise<RateLimitResult> {
+  const upstash = getUpstashRatelimit(maxHits, windowMs);
+  if (upstash) {
+    try {
+      const { success, limit, remaining, reset } = await upstash.limit(key);
+      const now = Date.now();
+      const retryAfterMs = success ? 0 : Math.max(0, reset - now);
+      return {
+        allowed: success,
+        remaining,
+        retryAfterMs,
+      };
+    } catch (err) {
+      console.error('Upstash ratelimit error, falling back to in-memory:', err);
+    }
+  }
+
+  // ── Local Fallback (Map-based sliding window) ──
   maybeSweep(windowMs);
 
   const now = Date.now();

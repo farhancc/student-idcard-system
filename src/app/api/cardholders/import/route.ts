@@ -75,7 +75,9 @@ export async function POST(request: Request) {
           const rowObj: Record<string, any> = {};
           (row.values as any[]).slice(1).forEach((cell, idx) => {
             const key = headers[idx];
-            if (key) rowObj[key] = cell?.text ?? cell ?? '';
+            if (key && key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+              rowObj[key] = cell?.text ?? cell ?? '';
+            }
           });
           rawData.push(rowObj);
         });
@@ -131,7 +133,9 @@ export async function POST(request: Request) {
       const custom: Record<string, any> = {};
       Object.keys(row).forEach(key => {
         if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol) {
-          custom[key] = row[key];
+          if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+            custom[key] = row[key];
+          }
         }
       });
 

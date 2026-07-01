@@ -113,6 +113,12 @@ export default function TemplatesPage() {
   const [frontGuides, setFrontGuides] = useState<{ id: string; type: 'horizontal' | 'vertical'; value: number }[]>([]);
   const [backGuides, setBackGuides] = useState<{ id: string; type: 'horizontal' | 'vertical'; value: number }[]>([]);
   const [activeGuideDrag, setActiveGuideDrag] = useState<{ id: string; side: 'front' | 'back'; type: 'horizontal' | 'vertical'; isNew?: boolean } | null>(null);
+  // Bleed & Safe Area guide overlay
+  const [showBleedGuides, setShowBleedGuides] = useState(false);
+  // CR80 standard at 300 DPI: 3.375" x 2.125" => 1013 x 638 px
+  // Bleed: 1.5mm at 300 DPI = ~18px; Safe area: 3mm = ~35px
+  const BLEED_PX = 18;
+  const SAFE_PX = 35;
 
   // Preview State
   const [previewId, setPreviewId] = useState<number | null>(null);
@@ -289,6 +295,15 @@ export default function TemplatesPage() {
     }
   };
 
+  // ── DPI / Dimension Standards ─────────────────────────────────────────────
+  // CR80 card at 300 DPI:  1013 × 638 px (landscape)
+  // CR80 card at 300 DPI:   638 × 1013 px (portrait)
+  // Minimum acceptable: 150 DPI => 507 × 319 px
+  const CR80_300DPI_W = 1013;
+  const CR80_300DPI_H = 638;
+  const CR80_150DPI_W = 507;
+  const CR80_150DPI_H = 319;
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -302,9 +317,51 @@ export default function TemplatesPage() {
     if (isVector) {
       if (side === 'front') { setCardWidth(1011); setCardHeight(638); }
     } else {
-      const img = new Image();
-      img.onload = () => { if (side === 'front') { setCardWidth(img.width); setCardHeight(img.height); } };
-      img.src = URL.createObjectURL(file);
+      // DPI / Resolution validation for raster images
+      await new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const w = img.width;
+          const h = img.height;
+          const isLandscape = w >= h;
+          const minW = isLandscape ? CR80_150DPI_W : CR80_150DPI_H;
+          const minH = isLandscape ? CR80_150DPI_H : CR80_150DPI_W;
+          const idealW = isLandscape ? CR80_300DPI_W : CR80_300DPI_H;
+          const idealH = isLandscape ? CR80_300DPI_H : CR80_300DPI_W;
+
+          if (w < minW || h < minH) {
+            // Hard block — below 150 DPI
+            toast(
+              `⛔ Image is too low-resolution (${w}×${h}px). ` +
+              `Minimum for acceptable print quality is ${minW}×${minH}px (150 DPI). ` +
+              `For sharp prints, use ${idealW}×${idealH}px (300 DPI).`,
+              'error'
+            );
+            e.target.value = '';
+            resolve();
+            return;
+          }
+
+          if (w < idealW || h < idealH) {
+            // Soft warning — below 300 DPI but usable
+            toast(
+              `⚠️ Low resolution detected (${w}×${h}px). ` +
+              `Prints may appear soft. For crisp ID cards, use ${idealW}×${idealH}px (300 DPI).`,
+              'warning'
+            );
+          } else {
+            toast(`✅ Image resolution OK (${w}×${h}px — meets 300 DPI standard).`, 'success');
+          }
+
+          if (side === 'front') { setCardWidth(w); setCardHeight(h); }
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = URL.createObjectURL(file);
+      });
+
+      // Exit early if file was cleared (failed DPI check)
+      if (!e.target.files?.[0]) return;
     }
 
     if (side === 'front') setUploadingFront(true);
@@ -2013,6 +2070,30 @@ export default function TemplatesPage() {
                     <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '6px' }}>
                       💡 Drag from rulers to place custom guides.
                     </span>
+
+                    {/* Bleed & Safe Area Guide Toggle */}
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      cursor: 'pointer', 
+                      background: showBleedGuides ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: showBleedGuides ? '1px solid rgba(239,68,68,0.7)' : '1px solid var(--glass-border)',
+                      transition: 'all 0.2s',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }} title="Show bleed (red) and safe area (yellow) guides for professional print. Keep critical content inside the yellow line.">
+                      <input 
+                        type="checkbox" 
+                        checked={showBleedGuides} 
+                        onChange={e => setShowBleedGuides(e.target.checked)} 
+                        style={{ cursor: 'pointer', margin: 0 }}
+                      />
+                      <span>🖨 Bleed Guides</span>
+                    </label>
                     {/* Test Data Toggle */}
                     <label style={{ 
                       display: 'flex', 
@@ -2194,6 +2275,48 @@ export default function TemplatesPage() {
                                         />
                                       );
                                     })}
+                                  </svg>
+                                );
+                              })()}
+
+                              {/* Bleed & Safe Area Overlay */}
+                              {showBleedGuides && (() => {
+                                const bleedPx = BLEED_PX * scale;
+                                const safePx = SAFE_PX * scale;
+                                return (
+                                  <svg
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      pointerEvents: 'none',
+                                      zIndex: 155,
+                                      overflow: 'visible',
+                                    }}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    {/* Bleed border — outermost red dashed line */}
+                                    <rect
+                                      x={bleedPx} y={bleedPx}
+                                      width={editorWidth - bleedPx * 2} height={editorHeight - bleedPx * 2}
+                                      fill="none"
+                                      stroke="rgba(239,68,68,0.85)"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="6,3"
+                                    />
+                                    {/* Safe area border — inner yellow dashed line */}
+                                    <rect
+                                      x={safePx} y={safePx}
+                                      width={editorWidth - safePx * 2} height={editorHeight - safePx * 2}
+                                      fill="none"
+                                      stroke="rgba(234,179,8,0.85)"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="6,3"
+                                    />
+                                    {/* Labels */}
+                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed (1.5mm)</text>
+                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area (3mm)</text>
                                   </svg>
                                 );
                               })()}
@@ -2490,6 +2613,45 @@ export default function TemplatesPage() {
                                         />
                                       );
                                     })}
+                                  </svg>
+                                );
+                              })()}
+
+                              {/* Bleed & Safe Area Overlay — Back Side */}
+                              {showBleedGuides && (() => {
+                                const bleedPx = BLEED_PX * scale;
+                                const safePx = SAFE_PX * scale;
+                                return (
+                                  <svg
+                                    style={{
+                                      position: 'absolute',
+                                      inset: 0,
+                                      width: '100%',
+                                      height: '100%',
+                                      pointerEvents: 'none',
+                                      zIndex: 155,
+                                      overflow: 'visible',
+                                    }}
+                                    xmlns="http://www.w3.org/2000/svg"
+                                  >
+                                    <rect
+                                      x={bleedPx} y={bleedPx}
+                                      width={editorWidth - bleedPx * 2} height={editorHeight - bleedPx * 2}
+                                      fill="none"
+                                      stroke="rgba(239,68,68,0.85)"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="6,3"
+                                    />
+                                    <rect
+                                      x={safePx} y={safePx}
+                                      width={editorWidth - safePx * 2} height={editorHeight - safePx * 2}
+                                      fill="none"
+                                      stroke="rgba(234,179,8,0.85)"
+                                      strokeWidth="1.5"
+                                      strokeDasharray="6,3"
+                                    />
+                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed (1.5mm)</text>
+                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area (3mm)</text>
                                   </svg>
                                 );
                               })()}

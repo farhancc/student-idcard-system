@@ -6,7 +6,7 @@ import {
   Building2, Users, FolderKanban, ShieldCheck, 
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
   DollarSign, TrendingUp, BarChart3, Search, Plus,
-  Eye, X, CreditCard, FileText
+  Eye, X, CreditCard, FileText, Type
 } from 'lucide-react';
 
 interface PressClient {
@@ -52,7 +52,16 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates'>('presses');
+  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts'>('presses');
+  
+  // Fonts State
+  const [globalFonts, setGlobalFonts] = useState<any[]>([]);
+  const [fontsLoading, setFontsLoading] = useState(false);
+  const [fontModalOpen, setFontModalOpen] = useState(false);
+  const [fontFile, setFontFile] = useState<File | null>(null);
+  const [fontName, setFontName] = useState('');
+  const [fontLanguage, setFontLanguage] = useState('en');
+  const [fontSubmitting, setFontSubmitting] = useState(false);
   
   // Analytics State
   const [analytics, setAnalytics] = useState<any[]>([]);
@@ -194,11 +203,28 @@ export default function SuperAdminDashboard() {
     fetchPresses();
   }, []);
 
+  const fetchGlobalFonts = async () => {
+    setFontsLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/superadmin/fonts');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch global fonts');
+      setGlobalFonts(data.fonts || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load global fonts.');
+    } finally {
+      setFontsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
     } else if (activeTab === 'templates') {
       fetchGlobalTemplates();
+    } else if (activeTab === 'fonts') {
+      fetchGlobalFonts();
     }
   }, [activeTab]);
 
@@ -464,6 +490,58 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const handleSaveFont = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!fontFile && !fontName) {
+      setError('Font file and name are required');
+      return;
+    }
+    setFontSubmitting(true);
+    try {
+      const formData = new FormData();
+      if (fontFile) formData.append('file', fontFile);
+      formData.append('name', fontName);
+      formData.append('language', fontLanguage);
+
+      const res = await fetch('/api/superadmin/fonts', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save font');
+
+      setFontModalOpen(false);
+      setFontFile(null);
+      setFontName('');
+      setFontLanguage('en');
+      fetchGlobalFonts();
+    } catch (err: any) {
+      setError(err.message || 'Failed to save font.');
+    } finally {
+      setFontSubmitting(false);
+    }
+  };
+
+  const handleDeleteFont = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this global font? This action cannot be undone.')) return;
+    
+    setError('');
+    try {
+      const res = await fetch(`/api/superadmin/fonts/${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete font');
+
+      fetchGlobalFonts();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete font.');
+    }
+  };
+
   const handleEditTemplateClick = (tmpl: any) => {
     setSelectedTemplate(tmpl);
     setTmplName(tmpl.name);
@@ -552,9 +630,29 @@ export default function SuperAdminDashboard() {
               Add Starter Template
             </button>
           )}
+          {activeTab === 'fonts' && (
+            <button 
+              className="btn btn-primary" 
+              onClick={() => {
+                setFontFile(null);
+                setFontName('');
+                setFontLanguage('en');
+                setFontModalOpen(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Plus size={16} />
+              Add Global Font
+            </button>
+          )}
           <button 
             className="btn btn-secondary" 
-            onClick={activeTab === 'presses' ? fetchPresses : activeTab === 'analytics' ? fetchAnalytics : fetchGlobalTemplates}
+            onClick={
+              activeTab === 'presses' ? fetchPresses : 
+              activeTab === 'analytics' ? fetchAnalytics : 
+              activeTab === 'templates' ? fetchGlobalTemplates : 
+              fetchGlobalFonts
+            }
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             <RefreshCw size={16} />
@@ -651,6 +749,27 @@ export default function SuperAdminDashboard() {
           }}
         >
           <FileText size={16} /> Starter Templates ({globalTemplates.length})
+        </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('fonts')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'fonts' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'fonts' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'fonts' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Type size={16} /> Global Fonts ({globalFonts.length})
         </button>
       </div>
 
@@ -1011,7 +1130,7 @@ export default function SuperAdminDashboard() {
             )}
           </div>
         </>
-      ) : (
+      ) : activeTab === 'templates' ? (
         <>
           {/* Starter Templates Grid */}
           {templatesLoading ? (
@@ -1028,34 +1147,26 @@ export default function SuperAdminDashboard() {
               {globalTemplates.map((tmpl) => (
                 <div key={tmpl.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '16px', border: '1px solid var(--glass-border)' }}>
                   {/* Preview Image */}
-                  <div style={{
-                    width: '100%',
-                    paddingTop: '63%',
-                    backgroundImage: `url(${tmpl.frontImageUrl})`,
-                    backgroundSize: 'contain',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
-                    backgroundColor: 'rgba(0,0,0,0.3)',
-                    borderRadius: '8px',
-                    marginBottom: '12px',
-                    position: 'relative'
-                  }}>
-                    {tmpl.backImageUrl && (
-                      <span className="badge badge-primary" style={{ position: 'absolute', bottom: '8px', right: '8px', fontSize: '0.75rem' }}>
-                        Dual-Sided
-                      </span>
+                  <div style={{ position: 'relative', width: '100%', paddingBottom: '63%', background: 'rgba(3,4,7,0.4)', borderRadius: '8px', overflow: 'hidden', marginBottom: '16px', border: '1px solid var(--glass-border)' }}>
+                    {tmpl.frontImageUrl ? (
+                      <img 
+                        src={tmpl.frontImageUrl} 
+                        alt={tmpl.name} 
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                        No Front Preview
+                      </div>
                     )}
-                    <span className="badge badge-secondary" style={{ position: 'absolute', top: '8px', left: '8px', fontSize: '0.75rem' }}>
-                      v{tmpl.version}
-                    </span>
                   </div>
 
-                  <h4 style={{ fontWeight: '600', fontSize: '1rem', color: '#ffffff', marginBottom: '4px' }}>{tmpl.name}</h4>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '12px' }}>
-                    Size: {tmpl.cardWidth}x{tmpl.cardHeight}px ({Math.round(tmpl.cardWidth * 0.264583)}x{Math.round(tmpl.cardHeight * 0.264583)}mm)
+                  <h4 style={{ margin: '0 0 4px 0', color: '#ffffff', fontSize: '1rem', fontWeight: '600' }}>{tmpl.name}</h4>
+                  <p style={{ margin: '0 0 16px 0', color: 'var(--muted)', fontSize: '0.8rem' }}>
+                    {tmpl.cardWidth}x{tmpl.cardHeight} px | {tmpl.backImageUrl ? 'Double-sided' : 'Single-sided'}
                   </p>
 
-                  <div style={{ marginTop: 'auto', display: 'flex', gap: '10px' }}>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: 'auto' }}>
                     <button
                       className="btn btn-secondary"
                       style={{ flex: 1, padding: '6px 12px', fontSize: '0.8rem', background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', borderColor: 'rgba(99,102,241,0.3)' }}
@@ -1073,6 +1184,72 @@ export default function SuperAdminDashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Global Fonts Tab Content */}
+          {fontsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', flexDirection: 'column', gap: '12px' }}>
+              <Loader2 size={36} className="spinner" />
+              <p>Loading global fonts...</p>
+            </div>
+          ) : globalFonts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: 'var(--muted)', border: '1px dashed var(--glass-border)', borderRadius: '12px' }}>
+              No global fonts uploaded yet. Click "Add Global Font" to upload one.
+            </div>
+          ) : (
+            <div className="glass-panel">
+              <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Type size={18} color="var(--primary)" />
+                Global Platform Fonts
+              </h3>
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>Font Name</th>
+                      <th>Language Support</th>
+                      <th>URL / Preview</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {globalFonts.map((font) => (
+                      <tr key={font.id}>
+                        <td style={{ fontWeight: '600', color: '#ffffff' }}>
+                          <span>{font.name}</span>
+                        </td>
+                        <td>
+                          <span className="badge badge-secondary" style={{ textTransform: 'uppercase' }}>
+                            {font.language}
+                          </span>
+                        </td>
+                        <td>
+                          <a 
+                            href={font.fileUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style={{ color: 'var(--primary)', textDecoration: 'underline', fontSize: '0.85rem', wordBreak: 'break-all' }}
+                          >
+                            {font.fileUrl.startsWith('data:') ? 'Base64 Encoded Font Data' : font.fileUrl}
+                          </a>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-danger"
+                            style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                            onClick={() => handleDeleteFont(font.id)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>
@@ -1726,6 +1903,115 @@ export default function SuperAdminDashboard() {
                   disabled={templateSubmitting || uploadingFront || uploadingBack}
                 >
                   {templateSubmitting ? 'Saving...' : selectedTemplate ? 'Save Changes' : 'Create Template'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Global Font Modal ─────────────────────────────────── */}
+      {fontModalOpen && (
+        <div
+          onClick={() => setFontModalOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(3,4,7,0.82)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '3px solid var(--primary)', borderRadius: '16px', padding: '32px', width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: '700', color: '#ffffff', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Type size={20} color="var(--primary)" />
+                Upload Global Font
+              </h2>
+              <button
+                type="button"
+                onClick={() => setFontModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 4 }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFont} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="fontName">Font Family Name</label>
+                <input
+                  type="text"
+                  id="fontName"
+                  className="form-input"
+                  value={fontName}
+                  onChange={(e) => setFontName(e.target.value)}
+                  placeholder="e.g. My Custom Font"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="fontLanguage">Language Support</label>
+                <select
+                  id="fontLanguage"
+                  className="form-input"
+                  value={fontLanguage}
+                  onChange={(e) => setFontLanguage(e.target.value)}
+                  required
+                >
+                  <option value="en">English (Latin)</option>
+                  <option value="ur">Urdu (Arabic)</option>
+                  <option value="hi">Hindi (Devanagari)</option>
+                  <option value="bn">Bengali</option>
+                  <option value="ar">Arabic</option>
+                  <option value="zh">Chinese</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="fontFile">Font File (.ttf, .otf, .woff, .woff2)</label>
+                <input
+                  type="file"
+                  id="fontFile"
+                  className="form-input"
+                  accept=".ttf,.otf,.woff,.woff2"
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                      setFontFile(files[0]);
+                      // Automatically set name if empty
+                      if (!fontName) {
+                        const nameWithoutExt = files[0].name.substring(0, files[0].name.lastIndexOf('.')) || files[0].name;
+                        // Replace hyphens/underscores with space and titlecase
+                        const cleanName = nameWithoutExt
+                          .replace(/[-_]/g, ' ')
+                          .replace(/\b\w/g, c => c.toUpperCase());
+                        setFontName(cleanName);
+                      }
+                    }
+                  }}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setFontModalOpen(false);
+                    setFontFile(null);
+                    setFontName('');
+                    setFontLanguage('en');
+                  }}
+                  disabled={fontSubmitting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={fontSubmitting}
+                >
+                  {fontSubmitting ? 'Uploading...' : 'Upload Font'}
                 </button>
               </div>
             </form>

@@ -64,6 +64,13 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid or expired portal link' }, { status: 404 });
     }
 
+    // 5. Enforce 30-day expiration policy for security
+    const expirationPeriod = 30 * 24 * 60 * 60 * 1000; // 30 days
+    const isExpired = Date.now() - new Date(share.createdAt).getTime() > expirationPeriod;
+    if (isExpired) {
+      return NextResponse.json({ error: 'This portal link has expired (expired after 30 days)' }, { status: 410 });
+    }
+
     // Fetch Client and Template details
     const client = await prisma.client.findUnique({
       where: { id: share.clientId },
@@ -89,7 +96,12 @@ export async function GET(
     });
 
     const pressFonts = await prisma.pressFont.findMany({
-      where: { pressId: client.pressId },
+      where: {
+        OR: [
+          { pressId: client.pressId },
+          { pressId: null }
+        ]
+      },
       select: { name: true, fileUrl: true },
     });
 

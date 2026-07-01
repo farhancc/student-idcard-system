@@ -47,7 +47,12 @@ export async function GET(request: Request) {
     });
 
     const pressFonts = await prisma.pressFont.findMany({
-      where: { pressId },
+      where: {
+        OR: [
+          { pressId },
+          { pressId: null }
+        ]
+      },
     });
 
     const cardholders = order.cardholders.map(oc => oc.cardholder);

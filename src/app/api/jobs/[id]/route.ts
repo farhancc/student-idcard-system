@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { generateSignedUrl } from '@/lib/signed-url';
 
 export async function GET(
   request: Request,
@@ -22,11 +23,17 @@ export async function GET(
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });
     }
 
-    // Check if the link has expired (R5)
+    // Check if the link has expired
     let isExpired = false;
     if (job.expiresAt && new Date() > job.expiresAt) {
       isExpired = true;
     }
+
+    // Generate a signed download URL (2-hour HMAC token)
+    const rawDownloadPath = isExpired ? null : `/api/jobs/${jobId}/download`;
+    const signedDownloadUrl = rawDownloadPath
+      ? generateSignedUrl(rawDownloadPath, 60 * 60 * 2)
+      : null;
 
     return NextResponse.json({
       success: true,
@@ -37,7 +44,7 @@ export async function GET(
         progress: job.progress,
         fileName: job.fileName,
         errorMsg: job.errorMsg,
-        downloadUrl: isExpired ? null : `/api/jobs/${jobId}/download`, // Point to secure logged download route
+        downloadUrl: signedDownloadUrl,
         isExpired,
         expiresAt: job.expiresAt,
         completedAt: job.completedAt,

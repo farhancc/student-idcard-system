@@ -116,10 +116,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
+    // Limit file size to 10MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
+    }
+
+    // Whitelist file extensions and MIME types
+    const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.pdf'];
+    const ALLOWED_MIME_TYPES = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/svg+xml',
+      'application/pdf',
+    ];
+
+    const fileExtension = path.extname(file.name).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(fileExtension) || !ALLOWED_MIME_TYPES.includes(file.type)) {
+      return NextResponse.json({ error: 'Invalid file type. Only standard images, SVGs, and PDFs are allowed.' }, { status: 400 });
+    }
+
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    const fileExtension = path.extname(file.name).toLowerCase();
     const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
+
 
     if (isCloudinaryConfigured) {
       const folder = `press_${pressId}/${type}s`;

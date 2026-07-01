@@ -7,7 +7,7 @@ import { loginSchema } from '@/lib/schemas';
 export async function POST(request: Request) {
   // ── Rate limiting: 10 attempts per 15 minutes per IP ─────────────────────
   const ip = getClientIp(request);
-  const rl = rateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
+  const rl = await rateLimit(`login:${ip}`, 10, 15 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many login attempts. Please wait before trying again.' },
