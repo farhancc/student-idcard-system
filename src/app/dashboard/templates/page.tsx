@@ -1329,7 +1329,7 @@ export default function TemplatesPage() {
                       <option 
                         key={pf.id} 
                         style={{ background: '#1e293b', color: '#ffffff' }} 
-                        value={pf.fontFamily}
+                        value={pf.name}
                       >
                         {pf.name}
                       </option>
