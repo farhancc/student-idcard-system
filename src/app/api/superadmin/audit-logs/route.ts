@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET /api/audit-logs?page=1&limit=50&category=SECURITY&action=&search=
+// GET /api/superadmin/audit-logs?page=1&limit=50&category=SECURITY&severity=&search=
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const isSuperAdmin = request.headers.get('x-super-admin') === 'true';
-
-    if (!pressIdStr && !isSuperAdmin) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get('page') || 1));
     const limit = Math.min(100, Number(searchParams.get('limit') || 50));
@@ -20,11 +13,6 @@ export async function GET(request: Request) {
     const search = searchParams.get('search') || '';
 
     const where: any = {};
-
-    // Non-super-admins can only see their own press's logs
-    if (!isSuperAdmin && pressIdStr) {
-      where.pressId = Number(pressIdStr);
-    }
 
     if (category) where.category = category;
     if (severity) where.severity = severity;
@@ -55,7 +43,7 @@ export async function GET(request: Request) {
       totalPages: Math.ceil(total / limit),
     });
   } catch (error: any) {
-    console.error('Audit log fetch error:', error);
+    console.error('Superadmin audit log fetch error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

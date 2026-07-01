@@ -6,7 +6,8 @@ import {
   Building2, Users, FolderKanban, ShieldCheck, 
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
   DollarSign, TrendingUp, BarChart3, Search, Plus,
-  Eye, X, CreditCard, FileText, Type
+  Eye, X, CreditCard, FileText, Type,
+  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield
 } from 'lucide-react';
 
 interface PressClient {
@@ -44,6 +45,22 @@ interface Press {
   };
 }
 
+const severityStyles: Record<string, { bg: string; color: string; label: string; icon: React.ReactNode }> = {
+  INFO:     { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa', label: 'Info',     icon: <Info size={12} /> },
+  WARN:     { bg: 'rgba(234,179,8,0.15)',  color: '#fbbf24', label: 'Warning',  icon: <AlertTriangle size={12} /> },
+  CRITICAL: { bg: 'rgba(239,68,68,0.18)', color: '#f87171', label: 'Critical', icon: <Zap size={12} /> },
+};
+
+const categoryColor: Record<string, string> = {
+  TEMPLATE: '#818cf8',
+  SECURITY: '#f87171',
+  BILLING:  '#34d399',
+  USER:     '#60a5fa',
+  PORTAL:   '#a78bfa',
+  ORDER:    '#fbbf24',
+  SYSTEM:   '#94a3b8',
+};
+
 export default function SuperAdminDashboard() {
   const router = useRouter();
   const [presses, setPresses] = useState<Press[]>([]);
@@ -52,7 +69,18 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts'>('presses');
+  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs'>('presses');
+
+  // Audit Logs State
+  const [logs, setLogs] = useState<any[]>([]);
+  const [totalLogs, setTotalLogs] = useState(0);
+  const [totalPagesLogs, setTotalPagesLogs] = useState(1);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logPage, setLogPage] = useState(1);
+  const [logSearch, setLogSearch] = useState('');
+  const [logCategory, setLogCategory] = useState('');
+  const [logSeverity, setLogSeverity] = useState('');
+  const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
   
   // Fonts State
   const [globalFonts, setGlobalFonts] = useState<any[]>([]);
@@ -218,6 +246,30 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const fetchAuditLogs = async () => {
+    setLogsLoading(true);
+    setError('');
+    try {
+      const params = new URLSearchParams({
+        page: String(logPage),
+        limit: '50',
+        ...(logSearch && { search: logSearch }),
+        ...(logCategory && { category: logCategory }),
+        ...(logSeverity && { severity: logSeverity }),
+      });
+      const res = await fetch(`/api/superadmin/audit-logs?${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch audit logs');
+      setLogs(data.logs || []);
+      setTotalLogs(data.total || 0);
+      setTotalPagesLogs(data.totalPages || 1);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load audit logs.');
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
@@ -225,8 +277,10 @@ export default function SuperAdminDashboard() {
       fetchGlobalTemplates();
     } else if (activeTab === 'fonts') {
       fetchGlobalFonts();
+    } else if (activeTab === 'auditLogs') {
+      fetchAuditLogs();
     }
-  }, [activeTab]);
+  }, [activeTab, logPage, logCategory, logSeverity]);
 
   const handleToggleStatus = async (pressId: number, currentStatus: boolean) => {
     setActionLoading(pressId);
@@ -651,7 +705,8 @@ export default function SuperAdminDashboard() {
               activeTab === 'presses' ? fetchPresses : 
               activeTab === 'analytics' ? fetchAnalytics : 
               activeTab === 'templates' ? fetchGlobalTemplates : 
-              fetchGlobalFonts
+              activeTab === 'fonts' ? fetchGlobalFonts :
+              fetchAuditLogs
             }
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
@@ -770,6 +825,27 @@ export default function SuperAdminDashboard() {
           }}
         >
           <Type size={16} /> Global Fonts ({globalFonts.length})
+        </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('auditLogs')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'auditLogs' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'auditLogs' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'auditLogs' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Shield size={16} /> System Audit Logs
         </button>
       </div>
 
@@ -1187,7 +1263,7 @@ export default function SuperAdminDashboard() {
             </div>
           )}
         </>
-      ) : (
+      ) : activeTab === 'fonts' ? (
         <>
           {/* Global Fonts Tab Content */}
           {fontsLoading ? (
@@ -1253,7 +1329,337 @@ export default function SuperAdminDashboard() {
             </div>
           )}
         </>
-      )}
+      ) : activeTab === 'auditLogs' ? (
+        <>
+          {/* System Audit Logs Content */}
+          <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px' }}>
+            <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={18} color="var(--primary)" />
+              System Audit Logs
+            </h3>
+
+            {/* Filter controls */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+              {/* Search input */}
+              <div style={{ flex: '1 1 300px', position: 'relative' }}>
+                <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', display: 'flex', alignItems: 'center' }}>
+                  <Search size={16} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search logs by action, description, or actor..."
+                  value={logSearch}
+                  onChange={(e) => setLogSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      setLogPage(1);
+                      fetchAuditLogs();
+                    }
+                  }}
+                  className="form-input"
+                  style={{ paddingLeft: '38px', width: '100%', height: '42px' }}
+                />
+              </div>
+
+              {/* Category selector */}
+              <div style={{ width: '180px' }}>
+                <select
+                  value={logCategory}
+                  onChange={(e) => {
+                    setLogCategory(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="form-input"
+                  style={{ width: '100%', height: '42px' }}
+                >
+                  <option value="">All Categories</option>
+                  <option value="TEMPLATE">Template</option>
+                  <option value="SECURITY">Security</option>
+                  <option value="BILLING">Billing</option>
+                  <option value="USER">User</option>
+                  <option value="PORTAL">Portal</option>
+                  <option value="ORDER">Order</option>
+                  <option value="SYSTEM">System</option>
+                </select>
+              </div>
+
+              {/* Severity selector */}
+              <div style={{ width: '180px' }}>
+                <select
+                  value={logSeverity}
+                  onChange={(e) => {
+                    setLogSeverity(e.target.value);
+                    setLogPage(1);
+                  }}
+                  className="form-input"
+                  style={{ width: '100%', height: '42px' }}
+                >
+                  <option value="">All Severities</option>
+                  <option value="INFO">Info</option>
+                  <option value="WARN">Warning</option>
+                  <option value="CRITICAL">Critical</option>
+                </select>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => {
+                    setLogPage(1);
+                    fetchAuditLogs();
+                  }}
+                  className="btn btn-primary"
+                  style={{ height: '42px', padding: '0 20px' }}
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => {
+                    setLogSearch('');
+                    setLogCategory('');
+                    setLogSeverity('');
+                    setLogPage(1);
+                    // Fetch with cleared values
+                    setTimeout(() => {
+                      fetchAuditLogs();
+                    }, 0);
+                  }}
+                  className="btn btn-secondary"
+                  style={{ height: '42px', padding: '0 16px' }}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+
+            {/* Audit Logs Table */}
+            {logsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', flexDirection: 'column', gap: '12px' }}>
+                <Loader2 size={36} className="spinner" />
+                <p style={{ color: 'var(--muted)' }}>Loading audit logs...</p>
+              </div>
+            ) : logs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--muted)', border: '1px dashed var(--glass-border)', borderRadius: '12px' }}>
+                <Shield size={36} style={{ marginBottom: '12px', opacity: 0.5 }} />
+                <p>No system audit logs found matching the filter criteria.</p>
+              </div>
+            ) : (
+              <>
+                <div className="table-container">
+                  <table className="custom-table" style={{ tableLayout: 'fixed', width: '100%' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '160px' }}>Timestamp</th>
+                        <th style={{ width: '110px' }}>Severity</th>
+                        <th style={{ width: '110px' }}>Category</th>
+                        <th style={{ width: '160px' }}>Action</th>
+                        <th style={{ width: '180px' }}>Actor</th>
+                        <th>Description</th>
+                        <th style={{ width: '80px', textAlign: 'center' }}>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logs.map((log) => {
+                        const style = severityStyles[log.severity] || { bg: 'rgba(255,255,255,0.05)', color: 'var(--muted)', label: log.severity, icon: null };
+                        const catColor = categoryColor[log.category] || 'var(--muted)';
+                        const isExpanded = expandedLogId === log.id;
+
+                        return (
+                          <React.Fragment key={log.id}>
+                            <tr style={{ borderBottom: isExpanded ? 'none' : '1px solid var(--glass-border)' }}>
+                              <td style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                                {new Date(log.createdAt).toLocaleString()}
+                              </td>
+                              <td>
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '600',
+                                    background: style.bg,
+                                    color: style.color,
+                                    border: `1px solid ${style.color}20`
+                                  }}
+                                >
+                                  {style.icon}
+                                  {style.label}
+                                </span>
+                              </td>
+                              <td>
+                                <span
+                                  style={{
+                                    display: 'inline-block',
+                                    padding: '2px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: '600',
+                                    background: `${catColor}12`,
+                                    color: catColor,
+                                    border: `1px solid ${catColor}20`
+                                  }}
+                                >
+                                  {log.category}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: '500', fontSize: '0.85rem', color: '#ffffff', wordBreak: 'break-all' }}>
+                                {log.action}
+                              </td>
+                              <td>
+                                <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#ffffff' }}>
+                                  {log.actorName}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                                  {log.actorType.replace('_', ' ')}
+                                </div>
+                              </td>
+                              <td style={{ fontSize: '0.85rem', color: '#e2e8f0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {log.description}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                                  className="btn btn-secondary"
+                                  style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto' }}
+                                >
+                                  {isExpanded ? 'Hide' : 'Show'}
+                                </button>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                                <td colSpan={7} style={{ padding: '16px 24px', borderBottom: '1px solid var(--glass-border)' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '16px' }}>
+                                    <div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Actor ID</div>
+                                      <div style={{ fontSize: '0.85rem', color: '#ffffff' }}>{log.actorId || 'N/A'}</div>
+                                    </div>
+                                    {log.pressId && (
+                                      <div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Press ID</div>
+                                        <div style={{ fontSize: '0.85rem', color: '#ffffff' }}>{log.pressId}</div>
+                                      </div>
+                                    )}
+                                    {log.resourceType && (
+                                      <div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Resource</div>
+                                        <div style={{ fontSize: '0.85rem', color: '#ffffff' }}>{log.resourceType} ({log.resourceId || 'N/A'})</div>
+                                      </div>
+                                    )}
+                                    <div>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>IP Address</div>
+                                      <div style={{ fontSize: '0.85rem', color: '#ffffff' }}>{log.ipAddress}</div>
+                                    </div>
+                                  </div>
+
+                                  {log.userAgent && (
+                                    <div style={{ marginBottom: '16px' }}>
+                                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>User Agent</div>
+                                      <div style={{ fontSize: '0.85rem', color: '#e2e8f0', wordBreak: 'break-all', fontFamily: 'monospace' }}>{log.userAgent}</div>
+                                    </div>
+                                  )}
+
+                                  {(log.oldValue || log.newValue) && (
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                      <div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>Before Change</div>
+                                        <pre style={{
+                                          margin: 0,
+                                          padding: '12px',
+                                          background: 'rgba(3,4,7,0.4)',
+                                          border: '1px solid var(--glass-border)',
+                                          borderRadius: '8px',
+                                          fontSize: '0.75rem',
+                                          color: '#f87171',
+                                          maxHeight: '200px',
+                                          overflowY: 'auto',
+                                          fontFamily: 'monospace',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-all'
+                                        }}>
+                                          {log.oldValue ? (() => {
+                                            try {
+                                              return JSON.stringify(JSON.parse(log.oldValue), null, 2);
+                                            } catch {
+                                              return log.oldValue;
+                                            }
+                                          })() : 'No values'}
+                                        </pre>
+                                      </div>
+                                      <div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '4px' }}>After Change</div>
+                                        <pre style={{
+                                          margin: 0,
+                                          padding: '12px',
+                                          background: 'rgba(3,4,7,0.4)',
+                                          border: '1px solid var(--glass-border)',
+                                          borderRadius: '8px',
+                                          fontSize: '0.75rem',
+                                          color: '#34d399',
+                                          maxHeight: '200px',
+                                          overflowY: 'auto',
+                                          fontFamily: 'monospace',
+                                          whiteSpace: 'pre-wrap',
+                                          wordBreak: 'break-all'
+                                        }}>
+                                          {log.newValue ? (() => {
+                                            try {
+                                              return JSON.stringify(JSON.parse(log.newValue), null, 2);
+                                            } catch {
+                                              return log.newValue;
+                                            }
+                                          })() : 'No values'}
+                                        </pre>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Pagination */}
+                {totalPagesLogs > 1 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', paddingTop: '16px', borderTop: '1px solid var(--glass-border)' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                      Showing {logs.length} of {totalLogs} log entries
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <button
+                        onClick={() => setLogPage(p => Math.max(1, p - 1))}
+                        disabled={logPage === 1}
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        <ChevronLeft size={16} /> Previous
+                      </button>
+                      <span style={{ fontSize: '0.9rem', color: '#ffffff', padding: '0 8px' }}>
+                        Page {logPage} of {totalPagesLogs}
+                      </span>
+                      <button
+                        onClick={() => setLogPage(p => Math.min(totalPagesLogs, p + 1))}
+                        disabled={logPage === totalPagesLogs}
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                      >
+                        Next <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      ) : null}
 
       {/* ── Press Detail Modal ─────────────────────────────────────── */}
       {detailPress && (

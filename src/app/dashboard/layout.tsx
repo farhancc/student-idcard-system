@@ -89,7 +89,6 @@ export default function DashboardLayout({
     { label: 'Templates', path: '/dashboard/templates', icon: <Layers size={18} /> },
     { label: 'PDF Jobs', path: '/dashboard/pdf-jobs', icon: <Clock size={18} /> },
     { label: 'Settings', path: '/dashboard/settings', icon: <Settings size={18} /> },
-    { label: 'Audit Log', path: '/dashboard/audit-logs', icon: <Shield size={18} /> },
   ];
 
   return (
