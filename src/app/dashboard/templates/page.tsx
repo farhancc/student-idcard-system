@@ -88,8 +88,8 @@ export default function TemplatesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [name, setName] = useState('');
-  const [cardWidth, setCardWidth] = useState(1011);
-  const [cardHeight, setCardHeight] = useState(638);
+  const [cardWidth, setCardWidth] = useState(673);
+  const [cardHeight, setCardHeight] = useState(1039);
   const [frontImageUrl, setFrontImageUrl] = useState('');
   const [backImageUrl, setBackImageUrl] = useState('');
   const [frontOriginalUrl, setFrontOriginalUrl] = useState('');
@@ -315,7 +315,7 @@ export default function TemplatesPage() {
                      file.name.toLowerCase().endsWith('.svg');
 
     if (isVector) {
-      if (side === 'front') { setCardWidth(1011); setCardHeight(638); }
+      if (side === 'front') { setCardWidth(673); setCardHeight(1039); }
     } else {
       // DPI / Resolution validation for raster images
       await new Promise<void>((resolve) => {
@@ -1751,8 +1751,8 @@ export default function TemplatesPage() {
 
       // Reset
       setName('');
-      setCardWidth(1011);
-      setCardHeight(638);
+      setCardWidth(673);
+      setCardHeight(1039);
       setFrontImageUrl('');
       setBackImageUrl('');
       setFrontOriginalUrl('');
@@ -1823,8 +1823,8 @@ export default function TemplatesPage() {
             if (showForm) {
               setEditingTemplateId(null);
               setName('');
-              setCardWidth(1011);
-              setCardHeight(638);
+              setCardWidth(673);
+              setCardHeight(1039);
               setFrontImageUrl('');
               setBackImageUrl('');
               setFrontFields([]);
@@ -1859,7 +1859,7 @@ export default function TemplatesPage() {
               <div className="form-group">
                 <label className="form-label">Dimensions</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Width (mm)</span>
                       <input 
@@ -1874,6 +1874,30 @@ export default function TemplatesPage() {
                         }} 
                       />
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const temp = cardWidth;
+                        setCardWidth(cardHeight);
+                        setCardHeight(temp);
+                      }}
+                      className="btn btn-secondary"
+                      style={{
+                        padding: '10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '42px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--glass-border)',
+                        background: 'rgba(255,255,255,0.05)',
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                      title="Swap orientation (Landscape / Portrait)"
+                    >
+                      <RefreshCw size={16} />
+                    </button>
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Height (mm)</span>
                       <input 
@@ -3253,8 +3277,8 @@ export default function TemplatesPage() {
                 setShowForm(false);
                 setEditingTemplateId(null);
                 setName('');
-                setCardWidth(1011);
-                setCardHeight(638);
+                setCardWidth(673);
+                setCardHeight(1039);
                 setFrontImageUrl('');
                 setBackImageUrl('');
                 setFrontFields([]);
