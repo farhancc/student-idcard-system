@@ -5,6 +5,11 @@ const { autoUpdater } = require('electron-updater');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 
+// Register local:// protocol scheme as privileged to avoid CORS/Fetch errors
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local', privileges: { secure: true, standard: true, corsEnabled: true, supportFetchAPI: true } }
+]);
+
 // ── Offline Print Queue ────────────────────────────────────────────────────
 // Uses a JSON file as a durable local queue. No native modules required.
 function getQueueFilePath() {
@@ -243,14 +248,32 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-  // Register local:// protocol to serve template images stored on disk
-  protocol.registerFileProtocol('local', (request, callback) => {
+  // Register local:// protocol to serve template images stored on disk with CORS headers
+  protocol.handle('local', async (request) => {
     const url = request.url.replace('local://', '');
     const decodedPath = decodeURIComponent(url);
     try {
-      return callback(decodedPath);
+      const fileBuffer = await fs.promises.readFile(decodedPath);
+      // Determine content type based on extension
+      const ext = path.extname(decodedPath).toLowerCase();
+      let contentType = 'application/octet-stream';
+      if (ext === '.png') contentType = 'image/png';
+      else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
+      else if (ext === '.svg') contentType = 'image/svg+xml';
+      else if (ext === '.webp') contentType = 'image/webp';
+
+      return new Response(fileBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
+          'Access-Control-Allow-Headers': '*'
+        }
+      });
     } catch (err) {
       console.error('local:// protocol error:', err);
+      return new Response('File not found', { status: 404 });
     }
   });
 

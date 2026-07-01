@@ -237,6 +237,7 @@ export default function TemplatesPage() {
       color: '#000000',
       align: 'left',
       prefix: 'Roll No : ',
+      verticalAlign: 'top',
     };
 
     if (side === 'front') {
@@ -441,9 +442,12 @@ export default function TemplatesPage() {
           });
         };
 
+        let localPreviewGenerated = false;
+
         // Trigger base64 preview generation in background
         createCheapCopyBase64(result.url)
           .then(webUrl => {
+            localPreviewGenerated = true;
             if (side === 'front') {
               setFrontWebUrl(webUrl);
             } else {
@@ -469,8 +473,27 @@ export default function TemplatesPage() {
           .then(r => r.json())
           .then(result => {
             if (result.originalUrl) {
-              if (side === 'front') setFrontOriginalUrl(result.originalUrl);
-              else setBackOriginalUrl(result.originalUrl);
+              if (side === 'front') {
+                setFrontOriginalUrl(result.originalUrl);
+                if (!localPreviewGenerated) {
+                  createCheapCopyBase64(result.originalUrl)
+                    .then(webUrl => {
+                      setFrontWebUrl(webUrl);
+                      toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
+                    })
+                    .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                }
+              } else {
+                setBackOriginalUrl(result.originalUrl);
+                if (!localPreviewGenerated) {
+                  createCheapCopyBase64(result.originalUrl)
+                    .then(webUrl => {
+                      setBackWebUrl(webUrl);
+                      toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
+                    })
+                    .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                }
+              }
             }
           })
           .catch(err => console.error('Background Cloudinary original upload failed:', err));
@@ -1014,7 +1037,7 @@ export default function TemplatesPage() {
           padding: '12px',
           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
           color: '#f8fafc',
-          zIndex: 1000,
+          zIndex: 10000,
           display: 'flex',
           flexDirection: 'column',
           gap: '10px',
@@ -1503,7 +1526,7 @@ export default function TemplatesPage() {
                     type="button"
                     onClick={() => updateField({ verticalAlign: 'top' })}
                     style={{
-                      background: f.verticalAlign === 'top' ? '#3b82f6' : 'transparent',
+                      background: f.verticalAlign === 'top' || !f.verticalAlign ? '#3b82f6' : 'transparent',
                       border: 'none',
                       borderRadius: '2px',
                       color: '#ffffff',
@@ -1523,7 +1546,7 @@ export default function TemplatesPage() {
                     type="button"
                     onClick={() => updateField({ verticalAlign: 'center' })}
                     style={{
-                      background: f.verticalAlign === 'center' || !f.verticalAlign ? '#3b82f6' : 'transparent',
+                      background: f.verticalAlign === 'center' ? '#3b82f6' : 'transparent',
                       border: 'none',
                       borderRadius: '2px',
                       color: '#ffffff',
@@ -2511,7 +2534,7 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
-                                 alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                 alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
@@ -2535,7 +2558,7 @@ export default function TemplatesPage() {
                                       height: `${h}px`,
                                       cursor: 'move',
                                       display: 'flex',
-                                      alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                      alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                       justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
                                       fontSize: '0.65rem',
                                       color: '#ffffff',
@@ -2635,7 +2658,7 @@ export default function TemplatesPage() {
                                           cursor: 'pointer',
                                           padding: 0,
                                           boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                          zIndex: 1001,
+                                          zIndex: isTooltipActive ? 10001 : 500,
                                         }}
                                         title={isTooltipActive ? "Close Editor" : "Open Editor"}
                                       >
@@ -2856,7 +2879,7 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
-                                 alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                 alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
@@ -2880,7 +2903,7 @@ export default function TemplatesPage() {
                                       height: `${h}px`,
                                       cursor: 'move',
                                       display: 'flex',
-                                      alignItems: f.verticalAlign === 'top' ? 'flex-start' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'center'),
+                                      alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                       justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
                                       fontSize: '0.65rem',
                                       color: '#ffffff',
@@ -2980,7 +3003,7 @@ export default function TemplatesPage() {
                                           cursor: 'pointer',
                                           padding: 0,
                                           boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                          zIndex: 1001,
+                                          zIndex: isTooltipActive ? 10001 : 500,
                                         }}
                                         title={isTooltipActive ? "Close Editor" : "Open Editor"}
                                       >
@@ -3096,7 +3119,7 @@ export default function TemplatesPage() {
                                         <option value="center">Center</option>
                                         <option value="right">Right</option>
                                       </select>
-                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'center'} onChange={e => handleFieldChange('front', i, 'verticalAlign', e.target.value)}>
+                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'top'} onChange={e => handleFieldChange('front', i, 'verticalAlign', e.target.value)}>
                                         <option value="top">Top</option>
                                         <option value="center">Center</option>
                                         <option value="bottom">Bottom</option>
@@ -3281,7 +3304,7 @@ export default function TemplatesPage() {
                                         <option value="center">Center</option>
                                         <option value="right">Right</option>
                                       </select>
-                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'center'} onChange={e => handleFieldChange('back', i, 'verticalAlign', e.target.value)}>
+                                      <select className="form-select" title="Vertical Align" style={{ padding: '4px', fontSize: '0.75rem', width: '80px' }} value={f.verticalAlign || 'top'} onChange={e => handleFieldChange('back', i, 'verticalAlign', e.target.value)}>
                                         <option value="top">Top</option>
                                         <option value="center">Center</option>
                                         <option value="bottom">Bottom</option>
