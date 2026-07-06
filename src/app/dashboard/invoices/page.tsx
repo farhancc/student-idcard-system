@@ -257,7 +257,7 @@ export default function InvoicesPage() {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+      <div className="dashboard-header">
         <div>
           <h1>Invoices</h1>
           <p style={{ marginTop: '4px' }}>Track client billing invoices, update payment status, and compile invoice PDFs.</p>
@@ -455,6 +455,7 @@ export default function InvoicesPage() {
             position: 'fixed', inset: 0, zIndex: 9000,
             background: 'rgba(3,4,7,0.75)', backdropFilter: 'blur(6px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
           }}
         >
           <div
@@ -486,7 +487,7 @@ export default function InvoicesPage() {
             )}
 
             <form onSubmit={handleUpdateInvoice} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="form-grid">
                 <div className="form-group">
                   <label className="form-label">Cards Quantity</label>
                   <input 
@@ -510,7 +511,7 @@ export default function InvoicesPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div className="form-grid">
                 <div className="form-group">
                   <label className="form-label">GST / Tax Percent (%)</label>
                   <input 
