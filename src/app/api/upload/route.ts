@@ -215,10 +215,14 @@ export async function POST(request: Request) {
       }
 
       const localUrl = `/uploads/${pressId}/${type}s/${fileName}`;
+      let displayUrl = localUrl;
+      if (fileExtension === '.pdf') {
+        displayUrl = localUrl.replace('.pdf', '.png');
+      }
 
       return NextResponse.json({
         success: true,
-        url: localUrl,
+        url: displayUrl,
         originalUrl: originalLocalUrl ?? undefined,
         provider: 'local_fallback',
       });

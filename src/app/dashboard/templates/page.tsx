@@ -499,8 +499,34 @@ export default function TemplatesPage() {
           .catch(err => console.error('Background Cloudinary original upload failed:', err));
 
       } else {
-        // ── Web fallback: not supported for template images ─────────
-        throw new Error('Template image upload is only supported in the Desktop App.');
+        // ── Web path: upload directly to /api/upload ─────────
+        const arrayBufferForUpload = await file.arrayBuffer();
+        const uploadFormData = new FormData();
+        uploadFormData.append('file', new Blob([arrayBufferForUpload], { type: file.type }), file.name);
+        uploadFormData.append('type', 'template');
+        
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'x-press-id': String(pressId ?? 0) },
+          body: uploadFormData,
+        });
+        
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.error || 'Failed to upload template image');
+        
+        if (side === 'front') {
+          setFrontImageUrl(result.url);
+          setFrontOriginalUrl(result.originalUrl || result.url);
+          setFrontLocalPath('');
+          setFrontWebUrl(result.url);
+        } else {
+          setBackImageUrl(result.url);
+          setBackOriginalUrl(result.originalUrl || result.url);
+          setBackLocalPath('');
+          setBackWebUrl(result.url);
+        }
+        
+        toast(`Template ${side} side uploaded successfully!`, 'success');
       }
     } catch (err: any) {
       toast(err.message || 'Failed to upload image', 'error');
