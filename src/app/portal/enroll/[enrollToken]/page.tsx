@@ -12,6 +12,29 @@ interface FieldCoordinate {
   type: string;
   prefix?: string;
   suffix?: string;
+  width?: number;
+  height?: number;
+  borderRadius?: number;
+}
+
+interface Client {
+  id: number;
+  name: string;
+  type: string;
+}
+
+interface Template {
+  id: number;
+  name: string;
+  cardWidth: number;
+  cardHeight: number;
+  frontImageUrl: string;
+  backImageUrl: string | null;
+  frontOriginalUrl?: string | null;
+  backOriginalUrl?: string | null;
+  frontFields: string;
+  backFields: string;
+  validTillDate?: string | null;
 }
 
 export default function EnrollmentPage({ params }: { params: Promise<{ enrollToken: string }> }) {
@@ -22,11 +45,11 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  const [client, setClient] = useState<any>(null);
-  const [template, setTemplate] = useState<any>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
   const [departmentName, setDepartmentName] = useState<string | null>(null);
   const [formFields, setFormFields] = useState<string[]>([]);
-  const [customImgFields, setCustomImgFields] = useState<any[]>([]);
+  const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [pressFonts, setPressFonts] = useState<any[]>([]);
 
   // Field visibility states
@@ -191,7 +214,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         }));
       }
     } catch (err: any) {
-      alert(err.message || 'Error uploading photo');
+      setError(err.message || 'Error uploading photo');
     } finally {
       setUploadingPhoto(false);
       setActiveCropField(null);
@@ -296,8 +319,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     const front = JSON.parse(template.frontFields || '[]');
     const back = JSON.parse(template.backFields || '[]');
     const all = [...front, ...back];
-    const allImageFields = all.filter((f: any) => f.type === 'image');
-    return allImageFields.find((f: any) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
+    const allImageFields = all.filter((f: FieldCoordinate) => f.type === 'image');
+    return allImageFields.find((f: FieldCoordinate) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
   })() : null;
 
   const mainBoxWidth = 120;
@@ -315,10 +338,10 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     const back = JSON.parse(template.backFields || '[]');
     const all = [...front, ...back];
     if (activeCropField === 'photo') {
-      const allImageFields = all.filter((f: any) => f.type === 'image');
-      return allImageFields.find((f: any) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
+      const allImageFields = all.filter((f: FieldCoordinate) => f.type === 'image');
+      return allImageFields.find((f: FieldCoordinate) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
     }
-    return all.find((f: any) => f.field === activeCropField) || null;
+    return all.find((f: FieldCoordinate) => f.field === activeCropField) || null;
   })() : null;
 
   const targetAspectRatio = activeFieldCoord && activeFieldCoord.width && activeFieldCoord.height
@@ -327,7 +350,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ maxWidth: '550px', width: '100%' }}>
+      <div style={{ maxWidth: showPreview ? '1100px' : '550px', width: '100%', transition: 'max-width 0.3s ease' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--primary)', fontWeight: 'bold' }}>
             {client?.type} ID Registration Portal
@@ -350,7 +373,9 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="card" style={{ padding: '32px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className={showPreview ? "portal-layout" : ""}>
+          <div className={showPreview ? "portal-form-col" : ""}>
+            <form onSubmit={handleSubmit} className="card" style={{ padding: '32px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Photo upload + Cropper trigger */}
           {hasPhoto && (
@@ -394,7 +419,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             // Scaled dimensions for the preview box (maintaining aspect ratio, max-width 120px)
             const boxWidth = 120;
             const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
-            const boxBorderRadius = field.borderRadius ? (field.borderRadius / field.width) * boxWidth : 8;
+            const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 8;
 
             return (
               <div key={field.field} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '12px' }}>
@@ -476,78 +501,81 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} disabled={loading || uploadingPhoto}>
             {loading ? 'Submitting...' : 'Submit Details'}
           </button>
-        </form>
-
-        {/* Real-time Preview */}
-        {showPreview && template && (
-          <div style={{
-            marginTop: '32px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '16px',
-            width: '100%',
-          }}>
-            <p style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
-              Live ID Card Preview
-            </p>
-            <div style={{
-              display: 'flex',
-              gap: '24px',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              width: '100%',
-            }}>
-              {/* Front Side Preview */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                <CardPreview
-                  template={template}
-                  cardholder={{
-                    name: name || 'Full Name',
-                    designation: designation || 'Designation',
-                    photoUrl: photoUrl || null,
-                    cardSerial: 'STU-0000',
-                    customFields: JSON.stringify(customFields),
-                  }}
-                  side="front"
-                  pressFonts={pressFonts}
-                  forceWeb={true}
-                  style={{
-                    width: '240px',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
-                    borderRadius: '12px',
-                  }}
-                />
-                <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Front View</span>
-              </div>
-
-              {/* Back Side Preview */}
-              {template.backImageUrl && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                  <CardPreview
-                    template={template}
-                    cardholder={{
-                      name: name || 'Full Name',
-                      designation: designation || 'Designation',
-                      photoUrl: photoUrl || null,
-                      cardSerial: 'STU-0000',
-                      customFields: JSON.stringify(customFields),
-                    }}
-                    side="back"
-                    pressFonts={pressFonts}
-                    forceWeb={true}
-                    style={{
-                      width: '240px',
-                      boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
-                      borderRadius: '12px',
-                    }}
-                  />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Back View</span>
-                </div>
-              )}
-            </div>
+            </form>
           </div>
-        )}
+
+          {/* Real-time Preview */}
+          {showPreview && template && (
+            <div className="portal-preview-col">
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px',
+                width: '100%',
+              }}>
+                <p style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
+                  Live ID Card Preview
+                </p>
+                <div style={{
+                  display: 'flex',
+                  gap: '24px',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                  width: '100%',
+                }}>
+                  {/* Front Side Preview */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                    <CardPreview
+                      template={template}
+                      cardholder={{
+                        name: name || 'Full Name',
+                        designation: designation || 'Designation',
+                        photoUrl: photoUrl || null,
+                        cardSerial: 'STU-0000',
+                        customFields: JSON.stringify(customFields),
+                      }}
+                      side="front"
+                      pressFonts={pressFonts}
+                      forceWeb={true}
+                      style={{
+                        width: '240px',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                        borderRadius: '12px',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Front View</span>
+                  </div>
+
+                  {/* Back Side Preview */}
+                  {template.backImageUrl && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <CardPreview
+                        template={template}
+                        cardholder={{
+                          name: name || 'Full Name',
+                          designation: designation || 'Designation',
+                          photoUrl: photoUrl || null,
+                          cardSerial: 'STU-0000',
+                          customFields: JSON.stringify(customFields),
+                        }}
+                        side="back"
+                        pressFonts={pressFonts}
+                        forceWeb={true}
+                        style={{
+                          width: '240px',
+                          boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                          borderRadius: '12px',
+                        }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Back View</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Image Cropper Modal */}

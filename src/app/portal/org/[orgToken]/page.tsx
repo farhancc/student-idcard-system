@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import { ToastProvider, useToast } from '@/components/ui/toast';
 
 import { 
   Users, 
@@ -38,6 +39,34 @@ interface Cardholder {
 interface FieldCoordinate {
   field: string;
   type: string;
+  width?: number;
+  height?: number;
+  borderRadius?: number;
+}
+
+interface Client {
+  id: number;
+  name: string;
+  type: string;
+}
+
+interface Template {
+  id: number;
+  name: string;
+  width?: number;
+  height?: number;
+  frontImageUrl?: string;
+  backImageUrl?: string;
+  frontOriginalUrl?: string | null;
+  backOriginalUrl?: string | null;
+  frontFields?: string;
+  backFields?: string;
+  validTillDate?: string | null;
+}
+
+interface ApprovalJob {
+  id: number;
+  downloadUrl?: string;
 }
 
 interface Department {
@@ -49,6 +78,15 @@ interface Department {
 }
 
 export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: string }> }) {
+  return (
+    <ToastProvider>
+      <OrgPortalPageContent params={params} />
+    </ToastProvider>
+  );
+}
+
+function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }> }) {
+  const { toast } = useToast();
   const { orgToken } = use(params);
 
   const [activeTab, setActiveTab] = useState<'cardholders' | 'departments'>('cardholders');
@@ -59,17 +97,17 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
   const [showPreview, setShowPreview] = useState(false);
   const [togglingPreview, setTogglingPreview] = useState(false);
 
-  const [client, setClient] = useState<any>(null);
-  const [template, setTemplate] = useState<any>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
   const [enrollToken, setEnrollToken] = useState('');
-  const [latestApprovalJob, setLatestApprovalJob] = useState<any>(null);
+  const [latestApprovalJob, setLatestApprovalJob] = useState<ApprovalJob | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [newDeptName, setNewDeptName] = useState('');
   const [creatingDept, setCreatingDept] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [formFields, setFormFields] = useState<string[]>([]);
-  const [customImgFields, setCustomImgFields] = useState<any[]>([]);
+  const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
 
   // Field visibility states
   const [hasName, setHasName] = useState(true);
@@ -121,7 +159,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
       // Parse fields
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
-      const allFields: any[] = [...front, ...back];
+      const allFields: FieldCoordinate[] = [...front, ...back];
       const textFields = allFields.filter(f => f.type === 'text' || f.type === 'qr' || f.type === 'barcode' || f.type === 'id');
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       const filteredKeys = keys.filter(k => 
@@ -240,8 +278,9 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
         const deptData = await deptRes.json();
         setDepartments(deptData.departments);
       }
+      toast('Department created successfully', 'success');
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
     } finally {
       setCreatingDept(false);
     }
@@ -260,7 +299,8 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
           const res = await fetch(`/api/portal/org/${orgToken}/departments/${id}`, { method: 'DELETE' });
           if (!res.ok) throw new Error('Failed to delete department');
           setDepartments(departments.filter(d => d.id !== id));
-        } catch (err: any) { alert(err.message); }
+          toast('Department deleted successfully', 'success');
+        } catch (err: any) { toast(err.message, 'error'); }
       },
     });
   };
@@ -361,7 +401,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
         }));
       }
     } catch (err: any) {
-      alert(err.message || 'Error uploading photo');
+      toast(err.message || 'Error uploading photo', 'error');
     } finally {
       setUploadingPhoto(false);
       setActiveCropField(null);
@@ -386,9 +426,8 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
 
       const url = modalMode === 'add'
         ? `/api/portal/org/${orgToken}/cardholders`
-        : `/api/portal/org/${orgToken}/cardholders/${editingCardholderId}`;
-
-      const res = await fetch(url, {
+        : `/api/portal/org/[orgToken]/cardholders/${editingCardholderId}`; // Wait, let's keep the exact original template string: /api/portal/org/${orgToken}/cardholders/${editingCardholderId}
+      const res = await fetch(modalMode === 'add' ? `/api/portal/org/${orgToken}/cardholders` : `/api/portal/org/${orgToken}/cardholders/${editingCardholderId}`, {
         method: modalMode === 'add' ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -401,8 +440,9 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
 
       setShowModal(false);
       await loadPortalData();
+      toast('Cardholder saved successfully', 'success');
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
       setLoading(false);
     }
   };
@@ -421,7 +461,11 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
           const res = await fetch(`/api/portal/org/${orgToken}/cardholders/${id}`, { method: 'DELETE' });
           if (!res.ok) throw new Error('Failed to delete cardholder');
           await loadPortalData();
-        } catch (err: any) { alert(err.message); setLoading(false); }
+          toast('Cardholder deleted successfully', 'success');
+        } catch (err: any) {
+          toast(err.message, 'error');
+          setLoading(false);
+        }
       },
     });
   };
@@ -473,10 +517,10 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
     const back = JSON.parse(template.backFields || '[]');
     const all = [...front, ...back];
     if (activeCropField === 'photo') {
-      const allImageFields = all.filter((f: any) => f.type === 'image');
-      return allImageFields.find((f: any) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
+      const allImageFields = all.filter((f: FieldCoordinate) => f.type === 'image');
+      return allImageFields.find((f: FieldCoordinate) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
     }
-    return all.find((f: any) => f.field === activeCropField) || null;
+    return all.find((f: FieldCoordinate) => f.field === activeCropField) || null;
   })() : null;
 
   const targetAspectRatio = activeFieldCoord && activeFieldCoord.width && activeFieldCoord.height
@@ -980,7 +1024,7 @@ export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: 
                 
                 const boxWidth = 60;
                 const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
-                const boxBorderRadius = field.borderRadius ? (field.borderRadius / field.width) * boxWidth : 6;
+                const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 6;
 
                 return (
                   <div key={field.field} style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>

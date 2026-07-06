@@ -25,14 +25,81 @@ import {
   Settings2,
 } from 'lucide-react';
 
+interface Client {
+  id: number;
+  name: string;
+}
+
+interface Cardholder {
+  id: number;
+  name: string;
+  designation?: string;
+  photoUrl?: string;
+  uniqueKey?: string;
+  cardSerial?: string;
+  createdAt: string;
+  resolvedTemplateId?: number;
+  templateName?: string;
+  customFields?: string; // JSON string
+}
+
+interface CSVImportResult {
+  mode: string;
+  totalRows: number;
+  newAdded: number;
+  updated: number;
+  skipped: number;
+  duplicateCount: number;
+}
+
+interface ZipDetail {
+  fileName: string;
+  status: string;
+  cardholderName?: string;
+  message?: string;
+  errors?: string[];
+  warnings?: string[];
+}
+
+interface ZIPImportResult {
+  summary?: {
+    totalFiles: number;
+    matchedCount: number;
+    failedValidationCount: number;
+    unmatchedCount: number;
+  };
+  details?: ZipDetail[];
+}
+
+interface SerialResult {
+  assignedCount: number;
+  lastAllocated: number;
+}
+
+interface QuickTemplate {
+  id: number | string;
+  name: string;
+}
+
+interface QuickJobResult {
+  id: string | number;
+  pdfType: string;
+  status: string;
+  progress: number;
+  isLocalJob?: boolean;
+  downloadUrl?: string;
+  errorMsg?: string;
+  orderId?: number;
+}
+
 export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const clientId = Number(params.id);
   const { toast } = useToast();
 
-  const [client, setClient] = useState<any>(null);
-  const [cardholders, setCardholders] = useState<any[]>([]);
+  const [client, setClient] = useState<Client | null>(null);
+  const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -53,13 +120,13 @@ export default function ClientDetailsPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
   const [importMode, setImportMode] = useState('check'); // check | skip | update | overwrite
-  const [importResult, setImportResult] = useState<any>(null);
+  const [importResult, setImportResult] = useState<CSVImportResult | null>(null);
   const [importError, setImportError] = useState('');
   const [importLoading, setImportLoading] = useState(false);
 
   // ZIP Photo Import State
   const [zipFile, setZipFile] = useState<File | null>(null);
-  const [zipResult, setZipResult] = useState<any>(null);
+  const [zipResult, setZipResult] = useState<ZIPImportResult | null>(null);
   const [zipError, setZipError] = useState('');
   const [zipLoading, setZipLoading] = useState(false);
 
@@ -67,7 +134,7 @@ export default function ClientDetailsPage() {
   const [serialPrefix, setSerialPrefix] = useState('STU');
   const [serialStart, setSerialStart] = useState('1');
   const [serialPad, setSerialPad] = useState('4');
-  const [serialResult, setSerialResult] = useState<any>(null);
+  const [serialResult, setSerialResult] = useState<SerialResult | null>(null);
   const [serialError, setSerialError] = useState('');
   const [serialLoading, setSerialLoading] = useState(false);
 
@@ -77,7 +144,7 @@ export default function ClientDetailsPage() {
   const [filterTemplate, setFilterTemplate] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
-  const [quickTemplates, setQuickTemplates] = useState<any[]>([]);
+  const [quickTemplates, setQuickTemplates] = useState<QuickTemplate[]>([]);
   const [showCompileModal, setShowCompileModal] = useState(false);
   const [qTemplateId, setQTemplateId] = useState('');
   const [qPricePerCard, setQPricePerCard] = useState('50');
@@ -85,13 +152,13 @@ export default function ClientDetailsPage() {
   const [qFoldLine, setQFoldLine] = useState(true);
   const [qBleed, setQBleed] = useState(0);
   const [qCompiling, setQCompiling] = useState<string | null>(null);
-  const [qJobResult, setQJobResult] = useState<any>(null);
+  const [qJobResult, setQJobResult] = useState<QuickJobResult | null>(null);
   const [qTemplateMixed, setQTemplateMixed] = useState(false);
   const [qDetectedTemplateName, setQDetectedTemplateName] = useState<string | null>(null);
 
   // View / Edit Cardholder Details Modals State
-  const [viewingCardholder, setViewingCardholder] = useState<any | null>(null);
-  const [editingCardholder, setEditingCardholder] = useState<any | null>(null);
+  const [viewingCardholder, setViewingCardholder] = useState<Cardholder | null>(null);
+  const [editingCardholder, setEditingCardholder] = useState<Cardholder | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
   const [editUniqueKey, setEditUniqueKey] = useState('');
@@ -1915,7 +1982,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
     setBatchLoading(true);
     setBatchJob(null);
     try {
-      const res = await fetch(`/api/portal/shares/${share.enrollToken}/cardholders`);
+      const res = await fetch(`/api/portal/shares/${share.orgToken}/cardholders`);
       const data = await res.json();
       if (data.success) {
         setBatchCardholders(data.cardholders || []);

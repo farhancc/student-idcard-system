@@ -15,6 +15,8 @@ const publicRoutes = [
   '/portal',
   '/api/portal',
   '/api/health',
+  '/api/desktop/version',
+  '/api/v1',
 ];
 
 export async function middleware(request: NextRequest) {
@@ -46,7 +48,15 @@ export async function middleware(request: NextRequest) {
 
   // 3. Check Press User paths (/dashboard, /api/press/..., etc.)
   if (pathname.startsWith('/dashboard') || pathname.startsWith('/api/')) {
-    const token = request.cookies.get('press_auth_token')?.value;
+    let token = request.cookies.get('press_auth_token')?.value;
+
+    if (!token && pathname.startsWith('/api/')) {
+      const authHeader = request.headers.get('Authorization');
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+    }
+
     if (!token) {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

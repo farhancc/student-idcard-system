@@ -10,13 +10,8 @@ export async function GET(
   try {
     const { token } = await params;
 
-    let share = await prisma.clientPortalShare.findFirst({
-      where: {
-        OR: [
-          { orgToken: token },
-          { enrollToken: token },
-        ],
-      },
+    let share = await prisma.clientPortalShare.findUnique({
+      where: { orgToken: token },
     });
 
     let enrollTokensToFilter: string[] = [];
@@ -28,13 +23,8 @@ export async function GET(
       });
       enrollTokensToFilter = [share.enrollToken, ...depts.map(d => d.enrollToken)];
     } else {
-      const dept = await prisma.clientDepartment.findFirst({
-        where: {
-          OR: [
-            { deptToken: token },
-            { enrollToken: token },
-          ],
-        },
+      const dept = await prisma.clientDepartment.findUnique({
+        where: { deptToken: token },
         include: { portalShare: true },
       });
       if (dept) {

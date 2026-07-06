@@ -20,7 +20,7 @@
     "patch-package": "^8.0.1"
   },
   "build": {
-    "appId": "com.studentidsystem.pressclient",
+    "appId": "com.idexocards.pressclient",
     "productName": "IDexoPressClient",
     "directories": {
       "output": "dist"
@@ -33,7 +33,7 @@
     ],
     "publish": {
       "provider": "generic",
-      "url": "https://cdn.studentidsystem.com/press-client/releases/"
+      "url": "https://cdn.idexocards.com/press-client/releases/"
     },
     "linux": {
       "target": [

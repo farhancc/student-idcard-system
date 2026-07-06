@@ -124,6 +124,17 @@ export async function GET(
       },
     });
 
+    const shareResponse: any = {
+      id: share.id,
+      enrollToken: enrollToken || share.enrollToken,
+      showPreview: share.showPreview,
+      createdAt: share.createdAt,
+    };
+
+    if (type !== 'enroll') {
+      shareResponse.orgToken = share.orgToken;
+    }
+
     return NextResponse.json({
       success: true,
       type,
@@ -132,13 +143,7 @@ export async function GET(
       departmentName,
       latestApprovalJob,
       pressFonts,
-      share: {
-        id: share.id,
-        enrollToken: enrollToken || share.enrollToken,
-        orgToken: share.orgToken,
-        showPreview: share.showPreview,
-        createdAt: share.createdAt,
-      },
+      share: shareResponse,
     });
   } catch (error) {
     console.error('Get portal share details error:', error);

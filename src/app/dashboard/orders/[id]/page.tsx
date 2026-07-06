@@ -25,15 +25,77 @@ import {
   Edit
 } from 'lucide-react';
 
+interface OrderClient {
+  id: number;
+  name: string;
+}
+
+interface OrderInvoice {
+  id: number;
+  pricePerCard: number;
+  taxPercent: number;
+  cardCount: number;
+  paymentStatus: string;
+  paymentMethod?: string;
+  notes?: string;
+  subtotal?: number;
+  taxAmount?: number;
+  totalAmount?: number;
+}
+
+interface OrderPdfJob {
+  id: number;
+  pdfType: string;
+  status: string;
+  progress: number;
+  label?: string;
+  version: number;
+  expiresAt?: string;
+  isLocalJob?: boolean;
+  downloadUrl?: string;
+  errorMsg?: string;
+  fileName?: string;
+  orderId?: number;
+}
+
+interface OrderDetails {
+  id: number;
+  clientId: number;
+  templateId: number;
+  status: string;
+  client?: OrderClient;
+  invoice?: OrderInvoice;
+  pdfJobs?: OrderPdfJob[];
+  _count?: {
+    cardholders: number;
+  };
+  cardholders?: any[];
+}
+
+interface OrderLog {
+  id: number;
+  timestamp: string;
+  actorName: string;
+  action: string;
+  note?: string;
+}
+
+interface OrderNote {
+  id: number;
+  createdAt: string;
+  authorName: string;
+  note: string;
+}
+
 export default function OrderDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const orderId = Number(params.id);
   const { toast } = useToast();
 
-  const [order, setOrder] = useState<any>(null);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [notes, setNotes] = useState<any[]>([]);
+  const [order, setOrder] = useState<OrderDetails | null>(null);
+  const [logs, setLogs] = useState<OrderLog[]>([]);
+  const [notes, setNotes] = useState<OrderNote[]>([]);
   const [noteContent, setNoteContent] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +104,7 @@ export default function OrderDetailsPage() {
 
   // PDF trigger states
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
-  const [previewJob, setPreviewJob] = useState<any | null>(null);
+  const [previewJob, setPreviewJob] = useState<OrderPdfJob | null>(null);
 
   // Production layout settings
   const [showLayoutSettings, setShowLayoutSettings] = useState(true);
@@ -70,24 +132,27 @@ export default function OrderDetailsPage() {
 
   const handleOpenInvoiceEdit = () => {
     if (!order?.invoice) return;
-    setInvPricePerCard(String(Number(order.invoice.pricePerCard)));
-    setInvTaxPercent(String(Number(order.invoice.taxPercent)));
-    setInvCardCount(String(order.invoice.cardCount));
-    setInvPaymentStatus(order.invoice.paymentStatus);
-    setInvPaymentMethod(order.invoice.paymentMethod || 'CASH');
-    setInvNotes(order.invoice.notes || '');
+    const inv = order.invoice;
+    setInvPricePerCard(String(Number(inv.pricePerCard)));
+    setInvTaxPercent(String(Number(inv.taxPercent)));
+    setInvCardCount(String(inv.cardCount));
+    setInvPaymentStatus(inv.paymentStatus);
+    setInvPaymentMethod(inv.paymentMethod || 'CASH');
+    setInvNotes(inv.notes || '');
     setShowInvoiceEdit(true);
   };
 
   const handleUpdateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!order?.invoice) return;
+    const inv = order.invoice;
     setInvSubmitting(true);
     try {
       const res = await fetch('/api/invoices', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: order.invoice.id,
+          id: inv.id,
           pricePerCard: Number(invPricePerCard),
           cardCount: Number(invCardCount),
           taxPercent: Number(invTaxPercent),
@@ -543,7 +608,7 @@ export default function OrderDetailsPage() {
       </div>
 
       {/* Grid panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px', alignItems: 'start' }}>
+      <div className="dashboard-grid-32">
         {/* Left Column: Quick actions & Logs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           {/* Action triggers */}
@@ -696,11 +761,11 @@ export default function OrderDetailsPage() {
                   className="btn btn-primary"
                   style={{ fontSize: '0.8rem', padding: '8px 12px', width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 14px 0 rgba(16,185,129,0.25)' }}
                   onClick={() => handleCompilePdf('PRODUCTION')}
-                  disabled={pdfLoading !== null || (order.status !== 'APPROVED' && order.status !== 'PRINTING')}
+                  disabled={pdfLoading !== null || (order?.status !== 'APPROVED' && order?.status !== 'PRINTING')}
                 >
                   {pdfLoading === 'PRODUCTION' ? 'Queueing...' : 'Compile Production PDF'}
                 </button>
-                {order.status !== 'APPROVED' && order.status !== 'PRINTING' && (
+                {order?.status !== 'APPROVED' && order?.status !== 'PRINTING' && (
                   <span style={{ display: 'block', fontSize: '0.65rem', color: '#f87171', marginTop: '6px', textAlign: 'center' }}>
                     * Requires order status set to APPROVED.
                   </span>
@@ -798,30 +863,30 @@ export default function OrderDetailsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.875rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--muted)' }}>Cards Quantity:</span>
-                  <span style={{ fontWeight: '600' }}>{order.invoice.cardCount} cards</span>
+                  <span style={{ fontWeight: '600' }}>{order?.invoice?.cardCount} cards</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: 'var(--muted)' }}>Price Per Card:</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order.invoice.pricePerCard).toFixed(2)}</span>
+                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.pricePerCard).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                   <span style={{ color: 'var(--muted)' }}>Subtotal:</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order.invoice.subtotal).toFixed(2)}</span>
+                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.subtotal).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted)' }}>GST/Tax ({order.invoice.taxPercent}%):</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order.invoice.taxAmount).toFixed(2)}</span>
+                  <span style={{ color: 'var(--muted)' }}>GST/Tax ({order?.invoice?.taxPercent}%):</span>
+                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.taxAmount).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                   <span style={{ fontWeight: '600' }}>Total Bill:</span>
-                  <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--info)' }}>Rs. {Number(order.invoice.totalAmount).toFixed(2)}</span>
+                  <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--info)' }}>Rs. {Number(order?.invoice?.totalAmount).toFixed(2)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: 'var(--muted)' }}>Status:</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {order.invoice.paymentStatus === 'PAID' ? (
+                    {order?.invoice?.paymentStatus === 'PAID' ? (
                       <>
-                        <span className="badge badge-success">Paid ({order.invoice.paymentMethod})</span>
+                        <span className="badge badge-success">Paid ({order?.invoice?.paymentMethod})</span>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '4px 8px', fontSize: '0.75rem' }}

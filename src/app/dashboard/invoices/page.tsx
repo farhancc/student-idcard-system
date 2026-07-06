@@ -18,16 +18,36 @@ import {
   Check
 } from 'lucide-react';
 
+interface Invoice {
+  id: number;
+  orderId: number;
+  cardCount: number;
+  pricePerCard: number;
+  subtotal: number;
+  taxPercent: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentStatus: string;
+  paymentMethod?: string;
+  notes?: string;
+  createdAt: string;
+  order?: {
+    client?: {
+      name: string;
+    };
+  };
+}
+
 export default function InvoicesPage() {
   const { toast } = useToast();
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'UNPAID'>('ALL');
   
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editingInvoice, setEditingInvoice] = useState<any>(null);
+  const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [pricePerCard, setPricePerCard] = useState('50');
   const [cardCount, setCardCount] = useState('0');
   const [taxPercent, setTaxPercent] = useState('18');
@@ -153,7 +173,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleOpenEdit = (inv: any) => {
+  const handleOpenEdit = (inv: Invoice) => {
     setEditingInvoice(inv);
     setPricePerCard(String(Number(inv.pricePerCard)));
     setCardCount(String(inv.cardCount));
@@ -167,6 +187,7 @@ export default function InvoicesPage() {
 
   const handleUpdateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingInvoice) return;
     setError('');
     setSubmitting(true);
 
@@ -197,7 +218,7 @@ export default function InvoicesPage() {
     }
   };
 
-  const handleQuickStatusChange = async (inv: any, newStatus: 'PAID' | 'UNPAID') => {
+  const handleQuickStatusChange = async (inv: Invoice, newStatus: 'PAID' | 'UNPAID') => {
     try {
       const res = await fetch('/api/invoices', {
         method: 'PUT',

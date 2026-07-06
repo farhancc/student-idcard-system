@@ -8,7 +8,16 @@ import {
   Activity, BarChart2, Package, ShoppingCart, RefreshCw
 } from 'lucide-react';
 
-function StatCard({ icon, label, value, sub, color, badge }: any) {
+interface StatCardProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  sub?: string;
+  color: string;
+  badge?: string;
+}
+
+function StatCard({ icon, label, value, sub, color, badge }: StatCardProps) {
   return (
     <div className="glass-panel" style={{
       display: 'flex', alignItems: 'center', gap: '18px',
@@ -35,6 +44,65 @@ function StatCard({ icon, label, value, sub, color, badge }: any) {
       </div>
     </div>
   );
+}
+
+interface AnalyticsSummary {
+  cardsGenerated?: number;
+  cardsLastMonth?: number;
+  ordersThisMonth?: number;
+  totalCardholders?: number;
+  clientsServed?: number;
+  pdfsGenerated?: number;
+  credits?: number;
+  lockedCredits?: number;
+  revenueThisMonth?: number;
+  pendingRevenue?: number;
+  pendingJobs?: number;
+}
+
+interface AnalyticsBreakdown {
+  byType: Record<string, number>;
+  byStatus: Record<string, number>;
+}
+
+interface AnalyticsClient {
+  id: number;
+  name: string;
+  cardCount: number;
+}
+
+interface AnalyticsJob {
+  id: string;
+  status: string;
+  fileName: string;
+  clientName: string;
+  pdfType: string;
+  generatedAt: string;
+  progress?: number;
+}
+
+interface AnalyticsOrder {
+  id: number;
+  clientName: string;
+  templateName: string;
+  cardCount: number;
+  status: string;
+  createdAt: string;
+}
+
+interface AnalyticsMonthlyTrend {
+  month: string;
+  cards: number;
+}
+
+interface AnalyticsData {
+  success: boolean;
+  summary: AnalyticsSummary;
+  breakdowns: AnalyticsBreakdown;
+  topClients: AnalyticsClient[];
+  recentJobs: AnalyticsJob[];
+  recentOrders: AnalyticsOrder[];
+  monthlyTrend: AnalyticsMonthlyTrend[];
 }
 
 function MiniBarChart({ data }: { data: { month: string; cards: number }[] }) {
@@ -72,7 +140,7 @@ function timeAgo(date: string) {
 
 export default function DashboardPage() {
   const { toast } = useToast();
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
   async function fetchAnalytics() {
@@ -160,8 +228,10 @@ export default function DashboardPage() {
   const recentOrders: any[] = data?.recentOrders || [];
   const monthlyTrend: any[] = data?.monthlyTrend || [];
 
-  const cardChange = s.cardsLastMonth > 0
-    ? `${s.cardsGenerated >= s.cardsLastMonth ? '+' : ''}${Math.round(((s.cardsGenerated - s.cardsLastMonth) / s.cardsLastMonth) * 100)}% vs last month`
+  const cardsLastMonth = s.cardsLastMonth || 0;
+  const cardsGenerated = s.cardsGenerated || 0;
+  const cardChange = cardsLastMonth > 0
+    ? `${cardsGenerated >= cardsLastMonth ? '+' : ''}${Math.round(((cardsGenerated - cardsLastMonth) / cardsLastMonth) * 100)}% vs last month`
     : 'No prior month data';
 
   if (loading) return (
@@ -189,7 +259,7 @@ export default function DashboardPage() {
               fontSize: '0.78rem', fontWeight: '600', border: '1px solid rgba(245,158,11,0.3)'
             }}>
               <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#f59e0b', animation: 'pulse 1.5s infinite' }} />
-              {s.pendingJobs} active job{s.pendingJobs !== 1 ? 's' : ''}
+              {s.pendingJobs ?? 0} active job{(s.pendingJobs ?? 0) !== 1 ? 's' : ''}
             </span>
           )}
           <button className="btn btn-secondary" style={{ gap: '8px', padding: '8px 16px' }} onClick={fetchAnalytics}>
@@ -206,18 +276,18 @@ export default function DashboardPage() {
         <StatCard icon={<TrendingUp size={22} />} label="Cards This Month" value={s.cardsGenerated ?? 0} sub={cardChange} color="#10b981" />
         <StatCard icon={<ShoppingCart size={22} />} label="Orders This Month" value={s.ordersThisMonth ?? 0} sub={`${s.totalCardholders ?? 0} total cardholders`} color="#6366f1" />
         <StatCard icon={<Users size={22} />} label="Active Clients" value={s.clientsServed ?? 0} color="#0ea5e9" badge={`${s.pdfsGenerated ?? 0} PDFs`} />
-        <StatCard icon={<CreditCard size={22} />} label="Print Credits" value={s.credits ?? 0} sub={s.lockedCredits > 0 ? `${s.lockedCredits} locked` : 'Available'} color="#f59e0b" />
+        <StatCard icon={<CreditCard size={22} />} label="Print Credits" value={s.credits ?? 0} sub={(s.lockedCredits ?? 0) > 0 ? `${s.lockedCredits} locked` : 'Available'} color="#f59e0b" />
         <StatCard
           icon={<FileText size={22} />}
           label="Revenue (This Month)"
           value={`Rs. ${(s.revenueThisMonth ?? 0).toLocaleString('en-IN')}`}
-          sub={s.pendingRevenue > 0 ? `Rs. ${s.pendingRevenue.toLocaleString('en-IN')} pending` : 'All collected'}
+          sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
           color="#a855f7"
         />
       </div>
 
       {/* Main grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', alignItems: 'start' }}>
+      <div className="dashboard-grid">
 
         {/* Left column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>

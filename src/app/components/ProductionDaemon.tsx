@@ -4,9 +4,16 @@ import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient } from '@/lib/pdf/card-renderer-client';
 
+interface CompilerJob {
+  id: number;
+  pdfType: string;
+  fileName?: string;
+  metadata?: any;
+}
+
 export default function ProductionDaemon() {
   const [isDesktop, setIsDesktop] = useState(false);
-  const [activeJob, setActiveJob] = useState<any>(null);
+  const [activeJob, setActiveJob] = useState<CompilerJob | null>(null);
   const [progress, setProgress] = useState(0);
   const [log, setLog] = useState<string[]>([]);
   const [offlineQueueCount, setOfflineQueueCount] = useState(0);

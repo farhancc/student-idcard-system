@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import { ToastProvider, useToast } from '@/components/ui/toast';
 
 import {
   Users,
@@ -36,9 +37,56 @@ interface Cardholder {
 interface FieldCoordinate {
   field: string;
   type: string;
+  width?: number;
+  height?: number;
+  borderRadius?: number;
+}
+
+interface Client {
+  id: number;
+  name: string;
+  type: string;
+}
+
+interface Template {
+  id: number;
+  name: string;
+  width?: number;
+  height?: number;
+  frontImageUrl?: string;
+  backImageUrl?: string;
+  frontOriginalUrl?: string | null;
+  backOriginalUrl?: string | null;
+  frontFields?: string;
+  backFields?: string;
+  validTillDate?: string | null;
+}
+
+interface ApprovalJob {
+  id: number;
+  downloadUrl?: string;
+}
+
+interface TemplateField {
+  field: string;
+  type: string;
+  isMainPhoto?: boolean;
+  isName?: boolean;
+  width?: number;
+  height?: number;
+  borderRadius?: number;
 }
 
 export default function DeptPortalPage({ params }: { params: Promise<{ deptToken: string }> }) {
+  return (
+    <ToastProvider>
+      <DeptPortalPageContent params={params} />
+    </ToastProvider>
+  );
+}
+
+function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string }> }) {
+  const { toast } = useToast();
   const { deptToken } = use(params);
 
   const [loading, setLoading] = useState(true);
@@ -80,15 +128,15 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
   const showConfirm = (cfg: typeof confirmConfig) => { setConfirmConfig(cfg); setConfirmOpen(true); };
   const closeConfirm = () => { setConfirmOpen(false); setConfirmConfig(null); };
 
-  const [client, setClient] = useState<any>(null);
-  const [template, setTemplate] = useState<any>(null);
+  const [client, setClient] = useState<Client | null>(null);
+  const [template, setTemplate] = useState<Template | null>(null);
   const [enrollToken, setEnrollToken] = useState('');
-  const [latestApprovalJob, setLatestApprovalJob] = useState<any>(null);
+  const [latestApprovalJob, setLatestApprovalJob] = useState<ApprovalJob | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [formFields, setFormFields] = useState<string[]>([]);
-  const [customImgFields, setCustomImgFields] = useState<any[]>([]);
-  const [templateFields, setTemplateFields] = useState<any[]>([]);
+  const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
+  const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
 
   // Field visibility states
   const [hasName, setHasName] = useState(true);
@@ -133,7 +181,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
 
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
-      const allFields: any[] = [...front, ...back];
+      const allFields: FieldCoordinate[] = [...front, ...back];
       const textFields = allFields.filter(f => f.type === 'text' || f.type === 'qr' || f.type === 'barcode' || f.type === 'id');
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       const filteredKeys = keys.filter(k =>
@@ -157,7 +205,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
       setCustomImgFields(customImages);
 
       // Extract template fields in order
-      const uniqueFields: any[] = [];
+      const uniqueFields: TemplateField[] = [];
       const seen = new Set<string>();
       
       if (mainPhoto) {
@@ -282,7 +330,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
         }));
       }
     } catch (err: any) {
-      alert(err.message || 'Error uploading photo');
+      toast(err.message || 'Error uploading photo', 'error');
     } finally {
       setUploadingPhoto(false);
       setActiveCropField(null);
@@ -316,8 +364,9 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
       }
       setShowModal(false);
       await loadPortalData();
+      toast('Cardholder saved successfully', 'success');
     } catch (err: any) {
-      alert(err.message);
+      toast(err.message, 'error');
       setLoading(false);
     }
   };
@@ -335,7 +384,11 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
           const res = await fetch(`/api/portal/dept/${deptToken}/cardholders/${id}`, { method: 'DELETE' });
           if (!res.ok) throw new Error('Failed to delete cardholder');
           await loadPortalData();
-        } catch (err: any) { alert(err.message); setLoading(false); }
+          toast('Cardholder deleted successfully', 'success');
+        } catch (err: any) {
+          toast(err.message, 'error');
+          setLoading(false);
+        }
       },
     });
   };
@@ -378,10 +431,10 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
     const back = JSON.parse(template.backFields || '[]');
     const all = [...front, ...back];
     if (activeCropField === 'photo') {
-      const allImageFields = all.filter((f: any) => f.type === 'image');
-      return allImageFields.find((f: any) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
+      const allImageFields = all.filter((f: FieldCoordinate) => f.type === 'image');
+      return allImageFields.find((f: FieldCoordinate) => f.field === 'photo' || f.field === 'avatar') || allImageFields[0] || null;
     }
-    return all.find((f: any) => f.field === activeCropField) || null;
+    return all.find((f: FieldCoordinate) => f.field === activeCropField) || null;
   })() : null;
 
   const targetAspectRatio = activeFieldCoord && activeFieldCoord.width && activeFieldCoord.height
@@ -639,7 +692,7 @@ export default function DeptPortalPage({ params }: { params: Promise<{ deptToken
                 
                 const boxWidth = 60;
                 const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
-                const boxBorderRadius = field.borderRadius ? (field.borderRadius / field.width) * boxWidth : 6;
+                const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 6;
 
                 return (
                   <div key={field.field} style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>

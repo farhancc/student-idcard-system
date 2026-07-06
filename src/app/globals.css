@@ -255,3 +255,71 @@ p {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Responsive Portals and Grid Layouts */
+.portal-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+}
+
+.portal-form-col {
+  width: 100%;
+}
+
+.portal-preview-col {
+  width: 100%;
+}
+
+@media (min-width: 992px) {
+  .portal-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 48px;
+  }
+  .portal-form-col {
+    flex: 1.2;
+    min-width: 0;
+  }
+  .portal-preview-col {
+    flex: 1;
+    min-width: 0;
+    position: sticky;
+    top: 40px;
+  }
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.dashboard-grid-32 {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+.dashboard-grid-2col {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 32px;
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 2fr 1fr;
+  }
+  .dashboard-grid-32 {
+    grid-template-columns: 2fr 1fr;
+  }
+  .dashboard-grid-2col {
+    grid-template-columns: 1fr 1fr;
+  }
+}

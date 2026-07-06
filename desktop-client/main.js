@@ -112,8 +112,8 @@ function getPortalUrl() {
 }
 
 // Configure Auto-Updater targeting secure CDN release path
-autoUpdater.autoDownload = true;
-autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = false;
 
 autoUpdater.on('checking-for-update', () => {
   console.log('Checking for updates...');

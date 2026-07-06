@@ -24,9 +24,37 @@ import {
   FileType
 } from 'lucide-react';
 
+interface ApiKey {
+  id: number;
+  label: string;
+  lastUsed?: string;
+  createdAt: string;
+}
+
+interface PrintVendor {
+  id: number;
+  name: string;
+  city?: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+}
+
+interface CleanupResult {
+  deletedFiles: number;
+  deletedDbRecords: number;
+}
+
+interface Font {
+  id: number;
+  name: string;
+  language: string;
+  fileUrl: string;
+}
+
 export default function SettingsPage() {
   const { toast } = useToast();
-  const [keys, setKeys] = useState<any[]>([]);
+  const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKeyLabel, setNewKeyLabel] = useState('');
   const [newGeneratedKey, setNewGeneratedKey] = useState('');
   const [keyLoading, setKeyLoading] = useState(false);
@@ -42,7 +70,7 @@ export default function SettingsPage() {
   const [profileError, setProfileError] = useState('');
 
   // Print Vendors State
-  const [vendors, setVendors] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<PrintVendor[]>([]);
   const [vendorName, setVendorName] = useState('');
   const [vendorPhone, setVendorPhone] = useState('');
   const [vendorEmail, setVendorEmail] = useState('');
@@ -52,11 +80,11 @@ export default function SettingsPage() {
   const [vendorLoading, setVendorLoading] = useState(false);
 
   // Cleanup State
-  const [cleanupResult, setCleanupResult] = useState<any>(null);
+  const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
 
   // Fonts state
-  const [fonts, setFonts] = useState<any[]>([]);
+  const [fonts, setFonts] = useState<Font[]>([]);
   const [fontName, setFontName] = useState('');
   const [fontLanguage, setFontLanguage] = useState('en');
   const [fontFile, setFontFile] = useState<File | null>(null);
@@ -92,7 +120,7 @@ export default function SettingsPage() {
       const fontsRes = await fetch('/api/fonts');
       if (fontsRes.ok) {
         const json = await fontsRes.json();
-        setFonts((json.fonts || []).filter((f: any) => f.pressId !== null));
+        setFonts((json.fonts || []).filter((f: Font & { pressId: number | null }) => f.pressId !== null));
       }
 
       // Fetch Press Profile
@@ -303,7 +331,7 @@ export default function SettingsPage() {
         <p style={{ marginTop: '4px' }}>Manage API integrations, print vendors, and storage retentions.</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px', alignItems: 'start' }}>
+      <div className="dashboard-grid-2col">
         {/* Left Column: API keys & Cleanup */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           
@@ -588,7 +616,7 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {fonts.map((f: any) => {
+                {fonts.map((f: Font) => {
                   const langLabels: Record<string, string> = {
                     en: 'Latin', hi: 'Hindi', ur: 'Urdu', ar: 'Arabic',
                     ta: 'Tamil', te: 'Telugu', bn: 'Bengali', gu: 'Gujarati',
