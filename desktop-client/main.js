@@ -5,6 +5,15 @@ const { autoUpdater } = require('electron-updater');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
 
+function getSystemPathFromLocalUrl(localUrl) {
+  if (!localUrl) return '';
+  let urlPath = localUrl.replace(/^local:\/\//i, '');
+  if (process.platform !== 'win32' && !urlPath.startsWith('/')) {
+    urlPath = '/' + urlPath;
+  }
+  return decodeURIComponent(urlPath);
+}
+
 // Register local:// protocol scheme as privileged to avoid CORS/Fetch errors
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local', privileges: { secure: true, standard: true, corsEnabled: true, supportFetchAPI: true } }
@@ -253,8 +262,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // Register local:// protocol to serve template images stored on disk with CORS headers
   protocol.handle('local', async (request) => {
-    const url = request.url.replace('local://', '');
-    const decodedPath = decodeURIComponent(url);
+    const decodedPath = getSystemPathFromLocalUrl(request.url);
     try {
       const fileBuffer = await fs.promises.readFile(decodedPath);
       // Determine content type based on extension
@@ -408,7 +416,7 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
     if (frontLocalPath) {
-      const cleanFrontPath = frontLocalPath.replace('local://', '');
+      const cleanFrontPath = getSystemPathFromLocalUrl(frontLocalPath);
       const ext = path.extname(cleanFrontPath);
       const targetPath = path.join(dir, `original_${templateId}_front${ext}`);
       
@@ -422,7 +430,7 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
     }
 
     if (backLocalPath) {
-      const cleanBackPath = backLocalPath.replace('local://', '');
+      const cleanBackPath = getSystemPathFromLocalUrl(backLocalPath);
       const ext = path.extname(cleanBackPath);
       const targetPath = path.join(dir, `original_${templateId}_back${ext}`);
       

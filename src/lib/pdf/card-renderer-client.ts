@@ -115,6 +115,36 @@ function generateBarcodeCanvas(text: string, width: number, height: number, scal
 }
 
 /**
+ * Robust helper to dynamically embed an image buffer as either PNG or JPEG
+ * by verifying the file format magic bytes.
+ */
+async function embedImageBuffer(pdfDoc: any, buffer: ArrayBuffer | Uint8Array) {
+  const bytes = new Uint8Array(buffer);
+  
+  // PNG Magic Bytes: 0x89 0x50 0x4E 0x47
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return pdfDoc.embedPng(buffer);
+  }
+  
+  // JPEG Magic Bytes: 0xFF 0xD8
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return pdfDoc.embedJpg(buffer);
+  }
+
+  // Attempt to parse text prefix to see if this is an HTML or JSON error response
+  const prefixText = Array.from(bytes.slice(0, 100))
+    .map(b => String.fromCharCode(b))
+    .join('');
+  
+  if (prefixText.trim().startsWith('<') || prefixText.trim().startsWith('{')) {
+    throw new Error(`Server returned HTML/JSON response instead of image: "${prefixText.trim().substring(0, 60)}..."`);
+  }
+
+  // Fallback default
+  return pdfDoc.embedJpg(buffer);
+}
+
+/**
  * Helper to wrap text.
  */
 export function wrapWords(text: string, maxWidth: number, measureFn: (s: string) => number): string[] {
@@ -635,10 +665,11 @@ export async function renderCardSideToPdfBytesClient(
   const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
   const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
 
-  // Prefer original PDF for vector fidelity, fall back to preview image
   const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
   const previewUrl  = side === 'front' ? template.frontImageUrl : template.backImageUrl;
-  const bgUrl = (originalUrl && originalUrl.toLowerCase().endsWith('.pdf')) ? originalUrl : previewUrl;
+
+  // Use originalUrl if available to preserve vector quality
+  const bgUrl = originalUrl || previewUrl;
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([widthPt, heightPt]);
@@ -649,32 +680,59 @@ export async function renderCardSideToPdfBytesClient(
   // ── 2. Background template ───────────────────────────────────────────────
   if (bgUrl) {
     try {
-      const lowerBg = bgUrl.toLowerCase();
-      if (lowerBg.endsWith('.pdf')) {
-        // Vector path: embed the PDF template page directly
-        const bgBytes = await fetchArrayBuffer(bgUrl);
-        const bgPdf = await PDFDocument.load(bgBytes);
-        const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
-        page.drawPage(embeddedPage, { x: 0, y: 0, width: widthPt, height: heightPt });
-      } else {
-        // Raster fallback: resolve SVG → PNG via Cloudinary transform if needed
-        let resolvedUrl = bgUrl;
-        if (lowerBg.endsWith('.svg')) {
-          if (bgUrl.includes('/image/upload/')) {
-            resolvedUrl = bgUrl.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png');
-          } else {
-            resolvedUrl = bgUrl.replace('.svg', '.png');
-          }
+      let bgBytes: Uint8Array | null = null;
+      let bgBufferSource = '';
+
+      if (originalUrl) {
+        try {
+          bgBytes = new Uint8Array(await fetchArrayBuffer(originalUrl));
+          bgBufferSource = originalUrl;
+        } catch (err) {
+          console.warn(`[PDF client] Failed to load original background (${originalUrl}), falling back to preview:`, err);
         }
-        const bgBytes = await fetchArrayBuffer(resolvedUrl);
-        const lowerResolved = resolvedUrl.toLowerCase();
-        const bgImg = lowerResolved.endsWith('.png')
-          ? await pdfDoc.embedPng(bgBytes)
-          : await pdfDoc.embedJpg(bgBytes);
-        page.drawImage(bgImg, { x: 0, y: 0, width: widthPt, height: heightPt });
+      }
+
+      if (!bgBytes && previewUrl) {
+        try {
+          bgBytes = new Uint8Array(await fetchArrayBuffer(previewUrl));
+          bgBufferSource = previewUrl;
+        } catch (err) {
+          console.error(`[PDF client] Failed to load preview background (${previewUrl}):`, err);
+        }
+      }
+
+      if (bgBytes) {
+        // Sniff bytes to determine if the loaded background is a PDF
+        const isPdf = bgBytes[0] === 0x25 && bgBytes[1] === 0x50 && bgBytes[2] === 0x44 && bgBytes[3] === 0x46 && bgBytes[4] === 0x2d; // %PDF-
+
+        if (isPdf) {
+          // Vector path: embed the PDF template page directly
+          const bgPdf = await PDFDocument.load(bgBytes);
+          const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
+          page.drawPage(embeddedPage, { x: 0, y: 0, width: widthPt, height: heightPt });
+        } else {
+          // Raster fallback: resolve SVG → PNG via Cloudinary transform if needed
+          const lowerSource = bgBufferSource.toLowerCase();
+          let resolvedUrl = bgBufferSource;
+          if (lowerSource.includes('.svg')) {
+            if (bgBufferSource.includes('/image/upload/')) {
+              resolvedUrl = bgBufferSource.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png');
+            } else {
+              resolvedUrl = bgBufferSource.replace('.svg', '.png');
+            }
+          }
+          
+          let finalBytes = bgBytes;
+          if (resolvedUrl !== bgBufferSource) {
+            finalBytes = new Uint8Array(await fetchArrayBuffer(resolvedUrl));
+          }
+          
+          const bgImg = await embedImageBuffer(pdfDoc, finalBytes);
+          page.drawImage(bgImg, { x: 0, y: 0, width: widthPt, height: heightPt });
+        }
       }
     } catch (err) {
-      console.error(`[renderCardSideToPdfBytesClient] Background load error from ${bgUrl}:`, err);
+      console.error(`[renderCardSideToPdfBytesClient] Background load error:`, err);
     }
   }
 
@@ -887,10 +945,7 @@ export async function renderCardSideToPdfBytesClient(
         if (!rawValue) continue;
         try {
           const imgBytes = await fetchArrayBuffer(String(rawValue));
-          const lowerImgUrl = String(rawValue).toLowerCase();
-          const img = lowerImgUrl.endsWith('.png')
-            ? await pdfDoc.embedPng(imgBytes)
-            : await pdfDoc.embedJpg(imgBytes);
+          const img = await embedImageBuffer(pdfDoc, imgBytes);
           page.drawImage(img, { x: xPt, y: yPt, width: wPt, height: hPt });
         } catch (err) {
           console.error(`[PDF client] Image field error for ${f.field}:`, err);

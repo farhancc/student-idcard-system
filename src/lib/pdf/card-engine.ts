@@ -59,6 +59,36 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
 }
 
+/**
+ * Robust helper to dynamically embed an image buffer as either PNG or JPEG
+ * by verifying the file format magic bytes.
+ */
+async function embedImageBuffer(pdfDoc: any, buffer: Buffer | ArrayBuffer | Uint8Array) {
+  const bytes = new Uint8Array(buffer);
+  
+  // PNG Magic Bytes: 0x89 0x50 0x4E 0x47
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return pdfDoc.embedPng(buffer);
+  }
+  
+  // JPEG Magic Bytes: 0xFF 0xD8
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) {
+    return pdfDoc.embedJpg(buffer);
+  }
+
+  // Attempt to parse text prefix to see if this is an HTML or JSON error response
+  const prefixText = Array.from(bytes.slice(0, 100))
+    .map(b => String.fromCharCode(b))
+    .join('');
+  
+  if (prefixText.trim().startsWith('<') || prefixText.trim().startsWith('{')) {
+    throw new Error(`Server returned HTML/JSON response instead of image: "${prefixText.trim().substring(0, 60)}..."`);
+  }
+
+  // Fallback default
+  return pdfDoc.embedJpg(buffer);
+}
+
 // Coordinate layout field mapping format
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
@@ -683,9 +713,8 @@ export async function renderCardSideToPdfBytes(
   const previewUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
 
   // Use original if it is a PDF (true vector), otherwise fall back to preview
-  const bgUrl = (originalUrl && originalUrl.toLowerCase().endsWith('.pdf'))
-    ? originalUrl
-    : previewUrl;
+  // Use originalUrl if available to preserve vector quality
+  const bgUrl = originalUrl || previewUrl;
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([widthPt, heightPt]);
@@ -702,34 +731,59 @@ export async function renderCardSideToPdfBytes(
   // 2. Draw Background — embed as vector PDF page when possible, else raster image
   if (bgUrl) {
     try {
-      const lowerBg = bgUrl.toLowerCase();
-      if (lowerBg.endsWith('.pdf')) {
-        // ── Vector path: embed the PDF page directly (preserves all vector paths) ──
-        const bgBuffer = await getFileBuffer(bgUrl);
-        const bgPdf = await PDFDocument.load(bgBuffer);
-        const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
-        page.drawPage(embeddedPage, {
-          x: 0,
-          y: 0,
-          width: widthPt,
-          height: heightPt,
-        });
-      } else {
-        // ── Raster fallback: embed PNG / JPEG preview ──
-        const targetBgUrl = lowerBg.endsWith('.svg') ? resolveSvgToPng(bgUrl, 3000) : bgUrl;
-        const bgBuffer = await getFileBuffer(targetBgUrl);
-        let bgImg;
-        if (targetBgUrl.toLowerCase().endsWith('.png')) {
-          bgImg = await pdfDoc.embedPng(bgBuffer);
-        } else {
-          bgImg = await pdfDoc.embedJpg(bgBuffer);
+      let bgBuffer: Buffer | null = null;
+      let bgBufferSource = '';
+
+      if (originalUrl) {
+        try {
+          bgBuffer = await getFileBuffer(originalUrl);
+          bgBufferSource = originalUrl;
+        } catch (err) {
+          console.warn(`[PDF server] Failed to load original background (${originalUrl}), falling back to preview:`, err);
         }
-        page.drawImage(bgImg, {
-          x: 0,
-          y: 0,
-          width: widthPt,
-          height: heightPt,
-        });
+      }
+
+      if (!bgBuffer && previewUrl) {
+        try {
+          bgBuffer = await getFileBuffer(previewUrl);
+          bgBufferSource = previewUrl;
+        } catch (err) {
+          console.error(`[PDF server] Failed to load preview background (${previewUrl}):`, err);
+        }
+      }
+
+      if (bgBuffer) {
+        // Sniff bytes to determine if the loaded background is a PDF
+        const isPdf = bgBuffer[0] === 0x25 && bgBuffer[1] === 0x50 && bgBuffer[2] === 0x44 && bgBuffer[3] === 0x46 && bgBuffer[4] === 0x2d; // %PDF-
+
+        if (isPdf) {
+          // ── Vector path: embed the PDF page directly (preserves all vector paths) ──
+          const bgPdf = await PDFDocument.load(bgBuffer);
+          const [embeddedPage] = await pdfDoc.embedPdf(bgPdf, [0]);
+          page.drawPage(embeddedPage, {
+            x: 0,
+            y: 0,
+            width: widthPt,
+            height: heightPt,
+          });
+        } else {
+          // ── Raster fallback: embed PNG / JPEG preview ──
+          const lowerSource = bgBufferSource.toLowerCase();
+          const targetBgUrl = lowerSource.includes('.svg') ? resolveSvgToPng(bgBufferSource, 3000) : bgBufferSource;
+          
+          let finalBuffer = bgBuffer;
+          if (targetBgUrl !== bgBufferSource) {
+            finalBuffer = await getFileBuffer(targetBgUrl);
+          }
+          
+          const bgImg = await embedImageBuffer(pdfDoc, finalBuffer);
+          page.drawImage(bgImg, {
+            x: 0,
+            y: 0,
+            width: widthPt,
+            height: heightPt,
+          });
+        }
       }
     } catch (err) {
       console.error(`Error rendering PDF background from ${bgUrl}:`, err);
@@ -986,12 +1040,7 @@ export async function renderCardSideToPdfBytes(
         if (!rawValue) continue;
         try {
           const imgBuffer = await getFileBuffer(rawValue);
-          let img;
-          if (rawValue.toLowerCase().endsWith('.png')) {
-            img = await pdfDoc.embedPng(imgBuffer);
-          } else {
-            img = await pdfDoc.embedJpg(imgBuffer);
-          }
+          const img = await embedImageBuffer(pdfDoc, imgBuffer);
 
           page.drawImage(img, {
             x: xPt,
