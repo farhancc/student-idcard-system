@@ -1838,11 +1838,14 @@ export default function TemplatesPage() {
       }
     }
 
-    let yOffset = 0;
+     let yOffset = 0;
+    const halfLeading = (lineHeight - fontSize) / 2;
     if (f.verticalAlign === 'center') {
-      yOffset = (f.height - textHeight) / 2;
+      yOffset = (f.height - textHeight) / 2 + halfLeading;
     } else if (f.verticalAlign === 'bottom') {
-      yOffset = f.height - textHeight;
+      yOffset = f.height - textHeight + halfLeading;
+    } else {
+      yOffset = halfLeading;
     }
 
     let xOffset = 0;
@@ -2678,7 +2681,7 @@ export default function TemplatesPage() {
                               const style = getBoxStyle(f, isSelected, scale);
 
                               const isTextLike = f.type === 'text' || f.type === 'id';
-                              const testDataStyle: React.CSSProperties = (showTestData && isTextLike) ? {
+                              const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
                                 fontFamily: getFontFamily(f.fontFamily),
@@ -2686,13 +2689,13 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
-                                 alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
+                                alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
                                 whiteSpace: 'pre-wrap',
                                 letterSpacing: f.letterSpacing ? `${f.letterSpacing * scale}px` : undefined,
-                                lineHeight: f.lineHeight ? f.lineHeight : undefined,
+                                lineHeight: f.lineHeight ?? 1.2,
                                 textDecoration: f.textDecoration ? f.textDecoration : undefined,
                                 textTransform: f.textTransform ? f.textTransform as any : undefined,
                                 opacity: f.opacity != null ? f.opacity : undefined,
@@ -3032,7 +3035,7 @@ export default function TemplatesPage() {
                               const style = getBoxStyle(f, isSelected, scale);
 
                               const isTextLike = f.type === 'text' || f.type === 'id';
-                              const testDataStyle: React.CSSProperties = (showTestData && isTextLike) ? {
+                              const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
                                 fontFamily: getFontFamily(f.fontFamily),
@@ -3040,13 +3043,13 @@ export default function TemplatesPage() {
                                 fontStyle: f.fontStyle || 'normal',
                                 textAlign: f.align || 'left',
                                 justifyContent: f.align === 'center' ? 'center' : (f.align === 'right' ? 'flex-end' : 'flex-start'),
-                                 alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
+                                alignItems: f.verticalAlign === 'center' ? 'center' : (f.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start'),
                                 padding: '0 4px',
                                 textShadow: 'none',
                                 overflow: 'hidden',
                                 whiteSpace: 'pre-wrap',
                                 letterSpacing: f.letterSpacing ? `${f.letterSpacing * scale}px` : undefined,
-                                lineHeight: f.lineHeight ? f.lineHeight : undefined,
+                                lineHeight: f.lineHeight ?? 1.2,
                                 textDecoration: f.textDecoration ? f.textDecoration : undefined,
                                 textTransform: f.textTransform ? f.textTransform as any : undefined,
                                 opacity: f.opacity != null ? f.opacity : undefined,

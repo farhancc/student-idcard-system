@@ -441,11 +441,12 @@ export async function renderCardSideClient(
         const renderedHeight = lines.length * lineHeight;
 
         // Calculate starting Y based on vertical alignment
-        let startY = effectiveY;
+        const halfLeading = (lineHeight - (f.fontSize || 20)) / 2;
+        let startY = effectiveY + halfLeading;
         if (f.verticalAlign === 'center') {
-          startY = effectiveY + (f.height - renderedHeight) / 2;
+          startY = effectiveY + (f.height - renderedHeight) / 2 + halfLeading;
         } else if (f.verticalAlign === 'bottom') {
-          startY = effectiveY + f.height - renderedHeight;
+          startY = effectiveY + f.height - renderedHeight + halfLeading;
         }
 
         ctx.beginPath();
@@ -957,11 +958,12 @@ export async function renderCardSideToPdfBytesClient(
           };
 
           const lines = wrapWordsPdf(processedValue, wPt, measureFn);
-          const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
+           const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
           const renderedHeightPt = lines.length * lineHeightPt;
+          const halfLeadingPt = (lineHeightPt - fontSizePt) / 2;
 
           // Adjust starting Y based on vertical alignment
-          let startYPt = yPt + hPt - fontSizePt;
+          let startYPt = yPt + hPt - fontSizePt - halfLeadingPt;
           if (f.verticalAlign === 'center') {
             startYPt -= (hPt - renderedHeightPt) / 2;
           } else if (f.verticalAlign === 'bottom') {

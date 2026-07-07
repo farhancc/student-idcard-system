@@ -538,11 +538,12 @@ export async function renderCardSide(
         const renderedHeight = lines.length * lineHeight;
 
         // Calculate starting Y based on vertical alignment
-        let startY = effectiveY;
+        const halfLeading = (lineHeight - (f.fontSize || 20)) / 2;
+        let startY = effectiveY + halfLeading;
         if (f.verticalAlign === 'center') {
-          startY = effectiveY + (f.height - renderedHeight) / 2;
+          startY = effectiveY + (f.height - renderedHeight) / 2 + halfLeading;
         } else if (f.verticalAlign === 'bottom') {
-          startY = effectiveY + f.height - renderedHeight;
+          startY = effectiveY + f.height - renderedHeight + halfLeading;
         }
 
         // Clip to the bounding box of the text field
@@ -1005,8 +1006,18 @@ export async function renderCardSideToPdfBytes(
             lines.push(currentLine);
           }
 
-          let currentYPt = yPt + hPt - fontSizePt;
-          const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
+           const lineHeightPt = fontSizePt * (f.lineHeight ?? 1.2);
+          const renderedHeightPt = lines.length * lineHeightPt;
+          const halfLeadingPt = (lineHeightPt - fontSizePt) / 2;
+
+          let startYPt = yPt + hPt - fontSizePt - halfLeadingPt;
+          if (f.verticalAlign === 'center') {
+            startYPt -= (hPt - renderedHeightPt) / 2;
+          } else if (f.verticalAlign === 'bottom') {
+            startYPt -= (hPt - renderedHeightPt);
+          }
+
+          let currentYPt = startYPt;
           const opacity = f.opacity != null ? f.opacity : 1.0;
 
           lines.forEach(lineText => {
