@@ -1,7 +1,6 @@
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
-import { processPdfJobInBackground } from '@/lib/pdf/job-processor';
 
 export async function POST(request: Request) {
   try {
@@ -127,26 +126,12 @@ export async function POST(request: Request) {
         expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 7), // Expires in 7 days (R5 PDF job link expiry)
         version: nextVersion,
         label: versionLabel,
+        isLocalJob: true,
       },
     });
 
-    // Delegate execution to background using Next.js 'after' API to prevent serverless container freeze
-    after(async () => {
-      try {
-        console.log(`[Background Job] Starting PDF generation for Job #${job.id}`);
-        await processPdfJobInBackground(
-          job.id,
-          pressId,
-          order.id,
-          cardholderIds,
-          pdfType,
-          jobOptions,
-          userId
-        );
-      } catch (error) {
-        console.error(`[Background Job] Failed to run PDF generation for Job #${job.id}:`, error);
-      }
-    });
+    // Offline compile model: All PDF compilation is offloaded to the local desktop client daemon.
+    // The server does not execute compilation.
 
 
     return NextResponse.json({
