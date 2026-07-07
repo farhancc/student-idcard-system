@@ -593,6 +593,8 @@ export default function TemplatesPage() {
       let targetX = dragState.origX + dx;
       let targetY = dragState.origY + dy;
 
+      const { xOffset, yOffset, textWidth, textHeight } = getFieldTextOffsets(field);
+
       // ── Vertical Snapping (X axis) ──
       let snappedX = targetX;
       let minDiffX = threshold;
@@ -602,25 +604,25 @@ export default function TemplatesPage() {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
         for (const g of guides) {
           if (g.type === 'vertical') {
-            // Left edge
-            const diffLeft = Math.abs(targetX - g.value);
+            // Text Left edge
+            const diffLeft = Math.abs((targetX + xOffset) - g.value);
             if (diffLeft < minDiffX) {
               minDiffX = diffLeft;
-              snappedX = g.value;
+              snappedX = g.value - xOffset;
               snappedToGuideX = true;
             }
-            // Right edge
-            const diffRight = Math.abs((targetX + field.width) - g.value);
+            // Text Right edge
+            const diffRight = Math.abs((targetX + xOffset + textWidth) - g.value);
             if (diffRight < minDiffX) {
               minDiffX = diffRight;
-              snappedX = g.value - field.width;
+              snappedX = g.value - xOffset - textWidth;
               snappedToGuideX = true;
             }
-            // Center
-            const diffCenter = Math.abs((targetX + field.width / 2) - g.value);
+            // Text Center
+            const diffCenter = Math.abs((targetX + xOffset + textWidth / 2) - g.value);
             if (diffCenter < minDiffX) {
               minDiffX = diffCenter;
-              snappedX = g.value - field.width / 2;
+              snappedX = g.value - xOffset - textWidth / 2;
               snappedToGuideX = true;
             }
           }
@@ -645,25 +647,25 @@ export default function TemplatesPage() {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
         for (const g of guides) {
           if (g.type === 'horizontal') {
-            // Top edge
-            const diffTop = Math.abs(targetY - g.value);
+            // Text Top edge
+            const diffTop = Math.abs((targetY + yOffset) - g.value);
             if (diffTop < minDiffY) {
               minDiffY = diffTop;
-              snappedY = g.value;
+              snappedY = g.value - yOffset;
               snappedToGuideY = true;
             }
-            // Bottom edge
-            const diffBottom = Math.abs((targetY + field.height) - g.value);
+            // Text Bottom edge
+            const diffBottom = Math.abs((targetY + yOffset + textHeight) - g.value);
             if (diffBottom < minDiffY) {
               minDiffY = diffBottom;
-              snappedY = g.value - field.height;
+              snappedY = g.value - yOffset - textHeight;
               snappedToGuideY = true;
             }
-            // Center
-            const diffCenter = Math.abs((targetY + field.height / 2) - g.value);
+            // Text Center
+            const diffCenter = Math.abs((targetY + yOffset + textHeight / 2) - g.value);
             if (diffCenter < minDiffY) {
               minDiffY = diffCenter;
-              snappedY = g.value - field.height / 2;
+              snappedY = g.value - yOffset - textHeight / 2;
               snappedToGuideY = true;
             }
           }
@@ -1792,6 +1794,65 @@ export default function TemplatesPage() {
     const customVal = testData[f.field];
     const val = (customVal !== undefined && customVal !== '') ? customVal : getFieldDefaultValue(f.field, f.type);
     return `${f.prefix || ''}${val}${f.suffix || ''}`;
+  };
+
+  const getFieldTextOffsets = (f: FieldCoordinate) => {
+    if (f.type !== 'text' && f.type !== 'id') {
+      return { xOffset: 0, yOffset: 0, textWidth: f.width, textHeight: f.height };
+    }
+
+    const fontSize = f.fontSize || 18;
+    const lineHeight = fontSize * (f.lineHeight ?? 1.2);
+
+    let text = f.field;
+    if (f.staticValue !== undefined && f.staticValue !== null) {
+      text = `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+    } else if (showTestData) {
+      const customVal = testData[f.field];
+      const val = (customVal !== undefined && customVal !== '') ? customVal : getFieldDefaultValue(f.field, f.type);
+      text = `${f.prefix || ''}${val}${f.suffix || ''}`;
+    }
+
+    let textWidth = f.width;
+    let textHeight = lineHeight;
+
+    if (typeof window !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = `${f.fontStyle || 'normal'} ${f.fontWeight || 'normal'} ${fontSize}px sans-serif`;
+        const measureTextSpacing = (s: string) => {
+          const spacing = f.letterSpacing || 0;
+          if (!spacing) return ctx.measureText(s).width;
+          let totalWidth = 0;
+          for (let ci = 0; ci < s.length; ci++) {
+            totalWidth += ctx.measureText(s[ci]).width;
+            if (ci < s.length - 1) totalWidth += spacing;
+          }
+          return totalWidth;
+        };
+
+        const lines = wrapWords(text, f.width, measureTextSpacing);
+        textWidth = Math.max(0, ...lines.map(l => measureTextSpacing(l)));
+        textHeight = lines.length * lineHeight;
+      }
+    }
+
+    let yOffset = 0;
+    if (f.verticalAlign === 'center') {
+      yOffset = (f.height - textHeight) / 2;
+    } else if (f.verticalAlign === 'bottom') {
+      yOffset = f.height - textHeight;
+    }
+
+    let xOffset = 0;
+    if (f.align === 'center') {
+      xOffset = (f.width - textWidth) / 2;
+    } else if (f.align === 'right') {
+      xOffset = f.width - textWidth;
+    }
+
+    return { xOffset, yOffset, textWidth, textHeight };
   };
 
   const handleSave = async (e: React.FormEvent) => {
