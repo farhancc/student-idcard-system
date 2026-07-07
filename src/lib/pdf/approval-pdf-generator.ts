@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient } from './card-renderer-client';
+import { renderCardSideToPdfBytesClient, FieldCoordinate } from './card-renderer-client';
 
 export async function generateApprovalPdfClient(
   clientName: string,
@@ -52,6 +52,20 @@ export async function generateApprovalPdfClient(
     backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
   };
 
+  const frontFieldsList: FieldCoordinate[] = JSON.parse(clientTemplate.frontFields || '[]');
+  const backFieldsList: FieldCoordinate[] = JSON.parse(clientTemplate.backFields || '[]');
+  const allFields = [...frontFieldsList, ...backFieldsList];
+
+  const uniqueFieldsMap = new Map<string, FieldCoordinate>();
+  for (const f of allFields) {
+    if (f.field && f.field !== 'photo' && f.field !== 'cardSerial') {
+      const existing = uniqueFieldsMap.get(f.field);
+      if (!existing || (!existing.prefix && f.prefix)) {
+        uniqueFieldsMap.set(f.field, f);
+      }
+    }
+  }
+
   const parsedValidTill = template.validTill
     ? typeof template.validTill === 'string'
       ? new Date(template.validTill)
@@ -89,6 +103,24 @@ export async function generateApprovalPdfClient(
         photoUrl: cardholder.photoUrl,
         cardSerial: cardholder.cardSerial,
         customFields: typeof cardholder.customFields === 'string' ? cardholder.customFields : JSON.stringify(cardholder.customFields || {}),
+      };
+
+      const customData = typeof cardholder.customFields === 'string'
+        ? JSON.parse(cardholder.customFields || '{}')
+        : (cardholder.customFields || {});
+
+      let formattedValidTill = '';
+      if (parsedValidTill) {
+        const date = new Date(parsedValidTill);
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
+      }
+
+      const cardholderData: Record<string, any> = {
+        name: cardholder.name,
+        designation: cardholder.designation || '',
+        validTill: formattedValidTill,
+        ...customData,
       };
 
       if (hasBackSide) {
@@ -139,27 +171,49 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw cardholder details
-        page.drawText(`${cardholder.name} (${cardholder.designation || 'N/A'})`, {
+        page.drawText(cardholder.name, {
           x: 480,
           y: yOffset - 40,
           size: 9,
           font: fontBold,
           color: rgb(0, 0, 0),
         });
-        page.drawText(`Serial: ${cardholder.cardSerial || 'N/A'}`, {
-          x: 480,
-          y: yOffset - 55,
-          size: 8,
-          font,
-          color: rgb(0.4, 0.4, 0.4),
-        });
-        page.drawText(`ID: #${cardholder.id}`, {
-          x: 480,
-          y: yOffset - 70,
-          size: 8,
-          font,
-          color: rgb(0.5, 0.5, 0.5),
-        });
+
+        let currentY = yOffset - 53;
+        // Always draw ID if cardSerial is present and not already drawn
+        if (!uniqueFieldsMap.has('uniqueKey') && cardholder.cardSerial) {
+          page.drawText(`ID: ${cardholder.cardSerial}`, {
+            x: 480,
+            y: currentY,
+            size: 8,
+            font,
+            color: rgb(0.4, 0.4, 0.4),
+          });
+          currentY -= 12;
+        }
+
+        for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
+          if (fieldKey === 'name') continue;
+          const val = cardholderData[fieldKey];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
+            if (!label) {
+              label = fieldKey
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim();
+            }
+            const textToDraw = `${label}: ${val}`;
+            page.drawText(textToDraw, {
+              x: 480,
+              y: currentY,
+              size: 8,
+              font,
+              color: rgb(0.4, 0.4, 0.4),
+            });
+            currentY -= 12;
+          }
+        }
 
         // Draw bounding box outlines
         page.drawRectangle({
@@ -210,14 +264,31 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw details below the card
-        page.drawText(`${cardholder.name} (${cardholder.designation || 'N/A'})`, {
+        page.drawText(cardholder.name, {
           x: xOffset,
           y: yOffset - scaledHeight - 12,
           size: 8,
           font: fontBold,
           color: rgb(0, 0, 0),
         });
-        page.drawText(`Serial: ${cardholder.cardSerial || 'N/A'} | ID: #${cardholder.id}`, {
+
+        const detailsList: string[] = [];
+        for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
+          if (fieldKey === 'name') continue;
+          const val = cardholderData[fieldKey];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
+            if (!label) {
+              label = fieldKey
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim();
+            }
+            detailsList.push(`${label}: ${val}`);
+          }
+        }
+        const detailsLine = detailsList.join(' | ');
+        page.drawText(detailsLine, {
           x: xOffset,
           y: yOffset - scaledHeight - 22,
           size: 7.5,

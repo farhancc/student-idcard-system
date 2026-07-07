@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFString, PDFDict, degrees } from 'pdf-lib';
 import { getOrRenderCard } from './cache-manager';
+import { FieldCoordinate } from './card-engine';
 import { prisma } from '../prisma';
 import fs from 'fs';
 import path from 'path';
@@ -226,27 +227,80 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         });
 
         // Draw cardholder details
-        page.drawText(`${cardholder.name} (${cardholder.designation || 'N/A'})`, {
+        const frontFieldsList: FieldCoordinate[] = JSON.parse(order.template?.frontFields || '[]');
+        const backFieldsList: FieldCoordinate[] = JSON.parse(order.template?.backFields || '[]');
+        const allFields = [...frontFieldsList, ...backFieldsList];
+
+        const uniqueFieldsMap = new Map<string, FieldCoordinate>();
+        for (const f of allFields) {
+          if (f.field && f.field !== 'photo' && f.field !== 'cardSerial') {
+            const existing = uniqueFieldsMap.get(f.field);
+            if (!existing || (!existing.prefix && f.prefix)) {
+              uniqueFieldsMap.set(f.field, f);
+            }
+          }
+        }
+
+        const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+
+        let formattedValidTill = '';
+        if (order.validTill) {
+          const date = new Date(order.validTill);
+          const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
+        }
+
+        const cardholderData: Record<string, any> = {
+          name: cardholder.name,
+          designation: cardholder.designation || '',
+          uniqueKey: cardholder.uniqueKey || '',
+          validTill: formattedValidTill,
+          ...customData,
+        };
+
+        page.drawText(cardholder.name, {
           x: 480,
           y: yOffset - 40,
           size: 9,
           font: fontBold,
           color: rgb(0, 0, 0),
         });
-        page.drawText(`Serial: ${cardholder.cardSerial || 'Pending'}`, {
-          x: 480,
-          y: yOffset - 60,
-          size: 8,
-          font,
-          color: rgb(0.3, 0.3, 0.3),
-        });
-        page.drawText(`Unique Key: ${cardholder.uniqueKey || 'N/A'}`, {
-          x: 480,
-          y: yOffset - 80,
-          size: 8,
-          font,
-          color: rgb(0.3, 0.3, 0.3),
-        });
+
+        let currentY = yOffset - 53;
+        // Always draw uniqueKey if not already drawn and is present
+        if (!uniqueFieldsMap.has('uniqueKey') && cardholder.uniqueKey) {
+          page.drawText(`ID: ${cardholder.uniqueKey}`, {
+            x: 480,
+            y: currentY,
+            size: 8,
+            font,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          currentY -= 12;
+        }
+
+        for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
+          if (fieldKey === 'name') continue;
+          const val = cardholderData[fieldKey];
+          if (val !== undefined && val !== null && String(val).trim() !== '') {
+            let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
+            if (!label) {
+              label = fieldKey
+                .replace(/([A-Z])/g, ' $1')
+                .replace(/^./, str => str.toUpperCase())
+                .trim();
+            }
+            const textToDraw = `${label}: ${val}`;
+            page.drawText(textToDraw, {
+              x: 480,
+              y: currentY,
+              size: 8,
+              font,
+              color: rgb(0.3, 0.3, 0.3),
+            });
+            currentY -= 12;
+          }
+        }
 
         // Separator line
         const separatorY = yOffset - scaledHeight - (isPortraitTemplate ? 10 : 15);
