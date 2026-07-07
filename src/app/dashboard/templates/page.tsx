@@ -116,6 +116,7 @@ export default function TemplatesPage() {
   const [activeGuideDrag, setActiveGuideDrag] = useState<{ id: string; side: 'front' | 'back'; type: 'horizontal' | 'vertical'; isNew?: boolean } | null>(null);
   // Bleed & Safe Area guide overlay
   const [showBleedGuides, setShowBleedGuides] = useState(false);
+  const [zoom, setZoom] = useState(1);
   // CR80 standard at 300 DPI: 3.375" x 2.125" => 1013 x 638 px
   // Bleed: 1.5mm at 300 DPI = ~18px; Safe area: 3mm = ~35px
   const BLEED_PX = 18;
@@ -236,7 +237,8 @@ export default function TemplatesPage() {
       fontWeight: 'normal',
       color: '#000000',
       align: 'left',
-      prefix: 'Roll No : ',
+      prefix: '',
+      suffix: '',
       verticalAlign: 'top',
     };
 
@@ -754,7 +756,7 @@ export default function TemplatesPage() {
   useEffect(() => {
     if (!dragState) return;
 
-    const scale = 480 / cardWidth;
+    const scale = (480 * zoom) / cardWidth;
 
     const onMouseMove = (e: MouseEvent) => handleMouseMove(e, scale);
     const onMouseUp = () => handleMouseUp();
@@ -766,13 +768,13 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides]);
+  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides, zoom]);
 
   // ── Guide Dragging Effect ─────────────────────────────────────────────
   useEffect(() => {
     if (!activeGuideDrag) return;
 
-    const scale = 480 / cardWidth;
+    const scale = (480 * zoom) / cardWidth;
     const canvasEl = document.getElementById(`designer-canvas-${activeGuideDrag.side}`);
     if (!canvasEl) return;
 
@@ -823,14 +825,15 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [activeGuideDrag, cardWidth, cardHeight]);
+  }, [activeGuideDrag, cardWidth, cardHeight, zoom]);
 
   // ── Photoshop-style Rulers ────────────────────────────────────────────
   const renderRuler = (side: 'front' | 'back', type: 'horizontal' | 'vertical') => {
     const isHoriz = type === 'horizontal';
     const length = isHoriz ? cardWidth : cardHeight;
-    const displayLength = isHoriz ? 480 : (480 / cardWidth) * cardHeight;
-    const scale = 480 / cardWidth;
+    const editorWidth = 480 * zoom;
+    const displayLength = isHoriz ? editorWidth : (editorWidth / cardWidth) * cardHeight;
+    const scale = editorWidth / cardWidth;
 
     const ticks = [];
     const step = 10;
@@ -938,7 +941,7 @@ export default function TemplatesPage() {
 
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    const scale = 480 / cardWidth;
+    const scale = (480 * zoom) / cardWidth;
     
     let startCardX = Math.round((e.clientX - rect.left) / scale);
     let startCardY = Math.round((e.clientY - rect.top) / scale);
@@ -960,7 +963,8 @@ export default function TemplatesPage() {
       fontWeight: 'normal',
       color: '#000000',
       align: 'left',
-      prefix: `field_${newIndex + 1}: `,
+      prefix: '',
+      suffix: '',
     };
 
     if (side === 'front') {
@@ -1052,7 +1056,7 @@ export default function TemplatesPage() {
     const h = (f.height + selfOverflow) * scale;
     const isLowerHalf = y > (cardHeight * scale) / 2;
 
-    const tooltipLeft = Math.max(0, Math.min(x, 480 - 320)); // 320px width
+    const tooltipLeft = Math.max(0, Math.min(x, (480 * zoom) - 320)); // 320px width
 
     const handleStaticImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -2193,6 +2197,34 @@ export default function TemplatesPage() {
                     Visual Interactive Designer
                   </h4>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Zoom Option */}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px', 
+                      fontSize: '0.8rem', 
+                      background: 'rgba(255,255,255,0.05)', 
+                      padding: '6px 12px', 
+                      borderRadius: '8px', 
+                      border: '1px solid var(--glass-border)',
+                      userSelect: 'none',
+                      fontWeight: 500,
+                    }}>
+                      <span style={{ color: '#94a3b8' }}>Zoom:</span>
+                      <select
+                        value={zoom}
+                        onChange={e => setZoom(Number(e.target.value))}
+                        className="form-input"
+                        style={{ padding: '0px 4px', fontSize: '0.75rem', width: 'auto', minWidth: '70px', background: 'transparent', border: 'none', color: '#fff', outline: 'none', cursor: 'pointer' }}
+                      >
+                        <option value={0.5} style={{ background: '#1e293b' }}>50%</option>
+                        <option value={0.75} style={{ background: '#1e293b' }}>75%</option>
+                        <option value={1} style={{ background: '#1e293b' }}>100%</option>
+                        <option value={1.25} style={{ background: '#1e293b' }}>125%</option>
+                        <option value={1.5} style={{ background: '#1e293b' }}>150%</option>
+                        <option value={2} style={{ background: '#1e293b' }}>200%</option>
+                      </select>
+                    </div>
                     {/* Grid Toggle */}
                     <label style={{ 
                       display: 'flex', 
@@ -2415,7 +2447,7 @@ export default function TemplatesPage() {
                     </div>
                     {frontImageUrl ? (
                       (() => {
-                        const editorWidth = 480;
+                        const editorWidth = 480 * zoom;
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
@@ -2542,27 +2574,36 @@ export default function TemplatesPage() {
                                 return (
                                   <div
                                     key={g.id}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setActiveGuideDrag({ id: g.id, side: 'front', type: g.type });
-                                    }}
                                     style={{
                                       position: 'absolute',
                                       left: isHoriz ? '0' : `${pos}px`,
                                       top: isHoriz ? `${pos}px` : '0',
-                                      width: isHoriz ? '100%' : '2px',
-                                      height: isHoriz ? '2px' : '100%',
-                                      cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                      width: isHoriz ? '100%' : '0px',
+                                      height: isHoriz ? '0px' : '100%',
                                       borderTop: isHoriz ? '1.5px dashed #06b6d4' : 'none',
                                       borderLeft: !isHoriz ? '1.5px dashed #06b6d4' : 'none',
                                       zIndex: 350,
-                                      padding: isHoriz ? '4px 0' : '0 4px',
-                                      margin: isHoriz ? '-4px 0 0 0' : '0 0 0 -4px',
-                                      background: 'transparent'
                                     }}
-                                    title="Drag to move, drag off canvas/ruler to delete"
-                                  />
+                                  >
+                                    {/* Invisible Grab Zone */}
+                                    <div
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setActiveGuideDrag({ id: g.id, side: 'front', type: g.type });
+                                      }}
+                                      style={{
+                                        position: 'absolute',
+                                        left: isHoriz ? '0' : '-8px',
+                                        top: isHoriz ? '-8px' : '0',
+                                        width: isHoriz ? '100%' : '17px',
+                                        height: isHoriz ? '17px' : '100%',
+                                        cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                        background: 'transparent'
+                                      }}
+                                      title="Drag to move, drag off canvas/ruler to delete"
+                                    />
+                                  </div>
                                 );
                               })}
                             {frontFields.map((f, i) => {
@@ -2738,8 +2779,8 @@ export default function TemplatesPage() {
                       })()
                     ) : (
                       <div style={{
-                        width: '480px',
-                        height: '303px',
+                        width: `${480 * zoom}px`,
+                        height: `${303 * zoom}px`,
                         border: '1.5px dashed var(--glass-border)',
                         borderRadius: '8px',
                         display: 'flex',
@@ -2763,7 +2804,7 @@ export default function TemplatesPage() {
                     </div>
                     {backImageUrl ? (
                       (() => {
-                        const editorWidth = 480;
+                        const editorWidth = 480 * zoom;
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
@@ -2887,27 +2928,36 @@ export default function TemplatesPage() {
                                 return (
                                   <div
                                     key={g.id}
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setActiveGuideDrag({ id: g.id, side: 'back', type: g.type });
-                                    }}
                                     style={{
                                       position: 'absolute',
                                       left: isHoriz ? '0' : `${pos}px`,
                                       top: isHoriz ? `${pos}px` : '0',
-                                      width: isHoriz ? '100%' : '2px',
-                                      height: isHoriz ? '2px' : '100%',
-                                      cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                      width: isHoriz ? '100%' : '0px',
+                                      height: isHoriz ? '0px' : '100%',
                                       borderTop: isHoriz ? '1.5px dashed #06b6d4' : 'none',
                                       borderLeft: !isHoriz ? '1.5px dashed #06b6d4' : 'none',
                                       zIndex: 350,
-                                      padding: isHoriz ? '4px 0' : '0 4px',
-                                      margin: isHoriz ? '-4px 0 0 0' : '0 0 0 -4px',
-                                      background: 'transparent'
                                     }}
-                                    title="Drag to move, drag off canvas/ruler to delete"
-                                  />
+                                  >
+                                    {/* Invisible Grab Zone */}
+                                    <div
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setActiveGuideDrag({ id: g.id, side: 'back', type: g.type });
+                                      }}
+                                      style={{
+                                        position: 'absolute',
+                                        left: isHoriz ? '0' : '-8px',
+                                        top: isHoriz ? '-8px' : '0',
+                                        width: isHoriz ? '100%' : '17px',
+                                        height: isHoriz ? '17px' : '100%',
+                                        cursor: isHoriz ? 'ns-resize' : 'ew-resize',
+                                        background: 'transparent'
+                                      }}
+                                      title="Drag to move, drag off canvas/ruler to delete"
+                                    />
+                                  </div>
                                 );
                               })}
                             {backFields.map((f, i) => {
@@ -3083,8 +3133,8 @@ export default function TemplatesPage() {
                       })()
                     ) : (
                       <div style={{
-                        width: '480px',
-                        height: '303px',
+                        width: `${480 * zoom}px`,
+                        height: `${303 * zoom}px`,
                         border: '1.5px dashed var(--glass-border)',
                         borderRadius: '8px',
                         display: 'flex',
