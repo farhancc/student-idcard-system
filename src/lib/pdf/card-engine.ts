@@ -34,6 +34,10 @@ function hexToRgb(hex?: string) {
   return rgb(isNaN(r) ? 0 : r, isNaN(g) ? 0 : g, isNaN(b) ? 0 : b);
 }
 
+// Global caches for background templates and font files to prevent redundant downloads/reads during compilation
+const globalBgBufferCache = new Map<string, Buffer>();
+const globalFontBufferCache = new Map<string, Buffer>();
+
 // Helper to load file (local or HTTP) as a Buffer
 async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   if (fileUrl.startsWith('data:')) {
@@ -42,6 +46,19 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
       const base64Data = fileUrl.substring(commaIndex + 1);
       return Buffer.from(base64Data, 'base64');
     }
+  }
+  // local:// is the Electron custom protocol — on the server, strip the scheme
+  // and read the file directly from disk using the absolute path embedded in the URL.
+  if (fileUrl.startsWith('local://')) {
+    let localPath = fileUrl.replace(/^local:\/\//i, '');
+    if (process.platform !== 'win32' && !localPath.startsWith('/')) {
+      localPath = '/' + localPath;
+    }
+    localPath = decodeURIComponent(localPath);
+    if (fs.existsSync(localPath)) {
+      return fs.readFileSync(localPath);
+    }
+    throw new Error(`[card-engine] local:// file not found on server: ${localPath}`);
   }
   if (fileUrl.startsWith('/')) {
     const filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
@@ -58,6 +75,7 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     throw new Error(`File not found: ${fileUrl}`);
   }
 }
+
 
 /**
  * Robust helper to dynamically embed an image buffer as either PNG or JPEG
@@ -734,21 +752,28 @@ export async function renderCardSideToPdfBytes(
       let bgBuffer: Buffer | null = null;
       let bgBufferSource = '';
 
-      if (originalUrl) {
-        try {
-          bgBuffer = await getFileBuffer(originalUrl);
-          bgBufferSource = originalUrl;
-        } catch (err) {
-          console.warn(`[PDF server] Failed to load original background (${originalUrl}), falling back to preview:`, err);
+      if (globalBgBufferCache.has(bgUrl)) {
+        bgBuffer = globalBgBufferCache.get(bgUrl)!;
+        bgBufferSource = bgUrl;
+      } else {
+        if (originalUrl) {
+          try {
+            bgBuffer = await getFileBuffer(originalUrl);
+            bgBufferSource = originalUrl;
+            globalBgBufferCache.set(bgUrl, bgBuffer);
+          } catch (err) {
+            console.warn(`[PDF server] Failed to load original background (${originalUrl}), falling back to preview:`, err);
+          }
         }
-      }
 
-      if (!bgBuffer && previewUrl) {
-        try {
-          bgBuffer = await getFileBuffer(previewUrl);
-          bgBufferSource = previewUrl;
-        } catch (err) {
-          console.error(`[PDF server] Failed to load preview background (${previewUrl}):`, err);
+        if (!bgBuffer && previewUrl) {
+          try {
+            bgBuffer = await getFileBuffer(previewUrl);
+            bgBufferSource = previewUrl;
+            globalBgBufferCache.set(bgUrl, bgBuffer);
+          } catch (err) {
+            console.error(`[PDF server] Failed to load preview background (${previewUrl}):`, err);
+          }
         }
       }
 
@@ -773,7 +798,12 @@ export async function renderCardSideToPdfBytes(
           
           let finalBuffer = bgBuffer;
           if (targetBgUrl !== bgBufferSource) {
-            finalBuffer = await getFileBuffer(targetBgUrl);
+            if (globalBgBufferCache.has(targetBgUrl)) {
+              finalBuffer = globalBgBufferCache.get(targetBgUrl)!;
+            } else {
+              finalBuffer = await getFileBuffer(targetBgUrl);
+              globalBgBufferCache.set(targetBgUrl, finalBuffer);
+            }
           }
           
           const bgImg = await embedImageBuffer(pdfDoc, finalBuffer);
@@ -819,7 +849,11 @@ export async function renderCardSideToPdfBytes(
         const cacheKey = match.fileUrl;
         if (!fontCache.has(cacheKey)) {
           try {
-            const fontBuffer = await getFileBuffer(match.fileUrl);
+            let fontBuffer = globalFontBufferCache.get(cacheKey);
+            if (!fontBuffer) {
+              fontBuffer = await getFileBuffer(match.fileUrl);
+              globalFontBufferCache.set(cacheKey, fontBuffer);
+            }
             fontCache.set(cacheKey, await pdfDoc.embedFont(fontBuffer));
           } catch (err) {
             console.error(`[PDF server] Font load failed for ${match.name}:`, err);

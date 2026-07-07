@@ -30,6 +30,10 @@ export interface FieldCoordinate {
 // Map to keep track of loaded font families in the browser
 const loadedFonts = new Set<string>();
 
+// Global caches for background templates and font files to prevent redundant HTTP downloads during compilation
+const globalBgBytesCache = new Map<string, Uint8Array>();
+const globalFontBytesCache = new Map<string, ArrayBuffer>();
+
 /**
  * Loads a custom font using the browser's FontFace API.
  */
@@ -668,8 +672,55 @@ export async function renderCardSideToPdfBytesClient(
   const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
   const previewUrl  = side === 'front' ? template.frontImageUrl : template.backImageUrl;
 
-  // Use originalUrl if available to preserve vector quality
-  const bgUrl = originalUrl || previewUrl;
+  // Resolve local paths or download cache if running in Electron
+  let finalBgUrl = originalUrl || previewUrl;
+  let resolvedLocally = false;
+
+  if (finalBgUrl && typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
+    try {
+      let localPath = await (window as any).electronAPI.getLocalTemplatePath({
+        templateId: template.id,
+        side,
+      });
+
+      // Auto-download and cache template locally if missing and online
+      if (!localPath && originalUrl) {
+        try {
+          console.log(`[PDF client] Template ${template.id} ${side} not cached locally. Downloading original...`);
+          const arrayBuffer = await fetchArrayBuffer(originalUrl);
+          
+          // Verify downloaded data is a PDF or other valid template asset
+          const bytes = new Uint8Array(arrayBuffer);
+          const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d; // %PDF-
+          
+          // Base64 encode for IPC bridge
+          const base64Data = Buffer.from(arrayBuffer).toString('base64');
+          
+          if ((window as any).electronAPI.saveTemplateOriginal) {
+            const saveRes = await (window as any).electronAPI.saveTemplateOriginal({
+              templateId: template.id,
+              side,
+              base64Data,
+              fileName: originalUrl,
+            });
+            if (saveRes?.success && saveRes.path) {
+              console.log(`[PDF client] Saved template original locally: ${saveRes.path} (isPdf=${isPdf})`);
+              localPath = saveRes.path;
+            }
+          }
+        } catch (downloadErr) {
+          console.warn(`[PDF client] Failed to download and cache original template locally:`, downloadErr);
+        }
+      }
+
+      if (localPath) {
+        finalBgUrl = `local://${localPath}`;
+        resolvedLocally = true;
+      }
+    } catch (err) {
+      console.error('[PDF client] Failed to resolve local template path:', err);
+    }
+  }
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([widthPt, heightPt]);
@@ -678,26 +729,33 @@ export async function renderCardSideToPdfBytesClient(
   page.drawRectangle({ x: 0, y: 0, width: widthPt, height: heightPt, color: rgb(1, 1, 1) });
 
   // ── 2. Background template ───────────────────────────────────────────────
-  if (bgUrl) {
+  if (finalBgUrl) {
     try {
       let bgBytes: Uint8Array | null = null;
       let bgBufferSource = '';
 
-      if (originalUrl) {
+      if (globalBgBytesCache.has(finalBgUrl)) {
+        bgBytes = globalBgBytesCache.get(finalBgUrl)!;
+        bgBufferSource = finalBgUrl;
+      } else {
         try {
-          bgBytes = new Uint8Array(await fetchArrayBuffer(originalUrl));
-          bgBufferSource = originalUrl;
+          bgBytes = new Uint8Array(await fetchArrayBuffer(finalBgUrl));
+          bgBufferSource = finalBgUrl;
+          globalBgBytesCache.set(finalBgUrl, bgBytes);
         } catch (err) {
-          console.warn(`[PDF client] Failed to load original background (${originalUrl}), falling back to preview:`, err);
+          console.warn(`[PDF client] Failed to load background from ${finalBgUrl}:`, err);
         }
-      }
 
-      if (!bgBytes && previewUrl) {
-        try {
-          bgBytes = new Uint8Array(await fetchArrayBuffer(previewUrl));
-          bgBufferSource = previewUrl;
-        } catch (err) {
-          console.error(`[PDF client] Failed to load preview background (${previewUrl}):`, err);
+        // Fallback to preview url if local resolution or fetch of originalUrl failed
+        if (!bgBytes && resolvedLocally && previewUrl) {
+          try {
+            console.log(`[PDF client] Local original template load failed, trying preview URL: ${previewUrl}`);
+            bgBytes = new Uint8Array(await fetchArrayBuffer(previewUrl));
+            bgBufferSource = previewUrl;
+            globalBgBytesCache.set(previewUrl, bgBytes);
+          } catch (prevErr) {
+            console.error(`[PDF client] Failed to load preview background fallback:`, prevErr);
+          }
         }
       }
 
@@ -724,7 +782,12 @@ export async function renderCardSideToPdfBytesClient(
           
           let finalBytes = bgBytes;
           if (resolvedUrl !== bgBufferSource) {
-            finalBytes = new Uint8Array(await fetchArrayBuffer(resolvedUrl));
+            if (globalBgBytesCache.has(resolvedUrl)) {
+              finalBytes = globalBgBytesCache.get(resolvedUrl)!;
+            } else {
+              finalBytes = new Uint8Array(await fetchArrayBuffer(resolvedUrl));
+              globalBgBytesCache.set(resolvedUrl, finalBytes);
+            }
           }
           
           const bgImg = await embedImageBuffer(pdfDoc, finalBytes);
@@ -765,7 +828,11 @@ export async function renderCardSideToPdfBytesClient(
         const cacheKey = match.fileUrl;
         if (!fontCache.has(cacheKey)) {
           try {
-            const fontBytes = await fetchArrayBuffer(match.fileUrl);
+            let fontBytes = globalFontBytesCache.get(cacheKey);
+            if (!fontBytes) {
+              fontBytes = await fetchArrayBuffer(match.fileUrl);
+              globalFontBytesCache.set(cacheKey, fontBytes);
+            }
             fontCache.set(cacheKey, await pdfDoc.embedFont(fontBytes));
           } catch (err) {
             console.error(`[PDF client] Font load failed for ${match.name}:`, err);

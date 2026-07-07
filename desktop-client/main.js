@@ -272,6 +272,7 @@ app.whenReady().then(() => {
       else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg';
       else if (ext === '.svg') contentType = 'image/svg+xml';
       else if (ext === '.webp') contentType = 'image/webp';
+      else if (ext === '.pdf') contentType = 'application/pdf';
 
       return new Response(fileBuffer, {
         status: 200,
@@ -363,7 +364,7 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
-        return { success: true, url: `local://${target}`, localPath: target };
+        return { success: true, url: `local://${target}`, localPath: filePath };
       } catch (convErr) {
         console.error('PDF conversion error:', convErr);
         return { success: true, url: `local://${filePath}`, localPath: filePath };
@@ -445,6 +446,24 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
     return { success: true };
   } catch (error) {
     console.error('finalize-template-originals error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC handler to save original template file directly to permanent templates directory
+ipcMain.handle('save-template-original', async (event, { templateId, side, base64Data, fileName }) => {
+  try {
+    const ext = path.extname(fileName).toLowerCase() || '.pdf';
+    const dir = path.join(app.getPath('userData'), 'templates');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const filePath = path.join(dir, `original_${templateId}_${side}${ext}`);
+    const buffer = Buffer.from(base64Data, 'base64');
+    fs.writeFileSync(filePath, buffer);
+    console.log(`[Main Process] Saved template original to: ${filePath}`);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('[Main Process] save-template-original error:', error);
     return { success: false, error: error.message };
   }
 });

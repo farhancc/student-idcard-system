@@ -387,13 +387,23 @@ export default function TemplatesPage() {
         
         // Show high-res local preview instantly in editor
         if (side === 'front') {
-          setFrontImageUrl(result.url);
-          setFrontLocalPath(result.localPath);
+          setFrontImageUrl(result.url);   // local:// PNG preview for canvas display
+          setFrontLocalPath(result.localPath); // absolute path to the raw PDF
           setFrontWebUrl(''); // Reset during upload
+          // IMPORTANT: immediately set originalUrl to the local PDF path so that
+          // the production renderer can embed it natively even before the background
+          // Cloudinary upload completes. Uses local:// protocol so the Electron
+          // protocol handler serves it as application/pdf.
+          if (result.localPath) {
+            setFrontOriginalUrl(`local://${result.localPath}`);
+          }
         } else {
           setBackImageUrl(result.url);
           setBackLocalPath(result.localPath);
           setBackWebUrl(''); // Reset during upload
+          if (result.localPath) {
+            setBackOriginalUrl(`local://${result.localPath}`);
+          }
         }
 
         // Helper to generate a cheap low-res preview as a compressed base64 data URI
@@ -573,7 +583,9 @@ export default function TemplatesPage() {
     const fields = dragState.side === 'front' ? [...frontFields] : [...backFields];
     const field = { ...fields[dragState.index] };
 
-    const threshold = 6; // Snap threshold in pixels
+    // Snap threshold: 8 screen pixels converted to card/field coordinate units
+    const screenThreshold = 8;
+    const threshold = screenThreshold / scale;
 
     if (dragState.type === 'move') {
       let targetX = dragState.origX + dx;
@@ -582,6 +594,7 @@ export default function TemplatesPage() {
       // ── Vertical Snapping (X axis) ──
       let snappedX = targetX;
       let minDiffX = threshold;
+      let snappedToGuideX = false;
 
       if (snapToGuides) {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
@@ -592,24 +605,27 @@ export default function TemplatesPage() {
             if (diffLeft < minDiffX) {
               minDiffX = diffLeft;
               snappedX = g.value;
+              snappedToGuideX = true;
             }
             // Right edge
             const diffRight = Math.abs((targetX + field.width) - g.value);
             if (diffRight < minDiffX) {
               minDiffX = diffRight;
               snappedX = g.value - field.width;
+              snappedToGuideX = true;
             }
             // Center
             const diffCenter = Math.abs((targetX + field.width / 2) - g.value);
             if (diffCenter < minDiffX) {
               minDiffX = diffCenter;
               snappedX = g.value - field.width / 2;
+              snappedToGuideX = true;
             }
           }
         }
       }
 
-      if (snapToGrid && showGrid && minDiffX === threshold) {
+      if (snapToGrid && showGrid && !snappedToGuideX) {
         const gridX = Math.round(targetX / gridSize) * gridSize;
         const diffGrid = Math.abs(targetX - gridX);
         if (diffGrid < threshold) {
@@ -621,6 +637,7 @@ export default function TemplatesPage() {
       // ── Horizontal Snapping (Y axis) ──
       let snappedY = targetY;
       let minDiffY = threshold;
+      let snappedToGuideY = false;
 
       if (snapToGuides) {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
@@ -631,24 +648,27 @@ export default function TemplatesPage() {
             if (diffTop < minDiffY) {
               minDiffY = diffTop;
               snappedY = g.value;
+              snappedToGuideY = true;
             }
             // Bottom edge
             const diffBottom = Math.abs((targetY + field.height) - g.value);
             if (diffBottom < minDiffY) {
               minDiffY = diffBottom;
               snappedY = g.value - field.height;
+              snappedToGuideY = true;
             }
             // Center
             const diffCenter = Math.abs((targetY + field.height / 2) - g.value);
             if (diffCenter < minDiffY) {
               minDiffY = diffCenter;
               snappedY = g.value - field.height / 2;
+              snappedToGuideY = true;
             }
           }
         }
       }
 
-      if (snapToGrid && showGrid && minDiffY === threshold) {
+      if (snapToGrid && showGrid && !snappedToGuideY) {
         const gridY = Math.round(targetY / gridSize) * gridSize;
         const diffGrid = Math.abs(targetY - gridY);
         if (diffGrid < threshold) {
@@ -664,6 +684,7 @@ export default function TemplatesPage() {
       // ── Resize Snapping (Width) ──
       let snappedW = targetW;
       let minDiffW = threshold;
+      let snappedToGuideW = false;
 
       if (snapToGuides) {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
@@ -673,12 +694,13 @@ export default function TemplatesPage() {
             if (diff < minDiffW) {
               minDiffW = diff;
               snappedW = g.value - field.x;
+              snappedToGuideW = true;
             }
           }
         }
       }
 
-      if (snapToGrid && showGrid && minDiffW === threshold) {
+      if (snapToGrid && showGrid && !snappedToGuideW) {
         const gridW = Math.round(targetW / gridSize) * gridSize;
         const diffGrid = Math.abs(targetW - gridW);
         if (diffGrid < threshold) {
@@ -690,6 +712,7 @@ export default function TemplatesPage() {
       // ── Resize Snapping (Height) ──
       let snappedH = targetH;
       let minDiffH = threshold;
+      let snappedToGuideH = false;
 
       if (snapToGuides) {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
@@ -699,12 +722,13 @@ export default function TemplatesPage() {
             if (diff < minDiffH) {
               minDiffH = diff;
               snappedH = g.value - field.y;
+              snappedToGuideH = true;
             }
           }
         }
       }
 
-      if (snapToGrid && showGrid && minDiffH === threshold) {
+      if (snapToGrid && showGrid && !snappedToGuideH) {
         const gridH = Math.round(targetH / gridSize) * gridSize;
         const diffGrid = Math.abs(targetH - gridH);
         if (diffGrid < threshold) {
