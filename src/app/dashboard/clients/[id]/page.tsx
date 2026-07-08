@@ -337,21 +337,90 @@ export default function ClientDetailsPage() {
       // Add photos folder
       const photosFolder = zip.folder('photos');
 
-      // Fetch photo blobs
-      let processedCount = 0;
-      const totalPhotos = cardholders.filter(ch => ch.photoUrl).length;
+      // Helper to identify if a custom field value is an image path, URL, or Base64 URI
+      const isImageUrl = (val: any): boolean => {
+        if (typeof val !== 'string') return false;
+        const cleanVal = val.trim().toLowerCase();
+        
+        const isPathOrUrl = cleanVal.startsWith('http://') || 
+                            cleanVal.startsWith('https://') || 
+                            cleanVal.startsWith('/uploads/') || 
+                            cleanVal.startsWith('/api/uploads/') ||
+                            cleanVal.startsWith('/') ||
+                            cleanVal.startsWith('data:image/');
+                            
+        const hasImageExtension = cleanVal.endsWith('.jpg') || 
+                                  cleanVal.endsWith('.jpeg') || 
+                                  cleanVal.endsWith('.png') || 
+                                  cleanVal.endsWith('.webp') ||
+                                  cleanVal.endsWith('.gif') ||
+                                  cleanVal.includes('.png?') ||
+                                  cleanVal.includes('.jpg?') ||
+                                  cleanVal.includes('.jpeg?') ||
+                                  cleanVal.includes('.webp?');
 
-      await Promise.all(
-        cardholders.map(async (ch) => {
-          if (!ch.photoUrl) return;
+        return isPathOrUrl || hasImageExtension;
+      };
+
+      const base64ToBlob = (base64Data: string): Blob => {
+        const parts = base64Data.split(';base64,');
+        const contentType = parts[0].split(':')[1];
+        const raw = window.atob(parts[1]);
+        const rawLength = raw.length;
+        const uInt8Array = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          uInt8Array[i] = raw.charCodeAt(i);
+        }
+        return new Blob([uInt8Array], { type: contentType });
+      };
+
+      // Gather download tasks (both main photo and custom image fields like signatures)
+      const downloadTasks: { cardholder: any; key: string; url: string; isCustom: boolean }[] = [];
+      let totalImages = 0;
+
+      cardholders.forEach((ch: any) => {
+        if (ch.photoUrl) {
+          downloadTasks.push({ cardholder: ch, key: 'photo', url: ch.photoUrl, isCustom: false });
+          totalImages++;
+        }
+
+        if (ch.customFields) {
           try {
-            const res = await fetch(ch.photoUrl);
-            if (res.ok) {
-              const blob = await res.blob();
-              
-              // Guess extension
-              let ext = '.png';
-              const cleanUrl = ch.photoUrl.split('?')[0].split('#')[0].toLowerCase();
+            const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+            if (parsed && typeof parsed === 'object') {
+              Object.entries(parsed).forEach(([key, val]) => {
+                if (isImageUrl(val)) {
+                  downloadTasks.push({ cardholder: ch, key, url: val as string, isCustom: true });
+                  totalImages++;
+                }
+              });
+            }
+          } catch (e) {
+            console.error('Failed to parse custom fields for zip export tasks', e);
+          }
+        }
+      });
+
+      let processedCount = 0;
+      await Promise.all(
+        downloadTasks.map(async (task) => {
+          const { cardholder: ch, key, url: imageUrl } = task;
+          try {
+            let blob: Blob;
+            let ext = '.png';
+
+            if (imageUrl.startsWith('data:image/')) {
+              blob = base64ToBlob(imageUrl);
+              const match = imageUrl.match(/data:image\/([a-zA-Z0-9+]+);base64/);
+              if (match && match[1]) {
+                ext = `.${match[1].replace('jpeg', 'jpg')}`;
+              }
+            } else {
+              const res = await fetch(imageUrl);
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
+              blob = await res.blob();
+
+              const cleanUrl = imageUrl.split('?')[0].split('#')[0].toLowerCase();
               if (cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.jpeg')) {
                 ext = '.jpg';
               } else if (cleanUrl.endsWith('.webp')) {
@@ -359,17 +428,18 @@ export default function ClientDetailsPage() {
               } else if (cleanUrl.endsWith('.gif')) {
                 ext = '.gif';
               }
+            }
 
-              const finalName = imageIdMap.get(ch.id);
-              if (finalName) {
-                photosFolder?.file(`${finalName}${ext}`, blob);
-              }
+            const finalName = imageIdMap.get(ch.id);
+            if (finalName) {
+              const filename = task.isCustom ? `${finalName}_${key}${ext}` : `${finalName}${ext}`;
+              photosFolder?.file(filename, blob);
             }
           } catch (err) {
-            console.error(`Failed to fetch photo for cardholder ${ch.id}:`, err);
+            console.error(`Failed to download image for cardholder ${ch.id} (${key}):`, err);
           } finally {
             processedCount++;
-            setZipProgress(`Downloading photos (${processedCount}/${totalPhotos})...`);
+            setZipProgress(`Downloading images (${processedCount}/${totalImages})...`);
           }
         })
       );
