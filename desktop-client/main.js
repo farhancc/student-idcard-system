@@ -309,16 +309,17 @@ app.on('window-all-closed', function () {
 });
 
 // IPC handler to save PDF binary buffer directly to OS documents folder
-ipcMain.handle('save-pdf', async (event, { fileName, base64Data }) => {
+ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) => {
   try {
     const documentsPath = app.getPath('documents');
-    let subfolder = 'Production';
+    let subfolder = 'production';
     if (fileName.toLowerCase().includes('approval')) {
-      subfolder = 'Approvals';
+      subfolder = 'approval';
     } else if (fileName.toLowerCase().includes('invoice')) {
-      subfolder = 'Invoices';
+      subfolder = 'invoices';
     }
-    const targetDir = path.join(documentsPath, 'Student_ID_Prints', subfolder);
+    const safeClientName = (clientName || 'Client').trim().replace(/[^a-z0-9_-]/gi, '_');
+    const targetDir = path.join(documentsPath, 'idexo-prints', safeClientName, subfolder);
 
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });

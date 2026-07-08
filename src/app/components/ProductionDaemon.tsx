@@ -272,7 +272,7 @@ export default function ProductionDaemon() {
     });
 
     addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data);
+    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order.clientName);
     if (!saveResult.success) {
       throw new Error(saveResult.error || 'Failed to save file');
     }
@@ -334,7 +334,7 @@ export default function ProductionDaemon() {
     });
 
     addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data);
+    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order.clientName);
     if (!saveResult.success) {
       throw new Error(saveResult.error || 'Failed to save file');
     }
@@ -563,7 +563,7 @@ export default function ProductionDaemon() {
     });
 
     addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data);
+    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order?.clientName || 'Client');
     if (!saveResult.success) {
       throw new Error(saveResult.error || 'Failed to save file');
     }

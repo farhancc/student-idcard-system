@@ -1,8 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  savePdfLocally: (fileName, base64Data) => 
-    ipcRenderer.invoke('save-pdf', { fileName, base64Data }),
+  savePdfLocally: (fileName, base64Data, clientName) => 
+    ipcRenderer.invoke('save-pdf', { fileName, base64Data, clientName }),
   isDesktop: () => 
     ipcRenderer.invoke('is-desktop'),
   getPortalUrl: () => 
