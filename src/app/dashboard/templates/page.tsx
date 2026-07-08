@@ -2056,8 +2056,8 @@ export default function TemplatesPage() {
     return { xOffset, yOffset, textWidth, textHeight };
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     setError('');
     setSubmitting(true);
 
@@ -2693,6 +2693,60 @@ export default function TemplatesPage() {
                     })()}
                   </div>
                 )}
+
+                {/* Sleek top action bar with Save/Update Template button */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: 'rgba(15, 23, 42, 0.45)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '12px',
+                  padding: '12px 20px',
+                  marginTop: '16px',
+                  marginBottom: '16px',
+                  width: '100%',
+                  boxShadow: '0 4px 20px -2px rgba(0,0,0,0.3)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: '#10b981',
+                      boxShadow: '0 0 8px #10b981'
+                    }} />
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 500 }}>
+                      Template:
+                    </span>
+                    <strong style={{ fontSize: '0.9rem', color: '#f8fafc' }}>
+                      {name || 'Untitled Template'}
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <button 
+                      type="button" 
+                      onClick={() => handleSave()} 
+                      className="btn btn-primary"
+                      disabled={submitting}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 18px',
+                        borderRadius: '8px',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        boxShadow: '0 0 12px rgba(20, 184, 166, 0.25)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <Save size={15} /> 
+                      {submitting ? 'Saving Layout...' : (editingTemplateId ? 'Update Template' : 'Save Template')}
+                    </button>
+                  </div>
+                </div>
 
                 <div style={{
                   display: 'flex',
