@@ -211,7 +211,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
           size: wmSize,
           font: fontBold,
           color: rgb(0.85, 0.15, 0.15),
-          opacity: 0.28,
+          opacity: 0.08,
           rotate: degrees(30),
         });
 
@@ -222,7 +222,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
           size: wmSize,
           font: fontBold,
           color: rgb(0.85, 0.15, 0.15),
-          opacity: 0.28,
+          opacity: 0.08,
           rotate: degrees(30),
         });
 
