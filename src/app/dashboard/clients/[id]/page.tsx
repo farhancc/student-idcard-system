@@ -226,11 +226,69 @@ export default function ClientDetailsPage() {
         return val;
       };
 
+      // 1. Pre-generate unique image IDs for each cardholder to guarantee exact mapping and unique filename in ZIP
+      const usedNames = new Set<string>();
+      const cardholderImageIds = cardholders.map((ch: any) => {
+        let baseName = '';
+        
+        if (ch.uniqueKey && ch.uniqueKey.trim() !== '') {
+          baseName = ch.uniqueKey.trim();
+        } else if (ch.customFields) {
+          try {
+            const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+            if (parsed && typeof parsed === 'object') {
+              const targetKeys = [
+                'roll number', 'rollno', 'roll no', 'rollnumber',
+                'employee id', 'empid', 'emp id', 'employeeid',
+                'student id', 'studentid', 'student_id',
+                'id', 'admission number', 'admissionno'
+              ];
+              
+              for (const targetKey of targetKeys) {
+                const matchedKey = Object.keys(parsed).find(
+                  k => k.toLowerCase().trim() === targetKey
+                );
+                if (matchedKey && parsed[matchedKey] && String(parsed[matchedKey]).trim() !== '') {
+                  baseName = String(parsed[matchedKey]).trim();
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing custom fields for image filename', e);
+          }
+        }
+
+        if (!baseName || baseName === '') {
+          baseName = ch.name || `student_${ch.id}`;
+        }
+
+        // Build a unique and clean filename
+        const cleanKey = baseName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+        
+        let finalName = cleanKey;
+        let counter = 1;
+        while (usedNames.has(finalName.toLowerCase())) {
+          finalName = `${cleanKey}_${counter}`;
+          counter++;
+        }
+        usedNames.add(finalName.toLowerCase());
+        
+        return {
+          cardholderId: ch.id,
+          imageId: finalName
+        };
+      });
+
+      const imageIdMap = new Map(cardholderImageIds.map(x => [x.cardholderId, x.imageId]));
+
       // Format data for Excel
       const formattedData = cardholders.map((ch: any) => {
+        const imageId = imageIdMap.get(ch.id) || '';
         const row: any = {
           'Name': escapeFormula(ch.name),
           'ID / Unique Key': escapeFormula(ch.uniqueKey || ''),
+          'Image ID': escapeFormula(imageId),
           'Date of Adding': ch.createdAt ? new Date(ch.createdAt).toLocaleDateString() : '',
           'Template Name': escapeFormula(ch.templateName || ''),
           'Photo URL': escapeFormula(ch.photoUrl || ''),
@@ -283,8 +341,6 @@ export default function ClientDetailsPage() {
       let processedCount = 0;
       const totalPhotos = cardholders.filter(ch => ch.photoUrl).length;
 
-      const usedNames = new Set<string>();
-
       await Promise.all(
         cardholders.map(async (ch) => {
           if (!ch.photoUrl) return;
@@ -304,55 +360,10 @@ export default function ClientDetailsPage() {
                 ext = '.gif';
               }
 
-              // Determine base name by checking uniqueKey or customFields for Roll No / ID / Employee ID
-              let baseName = '';
-              
-              if (ch.uniqueKey && ch.uniqueKey.trim() !== '') {
-                baseName = ch.uniqueKey.trim();
-              } else if (ch.customFields) {
-                try {
-                  const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-                  if (parsed && typeof parsed === 'object') {
-                    const targetKeys = [
-                      'roll number', 'rollno', 'roll no', 'rollnumber',
-                      'employee id', 'empid', 'emp id', 'employeeid',
-                      'student id', 'studentid', 'student_id',
-                      'id', 'admission number', 'admissionno'
-                    ];
-                    
-                    for (const targetKey of targetKeys) {
-                      const matchedKey = Object.keys(parsed).find(
-                        k => k.toLowerCase().trim() === targetKey
-                      );
-                      if (matchedKey && parsed[matchedKey] && String(parsed[matchedKey]).trim() !== '') {
-                        baseName = String(parsed[matchedKey]).trim();
-                        break;
-                      }
-                    }
-                  }
-                } catch (e) {
-                  console.error('Error parsing custom fields for image filename', e);
-                }
+              const finalName = imageIdMap.get(ch.id);
+              if (finalName) {
+                photosFolder?.file(`${finalName}${ext}`, blob);
               }
-
-              // Fallback to name or student ID if still empty
-              if (!baseName || baseName === '') {
-                baseName = ch.name || `student_${ch.id}`;
-              }
-
-              // Build a unique and clean filename
-              const cleanKey = baseName.replace(/[^a-zA-Z0-9_\-]/g, '_');
-              
-              // Ensure name uniqueness in ZIP file
-              let finalName = cleanKey;
-              let counter = 1;
-              while (usedNames.has(finalName.toLowerCase())) {
-                finalName = `${cleanKey}_${counter}`;
-                counter++;
-              }
-              usedNames.add(finalName.toLowerCase());
-              
-              photosFolder?.file(`${finalName}${ext}`, blob);
             }
           } catch (err) {
             console.error(`Failed to fetch photo for cardholder ${ch.id}:`, err);

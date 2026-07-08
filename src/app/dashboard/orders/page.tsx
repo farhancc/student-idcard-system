@@ -185,6 +185,7 @@ export default function OrdersPage() {
       const nameCol = getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name', 'studentname']) || 'name';
       const designationCol = getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title', 'course']) || 'designation';
       const uniqueKeyCol = getHeaderKey(firstRowHeaders, ['id', 'empid', 'rollnumber', 'roll no', 'rollno', 'employee id', 'unique key', 'admission number', 'admissionno', 'student id', 'studentid']) || 'uniqueKey';
+      const imageIdCol = getHeaderKey(firstRowHeaders, ['image id', 'imageid', 'photo id', 'photoid', 'photo identifier', 'photoidentifier', 'filename', 'file name', 'image name', 'imagename']);
       const photoUrlCol = getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
 
       // 2. Extract photos from ZIP
@@ -220,17 +221,18 @@ export default function OrdersPage() {
         const name = String(row[nameCol] || '').trim();
         const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
         const uniqueKey = row[uniqueKeyCol] ? String(row[uniqueKeyCol]).trim() : null;
+        const imageId = imageIdCol ? String(row[imageIdCol] || '').trim() : null;
         const photoUrl = row[photoUrlCol] ? String(row[photoUrlCol]).trim() : null;
 
         const custom: Record<string, any> = {};
         Object.keys(row).forEach(key => {
-          if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol) {
+          if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol && (!imageIdCol || key !== imageIdCol)) {
             custom[key] = row[key];
           }
         });
 
-        // Try matching a photo from the zip using uniqueKey or name
-        const matchKey = uniqueKey || name;
+        // Try matching a photo from the zip using imageId (priority), uniqueKey, or name
+        const matchKey = imageId || uniqueKey || name;
         const sanitizedKey = matchKey.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
         const hasPhoto = newPhotosMap.has(sanitizedKey);
 
@@ -242,7 +244,8 @@ export default function OrdersPage() {
           photoUrl,
           customFields: custom,
           hasPhoto,
-          sanitizedKey
+          sanitizedKey,
+          imageId
         };
       }).filter(c => c.name);
 
@@ -333,7 +336,7 @@ export default function OrdersPage() {
 
       const uploadTasks = cardsWithPhotos.map(card => {
         return async () => {
-          const matchKey = card.uniqueKey || card.name;
+          const matchKey = card.imageId || card.uniqueKey || card.name;
           const photoData = photosMap.get(card.sanitizedKey)!;
           
           try {
@@ -606,7 +609,11 @@ export default function OrdersPage() {
                               )}
                             </td>
                             <td style={{ padding: '8px 12px', fontWeight: 500 }}>{c.name}</td>
-                            <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{c.uniqueKey || '—'}</td>
+                            <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>
+                              {c.imageId && c.imageId !== c.uniqueKey 
+                                ? `${c.uniqueKey || '—'} [Img: ${c.imageId}]` 
+                                : (c.uniqueKey || c.imageId || '—')}
+                            </td>
                             <td style={{ padding: '8px 12px' }}>{c.designation || '—'}</td>
                             <td style={{ padding: '8px 12px' }}>
                               {c.hasPhoto ? (
