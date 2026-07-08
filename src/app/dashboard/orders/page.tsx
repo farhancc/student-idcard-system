@@ -122,6 +122,81 @@ export default function OrdersPage() {
     setUploadProgress({ current: 0, total: 0 });
     setSubmitting(true);
 
+    // Helper: Client-side image resizing and quality compression
+    const compressImage = (blob: Blob, maxDimension = 800): Promise<Blob> => {
+      return new Promise((resolve) => {
+        if (typeof window === 'undefined') {
+          return resolve(blob);
+        }
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          let width = img.width;
+          let height = img.height;
+
+          // If image is already reasonably small and lightweight, skip canvas manipulation
+          if (width <= maxDimension && height <= maxDimension && blob.size < 200 * 1024) {
+            return resolve(blob);
+          }
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (resultBlob) => {
+                resolve(resultBlob || blob);
+              },
+              'image/jpeg',
+              0.85
+            );
+          } else {
+            resolve(blob);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(blob);
+        };
+        img.src = url;
+      });
+    };
+
+    // Helper: Resilient fetch request with retry-backoff logic
+    const fetchWithRetry = async (
+      url: string,
+      options: RequestInit,
+      retries = 3,
+      delay = 1000
+    ): Promise<Response> => {
+      try {
+        const res = await fetch(url, options);
+        if (!res.ok) {
+          throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
+        }
+        return res;
+      } catch (err) {
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, delay));
+          return fetchWithRetry(url, options, retries - 1, delay * 1.5);
+        }
+        throw err;
+      }
+    };
+
     try {
       if (!clientId || !templateId) throw new Error('Client and Template must be selected');
       if (!excelFile) throw new Error('Excel student list file is required');
@@ -237,6 +312,7 @@ export default function OrdersPage() {
 
       let currentUpload = 0;
       const concurrency = 5;
+      const failedUploads: string[] = [];
 
       const uploadTasks = cardholdersWithPhotos.map(cardholder => {
         return async () => {
@@ -244,8 +320,12 @@ export default function OrdersPage() {
           const photoBlob = photosMap.get(matchKey.toLowerCase())!;
           
           try {
+            // Compress image client side
+            setUploadStatus(`Compressing photo for ${cardholder.name}...`);
+            const compressedBlob = await compressImage(photoBlob, 850);
+
             // Request signed upload payload from the server
-            const signRes = await fetch('/api/upload/sign', {
+            const signRes = await fetchWithRetry('/api/upload/sign', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -259,7 +339,7 @@ export default function OrdersPage() {
             if (signRes.ok && signData.success) {
               // Direct Cloudinary Upload
               const formData = new FormData();
-              formData.append('file', photoBlob);
+              formData.append('file', compressedBlob);
               formData.append('api_key', signData.apiKey);
               formData.append('timestamp', String(signData.timestamp));
               formData.append('signature', signData.signature);
@@ -267,38 +347,33 @@ export default function OrdersPage() {
               formData.append('public_id', String(matchKey));
               formData.append('overwrite', 'true');
 
-              const cloudRes = await fetch(`https://api.cloudinary.com/v1_1/${signData.cloudName}/image/upload`, {
+              const cloudRes = await fetchWithRetry(`https://api.cloudinary.com/v1_1/${signData.cloudName}/image/upload`, {
                 method: 'POST',
                 body: formData,
               });
 
-              if (!cloudRes.ok) {
-                throw new Error(`Cloudinary upload failed: ${cloudRes.statusText}`);
-              }
               const cloudData = await cloudRes.json();
               cardholder.photoUrl = cloudData.secure_url;
             } else {
               // Local upload fallback endpoint
               const formData = new FormData();
-              const ext = photoBlob.type.split('/')[1] || 'png';
-              formData.append('file', new File([photoBlob], `${matchKey}.${ext}`, { type: photoBlob.type }));
+              const ext = compressedBlob.type.split('/')[1] || 'jpeg';
+              formData.append('file', new File([compressedBlob], `${matchKey}.${ext}`, { type: compressedBlob.type }));
               formData.append('type', 'photo');
 
-              const localRes = await fetch('/api/upload', {
+              const localRes = await fetchWithRetry('/api/upload', {
                 method: 'POST',
                 headers: {
                   'x-press-id': String(pressId),
                 },
                 body: formData,
               });
-              if (!localRes.ok) {
-                throw new Error(`Local upload failed: ${localRes.statusText}`);
-              }
               const localData = await localRes.json();
               cardholder.photoUrl = localData.url;
             }
           } catch (err: any) {
             console.error(`Upload error for ${cardholder.name}:`, err);
+            failedUploads.push(cardholder.name);
           } finally {
             currentUpload++;
             setUploadStatus(`Uploading photos (${currentUpload}/${cardholdersWithPhotos.length})...`);
@@ -307,7 +382,7 @@ export default function OrdersPage() {
         };
       });
 
-      // Simple concurrency queue processor
+      // Concurrency queue processor
       const queue = async (tasks: (() => Promise<void>)[], maxConcurrency: number) => {
         const executing = new Set<Promise<void>>();
         for (const task of tasks) {
@@ -323,6 +398,19 @@ export default function OrdersPage() {
       };
 
       await queue(uploadTasks, concurrency);
+
+      // Warning prompt for failed uploads
+      if (failedUploads.length > 0) {
+        const proceed = window.confirm(
+          `${failedUploads.length} photo(s) failed to upload after retries:\n` +
+          failedUploads.slice(0, 5).map(name => `• ${name}`).join('\n') +
+          (failedUploads.length > 5 ? `\n...and ${failedUploads.length - 5} more` : '') +
+          `\n\nDo you want to proceed with creating the order without these photos?`
+        );
+        if (!proceed) {
+          throw new Error('Batch process cancelled by user due to failed photo uploads.');
+        }
+      }
 
       // 4. Send complete JSON batch metadata to /api/orders/batch-process
       setUploadStatus('Syncing registry changes with database...');
