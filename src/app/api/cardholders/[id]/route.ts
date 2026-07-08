@@ -18,7 +18,9 @@ export async function PUT(
     const body = await request.json();
     const result = cardholderUpdateSchema.safeParse(body);
     if (!result.success) {
-      return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
+      const messages = result.error.issues.map(i => i.message).join('; ');
+      console.error('[cardholder PUT] validation failed:', result.error.issues);
+      return NextResponse.json({ error: messages || 'Invalid input' }, { status: 400 });
     }
 
     const { name, designation, photoUrl, customFields, uniqueKey, active } = result.data;

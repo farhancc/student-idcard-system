@@ -163,7 +163,8 @@ export default function ClientDetailsPage() {
   const [editDesignation, setEditDesignation] = useState('');
   const [editUniqueKey, setEditUniqueKey] = useState('');
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
-  const [editCustomFields, setEditCustomFields] = useState('');
+  // Structured custom field editor: { fieldKey -> fieldValue }
+  const [editCustomFieldsMap, setEditCustomFieldsMap] = useState<Record<string, string>>({});
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [uploadingEditPhoto, setUploadingEditPhoto] = useState(false);
@@ -443,7 +444,19 @@ export default function ClientDetailsPage() {
     setEditDesignation(ch.designation || '');
     setEditUniqueKey(ch.uniqueKey || '');
     setEditPhotoUrl(ch.photoUrl || '');
-    setEditCustomFields(ch.customFields ? JSON.stringify(JSON.parse(ch.customFields), null, 2) : '');
+    // Parse customFields JSON into a flat key->value map for the structured editor
+    let parsedMap: Record<string, string> = {};
+    if (ch.customFields) {
+      try {
+        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+        if (parsed && typeof parsed === 'object') {
+          Object.entries(parsed).forEach(([k, v]) => {
+            parsedMap[k] = String(v ?? '');
+          });
+        }
+      } catch (e) { /* ignore parse error, start with empty */ }
+    }
+    setEditCustomFieldsMap(parsedMap);
     setEditError('');
   };
 
@@ -455,10 +468,11 @@ export default function ClientDetailsPage() {
     setEditLoading(true);
 
     try {
-      let customJson = null;
-      if (editCustomFields.trim()) {
-        customJson = JSON.parse(editCustomFields);
-      }
+      // Build customFields from the structured map (skip empty values)
+      const customJson: Record<string, string> | null =
+        Object.keys(editCustomFieldsMap).length > 0
+          ? Object.fromEntries(Object.entries(editCustomFieldsMap).filter(([, v]) => v.trim() !== ''))
+          : null;
 
       const res = await fetch(`/api/cardholders/${editingCardholder.id}`, {
         method: 'PUT',
@@ -476,9 +490,10 @@ export default function ClientDetailsPage() {
       if (!res.ok) throw new Error(json.error || 'Failed to update cardholder');
 
       setEditingCardholder(null);
+      toast('Cardholder updated successfully', 'success');
       fetchData();
     } catch (err: any) {
-      setEditError(err.message || 'JSON parsing or server error occurred');
+      setEditError(err.message || 'Server error occurred');
     } finally {
       setEditLoading(false);
     }
@@ -1749,14 +1764,30 @@ export default function ClientDetailsPage() {
               </div>
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Custom Details (JSON format - Optional)</label>
-                <textarea 
-                  className="form-textarea" 
-                  rows={3} 
-                  placeholder='{ "grade": "10th", "bloodGroup": "O+" }' 
-                  value={editCustomFields} 
-                  onChange={e => setEditCustomFields(e.target.value)} 
-                />
+                <label className="form-label">Custom Fields</label>
+                {Object.keys(editCustomFieldsMap).length === 0 ? (
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>No custom fields found for this cardholder.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {Object.entries(editCustomFieldsMap).map(([key, val]) => (
+                      <div key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{
+                          fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500,
+                          minWidth: '120px', maxWidth: '160px', padding: '8px 10px',
+                          background: 'rgba(56,189,248,0.05)', border: '1px solid var(--glass-border)',
+                          borderRadius: '6px', wordBreak: 'break-all',
+                        }}>{key}</span>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ flex: 1, fontSize: '0.85rem' }}
+                          value={val}
+                          onChange={e => setEditCustomFieldsMap(prev => ({ ...prev, [key]: e.target.value }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>

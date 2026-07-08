@@ -126,8 +126,8 @@ export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
 export const cardholderUpdateSchema = z.object({
   name: z.string().min(1, 'Name cannot be empty').max(150).optional(),
   designation: z.string().max(150).nullable().optional(),
-  photoUrl: z.string().max(1000).nullable().optional().or(z.literal('')),
-  uniqueKey: z.string().max(100).nullable().optional(),
+  photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional().or(z.literal('')),
+  uniqueKey: z.string().max(500).nullable().optional(),
   customFields: z.record(z.string(), z.any()).nullable().optional(),
   active: z.boolean().optional(),
 });
