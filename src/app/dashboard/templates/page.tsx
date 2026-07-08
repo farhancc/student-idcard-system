@@ -869,14 +869,15 @@ export default function TemplatesPage() {
     const scale = editorWidth / cardWidth;
 
     const ticks = [];
-    const step = 10;
-    for (let i = 0; i <= length; i += step) {
-      const pos = i * scale;
-      const isMajor = i % 50 === 0;
-      const isMedium = i % 10 === 0 && !isMajor;
+    const lengthMM = (length * 25.4) / 300;
+    for (let mm = 0; mm <= lengthMM; mm += 1) {
+      const pxValue = (mm * 300) / 25.4;
+      const pos = pxValue * scale;
+      const isMajor = mm % 10 === 0;
+      const isMedium = mm % 5 === 0 && !isMajor;
       
       ticks.push({
-        val: i,
+        val: mm,
         pos,
         isMajor,
         isMedium
@@ -909,7 +910,7 @@ export default function TemplatesPage() {
           userSelect: 'none',
           zIndex: 400
         }}
-        title={`Drag down to create a ${isHoriz ? 'horizontal' : 'vertical'} guideline`}
+        title={`Drag to create a ${isHoriz ? 'horizontal' : 'vertical'} guideline (units in mm)`}
       >
         <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
           {ticks.map((t, idx) => {
@@ -2442,7 +2443,7 @@ export default function TemplatesPage() {
                     </label>
 
                     <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '6px' }}>
-                      💡 Drag from rulers to place custom guides.
+                      💡 Drag from rulers to place custom guides (units in mm).
                     </span>
 
                     {/* Bleed & Safe Area Guide Toggle */}
@@ -2729,7 +2730,7 @@ export default function TemplatesPage() {
                                         cursor: isHoriz ? 'ns-resize' : 'ew-resize',
                                         background: 'transparent'
                                       }}
-                                      title="Drag to move, drag off canvas/ruler to delete"
+                                      title={`Guide: ${Math.round((g.value * 25.4 / 300) * 10) / 10} mm (Drag to move, drag off canvas/ruler to delete)`}
                                     />
                                   </div>
                                 );
@@ -3118,7 +3119,7 @@ export default function TemplatesPage() {
                                         cursor: isHoriz ? 'ns-resize' : 'ew-resize',
                                         background: 'transparent'
                                       }}
-                                      title="Drag to move, drag off canvas/ruler to delete"
+                                      title={`Guide: ${Math.round((g.value * 25.4 / 300) * 10) / 10} mm (Drag to move, drag off canvas/ruler to delete)`}
                                     />
                                   </div>
                                 );
