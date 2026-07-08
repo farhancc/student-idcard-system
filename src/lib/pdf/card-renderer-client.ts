@@ -34,6 +34,60 @@ const loadedFonts = new Set<string>();
 const globalBgBytesCache = new Map<string, Uint8Array>();
 const globalFontBytesCache = new Map<string, ArrayBuffer>();
 
+export function getResolvedFieldValue(
+  fieldKey: string,
+  data: Record<string, any>,
+  cardholder: {
+    id?: number;
+    name: string;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
+    uniqueKey?: string | null;
+    customFields?: string | null;
+  }
+): any {
+  if (!fieldKey) return undefined;
+
+  // 1. Try exact match in data
+  if (data[fieldKey] !== undefined && data[fieldKey] !== null) {
+    return data[fieldKey];
+  }
+
+  // 2. Try normalized search in data keys
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const targetClean = clean(fieldKey);
+  
+  for (const k of Object.keys(data)) {
+    if (clean(k) === targetClean) {
+      if (data[k] !== undefined && data[k] !== null) {
+        return data[k];
+      }
+    }
+  }
+
+  // 3. Fallbacks for standard fields
+  if (targetClean === 'designation' || targetClean === 'class' || targetClean === 'grade' || targetClean === 'role') {
+    return cardholder.designation || '';
+  }
+  if (
+    targetClean === 'id' ||
+    targetClean === 'uniqueekey' ||
+    targetClean === 'uniquekey' ||
+    targetClean === 'admissionnumber' ||
+    targetClean === 'rollnumber' ||
+    targetClean === 'admissionno' ||
+    targetClean === 'studentid'
+  ) {
+    return cardholder.uniqueKey || cardholder.id || '';
+  }
+  if (targetClean === 'serial' || targetClean === 'cardserial' || targetClean === 'serialno') {
+    return cardholder.cardSerial || '';
+  }
+
+  return undefined;
+}
+
 /**
  * Loads a custom font using the browser's FontFace API.
  */
@@ -335,7 +389,7 @@ export async function renderCardSideClient(
   const tempCtx = tempCanvas.getContext('2d');
   
   const getClientValueStr = (f: FieldCoordinate) => {
-    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -376,7 +430,7 @@ export async function renderCardSideClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rawValue) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -949,7 +1003,7 @@ export async function renderCardSideToPdfBytesClient(
     if (f.staticValue !== undefined && f.staticValue !== null) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
-    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -1029,7 +1083,7 @@ export async function renderCardSideToPdfBytesClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
 
     // Photo field fallback
     if (f.type === 'image' && !rawValue) {
