@@ -194,12 +194,14 @@ p {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
 }
 
 .custom-table td {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: #e2e8f0;
+  white-space: nowrap;
 }
 
 .custom-table tr:hover td {

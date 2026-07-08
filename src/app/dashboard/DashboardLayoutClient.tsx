@@ -348,6 +348,7 @@ export default function DashboardLayoutClient({
         {/* Main content grid */}
         <main style={{ 
           flex: 1, 
+          minWidth: 0,
           padding: isMobile ? '24px 16px' : '40px', 
           overflowY: 'auto', 
           maxHeight: isMobile ? 'calc(100vh - 60px)' : '100vh' 
