@@ -843,6 +843,34 @@ export async function renderCardSideToPdfBytes(
   // 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets
   const fontCache = new Map<string, any>();
 
+  // Map common system/web font names to pdf-lib StandardFonts, respecting bold/italic
+  const resolveStandardFont = (family: string, isBold: boolean, isItalic: boolean): string | null => {
+    const n = family.toLowerCase().replace(/[\s-_]+/g, '');
+    const timesAliases = ['timesnewroman', 'times', 'timesroman', 'georgia', 'garamond', 'palatino', 'bookantiqua', 'palatinolinotype'];
+    const courierAliases = ['couriernew', 'courier', 'lucidaconsole', 'consolascourier'];
+    const helveticaAliases = ['arial', 'helvetica', 'arialnarrow', 'calibri', 'tahoma', 'verdana', 'trebuchetms', 'gillsans', 'centuryschoolbook'];
+
+    if (timesAliases.some(a => n.includes(a))) {
+      return isBold && isItalic ? StandardFonts.TimesRomanBoldItalic
+        : isBold   ? StandardFonts.TimesRomanBold
+        : isItalic ? StandardFonts.TimesRomanItalic
+        :            StandardFonts.TimesRoman;
+    }
+    if (courierAliases.some(a => n.includes(a))) {
+      return isBold && isItalic ? StandardFonts.CourierBoldOblique
+        : isBold   ? StandardFonts.CourierBold
+        : isItalic ? StandardFonts.CourierOblique
+        :            StandardFonts.Courier;
+    }
+    if (helveticaAliases.some(a => n.includes(a))) {
+      return isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+        : isBold   ? StandardFonts.HelveticaBold
+        : isItalic ? StandardFonts.HelveticaOblique
+        :            StandardFonts.Helvetica;
+    }
+    return null;
+  };
+
   const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
       const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
@@ -883,9 +911,19 @@ export async function renderCardSideToPdfBytes(
         if (fontCache.has(cacheKey)) return fontCache.get(cacheKey);
       }
     }
-    // Fall back to Helvetica variant based on bold/italic style
+    // Try to map common system font names to pdf-lib StandardFonts
     const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
     const isItalic = f.fontStyle === 'italic';
+    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+      const mappedStd = resolveStandardFont(f.fontFamily, isBold, isItalic);
+      if (mappedStd) {
+        if (!fontCache.has(mappedStd)) {
+          fontCache.set(mappedStd, await pdfDoc.embedFont(mappedStd));
+        }
+        return fontCache.get(mappedStd);
+      }
+    }
+    // Final fallback: Helvetica
     const stdFont =
       isBold && isItalic ? StandardFonts.HelveticaBoldOblique
       : isBold           ? StandardFonts.HelveticaBold
@@ -942,12 +980,21 @@ export async function renderCardSideToPdfBytes(
     if (!embeddedFont) {
       const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
       const isItalic = f.fontStyle === 'italic';
-      const stdFont =
-        isBold && isItalic ? StandardFonts.HelveticaBoldOblique
-        : isBold           ? StandardFonts.HelveticaBold
-        : isItalic         ? StandardFonts.HelveticaOblique
-        :                    StandardFonts.Helvetica;
-      embeddedFont = fontCache.get(stdFont);
+      // Try standard font mapping first
+      if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+        const mappedStd = resolveStandardFont(f.fontFamily, isBold, isItalic);
+        if (mappedStd) {
+          embeddedFont = fontCache.get(mappedStd);
+        }
+      }
+      if (!embeddedFont) {
+        const stdFont =
+          isBold && isItalic ? StandardFonts.HelveticaBoldOblique
+          : isBold           ? StandardFonts.HelveticaBold
+          : isItalic         ? StandardFonts.HelveticaOblique
+          :                    StandardFonts.Helvetica;
+        embeddedFont = fontCache.get(stdFont);
+      }
     }
     const fontSizePt = (f.fontSize || 20) * 0.24;
     if (!embeddedFont) return s.length * fontSizePt * 0.55 / 0.24;
