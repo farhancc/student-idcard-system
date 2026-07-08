@@ -824,7 +824,27 @@ export async function renderCardSideToPdfBytesClient(
 
   const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+      const isItalic = f.fontStyle === 'italic';
+      const baseName = f.fontFamily.toLowerCase();
+
+      // Try to find a style-specific variant first (e.g. "Inter Bold", "Inter Italic", "Inter Bold Italic")
+      const styleVariantName = (
+        isBold && isItalic ? `${baseName} bold italic`
+        : isBold           ? `${baseName} bold`
+        : isItalic         ? `${baseName} italic`
+        :                    null
+      );
+
+      let match = styleVariantName
+        ? pressFonts.find(pf => pf.name.toLowerCase() === styleVariantName)
+        : null;
+
+      // Fall back to base font name if no style variant found
+      if (!match) {
+        match = pressFonts.find(pf => pf.name.toLowerCase() === baseName);
+      }
+
       if (match) {
         const cacheKey = match.fileUrl;
         if (!fontCache.has(cacheKey)) {
@@ -842,7 +862,7 @@ export async function renderCardSideToPdfBytesClient(
         if (fontCache.has(cacheKey)) return fontCache.get(cacheKey);
       }
     }
-    // Fall back to Helvetica variant
+    // Fall back to Helvetica variant based on bold/italic style
     const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
     const isItalic = f.fontStyle === 'italic';
     const stdFont =
@@ -879,11 +899,24 @@ export async function renderCardSideToPdfBytesClient(
   };
 
   const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
-    // Get preloaded font from cache
+    // Get preloaded font from cache — mirrors the style-aware logic in getEmbeddedFont
     let embeddedFont;
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const match = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
-      if (match) embeddedFont = fontCache.get(match.fileUrl);
+      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
+      const isItalic = f.fontStyle === 'italic';
+      const baseName = f.fontFamily.toLowerCase();
+      const styleVariantName = (
+        isBold && isItalic ? `${baseName} bold italic`
+        : isBold           ? `${baseName} bold`
+        : isItalic         ? `${baseName} italic`
+        :                    null
+      );
+      const variantMatch = styleVariantName
+        ? pressFonts.find(pf => pf.name.toLowerCase() === styleVariantName)
+        : null;
+      const baseMatch = pressFonts.find(pf => pf.name.toLowerCase() === baseName);
+      const resolvedMatch = variantMatch || baseMatch;
+      if (resolvedMatch) embeddedFont = fontCache.get(resolvedMatch.fileUrl);
     }
     if (!embeddedFont) {
       const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
