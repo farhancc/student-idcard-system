@@ -233,7 +233,10 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
 
         const uniqueFieldsMap = new Map<string, FieldCoordinate>();
         for (const f of allFields) {
-          if (f.field && f.field !== 'photo' && f.field !== 'cardSerial') {
+          const isImageField = f.type === 'image' || 
+            ['photo', 'logo', 'sig', 'avatar', 'image'].some(kw => f.field.toLowerCase().includes(kw));
+
+          if (f.field && f.field !== 'photo' && f.field !== 'cardSerial' && !isImageField) {
             const existing = uniqueFieldsMap.get(f.field);
             if (!existing || (!existing.prefix && f.prefix)) {
               uniqueFieldsMap.set(f.field, f);
@@ -253,6 +256,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         const cardholderData: Record<string, any> = {
           name: cardholder.name,
           designation: cardholder.designation || '',
+          id: cardholder.uniqueKey || '',
           uniqueKey: cardholder.uniqueKey || '',
           validTill: formattedValidTill,
           ...customData,
@@ -267,8 +271,9 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         });
 
         let currentY = yOffset - 53;
-        // Always draw uniqueKey if not already drawn and is present
-        if (!uniqueFieldsMap.has('uniqueKey') && cardholder.uniqueKey) {
+        // Always draw ID if not already in uniqueFieldsMap and present
+        const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
+        if (!hasIdField && cardholder.uniqueKey) {
           page.drawText(`ID: ${cardholder.uniqueKey}`, {
             x: 480,
             y: currentY,

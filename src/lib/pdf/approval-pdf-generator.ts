@@ -19,6 +19,7 @@ export async function generateApprovalPdfClient(
     designation: string | null;
     photoUrl: string | null;
     cardSerial: string | null;
+    uniqueKey?: string | null;
     customFields?: any;
   }>,
   pressFonts: Array<{ name: string; fileUrl: string }> = []
@@ -58,7 +59,10 @@ export async function generateApprovalPdfClient(
 
   const uniqueFieldsMap = new Map<string, FieldCoordinate>();
   for (const f of allFields) {
-    if (f.field && f.field !== 'photo' && f.field !== 'cardSerial') {
+    const isImageField = f.type === 'image' || 
+      ['photo', 'logo', 'sig', 'avatar', 'image'].some(kw => f.field.toLowerCase().includes(kw));
+
+    if (f.field && f.field !== 'photo' && f.field !== 'cardSerial' && !isImageField) {
       const existing = uniqueFieldsMap.get(f.field);
       if (!existing || (!existing.prefix && f.prefix)) {
         uniqueFieldsMap.set(f.field, f);
@@ -102,6 +106,7 @@ export async function generateApprovalPdfClient(
         designation: cardholder.designation,
         photoUrl: cardholder.photoUrl,
         cardSerial: cardholder.cardSerial,
+        uniqueKey: cardholder.uniqueKey || null,
         customFields: typeof cardholder.customFields === 'string' ? cardholder.customFields : JSON.stringify(cardholder.customFields || {}),
       };
 
@@ -119,6 +124,8 @@ export async function generateApprovalPdfClient(
       const cardholderData: Record<string, any> = {
         name: cardholder.name,
         designation: cardholder.designation || '',
+        id: cardholder.uniqueKey || '',
+        uniqueKey: cardholder.uniqueKey || '',
         validTill: formattedValidTill,
         ...customData,
       };
@@ -180,9 +187,10 @@ export async function generateApprovalPdfClient(
         });
 
         let currentY = yOffset - 53;
-        // Always draw ID if cardSerial is present and not already drawn
-        if (!uniqueFieldsMap.has('uniqueKey') && cardholder.cardSerial) {
-          page.drawText(`ID: ${cardholder.cardSerial}`, {
+        // Always draw ID if not already in uniqueFieldsMap and present
+        const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
+        if (!hasIdField && cardholder.uniqueKey) {
+          page.drawText(`ID: ${cardholder.uniqueKey}`, {
             x: 480,
             y: currentY,
             size: 8,
@@ -273,6 +281,10 @@ export async function generateApprovalPdfClient(
         });
 
         const detailsList: string[] = [];
+        const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
+        if (!hasIdField && cardholder.uniqueKey) {
+          detailsList.push(`ID: ${cardholder.uniqueKey}`);
+        }
         for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
           if (fieldKey === 'name') continue;
           const val = cardholderData[fieldKey];

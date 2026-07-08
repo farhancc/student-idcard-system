@@ -304,6 +304,7 @@ export default function ProductionDaemon() {
       designation: ch.designation || null,
       photoUrl: ch.photoUrl || null,
       cardSerial: ch.cardSerial || null,
+      uniqueKey: ch.uniqueKey || null,
       customFields: typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields || {},
     }));
 
