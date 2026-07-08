@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
+import { generateApprovalPdfClient } from '@/lib/pdf/approval-pdf-generator';
+import { generateProductionPdfClient } from '@/lib/pdf/production-pdf-generator';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -32,6 +34,13 @@ export default function OrdersPage() {
   const [parsedCardholders, setParsedCardholders] = useState<any[]>([]);
   const [selectedPreviewIndexes, setSelectedPreviewIndexes] = useState<number[]>([]);
   const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string }>>(new Map());
+
+  // Layout options for client-side batch processing
+  const [paperSize, setPaperSize] = useState<'A3' | 'A4'>('A3');
+  const [orientation, setOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
+  const [bleedMm, setBleedMm] = useState<string>('3'); // default 3mm
+  const [cropMarks, setCropMarks] = useState<boolean>(true);
+  const [foldLine, setFoldLine] = useState<boolean>(true);
 
   const fetchData = async () => {
     try {
@@ -260,221 +269,155 @@ export default function OrdersPage() {
     }
   };
 
-  const handleCreateBatchFromPreview = async () => {
+  const handleGenerateApprovalProof = async () => {
     setError('');
-    setUploadStatus('Initializing photo uploads...');
+    setUploadStatus('Generating Approval Proof PDF...');
     setUploadProgress({ current: 0, total: selectedPreviewIndexes.length });
     setSubmitting(true);
 
-    const compressImage = (blob: Blob, maxDimension = 800): Promise<Blob> => {
-      return new Promise((resolve) => {
-        const img = new Image();
-        const url = URL.createObjectURL(blob);
-        img.onload = () => {
-          URL.revokeObjectURL(url);
-          let width = img.width;
-          let height = img.height;
-          if (width <= maxDimension && height <= maxDimension && blob.size < 200 * 1024) {
-            return resolve(blob);
-          }
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((r) => resolve(r || blob), 'image/jpeg', 0.85);
-          } else {
-            resolve(blob);
-          }
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve(blob);
-        };
-        img.src = url;
-      });
-    };
-
-    const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
-      try {
-        const res = await fetch(url, options);
-        if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
-        return res;
-      } catch (err) {
-        if (retries > 0) {
-          await new Promise((r) => setTimeout(r, delay));
-          return fetchWithRetry(url, options, retries - 1, delay * 1.5);
-        }
-        throw err;
-      }
-    };
-
     try {
-      if (!pressId) throw new Error('Press session could not be resolved. Please refresh.');
-      
+      const selectedTemplate = templates.find(t => String(t.id) === templateId);
+      if (!selectedTemplate) throw new Error('Template not found');
+
+      const selectedClient = clients.find(c => String(c.id) === clientId);
+      const clientName = selectedClient ? selectedClient.name : 'Client';
+      const deptName = selectedTemplate.name;
+
       const selectedCards = parsedCardholders.filter((_, idx) => selectedPreviewIndexes.includes(idx));
       if (selectedCards.length === 0) {
         throw new Error('Please select at least one record to print.');
       }
 
-      // Filter cards that have a matching photo in ZIP
-      const cardsWithPhotos = selectedCards.filter(c => c.hasPhoto && photosMap.has(c.sanitizedKey));
-      
-      let currentUpload = 0;
-      const concurrency = 5;
-      const failedUploads: string[] = [];
+      // Fetch fonts
+      setUploadStatus('Loading fonts...');
+      const fontsRes = await fetch('/api/fonts', {
+        headers: { 'x-press-id': String(pressId || '') }
+      });
+      let pressFonts = [];
+      if (fontsRes.ok) {
+        const fontsJson = await fontsRes.json();
+        pressFonts = fontsJson.fonts || [];
+      }
 
-      const uploadTasks = cardsWithPhotos.map(card => {
-        return async () => {
-          const matchKey = card.imageId || card.uniqueKey || card.name;
-          const photoData = photosMap.get(card.sanitizedKey)!;
-          
-          try {
-            setUploadStatus(`Compressing photo for ${card.name}...`);
-            const compressedBlob = await compressImage(photoData.blob, 850);
-
-            // Request signed upload payload
-            const signRes = await fetchWithRetry('/api/upload/sign', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                folder: `press_${pressId}/client_${clientId}/photos`,
-                publicId: String(matchKey),
-                overwrite: true,
-              }),
-            });
-
-            const signData = await signRes.json();
-            if (signRes.ok && signData.success) {
-              const formData = new FormData();
-              formData.append('file', compressedBlob);
-              formData.append('api_key', signData.apiKey);
-              formData.append('timestamp', String(signData.timestamp));
-              formData.append('signature', signData.signature);
-              formData.append('folder', `press_${pressId}/client_${clientId}/photos`);
-              formData.append('public_id', String(matchKey));
-              formData.append('overwrite', 'true');
-
-              const cloudRes = await fetchWithRetry(`https://api.cloudinary.com/v1_1/${signData.cloudName}/image/upload`, {
-                method: 'POST',
-                body: formData,
-              });
-
-              const cloudData = await cloudRes.json();
-              card.photoUrl = cloudData.secure_url;
-            } else {
-              // Local upload fallback
-              const formData = new FormData();
-              const ext = compressedBlob.type.split('/')[1] || 'jpeg';
-              formData.append('file', new File([compressedBlob], `${matchKey}.${ext}`, { type: compressedBlob.type }));
-              formData.append('type', 'photo');
-
-              const localRes = await fetchWithRetry('/api/upload', {
-                method: 'POST',
-                headers: { 'x-press-id': String(pressId) },
-                body: formData,
-              });
-              const localData = await localRes.json();
-              card.photoUrl = localData.url;
-            }
-          } catch (err: any) {
-            console.error(`Upload error for ${card.name}:`, err);
-            failedUploads.push(card.name);
-          } finally {
-            currentUpload++;
-            setUploadStatus(`Uploading photos (${currentUpload}/${cardsWithPhotos.length})...`);
-            setUploadProgress({ current: currentUpload, total: cardsWithPhotos.length });
-          }
+      // Map to correct parameter format
+      const cardholdersForPdf = selectedCards.map(c => {
+        const matchedPhoto = photosMap.get(c.sanitizedKey);
+        return {
+          id: c.id,
+          name: c.name,
+          designation: c.designation || null,
+          photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
+          cardSerial: c.cardSerial || null,
+          uniqueKey: c.uniqueKey || null,
+          customFields: c.customFields ? JSON.stringify(c.customFields) : null,
         };
       });
 
-      // Concurrency helper
-      const queue = async (tasks: (() => Promise<void>)[], maxConcurrency: number) => {
-        const executing = new Set<Promise<void>>();
-        for (const task of tasks) {
-          const p = Promise.resolve().then(() => task());
-          executing.add(p);
-          const clean = () => executing.delete(p);
-          p.then(clean, clean);
-          if (executing.size >= maxConcurrency) {
-            await Promise.race(executing);
-          }
-        }
-        await Promise.all(executing);
-      };
+      setUploadStatus('Assembling pages...');
+      const pdfBlob = await generateApprovalPdfClient(
+        clientName,
+        deptName,
+        selectedTemplate,
+        cardholdersForPdf,
+        pressFonts
+      );
 
-      await queue(uploadTasks, concurrency);
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Approval_Proof_${clientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-      if (failedUploads.length > 0) {
-        const proceed = window.confirm(
-          `${failedUploads.length} photo(s) failed to upload:\n` +
-          failedUploads.slice(0, 5).map(name => `• ${name}`).join('\n') +
-          (failedUploads.length > 5 ? `\n...and ${failedUploads.length - 5} more` : '') +
-          `\n\nDo you want to proceed with creating the order without these photos?`
-        );
-        if (!proceed) {
-          throw new Error('Batch process cancelled by user.');
-        }
-      }
-
-      setUploadStatus('Syncing registry changes with database...');
-      
-      // Clean up the temporary UI props like id/hasPhoto/sanitizedKey before sending to backend
-      const cardholdersToSubmit = selectedCards.map(({ name, designation, uniqueKey, photoUrl, customFields }) => ({
-        name,
-        designation,
-        uniqueKey,
-        photoUrl,
-        customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields),
-      }));
-
-      const res = await fetch('/api/orders/batch-process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: Number(clientId),
-          templateId: Number(templateId),
-          pricePerCard: Number(pricePerCard),
-          taxPercent: Number(taxPercent),
-          validTill: validTill || null,
-          cardholders: cardholdersToSubmit,
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to process batch order');
-
-      setShowForm(false);
-      setExcelFile(null);
-      setZipFile(null);
-      setParsedCardholders([]);
-      setSelectedPreviewIndexes([]);
-      setShowPreviewStep(false);
-      
-      // Revoke urls
-      photosMap.forEach((val) => {
-        if (val.url) URL.revokeObjectURL(val.url);
-      });
-      setPhotosMap(new Map());
-
-      setUploadStatus('');
-      fetchData();
-      window.dispatchEvent(new Event('refresh-profile'));
+      setUploadStatus('Success!');
+      setTimeout(() => setUploadStatus(''), 2000);
     } catch (err: any) {
-      setError(err.message || 'Error occurred during batch processing');
+      console.error(err);
+      setError(err.message || 'Failed to generate approval proof');
     } finally {
       setSubmitting(false);
-      setUploadStatus('');
+    }
+  };
+
+  const handleGenerateProductionPdf = async () => {
+    setError('');
+    setUploadStatus('Generating Production PDF...');
+    setUploadProgress({ current: 0, total: selectedPreviewIndexes.length });
+    setSubmitting(true);
+
+    try {
+      const selectedTemplate = templates.find(t => String(t.id) === templateId);
+      if (!selectedTemplate) throw new Error('Template not found');
+
+      const selectedCards = parsedCardholders.filter((_, idx) => selectedPreviewIndexes.includes(idx));
+      if (selectedCards.length === 0) {
+        throw new Error('Please select at least one record to print.');
+      }
+
+      // Fetch fonts
+      setUploadStatus('Loading fonts...');
+      const fontsRes = await fetch('/api/fonts', {
+        headers: { 'x-press-id': String(pressId || '') }
+      });
+      let pressFonts = [];
+      if (fontsRes.ok) {
+        const fontsJson = await fontsRes.json();
+        pressFonts = fontsJson.fonts || [];
+      }
+
+      // Map to correct parameter format
+      const cardholdersForPdf = selectedCards.map(c => {
+        const matchedPhoto = photosMap.get(c.sanitizedKey);
+        return {
+          id: c.id,
+          name: c.name,
+          designation: c.designation || null,
+          photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
+          cardSerial: c.cardSerial || null,
+          uniqueKey: c.uniqueKey || null,
+          customFields: c.customFields ? JSON.stringify(c.customFields) : null,
+        };
+      });
+
+      setUploadStatus('Compiling print-ready sheets...');
+      const bleedPt = Number(bleedMm) * 2.83464567; // mm to points
+      const pdfBlob = await generateProductionPdfClient(
+        selectedTemplate,
+        cardholdersForPdf,
+        {
+          paperSize,
+          orientation,
+          bleed: bleedPt,
+          cropMarks,
+          foldLine,
+        },
+        pressFonts,
+        (percent) => {
+          setUploadProgress({ current: Math.round((percent / 100) * selectedPreviewIndexes.length), total: selectedPreviewIndexes.length });
+        }
+      );
+
+      const selectedClient = clients.find(c => String(c.id) === clientId);
+      const clientName = selectedClient ? selectedClient.name : 'Client';
+
+      const url = URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Production_Print_${clientName.replace(/\s+/g, '_')}_${paperSize}_${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      setUploadStatus('Success!');
+      setTimeout(() => setUploadStatus(''), 2000);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to generate production PDF');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -656,7 +599,78 @@ export default function OrdersPage() {
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                {/* PDF Layout Configuration */}
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.03)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: '12px',
+                  padding: '16px',
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '16px',
+                  marginTop: '8px'
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)' }}>Paper Size</label>
+                    <select 
+                      className="form-select" 
+                      style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                      value={paperSize} 
+                      onChange={e => setPaperSize(e.target.value as any)}
+                    >
+                      <option value="A3">A3 Sheet</option>
+                      <option value="A4">A4 Sheet</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)' }}>Orientation</label>
+                    <select 
+                      className="form-select" 
+                      style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                      value={orientation} 
+                      onChange={e => setOrientation(e.target.value as any)}
+                    >
+                      <option value="PORTRAIT">Portrait</option>
+                      <option value="LANDSCAPE">Landscape</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)' }}>Bleed (mm)</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      className="form-input" 
+                      style={{ padding: '6px 12px', fontSize: '0.85rem' }}
+                      value={bleedMm} 
+                      onChange={e => setBleedMm(e.target.value)} 
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px', paddingTop: '10px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={cropMarks} 
+                        onChange={e => setCropMarks(e.target.checked)} 
+                      />
+                      Crop Marks
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={foldLine} 
+                        onChange={e => setFoldLine(e.target.checked)} 
+                      />
+                      Fold Line
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '14px' }}>
                   <button 
                     type="button" 
                     className="btn btn-secondary" 
@@ -676,11 +690,20 @@ export default function OrdersPage() {
                   </button>
                   <button 
                     type="button" 
+                    className="btn btn-secondary" 
+                    style={{ border: '1px solid rgba(255, 255, 255, 0.15)', background: 'transparent' }}
+                    disabled={submitting || selectedPreviewIndexes.length === 0}
+                    onClick={handleGenerateApprovalProof}
+                  >
+                    {submitting ? 'Processing...' : 'Download Approval Proof (A4)'}
+                  </button>
+                  <button 
+                    type="button" 
                     className="btn btn-primary" 
                     disabled={submitting || selectedPreviewIndexes.length === 0}
-                    onClick={handleCreateBatchFromPreview}
+                    onClick={handleGenerateProductionPdf}
                   >
-                    {submitting ? 'Uploading...' : `Create Order (${selectedPreviewIndexes.length} cards)`}
+                    {submitting ? 'Generating...' : `Download Production PDF (${selectedPreviewIndexes.length} cards)`}
                   </button>
                 </div>
               </div>
