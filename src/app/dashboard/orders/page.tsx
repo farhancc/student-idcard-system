@@ -242,8 +242,39 @@ export default function OrdersPage() {
 
         // Try matching a photo from the zip using imageId (priority), uniqueKey, or name
         const matchKey = imageId || uniqueKey || name;
-        const sanitizedKey = matchKey.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
-        const hasPhoto = newPhotosMap.has(sanitizedKey);
+        const baseSanitized = matchKey.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
+        
+        let foundPhotoKey = baseSanitized;
+        let hasPhoto = newPhotosMap.has(baseSanitized);
+        if (!hasPhoto) {
+          const photoCandidates = [
+            `${baseSanitized}_photo`,
+            `${baseSanitized}_image`,
+            `${baseSanitized}_pic`
+          ];
+          for (const cand of photoCandidates) {
+            if (newPhotosMap.has(cand)) {
+              hasPhoto = true;
+              foundPhotoKey = cand;
+              break;
+            }
+          }
+        }
+
+        // Map custom sub-images (e.g. signature, parent photo, etc.) from the zip file
+        newPhotosMap.forEach((val, key) => {
+          if (key.startsWith(`${baseSanitized}_`)) {
+            const suffix = key.substring(baseSanitized.length + 1); // e.g. "signature"
+            if (suffix && suffix !== 'photo' && suffix !== 'image' && suffix !== 'pic') {
+              custom[suffix] = val.url;
+            }
+          } else if (key.startsWith(`${baseSanitized}-`)) {
+            const suffix = key.substring(baseSanitized.length + 1);
+            if (suffix && suffix !== 'photo' && suffix !== 'image' && suffix !== 'pic') {
+              custom[suffix] = val.url;
+            }
+          }
+        });
 
         return {
           id: index,
@@ -253,7 +284,7 @@ export default function OrdersPage() {
           photoUrl,
           customFields: custom,
           hasPhoto,
-          sanitizedKey,
+          sanitizedKey: foundPhotoKey,
           imageId
         };
       }).filter(c => c.name);
