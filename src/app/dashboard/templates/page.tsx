@@ -595,6 +595,11 @@ export default function TemplatesPage() {
 
       const { xOffset, yOffset, textWidth, textHeight } = getFieldTextOffsets(field);
 
+      // Temp update of the dragged field to compute layout push-down offset at targetY
+      const tempFields = fields.map((f, idx) => idx === dragState.index ? { ...f, y: targetY } : f);
+      const tempOffsets = getDesignerYOffsets(tempFields);
+      const currentPushDown = tempOffsets.get(dragState.index) ?? 0;
+
       // ── Vertical Snapping (X axis) ──
       let snappedX = targetX;
       let minDiffX = threshold;
@@ -647,25 +652,25 @@ export default function TemplatesPage() {
         const guides = dragState.side === 'front' ? frontGuides : backGuides;
         for (const g of guides) {
           if (g.type === 'horizontal') {
-            // Text Top edge
-            const diffTop = Math.abs((targetY + yOffset) - g.value);
+            // Text Top edge (visual text top = targetY + currentPushDown + yOffset)
+            const diffTop = Math.abs((targetY + currentPushDown + yOffset) - g.value);
             if (diffTop < minDiffY) {
               minDiffY = diffTop;
-              snappedY = g.value - yOffset;
+              snappedY = g.value - currentPushDown - yOffset;
               snappedToGuideY = true;
             }
             // Text Bottom edge
-            const diffBottom = Math.abs((targetY + yOffset + textHeight) - g.value);
+            const diffBottom = Math.abs((targetY + currentPushDown + yOffset + textHeight) - g.value);
             if (diffBottom < minDiffY) {
               minDiffY = diffBottom;
-              snappedY = g.value - yOffset - textHeight;
+              snappedY = g.value - currentPushDown - yOffset - textHeight;
               snappedToGuideY = true;
             }
             // Text Center
-            const diffCenter = Math.abs((targetY + yOffset + textHeight / 2) - g.value);
+            const diffCenter = Math.abs((targetY + currentPushDown + yOffset + textHeight / 2) - g.value);
             if (diffCenter < minDiffY) {
               minDiffY = diffCenter;
-              snappedY = g.value - yOffset - textHeight / 2;
+              snappedY = g.value - currentPushDown - yOffset - textHeight / 2;
               snappedToGuideY = true;
             }
           }
@@ -1820,7 +1825,19 @@ export default function TemplatesPage() {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (ctx) {
-        ctx.font = `${f.fontStyle || 'normal'} ${f.fontWeight || 'normal'} ${fontSize}px sans-serif`;
+        let fontName = 'sans-serif';
+        if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+          const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+          if (matchingFont) {
+            fontName = matchingFont.name.replace(/\s+/g, '_');
+          } else {
+            fontName = f.fontFamily;
+          }
+        }
+        const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+        const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+        ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${fontName}"`;
+
         const measureTextSpacing = (s: string) => {
           const spacing = f.letterSpacing || 0;
           if (!spacing) return ctx.measureText(s).width;
@@ -1832,13 +1849,13 @@ export default function TemplatesPage() {
           return totalWidth;
         };
 
-        const lines = wrapWords(text, f.width, measureTextSpacing);
+        const lines = wrapWords(text, f.width - 8, measureTextSpacing);
         textWidth = Math.max(0, ...lines.map(l => measureTextSpacing(l)));
         textHeight = lines.length * lineHeight;
       }
     }
 
-     let yOffset = 0;
+    let yOffset = 0;
     const halfLeading = (lineHeight - fontSize) / 2;
     if (f.verticalAlign === 'center') {
       yOffset = (f.height - textHeight) / 2 + halfLeading;
@@ -1852,7 +1869,9 @@ export default function TemplatesPage() {
     if (f.align === 'center') {
       xOffset = (f.width - textWidth) / 2;
     } else if (f.align === 'right') {
-      xOffset = f.width - textWidth;
+      xOffset = f.width - textWidth - 4;
+    } else {
+      xOffset = 4;
     }
 
     return { xOffset, yOffset, textWidth, textHeight };
