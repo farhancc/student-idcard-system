@@ -337,9 +337,8 @@ export async function renderCardSideClient(
   const getClientValueStr = (f: FieldCoordinate) => {
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rv) {
-      const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
-      const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
-      if (isProfileField || isOnlyImageField) {
+      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
+      if (isProfileField) {
         rv = cardholder.photoUrl || '';
       }
     }
@@ -379,9 +378,8 @@ export async function renderCardSideClient(
     const yOffset = yOffsets.get(fi) ?? 0;
     let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rawValue) {
-      const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
-      const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
-      if (isProfileField || isOnlyImageField) {
+      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
+      if (isProfileField) {
         rawValue = cardholder.photoUrl || '';
       }
     }
@@ -953,9 +951,8 @@ export async function renderCardSideToPdfBytesClient(
     }
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rv) {
-      const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
-      const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
-      if (isProfileField || isOnlyImageField) {
+      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
+      if (isProfileField) {
         rv = cardholder.photoUrl || '';
       }
     }
@@ -1036,9 +1033,9 @@ export async function renderCardSideToPdfBytesClient(
 
     // Photo field fallback
     if (f.type === 'image' && !rawValue) {
-      const isProfile = ['photo','avatar','image','profile'].includes(f.field);
+      const isProfile = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       const isOnlyImg = fields.filter(x => x.type === 'image').length === 1;
-      if (isProfile || isOnlyImg) rawValue = cardholder.photoUrl || '';
+      if (isProfile) rawValue = cardholder.photoUrl || '';
     }
     if (rawValue === undefined || rawValue === null) continue;
 

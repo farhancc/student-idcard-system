@@ -109,6 +109,26 @@ export default function ImageCropper({
     const xInCrop = cropLeft - imgX;
     const yInCrop = cropTop - imgY;
 
+    // Apply border radius clip to crop image
+    if (targetWidth && targetBorderRadius) {
+      const r = Math.min((targetBorderRadius / targetWidth) * canvas.width, canvas.width / 2, canvas.height / 2);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(0, 0, canvas.width, canvas.height, r);
+      } else {
+        ctx.moveTo(r, 0);
+        ctx.lineTo(canvas.width - r, 0);
+        ctx.quadraticCurveTo(canvas.width, 0, canvas.width, r);
+        ctx.lineTo(canvas.width, canvas.height - r);
+        ctx.quadraticCurveTo(canvas.width, canvas.height, canvas.width - r, canvas.height);
+        ctx.lineTo(r, canvas.height);
+        ctx.quadraticCurveTo(0, canvas.height, 0, canvas.height - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+      }
+      ctx.clip();
+    }
+
     // Draw image onto canvas mapping crop space to canvas dimensions
     ctx.drawImage(
       img,
