@@ -5,10 +5,13 @@ export async function generateApprovalPdfClient(
   clientName: string,
   deptName: string,
   template: {
+    id?: number;
     cardWidth: number;
     cardHeight: number;
     frontImageUrl: string;
     backImageUrl: string | null;
+    frontOriginalUrl?: string | null;
+    backOriginalUrl?: string | null;
     frontFields: string;
     backFields: string;
     validTill?: string | Date | null;
@@ -45,10 +48,13 @@ export async function generateApprovalPdfClient(
 
   // Convert template fields to string if they are parsed objects
   const clientTemplate = {
+    id: template.id,
     cardWidth: template.cardWidth,
     cardHeight: template.cardHeight,
     frontImageUrl: template.frontImageUrl,
     backImageUrl: template.backImageUrl,
+    frontOriginalUrl: template.frontOriginalUrl ?? null,
+    backOriginalUrl: template.backOriginalUrl ?? null,
     frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
     backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
   };
