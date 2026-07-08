@@ -182,11 +182,21 @@ export default function OrdersPage() {
         sheet.eachRow((row, rowNumber) => {
           if (rowNumber === 1) return;
           const rowObj: Record<string, any> = {};
-          const values = (row.values as any[]).slice(1);
-          values.forEach((cell, idx) => {
-            const key = headers[idx];
-            if (key) rowObj[key] = cell?.text ?? cell ?? '';
-          });
+          for (let i = 1; i <= headers.length; i++) {
+            const cell = row.getCell(i);
+            const key = headers[i - 1];
+            if (key) {
+              let val = cell.value;
+              if (val && typeof val === 'object') {
+                if ('result' in val) {
+                  val = (val as any).result;
+                } else if ('text' in val) {
+                  val = (val as any).text;
+                }
+              }
+              rowObj[key] = val !== null && val !== undefined ? String(val) : '';
+            }
+          }
           rawData.push(rowObj);
         });
       } else {
@@ -199,9 +209,24 @@ export default function OrdersPage() {
 
       // Auto-detect columns
       const getHeaderKey = (headers: string[], possibleNames: string[]): string | null => {
+        // First try exact or normalized clean match
         for (const h of headers) {
-          if (possibleNames.some(p => h.toLowerCase().trim() === p.toLowerCase())) {
-            return h;
+          const cleanH = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+          for (const p of possibleNames) {
+            const cleanP = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanH === cleanP) {
+              return h;
+            }
+          }
+        }
+        // Fallback to substring matching
+        for (const h of headers) {
+          const cleanH = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+          for (const p of possibleNames) {
+            const cleanP = p.toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (cleanH.includes(cleanP) || cleanP.includes(cleanH)) {
+              return h;
+            }
           }
         }
         return null;
@@ -372,8 +397,16 @@ export default function OrdersPage() {
           }
         });
 
+        let recordId = index;
+        if (uniqueKey) {
+          const parsedId = parseInt(uniqueKey, 10);
+          if (!isNaN(parsedId)) {
+            recordId = parsedId;
+          }
+        }
+
         return {
-          id: index,
+          id: recordId,
           name,
           designation,
           uniqueKey,
@@ -430,7 +463,7 @@ export default function OrdersPage() {
       const cardholdersForPdf = selectedCards.map(c => {
         const matchedPhoto = photosMap.get(c.sanitizedKey);
         return {
-          id: c.id,
+          id: c.uniqueKey || c.id,
           name: c.name,
           designation: c.designation || null,
           photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
@@ -498,7 +531,7 @@ export default function OrdersPage() {
       const cardholdersForPdf = selectedCards.map(c => {
         const matchedPhoto = photosMap.get(c.sanitizedKey);
         return {
-          id: c.id,
+          id: c.uniqueKey || c.id,
           name: c.name,
           designation: c.designation || null,
           photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
