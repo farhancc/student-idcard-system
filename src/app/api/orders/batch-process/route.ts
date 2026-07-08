@@ -2,13 +2,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCreditSettings } from '@/lib/system-settings';
 
-import AdmZip from 'adm-zip';
-import sharp from 'sharp';
-import fs from 'fs';
-import path from 'path';
-import ExcelJS from 'exceljs';
-import Papa from 'papaparse';
-
 export async function POST(request: Request) {
   try {
     const pressIdStr = request.headers.get('x-press-id');
@@ -26,28 +19,21 @@ export async function POST(request: Request) {
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
 
-    const formData = await request.formData();
-    const clientIdStr = formData.get('clientId');
-    const templateIdStr = formData.get('templateId');
-    const pricePerCardStr = formData.get('pricePerCard');
-    const taxPercentStr = formData.get('taxPercent');
-    const validTill = formData.get('validTill') as string | null;
+    const body = await request.json();
+    const { clientId: clientIdRaw, templateId: templateIdRaw, pricePerCard: pricePerCardRaw, taxPercent: taxPercentRaw, validTill, cardholders } = body;
 
-    const excelFile = formData.get('excel') as File | null;
-    const zipFile = formData.get('zip') as File | null;
-
-    if (!clientIdStr || !templateIdStr) {
+    if (!clientIdRaw || !templateIdRaw) {
       return NextResponse.json({ error: 'Client ID and Template ID are required' }, { status: 400 });
     }
 
-    if (!excelFile || !zipFile) {
-      return NextResponse.json({ error: 'Excel sheet and ZIP photos file are both required' }, { status: 400 });
+    if (!cardholders || !Array.isArray(cardholders) || cardholders.length === 0) {
+      return NextResponse.json({ error: 'A list of cardholders is required' }, { status: 400 });
     }
 
-    const clientId = Number(clientIdStr);
-    const templateId = Number(templateIdStr);
-    const pricePerCard = pricePerCardStr ? Number(pricePerCardStr) : 50.0;
-    const taxPercent = taxPercentStr ? Number(taxPercentStr) : 18.0;
+    const clientId = Number(clientIdRaw);
+    const templateId = Number(templateIdRaw);
+    const pricePerCard = pricePerCardRaw ? Number(pricePerCardRaw) : 50.0;
+    const taxPercent = taxPercentRaw ? Number(taxPercentRaw) : 18.0;
 
     // Verify client and template belong to press
     const client = await prisma.client.findFirst({
@@ -61,78 +47,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Client or Template not found' }, { status: 404 });
     }
 
-    // 1. Read and parse Excel / CSV
-    let rawData: any[] = [];
-    const excelBuffer = Buffer.from(await excelFile.arrayBuffer());
-    const excelName = excelFile.name.toLowerCase();
-
-    if (excelName.endsWith('.csv')) {
-      const csvText = excelBuffer.toString('utf-8');
-      const parseResult = Papa.parse(csvText, { header: true, skipEmptyLines: true });
-      rawData = parseResult.data;
-    } else if (excelName.endsWith('.xlsx') || excelName.endsWith('.xls')) {
-      const workbook = new ExcelJS.Workbook();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await workbook.xlsx.load(Buffer.from(excelBuffer) as any);
-      const sheet = workbook.worksheets[0];
-      if (!sheet) {
-        return NextResponse.json({ error: 'XLSX file contains no sheets.' }, { status: 400 });
-      }
-      const headerRow = sheet.getRow(1).values as (string | undefined)[];
-      const headers = headerRow.slice(1);
-      sheet.eachRow((row, rowNumber) => {
-        if (rowNumber === 1) return;
-        const rowObj: Record<string, any> = {};
-        (row.values as any[]).slice(1).forEach((cell, idx) => {
-          const key = headers[idx];
-          if (key) rowObj[key] = cell?.text ?? cell ?? '';
-        });
-        rawData.push(rowObj);
-      });
-    } else {
-      return NextResponse.json({ error: 'Unsupported spreadsheet format. Please upload CSV or XLSX.' }, { status: 400 });
-    }
-
-    if (rawData.length === 0) {
-      return NextResponse.json({ error: 'No data rows found in the spreadsheet.' }, { status: 400 });
-    }
-
-    // Auto-detect columns
-    const getHeaderKey = (headers: string[], possibleNames: string[]): string | null => {
-      for (const h of headers) {
-        if (possibleNames.some(p => h.toLowerCase().trim() === p.toLowerCase())) {
-          return h;
-        }
-      }
-      return null;
-    };
-
-    const firstRowHeaders = Object.keys(rawData[0]);
-    const nameCol = getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name', 'studentname']) || 'name';
-    const designationCol = getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title', 'course']) || 'designation';
-    const uniqueKeyCol = getHeaderKey(firstRowHeaders, ['id', 'empid', 'rollnumber', 'roll no', 'rollno', 'employee id', 'unique key', 'admission number', 'admissionno', 'student id', 'studentid']) || 'uniqueKey';
-    const photoUrlCol = getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
-
-    // 2. Import Cardholders
+    // 1. Process/Import Cardholders list
     const cardholderIds: number[] = [];
-    const uniqueKeyToCardholder = new Map<string, any>();
+    let matchedPhotosCount = 0;
 
-    for (let i = 0; i < rawData.length; i++) {
-      const row = rawData[i];
-      const name = String(row[nameCol] || '').trim();
-      if (!name) continue; // skip blank name rows
+    for (let i = 0; i < cardholders.length; i++) {
+      const ch = cardholders[i];
+      const name = String(ch.name || '').trim();
+      if (!name) continue;
 
-      const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
-      const uniqueKey = row[uniqueKeyCol] ? String(row[uniqueKeyCol]).trim() : null;
-      const photoUrl = row[photoUrlCol] ? String(row[photoUrlCol]).trim() : null;
+      const designation = ch.designation ? String(ch.designation).trim() : null;
+      const uniqueKey = ch.uniqueKey ? String(ch.uniqueKey).trim() : null;
+      const photoUrl = ch.photoUrl ? String(ch.photoUrl).trim() : null;
+      
+      if (photoUrl) {
+        matchedPhotosCount++;
+      }
 
-      // Extract custom fields (all columns not mapped to core fields)
-      const custom: Record<string, any> = {};
-      Object.keys(row).forEach(key => {
-        if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol) {
-          custom[key] = row[key];
-        }
-      });
+      // Convert customFields object to string JSON
+      const customFieldsStr = ch.customFields && Object.keys(ch.customFields).length > 0 
+        ? JSON.stringify(ch.customFields) 
+        : null;
 
       // Find duplicate in DB
       let duplicate = null;
@@ -152,13 +87,13 @@ export async function POST(request: Request) {
         name,
         designation,
         photoUrl,
-        customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
+        customFields: customFieldsStr,
         uniqueKey,
       };
 
-      let cardholder;
+      let cardholderRecord;
       if (duplicate) {
-        cardholder = await prisma.cardholder.update({
+        cardholderRecord = await prisma.cardholder.update({
           where: { id: duplicate.id },
           data: {
             ...cardholderPayload,
@@ -169,7 +104,7 @@ export async function POST(request: Request) {
         if (
           name !== duplicate.name ||
           designation !== duplicate.designation ||
-          JSON.stringify(custom) !== duplicate.customFields
+          customFieldsStr !== duplicate.customFields
         ) {
           await prisma.cardAsset.updateMany({
             where: { cardholderId: duplicate.id },
@@ -177,116 +112,17 @@ export async function POST(request: Request) {
           });
         }
       } else {
-        cardholder = await prisma.cardholder.create({ data: cardholderPayload });
+        cardholderRecord = await prisma.cardholder.create({ data: cardholderPayload });
       }
 
-      cardholderIds.push(cardholder.id);
-      if (uniqueKey) {
-        uniqueKeyToCardholder.set(uniqueKey, cardholder);
-      }
-      // Also map by name as backup if uniqueKey doesn't match
-      uniqueKeyToCardholder.set(name.toLowerCase(), cardholder);
+      cardholderIds.push(cardholderRecord.id);
     }
 
     if (cardholderIds.length === 0) {
-      return NextResponse.json({ error: 'No valid cardholders imported from sheet' }, { status: 400 });
+      return NextResponse.json({ error: 'No valid cardholders imported' }, { status: 400 });
     }
 
-    // 3. Process ZIP file photos and match with student IDs
-    const zipBuffer = Buffer.from(await zipFile.arrayBuffer());
-    const zip = new AdmZip(zipBuffer);
-    const zipEntries = zip.getEntries();
-
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', String(pressId), String(clientId), 'photos');
-    fs.mkdirSync(uploadDir, { recursive: true });
-
-    let matchedPhotosCount = 0;
-
-    for (const entry of zipEntries) {
-      if (entry.isDirectory) continue;
-
-      const ext = path.extname(entry.entryName).toLowerCase();
-      if (!['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
-        continue;
-      }
-
-      const baseName = path.basename(entry.entryName, ext).trim();
-      const imageBuffer = entry.getData();
-
-      // Find matching cardholder
-      // Match by student ID (uniqueKey) first, fallback to lowercase name
-      let cardholder = uniqueKeyToCardholder.get(baseName);
-      if (!cardholder) {
-        cardholder = uniqueKeyToCardholder.get(baseName.toLowerCase());
-      }
-
-      if (cardholder) {
-        // Simple verification that sharp can read the image
-        try {
-          await sharp(imageBuffer).metadata();
-        } catch (e) {
-          console.warn(`Corrupt image entry: ${entry.entryName}`);
-          continue;
-        }
-
-        const isCloudinaryConfigured = 
-          process.env.CLOUDINARY_CLOUD_NAME && 
-          process.env.CLOUDINARY_API_KEY && 
-          process.env.CLOUDINARY_API_SECRET;
-
-        let publicUrl = '';
-
-        if (isCloudinaryConfigured) {
-          const { v2: cloudinary } = require('cloudinary');
-          cloudinary.config({
-            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-            api_key: process.env.CLOUDINARY_API_KEY,
-            api_secret: process.env.CLOUDINARY_API_SECRET,
-          });
-
-          const uploadResult = await new Promise<any>((resolve, reject) => {
-            cloudinary.uploader.upload_stream(
-              {
-                folder: `press_${pressId}/client_${clientId}/photos`,
-                resource_type: 'image',
-                public_id: String(cardholder.id),
-                overwrite: true,
-              },
-              (error: any, result: any) => {
-                if (error) reject(error);
-                else resolve(result);
-              }
-            ).end(imageBuffer);
-          });
-
-          publicUrl = uploadResult.secure_url;
-        } else {
-          // Save file locally in upload directory
-          const destFileName = `${cardholder.id}${ext}`;
-          const destPath = path.join(uploadDir, destFileName);
-          fs.writeFileSync(destPath, imageBuffer);
-
-          // Save URL path relative to public/
-          publicUrl = `/uploads/${pressId}/${clientId}/photos/${destFileName}`;
-        }
-
-        // Update Cardholder DB
-        await prisma.cardholder.update({
-          where: { id: cardholder.id },
-          data: { photoUrl: publicUrl },
-        });
-
-        // Mark cache stale
-        await prisma.cardAsset.updateMany({
-          where: { cardholderId: cardholder.id },
-          data: { isStale: true },
-        });
-
-        matchedPhotosCount++;
-      }
-    }
-
-    // 4. Create CardOrder & Invoice
+    // 2. Create CardOrder & Invoice
     const validTillDate = validTill ? new Date(validTill) : null;
     const order = await prisma.cardOrder.create({
       data: {
@@ -342,7 +178,7 @@ export async function POST(request: Request) {
       },
     });
 
-    // 5. Trigger PDF Generation Jobs for both types: APPROVAL and PRODUCTION
+    // 3. Trigger PDF Generation Jobs for both types: APPROVAL and PRODUCTION
     const jobOptions = {
       paperSize: 'A3' as const,
       orientation: 'PORTRAIT' as const,
