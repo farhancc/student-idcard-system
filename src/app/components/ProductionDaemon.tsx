@@ -132,12 +132,12 @@ export default function ProductionDaemon() {
     }
   };
 
-  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string) => {
+  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string, localPath?: string) => {
     try {
       const res = await fetch('/api/jobs/production-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64 }),
+        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64, localPath }),
         credentials: 'same-origin'
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
@@ -153,7 +153,7 @@ export default function ProductionDaemon() {
       try {
         const electronAPI = (window as any).electronAPI;
         if (electronAPI?.queuePrintLog) {
-          const result = await electronAPI.queuePrintLog({ jobId, success, errorMsg, pdfBase64: undefined });
+          const result = await electronAPI.queuePrintLog({ jobId, success, errorMsg, pdfBase64: undefined, localPath });
           setOfflineQueueCount(result?.queueLength ?? 0);
           addLog(`Queued offline. Total pending: ${result?.queueLength ?? '?'}`);
           wasOfflineRef.current = true;
@@ -163,6 +163,7 @@ export default function ProductionDaemon() {
       }
     }
   };
+
 
   const drawCropMarks = (page: any, x: number, y: number, cw: number, ch: number) => {
     const markLen = 10;
@@ -278,7 +279,7 @@ export default function ProductionDaemon() {
 
     addLog(`Saved successfully to: ${saveResult.path}`);
     await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, base64Data);
+    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
   };
 
   const compileApprovalLocally = async (jobPayload: any) => {
@@ -340,7 +341,7 @@ export default function ProductionDaemon() {
 
     addLog(`Saved successfully to: ${saveResult.path}`);
     await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, base64Data);
+    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
   };
 
   const processJob = async (jobPayload: any) => {
@@ -569,7 +570,7 @@ export default function ProductionDaemon() {
 
     addLog(`Saved successfully to: ${saveResult.path}`);
     await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, base64Data);
+    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
   };
 
   if (!isDesktop || !activeJob) return null;

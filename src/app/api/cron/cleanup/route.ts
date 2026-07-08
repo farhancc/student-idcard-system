@@ -75,7 +75,7 @@ export async function POST(request: Request) {
           console.error(`Failed to delete Cloudinary asset for job #${job.id}:`, err);
           failedDeletionsCount++;
         }
-      } else {
+      } else if (!job.downloadUrl.startsWith('local://')) {
         // Delete from local filesystem
         try {
           const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';

@@ -44,7 +44,7 @@ export async function POST(request: Request) {
               console.error(`Failed to delete Cloudinary file for job #${job.id}:`, cloudErr);
             }
           }
-        } else {
+        } else if (!job.downloadUrl.startsWith('local://')) {
           // Construct local file path from relative downloadUrl
           // e.g. downloadUrl = /uploads/{pressId}/pdfs/{fileName}.pdf
           const relativePath = job.downloadUrl.replace(/^\//, '');

@@ -7,6 +7,7 @@ const productionCompleteSchema = z.object({
   success: z.boolean(),
   errorMsg: z.string().optional(),
   pdfBase64: z.string().optional(),
+  localPath: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request parameters', details: validation.error.format() }, { status: 400 });
     }
 
-    const { jobId, success, errorMsg, pdfBase64 } = validation.data;
+    const { jobId, success, errorMsg, pdfBase64, localPath } = validation.data;
 
 
     // Process the entire completion flow inside an interactive transaction to prevent race conditions / double refunds
@@ -55,52 +56,27 @@ export async function POST(request: Request) {
 
       if (success) {
         let downloadUrl = '';
-        if (pdfBase64) {
+        if (localPath) {
+          downloadUrl = `local://${localPath}`;
+        } else if (pdfBase64) {
           const pdfBuffer = Buffer.from(pdfBase64, 'base64');
-          const isCloudinaryConfigured = 
-            process.env.CLOUDINARY_CLOUD_NAME && 
-            process.env.CLOUDINARY_API_KEY && 
-            process.env.CLOUDINARY_API_SECRET;
+          // Cloudinary integration is completely disabled (local-first rule)
+          const isCloudinaryConfigured = false;
 
           const fileName = `${job.pdfType.toLowerCase()}_order_${job.orderId}_job_${job.id}.pdf`;
 
-          if (isCloudinaryConfigured) {
-            const { v2: cloudinary } = require('cloudinary');
-            cloudinary.config({
-              cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-              api_key: process.env.CLOUDINARY_API_KEY,
-              api_secret: process.env.CLOUDINARY_API_SECRET,
-            });
+          const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
+          const fs = require('fs');
+          const path = require('path');
+          const pdfDir = isProd
+            ? path.join('/tmp', 'idexo', String(pressId), 'pdfs')
+            : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
+          fs.mkdirSync(pdfDir, { recursive: true });
 
-            const uploadResult = await new Promise<any>((resolve, reject) => {
-              cloudinary.uploader.upload_stream(
-                {
-                  folder: `press_${pressId}/pdfs`,
-                  resource_type: 'raw',
-                  public_id: fileName.replace('.pdf', ''),
-                },
-                (error: any, result: any) => {
-                  if (error) reject(error);
-                  else resolve(result);
-                }
-              ).end(pdfBuffer);
-            });
+          const filePath = path.join(pdfDir, fileName);
+          fs.writeFileSync(filePath, pdfBuffer);
 
-            downloadUrl = uploadResult.secure_url;
-          } else {
-            const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
-            const fs = require('fs');
-            const path = require('path');
-            const pdfDir = isProd
-              ? path.join('/tmp', 'idexo', String(pressId), 'pdfs')
-              : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
-            fs.mkdirSync(pdfDir, { recursive: true });
-
-            const filePath = path.join(pdfDir, fileName);
-            fs.writeFileSync(filePath, pdfBuffer);
-
-            downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
-          }
+          downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
         }
 
         // Success Flow

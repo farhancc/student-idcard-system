@@ -41,38 +41,14 @@ export async function processPdfJobInBackground(
       }
     );
 
-    const isCloudinaryConfigured = 
-      process.env.CLOUDINARY_CLOUD_NAME && 
-      process.env.CLOUDINARY_API_KEY && 
-      process.env.CLOUDINARY_API_SECRET;
+    // Cloudinary integration is completely disabled (local-first rule)
+    const isCloudinaryConfigured = false;
 
     let downloadUrl = '';
     const fileName = `${pdfType.toLowerCase()}_order_${orderId}_job_${jobId}.pdf`;
 
     if (isCloudinaryConfigured) {
-      console.log(`Uploading PDF Job #${jobId} to Cloudinary...`);
-      const { v2: cloudinary } = require('cloudinary');
-      cloudinary.config({
-        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-        api_key: process.env.CLOUDINARY_API_KEY,
-        api_secret: process.env.CLOUDINARY_API_SECRET,
-      });
-
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-          {
-            folder: `press_${pressId}/pdfs`,
-            resource_type: 'raw',
-            public_id: fileName.replace('.pdf', ''),
-          },
-          (error: any, result: any) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        ).end(pdfBuffer);
-      });
-
-      downloadUrl = uploadResult.secure_url;
+      // unreachable branch preserved for structural schema references if needed
     } else {
       const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
       const pdfDir = isProd
