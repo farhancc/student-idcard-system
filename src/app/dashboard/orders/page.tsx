@@ -624,7 +624,7 @@ export default function OrdersPage() {
       </div>
 
       {showForm && (
-        <div className="glass-panel" style={{ marginBottom: '32px', maxWidth: '640px' }}>
+        <div className="glass-panel" style={{ marginBottom: '32px', maxWidth: (orderMethod === 'batch' && showPreviewStep) ? '1200px' : '640px', width: '100%', transition: 'max-width 0.25s ease-in-out' }}>
           <h3 style={{ marginBottom: '16px' }}>Initialize Printing Order</h3>
           
           <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
@@ -1095,7 +1095,7 @@ export default function OrdersPage() {
         }}>
           <div className="glass-panel" style={{
             width: '100%',
-            maxWidth: '950px',
+            maxWidth: '1200px',
             maxHeight: '90vh',
             display: 'flex',
             flexDirection: 'column',
