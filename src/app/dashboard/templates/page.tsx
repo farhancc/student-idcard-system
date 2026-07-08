@@ -970,6 +970,139 @@ export default function TemplatesPage() {
     );
   };
 
+  const renderGuideDifferences = (side: 'front' | 'back') => {
+    if (!activeGuideDrag || activeGuideDrag.side !== side) return null;
+    
+    const scale = (480 * zoom) / cardWidth;
+    const guides = side === 'front' ? frontGuides : backGuides;
+    const sameTypeGuides = guides
+      .filter(g => g.type === activeGuideDrag.type)
+      .sort((a, b) => a.value - b.value);
+    
+    const dragIdx = sameTypeGuides.findIndex(g => g.id === activeGuideDrag.id);
+    if (dragIdx === -1) return null;
+    
+    const dragged = sameTypeGuides[dragIdx];
+    const prev = dragIdx > 0 ? sameTypeGuides[dragIdx - 1] : null;
+    const next = dragIdx < sameTypeGuides.length - 1 ? sameTypeGuides[dragIdx + 1] : null;
+    
+    const indicators = [];
+    const toMM = (valPx: number) => Math.round((valPx * 25.4 / 300) * 10) / 10;
+    
+    if (prev) {
+      const distPx = dragged.value - prev.value;
+      if (distPx > 0) {
+        indicators.push({
+          id: 'prev',
+          from: prev.value,
+          to: dragged.value,
+          dist: toMM(distPx),
+          offsetPct: '35%'
+        });
+      }
+    }
+    
+    if (next) {
+      const distPx = next.value - dragged.value;
+      if (distPx > 0) {
+        indicators.push({
+          id: 'next',
+          from: dragged.value,
+          to: next.value,
+          dist: toMM(distPx),
+          offsetPct: '65%'
+        });
+      }
+    }
+    
+    return indicators.map((ind) => {
+      const isHoriz = activeGuideDrag.type === 'horizontal';
+      const start = ind.from * scale;
+      const end = ind.to * scale;
+      const length = end - start;
+      
+      if (isHoriz) {
+        return (
+          <div
+            key={ind.id}
+            style={{
+              position: 'absolute',
+              left: ind.offsetPct,
+              top: `${start}px`,
+              width: '1px',
+              height: `${length}px`,
+              background: 'rgba(6, 182, 212, 0.75)',
+              zIndex: 390,
+              pointerEvents: 'none',
+              fontFamily: 'monospace'
+            }}
+          >
+            <div style={{ position: 'absolute', top: 0, left: '-4px', width: '9px', height: '1px', background: 'rgba(6, 182, 212, 0.9)' }} />
+            <div style={{ position: 'absolute', bottom: 0, left: '-4px', width: '9px', height: '1px', background: 'rgba(6, 182, 212, 0.9)' }} />
+            <div
+              style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: '#0891b2',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                color: '#ffffff',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+              }}
+            >
+              {ind.dist} mm
+            </div>
+          </div>
+        );
+      } else {
+        return (
+          <div
+            key={ind.id}
+            style={{
+              position: 'absolute',
+              left: `${start}px`,
+              top: ind.offsetPct,
+              width: `${length}px`,
+              height: '1px',
+              background: 'rgba(6, 182, 212, 0.75)',
+              zIndex: 390,
+              pointerEvents: 'none',
+              fontFamily: 'monospace'
+            }}
+          >
+            <div style={{ position: 'absolute', left: 0, top: '-4px', width: '1px', height: '9px', background: 'rgba(6, 182, 212, 0.9)' }} />
+            <div style={{ position: 'absolute', right: 0, top: '-4px', width: '1px', height: '9px', background: 'rgba(6, 182, 212, 0.9)' }} />
+            <div
+              style={{
+                position: 'absolute',
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)',
+                background: '#0891b2',
+                border: '1px solid rgba(255,255,255,0.2)',
+                borderRadius: '4px',
+                padding: '2px 6px',
+                color: '#ffffff',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                whiteSpace: 'nowrap',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+              }}
+            >
+              {ind.dist} mm
+            </div>
+          </div>
+        );
+      }
+    });
+  };
+
   const handleEditorMouseDown = (e: React.MouseEvent<HTMLDivElement>, side: 'front' | 'back') => {
     if (e.target !== e.currentTarget) return;
 
@@ -2735,6 +2868,7 @@ export default function TemplatesPage() {
                                   </div>
                                 );
                               })}
+                              {renderGuideDifferences('front')}
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = frontYOffsets.get(i) ?? 0;
@@ -3124,6 +3258,7 @@ export default function TemplatesPage() {
                                   </div>
                                 );
                               })}
+                              {renderGuideDifferences('back')}
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = backYOffsets.get(i) ?? 0;
