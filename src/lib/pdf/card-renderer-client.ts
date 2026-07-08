@@ -228,6 +228,7 @@ export async function renderCardSideClient(
     designation?: string | null;
     photoUrl?: string | null;
     cardSerial?: string | null;
+    uniqueKey?: string | null;
     customFields?: string | null;
   },
   side: 'front' | 'back',
@@ -235,6 +236,7 @@ export async function renderCardSideClient(
   pressFonts: Array<{ name: string; fileUrl: string }> = [],
   scale: number = 1
 ): Promise<void> {
+
   const width = template.cardWidth;
   const height = template.cardHeight;
 
@@ -333,7 +335,7 @@ export async function renderCardSideClient(
   const tempCtx = tempCanvas.getContext('2d');
   
   const getClientValueStr = (f: FieldCoordinate) => {
-    let rv = f.type === 'id' ? cardholder.id : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rv) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
       const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
@@ -375,7 +377,7 @@ export async function renderCardSideClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
+    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rawValue) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
       const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
@@ -655,12 +657,14 @@ export async function renderCardSideToPdfBytesClient(
     designation?: string | null;
     photoUrl?: string | null;
     cardSerial?: string | null;
+    uniqueKey?: string | null;
     customFields?: string | null;
   },
   side: 'front' | 'back',
   validTillDate: Date | null,
   pressFonts: Array<{ name: string; fileUrl: string }> = []
 ): Promise<Uint8Array> {
+
   const widthPx = template.cardWidth;
   const heightPx = template.cardHeight;
   const PX_TO_PT = 0.24; // 300 DPI: 1 px = 72/300 pt
@@ -947,7 +951,7 @@ export async function renderCardSideToPdfBytesClient(
     if (f.staticValue !== undefined && f.staticValue !== null) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
-    let rv = f.type === 'id' ? cardholder.id : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
     if (f.type === 'image' && !rv) {
       const isProfileField = f.field === 'photo' || f.field === 'avatar' || f.field === 'image' || f.field === 'profile';
       const isOnlyImageField = fields.filter((x: any) => x.type === 'image').length === 1;
@@ -1028,7 +1032,7 @@ export async function renderCardSideToPdfBytesClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue = f.type === 'id' ? cardholder.id : data[f.field];
+    let rawValue = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
 
     // Photo field fallback
     if (f.type === 'image' && !rawValue) {

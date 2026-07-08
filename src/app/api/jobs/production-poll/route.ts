@@ -55,7 +55,17 @@ export async function GET(request: Request) {
       },
     });
 
-    const cardholders = order.cardholders.map(oc => oc.cardholder);
+    // Sort: cards with a uniqueKey go first (sorted alphanumerically), then by name
+    const cardholders = order.cardholders
+      .map(oc => oc.cardholder)
+      .sort((a, b) => {
+        const aKey = a.uniqueKey?.trim() || '';
+        const bKey = b.uniqueKey?.trim() || '';
+        if (aKey && bKey) return aKey.localeCompare(bKey, undefined, { numeric: true, sensitivity: 'base' });
+        if (aKey) return -1; // a has key, b doesn't → a comes first
+        if (bKey) return 1;  // b has key, a doesn't → b comes first
+        return a.name.localeCompare(b.name);
+      });
 
     return NextResponse.json({
       success: true,
@@ -116,6 +126,7 @@ export async function GET(request: Request) {
         photoUrl: ch.photoUrl,
         customFields: ch.customFields ? JSON.parse(ch.customFields) : {},
         cardSerial: ch.cardSerial,
+        uniqueKey: ch.uniqueKey || '',
       })),
     });
   } catch (error) {
