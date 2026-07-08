@@ -325,7 +325,10 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
       fs.mkdirSync(targetDir, { recursive: true });
     }
 
-    const filePath = path.join(targetDir, fileName);
+    const dateStr = new Date().toISOString().split('T')[0];
+    const datedFileName = `${dateStr}_${fileName}`;
+
+    const filePath = path.join(targetDir, datedFileName);
     const buffer = Buffer.from(base64Data, 'base64');
     
     fs.writeFileSync(filePath, buffer);
