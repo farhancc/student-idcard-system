@@ -648,7 +648,7 @@ export async function renderCardSide(
           } else {
             // Image is taller than box -> crop top/bottom
             drawHeight = f.width / imgRatio;
-            drawY = f.y - (drawHeight - f.height) / 2;
+            drawY = effectiveY - (drawHeight - f.height) / 2;
           }
 
           ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
@@ -658,7 +658,7 @@ export async function renderCardSide(
           // Draw red cross placeholder on error
           ctx.strokeStyle = '#ff0000';
           ctx.lineWidth = 1;
-          ctx.strokeRect(f.x, f.y, f.width, f.height);
+          ctx.strokeRect(f.x, effectiveY, f.width, f.height);
         }
         break;
       }
@@ -668,7 +668,7 @@ export async function renderCardSide(
         try {
           const qrDataUrl = await generateQrCode(String(rawValue));
           const qrImg = await loadImage(qrDataUrl);
-          ctx.drawImage(qrImg, f.x, f.y, f.width, f.height);
+          ctx.drawImage(qrImg, f.x, effectiveY, f.width, f.height);
         } catch (err) {
           console.error('QR code render error:', err);
         }
@@ -679,7 +679,7 @@ export async function renderCardSide(
         if (!rawValue) continue;
         try {
           const barcodeCanvas = generateBarcodeCanvas(String(rawValue), f.width, f.height);
-          ctx.drawImage(barcodeCanvas, f.x, f.y, f.width, f.height);
+          ctx.drawImage(barcodeCanvas, f.x, effectiveY, f.width, f.height);
         } catch (err) {
           console.error('Barcode render error:', err);
         }
@@ -1084,15 +1084,61 @@ export async function renderCardSideToPdfBytes(
       case 'image': {
         if (!rawValue) continue;
         try {
-          const imgBuffer = await getFileBuffer(rawValue);
-          const img = await embedImageBuffer(pdfDoc, imgBuffer);
+          let absoluteImgPath = rawValue;
+          if (rawValue.startsWith('/')) {
+            absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', rawValue);
+          }
+          const img = await loadImage(absoluteImgPath);
 
-          page.drawImage(img, {
-            x: xPt,
-            y: yPt,
-            width: wPt,
-            height: hPt,
-          });
+          const scaleFactor = 3;
+          const boxWidth = f.width * scaleFactor;
+          const boxHeight = f.height * scaleFactor;
+          
+          const tempCanvas = createCanvas(boxWidth, boxHeight);
+          const tempCtx = tempCanvas.getContext('2d');
+
+          if (tempCtx) {
+            const radius = Math.min((f.borderRadius || 0) * scaleFactor, boxWidth / 2, boxHeight / 2);
+            tempCtx.beginPath();
+            if (radius > 0) {
+              const x = 0, y = 0, w = boxWidth, h = boxHeight, r = radius;
+              tempCtx.moveTo(x + r, y);
+              tempCtx.lineTo(x + w - r, y);
+              tempCtx.quadraticCurveTo(x + w, y, x + w, y + r);
+              tempCtx.lineTo(x + w, y + h - r);
+              tempCtx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+              tempCtx.lineTo(x + r, y + h);
+              tempCtx.quadraticCurveTo(x, y + h, x, y + h - r);
+              tempCtx.lineTo(x, y + r);
+              tempCtx.quadraticCurveTo(x, y, x + r, y);
+              tempCtx.closePath();
+            } else {
+              tempCtx.rect(0, 0, boxWidth, boxHeight);
+            }
+            tempCtx.clip();
+
+            const imgRatio = img.width / img.height;
+            const boxRatio = boxWidth / boxHeight;
+
+            let drawWidth = boxWidth;
+            let drawHeight = boxHeight;
+            let drawX = 0;
+            let drawY = 0;
+
+            if (imgRatio > boxRatio) {
+              drawWidth = boxHeight * imgRatio;
+              drawX = - (drawWidth - boxWidth) / 2;
+            } else {
+              drawHeight = boxWidth / imgRatio;
+              drawY = - (drawHeight - boxHeight) / 2;
+            }
+
+            tempCtx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+
+            const pngBuffer = tempCanvas.toBuffer('image/png');
+            const pdfImg = await pdfDoc.embedPng(pngBuffer);
+            page.drawImage(pdfImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+          }
         } catch (err) {
           console.error(`Error rendering image field ${f.field} in PDF:`, err);
         }
