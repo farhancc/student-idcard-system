@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle, Eye } from 'lucide-react';
 import { generateApprovalPdfClient } from '@/lib/pdf/approval-pdf-generator';
 import { generateProductionPdfClient } from '@/lib/pdf/production-pdf-generator';
+import CardPreview from '@/app/components/CardPreview';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -34,6 +35,24 @@ export default function OrdersPage() {
   const [parsedCardholders, setParsedCardholders] = useState<any[]>([]);
   const [selectedPreviewIndexes, setSelectedPreviewIndexes] = useState<number[]>([]);
   const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string }>>(new Map());
+  const [selectedCardholderForDetails, setSelectedCardholderForDetails] = useState<any | null>(null);
+  const [detailsPreviewSide, setDetailsPreviewSide] = useState<'front' | 'back'>('front');
+  const [loadedPressFonts, setLoadedPressFonts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (pressId) {
+      fetch('/api/fonts', {
+        headers: { 'x-press-id': String(pressId) }
+      })
+        .then(res => res.ok ? res.json() : null)
+        .then(json => {
+          if (json?.fonts) {
+            setLoadedPressFonts(json.fonts);
+          }
+        })
+        .catch(err => console.error('Failed to load press fonts for preview:', err));
+    }
+  }, [pressId]);
 
   // Layout options for client-side batch processing
   const [paperSize, setPaperSize] = useState<'A3' | 'A4'>('A3');
@@ -670,6 +689,7 @@ export default function OrdersPage() {
                         <th style={{ padding: '8px 12px' }}>ID / Roll Number</th>
                         <th style={{ padding: '8px 12px' }}>Designation</th>
                         <th style={{ padding: '8px 12px' }}>Status</th>
+                        <th style={{ padding: '8px 12px', textAlign: 'right' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -728,6 +748,26 @@ export default function OrdersPage() {
                                   <AlertTriangle size={12} /> Missing Photo
                                 </span>
                               )}
+                            </td>
+                            <td style={{ padding: '8px 12px', textAlign: 'right' }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '0.75rem',
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                onClick={() => setSelectedCardholderForDetails(c)}
+                              >
+                                <Eye size={12} /> View Details
+                              </button>
                             </td>
                           </tr>
                         );
@@ -1035,6 +1075,228 @@ export default function OrdersPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {selectedCardholderForDetails && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(12px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '950px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            padding: 0,
+            overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '16px 24px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.02)'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>Cardholder Detailed Profile</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                  Detailed data auditing and verification for production print.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCardholderForDetails(null);
+                  setDetailsPreviewSide('front');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--muted)',
+                  cursor: 'pointer',
+                  fontSize: '1.25rem',
+                  lineHeight: 1
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(320px, 1fr) 1.2fr',
+              gap: '24px',
+              padding: '24px',
+              overflowY: 'auto'
+            }}>
+              {/* Left Column: Visual Preview */}
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '16px'
+              }}>
+                <div style={{
+                  width: '100%',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  background: 'rgba(0,0,0,0.4)',
+                  padding: '20px',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255,255,255,0.06)'
+                }}>
+                  {(() => {
+                    const selectedTemplate = templates.find(t => String(t.id) === templateId);
+                    if (!selectedTemplate) {
+                      return (
+                        <div style={{ color: 'var(--muted)', fontSize: '0.85rem', padding: '40px 0', textAlign: 'center' }}>
+                          Select a template in the main form to render this card.
+                        </div>
+                      );
+                    }
+                    
+                    const matchedPhoto = photosMap.get(selectedCardholderForDetails.sanitizedKey);
+                    const cardholderForPreview = {
+                      id: selectedCardholderForDetails.id,
+                      name: selectedCardholderForDetails.name,
+                      designation: selectedCardholderForDetails.designation,
+                      photoUrl: selectedCardholderForDetails.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
+                      cardSerial: selectedCardholderForDetails.uniqueKey || selectedCardholderForDetails.cardSerial || null,
+                      customFields: JSON.stringify(selectedCardholderForDetails.customFields || {})
+                    };
+
+                    return (
+                      <CardPreview
+                        template={selectedTemplate}
+                        cardholder={cardholderForPreview}
+                        side={detailsPreviewSide}
+                        pressFonts={loadedPressFonts}
+                        validTill={validTill}
+                        style={{ maxWidth: '100%', maxHeight: '380px', objectFit: 'contain', borderRadius: '6px' }}
+                      />
+                    );
+                  })()}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                  <button
+                    type="button"
+                    className={`btn ${detailsPreviewSide === 'front' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, padding: '8px', fontSize: '0.8rem' }}
+                    onClick={() => setDetailsPreviewSide('front')}
+                  >
+                    Front Preview
+                  </button>
+                  {(() => {
+                    const selectedTemplate = templates.find(t => String(t.id) === templateId);
+                    return selectedTemplate?.backImageUrl ? (
+                      <button
+                        type="button"
+                        className={`btn ${detailsPreviewSide === 'back' ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{ flex: 1, padding: '8px', fontSize: '0.8rem' }}
+                        onClick={() => setDetailsPreviewSide('back')}
+                      >
+                        Back Preview
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+
+              {/* Right Column: Key-Value Field Explorer */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>Record Fields (Excel Data)</h4>
+                
+                <div style={{
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }} className="custom-table">
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.02)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 16px', fontWeight: 600, width: '40%' }}>Field Name / Column</th>
+                        <th style={{ padding: '10px 16px', fontWeight: 600 }}>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)', fontWeight: 500 }}>Name</td>
+                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>{selectedCardholderForDetails.name}</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Designation</td>
+                        <td style={{ padding: '10px 16px' }}>{selectedCardholderForDetails.designation || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>}</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Unique Key / ID</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'monospace' }}>{selectedCardholderForDetails.uniqueKey || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>}</td>
+                      </tr>
+                      <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                        <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Photo Filename (sanitized)</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'monospace' }}>{selectedCardholderForDetails.sanitizedKey}</td>
+                      </tr>
+                      
+                      {/* Dynamic Custom Fields */}
+                      {Object.entries(selectedCardholderForDetails.customFields || {}).map(([key, val]) => (
+                        <tr key={key} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                          <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, s => s.toUpperCase())}</td>
+                          <td style={{ padding: '10px 16px' }}>
+                            {typeof val === 'string' && val.startsWith('blob:') ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <img src={val} alt={key} style={{ maxHeight: '40px', maxWidth: '100px', objectFit: 'contain', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', background: 'rgba(0,0,0,0.2)', padding: '2px' }} />
+                                <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Image Asset</span>
+                              </div>
+                            ) : (
+                              String(val || '') || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '16px 24px',
+              borderTop: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.02)',
+              gap: '12px'
+            }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setSelectedCardholderForDetails(null);
+                  setDetailsPreviewSide('front');
+                }}
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
