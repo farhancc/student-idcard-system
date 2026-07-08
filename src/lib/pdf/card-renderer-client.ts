@@ -818,58 +818,86 @@ export async function renderCardSideToPdfBytesClient(
     ...customData,
   };
 
-  // ── 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets ──
-  // Cache for embedded fonts within this document
+  // \u2500\u2500 4. Pre-embed fonts \u2500\u2500
   const fontCache = new Map<string, any>();
 
-  // Map common system/web font names to pdf-lib StandardFonts, respecting bold/italic
-  const resolveStandardFont = (family: string, isBold: boolean, isItalic: boolean): string | null => {
+  // Normalize any fontWeight value (CSS keyword or numeric string) to a number (100-900)
+  const resolveWeightNumber = (fw: string | undefined): number => {
+    if (!fw) return 400;
+    const n = Number(fw);
+    if (!isNaN(n) && n >= 100) return n;
+    const kwMap: Record<string, number> = {
+      thin: 100, hairline: 100,
+      extralight: 200, ultralight: 200,
+      light: 300,
+      normal: 400, regular: 400, book: 400,
+      medium: 500,
+      semibold: 600, demibold: 600,
+      bold: 700,
+      extrabold: 800, ultrabold: 800,
+      black: 900, heavy: 900, ultra: 900,
+    };
+    return kwMap[fw.toLowerCase().replace(/[\s-_]+/g, '')] ?? 400;
+  };
+
+  // Map common system/web font names to pdf-lib StandardFonts (bold = weight >= 700)
+  const resolveStandardFont = (family: string, weightNum: number, isItalic: boolean): string | null => {
+    const isBoldStd = weightNum >= 700;
     const n = family.toLowerCase().replace(/[\s-_]+/g, '');
     const timesAliases = ['timesnewroman', 'times', 'timesroman', 'georgia', 'garamond', 'palatino', 'bookantiqua', 'palatinolinotype'];
     const courierAliases = ['couriernew', 'courier', 'lucidaconsole', 'consolascourier'];
     const helveticaAliases = ['arial', 'helvetica', 'arialnarrow', 'calibri', 'tahoma', 'verdana', 'trebuchetms', 'gillsans', 'centuryschoolbook'];
     if (timesAliases.some(a => n.includes(a))) {
-      return isBold && isItalic ? StandardFonts.TimesRomanBoldItalic
-        : isBold   ? StandardFonts.TimesRomanBold
-        : isItalic ? StandardFonts.TimesRomanItalic
-        :            StandardFonts.TimesRoman;
+      return isBoldStd && isItalic ? StandardFonts.TimesRomanBoldItalic
+        : isBoldStd ? StandardFonts.TimesRomanBold
+        : isItalic  ? StandardFonts.TimesRomanItalic
+        :             StandardFonts.TimesRoman;
     }
     if (courierAliases.some(a => n.includes(a))) {
-      return isBold && isItalic ? StandardFonts.CourierBoldOblique
-        : isBold   ? StandardFonts.CourierBold
-        : isItalic ? StandardFonts.CourierOblique
-        :            StandardFonts.Courier;
+      return isBoldStd && isItalic ? StandardFonts.CourierBoldOblique
+        : isBoldStd ? StandardFonts.CourierBold
+        : isItalic  ? StandardFonts.CourierOblique
+        :             StandardFonts.Courier;
     }
     if (helveticaAliases.some(a => n.includes(a))) {
-      return isBold && isItalic ? StandardFonts.HelveticaBoldOblique
-        : isBold   ? StandardFonts.HelveticaBold
-        : isItalic ? StandardFonts.HelveticaOblique
-        :            StandardFonts.Helvetica;
+      return isBoldStd && isItalic ? StandardFonts.HelveticaBoldOblique
+        : isBoldStd ? StandardFonts.HelveticaBold
+        : isItalic  ? StandardFonts.HelveticaOblique
+        :             StandardFonts.Helvetica;
     }
     return null;
   };
 
   const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
+    const weightNum = resolveWeightNumber(f.fontWeight);
+    const isItalic = f.fontStyle === 'italic';
+
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
-      const isItalic = f.fontStyle === 'italic';
       const baseName = f.fontFamily.toLowerCase();
-
-      // Try to find a style-specific variant first (e.g. "Inter Bold", "Inter Italic", "Inter Bold Italic")
-      const styleVariantName = (
-        isBold && isItalic ? `${baseName} bold italic`
-        : isBold           ? `${baseName} bold`
-        : isItalic         ? `${baseName} italic`
-        :                    null
+      const weightLabel = (
+        weightNum <= 100 ? 'thin'
+        : weightNum <= 200 ? 'extralight'
+        : weightNum <= 300 ? 'light'
+        : weightNum <= 400 ? 'regular'
+        : weightNum <= 500 ? 'medium'
+        : weightNum <= 600 ? 'semibold'
+        : weightNum <= 700 ? 'bold'
+        : weightNum <= 800 ? 'extrabold'
+        :                    'black'
       );
+      const italicSuffix = isItalic ? ' italic' : '';
+      const candidates = [
+        `${baseName} ${weightLabel}${italicSuffix}`,
+        `${baseName} ${weightNum}${italicSuffix}`,
+        isItalic ? `${baseName} ${weightLabel} italic` : null,
+        isItalic ? `${baseName} italic` : null,
+        baseName,
+      ].filter(Boolean) as string[];
 
-      let match = styleVariantName
-        ? pressFonts.find(pf => pf.name.toLowerCase() === styleVariantName)
-        : null;
-
-      // Fall back to base font name if no style variant found
-      if (!match) {
-        match = pressFonts.find(pf => pf.name.toLowerCase() === baseName);
+      let match: { name: string; fileUrl: string } | undefined;
+      for (const candidate of candidates) {
+        match = pressFonts.find(pf => pf.name.toLowerCase() === candidate);
+        if (match) break;
       }
 
       if (match) {
@@ -888,25 +916,21 @@ export async function renderCardSideToPdfBytesClient(
         }
         if (fontCache.has(cacheKey)) return fontCache.get(cacheKey);
       }
-    }
-    // Try to map common system font names to pdf-lib StandardFonts
-    const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
-    const isItalic = f.fontStyle === 'italic';
-    if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const mappedStd = resolveStandardFont(f.fontFamily, isBold, isItalic);
+
+      // Try standard font name mapping (e.g. Times New Roman → TimesRoman)
+      const mappedStd = resolveStandardFont(f.fontFamily, weightNum, isItalic);
       if (mappedStd) {
-        if (!fontCache.has(mappedStd)) {
-          fontCache.set(mappedStd, await pdfDoc.embedFont(mappedStd));
-        }
+        if (!fontCache.has(mappedStd)) fontCache.set(mappedStd, await pdfDoc.embedFont(mappedStd));
         return fontCache.get(mappedStd);
       }
     }
-    // Final fallback: Helvetica
+    // Final fallback: Helvetica with bold collapsed at >=700
+    const isBoldFallback = weightNum >= 700;
     const stdFont =
-      isBold && isItalic ? StandardFonts.HelveticaBoldOblique
-      : isBold           ? StandardFonts.HelveticaBold
-      : isItalic         ? StandardFonts.HelveticaOblique
-      :                    StandardFonts.Helvetica;
+      isBoldFallback && isItalic ? StandardFonts.HelveticaBoldOblique
+      : isBoldFallback           ? StandardFonts.HelveticaBold
+      : isItalic                 ? StandardFonts.HelveticaOblique
+      :                            StandardFonts.Helvetica;
     if (!fontCache.has(stdFont)) {
       fontCache.set(stdFont, await pdfDoc.embedFont(stdFont));
     }
@@ -936,41 +960,51 @@ export async function renderCardSideToPdfBytesClient(
   };
 
   const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
-    // Get preloaded font from cache — mirrors the style-aware logic in getEmbeddedFont
+    // Get preloaded font from cache — mirrors the weight-aware logic in getEmbeddedFont
     let embeddedFont;
+    const weightNum = resolveWeightNumber(f.fontWeight);
+    const isItalic = f.fontStyle === 'italic';
+
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
-      const isItalic = f.fontStyle === 'italic';
       const baseName = f.fontFamily.toLowerCase();
-      const styleVariantName = (
-        isBold && isItalic ? `${baseName} bold italic`
-        : isBold           ? `${baseName} bold`
-        : isItalic         ? `${baseName} italic`
-        :                    null
+      const weightLabel = (
+        weightNum <= 100 ? 'thin'
+        : weightNum <= 200 ? 'extralight'
+        : weightNum <= 300 ? 'light'
+        : weightNum <= 400 ? 'regular'
+        : weightNum <= 500 ? 'medium'
+        : weightNum <= 600 ? 'semibold'
+        : weightNum <= 700 ? 'bold'
+        : weightNum <= 800 ? 'extrabold'
+        :                    'black'
       );
-      const variantMatch = styleVariantName
-        ? pressFonts.find(pf => pf.name.toLowerCase() === styleVariantName)
-        : null;
-      const baseMatch = pressFonts.find(pf => pf.name.toLowerCase() === baseName);
-      const resolvedMatch = variantMatch || baseMatch;
-      if (resolvedMatch) embeddedFont = fontCache.get(resolvedMatch.fileUrl);
-    }
-    if (!embeddedFont) {
-      const isBold = f.fontWeight === 'bold' || (!isNaN(Number(f.fontWeight)) && Number(f.fontWeight) >= 600);
-      const isItalic = f.fontStyle === 'italic';
-      // Try standard font name mapping
-      if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-        const mappedStd = resolveStandardFont(f.fontFamily, isBold, isItalic);
+      const italicSuffix = isItalic ? ' italic' : '';
+      const candidates = [
+        `${baseName} ${weightLabel}${italicSuffix}`,
+        `${baseName} ${weightNum}${italicSuffix}`,
+        isItalic ? `${baseName} ${weightLabel} italic` : null,
+        isItalic ? `${baseName} italic` : null,
+        baseName,
+      ].filter(Boolean) as string[];
+
+      for (const candidate of candidates) {
+        const match = pressFonts.find(pf => pf.name.toLowerCase() === candidate);
+        if (match) { embeddedFont = fontCache.get(match.fileUrl); break; }
+      }
+
+      if (!embeddedFont) {
+        const mappedStd = resolveStandardFont(f.fontFamily, weightNum, isItalic);
         if (mappedStd) embeddedFont = fontCache.get(mappedStd);
       }
-      if (!embeddedFont) {
-        const stdFont =
-          isBold && isItalic ? StandardFonts.HelveticaBoldOblique
-          : isBold           ? StandardFonts.HelveticaBold
-          : isItalic         ? StandardFonts.HelveticaOblique
-          :                    StandardFonts.Helvetica;
-        embeddedFont = fontCache.get(stdFont);
-      }
+    }
+    if (!embeddedFont) {
+      const isBoldFallback = weightNum >= 700;
+      const stdFont =
+        isBoldFallback && isItalic ? StandardFonts.HelveticaBoldOblique
+        : isBoldFallback           ? StandardFonts.HelveticaBold
+        : isItalic                 ? StandardFonts.HelveticaOblique
+        :                            StandardFonts.Helvetica;
+      embeddedFont = fontCache.get(stdFont);
     }
     const fontSizePt = (f.fontSize || 20) * PX_TO_PT;
     if (!embeddedFont) return s.length * fontSizePt * 0.55 / PX_TO_PT;
