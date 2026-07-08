@@ -733,23 +733,25 @@ export default function OrdersPage() {
                   <input type="number" required className="form-input" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} />
                 </div>
 
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Card Expiry Validity Date</label>
-                  <input 
-                    type="date" 
-                    required 
-                    className="form-input" 
-                    value={validTill} 
-                    onChange={e => setValidTill(e.target.value)} 
-                    onClick={(e) => {
-                      try {
-                        e.currentTarget.showPicker();
-                      } catch (err) {
-                        console.warn('showPicker is not supported:', err);
-                      }
-                    }}
-                  />
-                </div>
+                {orderMethod === 'standard' && (
+                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                    <label className="form-label">Card Expiry Validity Date</label>
+                    <input 
+                      type="date" 
+                      required 
+                      className="form-input" 
+                      value={validTill} 
+                      onChange={e => setValidTill(e.target.value)} 
+                      onClick={(e) => {
+                        try {
+                          e.currentTarget.showPicker();
+                        } catch (err) {
+                          console.warn('showPicker is not supported:', err);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
 
                 {orderMethod === 'batch' && (
                   <>
