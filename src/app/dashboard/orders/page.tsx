@@ -142,6 +142,23 @@ export default function OrdersPage() {
       if (!zipFile) throw new Error('ZIP photos file is required');
       if (!pressId) throw new Error('Press session could not be resolved. Please try refreshing page.');
 
+      const selectedTemplate = templates.find(t => String(t.id) === templateId);
+      if (!selectedTemplate) throw new Error('Selected Template not found.');
+
+      // Get all field keys from the template
+      const templateFieldKeys: string[] = [];
+      try {
+        const front = JSON.parse(selectedTemplate.frontFields || '[]');
+        const back = JSON.parse(selectedTemplate.backFields || '[]');
+        [...front, ...back].forEach((f: any) => {
+          if (f.field && !templateFieldKeys.includes(f.field)) {
+            templateFieldKeys.push(f.field);
+          }
+        });
+      } catch (e) {
+        console.error('Failed to parse template fields:', e);
+      }
+
       // 1. Read and parse Excel / CSV
       let rawData: any[] = [];
       const excelName = excelFile.name.toLowerCase();
@@ -197,6 +214,63 @@ export default function OrdersPage() {
       const imageIdCol = getHeaderKey(firstRowHeaders, ['image id', 'imageid', 'photo id', 'photoid', 'photo identifier', 'photoidentifier', 'filename', 'file name', 'image name', 'imagename']);
       const photoUrlCol = getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
 
+      // Build explicit smart field mappings
+      const fieldMapping: Record<string, string> = {};
+      const cleanString = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      templateFieldKeys.forEach(fieldKey => {
+        // 1. Try exact match
+        let matchedHeader = firstRowHeaders.find(h => h === fieldKey);
+        if (matchedHeader) {
+          fieldMapping[fieldKey] = matchedHeader;
+          return;
+        }
+        
+        // 2. Try normalized clean match
+        const cleanField = cleanString(fieldKey);
+        matchedHeader = firstRowHeaders.find(h => cleanString(h) === cleanField);
+        if (matchedHeader) {
+          fieldMapping[fieldKey] = matchedHeader;
+          return;
+        }
+        
+        // 3. Try fuzzy/alias match for core/common fields
+        const aliases: Record<string, string[]> = {
+          name: ['name', 'fullname', 'studentname', 'employeename', 'cardholdername', 'username'],
+          designation: ['designation', 'role', 'class', 'grade', 'jobtitle', 'course', 'branch', 'std'],
+          uniquekey: ['id', 'empid', 'rollnumber', 'rollno', 'employeeid', 'uniquekey', 'admissionnumber', 'admissionno', 'studentid'],
+          photourl: ['photo', 'photourl', 'image', 'picture', 'avatar'],
+          bloodgroup: ['bloodgroup', 'bg', 'blood', 'bloodgrp'],
+          fathername: ['fathername', 'fathersname', 'father', 'fathernm'],
+          mothername: ['mothername', 'mothersname', 'mother', 'mothernm'],
+          mobileno: ['mobileno', 'mobile', 'phone', 'phoneno', 'contact', 'contactno', 'mobilephone'],
+          dob: ['dob', 'dateofbirth', 'birthdate', 'birth'],
+          address: ['address', 'residence', 'addr']
+        };
+        
+        const possibleAliases = aliases[cleanField] || [];
+        matchedHeader = firstRowHeaders.find(h => {
+          const cleanH = cleanString(h);
+          return possibleAliases.includes(cleanH) || cleanH.includes(cleanField) || cleanField.includes(cleanH);
+        });
+        
+        if (matchedHeader) {
+          fieldMapping[fieldKey] = matchedHeader;
+          return;
+        }
+        
+        // 4. Try partial word match (e.g. "father" matches "Father's Name")
+        matchedHeader = firstRowHeaders.find(h => {
+          const cleanH = cleanString(h);
+          return cleanH.includes(cleanField) || cleanField.includes(cleanH);
+        });
+        if (matchedHeader) {
+          fieldMapping[fieldKey] = matchedHeader;
+        }
+      });
+
+      console.log('[Batch Import] Auto-detected field mappings:', fieldMapping);
+
       // 2. Extract photos from ZIP
       setUploadStatus('Extracting photos from ZIP...');
       const JSZip = (await import('jszip')).default;
@@ -227,15 +301,37 @@ export default function OrdersPage() {
 
       // Parse and construct raw JSON cardholder objects
       const parsed = rawData.map((row, index) => {
-        const name = String(row[nameCol] || '').trim();
-        const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
-        const uniqueKey = row[uniqueKeyCol] ? String(row[uniqueKeyCol]).trim() : null;
+        const name = String(row[fieldMapping['name'] || nameCol] || '').trim();
+        const designation = row[fieldMapping['designation'] || designationCol] ? String(row[fieldMapping['designation'] || designationCol]).trim() : null;
+        const uniqueKey = row[fieldMapping['uniqueKey'] || uniqueKeyCol] ? String(row[fieldMapping['uniqueKey'] || uniqueKeyCol]).trim() : null;
         const imageId = imageIdCol ? String(row[imageIdCol] || '').trim() : null;
-        const photoUrl = row[photoUrlCol] ? String(row[photoUrlCol]).trim() : null;
+        const photoUrl = row[fieldMapping['photoUrl'] || photoUrlCol] ? String(row[fieldMapping['photoUrl'] || photoUrlCol]).trim() : null;
 
         const custom: Record<string, any> = {};
+        
+        // Map all mapped template fields to custom
+        Object.keys(fieldMapping).forEach(templateFieldKey => {
+          if (
+            templateFieldKey !== 'name' &&
+            templateFieldKey !== 'designation' &&
+            templateFieldKey !== 'uniqueKey' &&
+            templateFieldKey !== 'photoUrl'
+          ) {
+            const excelHeader = fieldMapping[templateFieldKey];
+            custom[templateFieldKey] = row[excelHeader];
+          }
+        });
+
+        // Also add any other columns from the excel into custom as fallbacks
         Object.keys(row).forEach(key => {
-          if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol && (!imageIdCol || key !== imageIdCol)) {
+          if (
+            key !== nameCol &&
+            key !== designationCol &&
+            key !== uniqueKeyCol &&
+            key !== photoUrlCol &&
+            (!imageIdCol || key !== imageIdCol) &&
+            !Object.values(fieldMapping).includes(key)
+          ) {
             custom[key] = row[key];
           }
         });

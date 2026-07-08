@@ -81,6 +81,12 @@ export function getResolvedFieldValue(
   ) {
     return cardholder.uniqueKey || cardholder.id || '';
   }
+  if (targetClean === 'name' || targetClean === 'studentname' || targetClean === 'employeename' || targetClean === 'cardholdername' || targetClean === 'fullname') {
+    return cardholder.name || '';
+  }
+  if (targetClean === 'photo' || targetClean === 'photourl' || targetClean === 'image' || targetClean === 'picture' || targetClean === 'avatar') {
+    return cardholder.photoUrl || '';
+  }
   if (targetClean === 'serial' || targetClean === 'cardserial' || targetClean === 'serialno') {
     return cardholder.cardSerial || '';
   }
