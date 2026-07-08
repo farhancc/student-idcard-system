@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw } from 'lucide-react';
+import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle } from 'lucide-react';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -26,6 +26,12 @@ export default function OrdersPage() {
   const [pressId, setPressId] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+
+  // Pre-upload preview state
+  const [showPreviewStep, setShowPreviewStep] = useState(false);
+  const [parsedCardholders, setParsedCardholders] = useState<any[]>([]);
+  const [selectedPreviewIndexes, setSelectedPreviewIndexes] = useState<number[]>([]);
+  const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string }>>(new Map());
 
   const fetchData = async () => {
     try {
@@ -115,87 +121,11 @@ export default function OrdersPage() {
     }
   };
 
-  const handleBatchCreate = async (e: React.FormEvent) => {
+  const handleAnalyzeBatchFiles = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setUploadStatus('Reading spreadsheet file...');
-    setUploadProgress({ current: 0, total: 0 });
     setSubmitting(true);
-
-    // Helper: Client-side image resizing and quality compression
-    const compressImage = (blob: Blob, maxDimension = 800): Promise<Blob> => {
-      return new Promise((resolve) => {
-        if (typeof window === 'undefined') {
-          return resolve(blob);
-        }
-        const img = new Image();
-        const url = URL.createObjectURL(blob);
-        img.onload = () => {
-          URL.revokeObjectURL(url);
-          let width = img.width;
-          let height = img.height;
-
-          // If image is already reasonably small and lightweight, skip canvas manipulation
-          if (width <= maxDimension && height <= maxDimension && blob.size < 200 * 1024) {
-            return resolve(blob);
-          }
-
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob(
-              (resultBlob) => {
-                resolve(resultBlob || blob);
-              },
-              'image/jpeg',
-              0.85
-            );
-          } else {
-            resolve(blob);
-          }
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(url);
-          resolve(blob);
-        };
-        img.src = url;
-      });
-    };
-
-    // Helper: Resilient fetch request with retry-backoff logic
-    const fetchWithRetry = async (
-      url: string,
-      options: RequestInit,
-      retries = 3,
-      delay = 1000
-    ): Promise<Response> => {
-      try {
-        const res = await fetch(url, options);
-        if (!res.ok) {
-          throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
-        }
-        return res;
-      } catch (err) {
-        if (retries > 0) {
-          await new Promise((r) => setTimeout(r, delay));
-          return fetchWithRetry(url, options, retries - 1, delay * 1.5);
-        }
-        throw err;
-      }
-    };
 
     try {
       if (!clientId || !templateId) throw new Error('Client and Template must be selected');
@@ -216,7 +146,6 @@ export default function OrdersPage() {
         const ExcelJS = (await import('exceljs')).default;
         const workbook = new ExcelJS.Workbook();
         const excelBuffer = await excelFile.arrayBuffer();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await workbook.xlsx.load(excelBuffer as any);
         const sheet = workbook.worksheets[0];
         if (!sheet) {
@@ -262,7 +191,12 @@ export default function OrdersPage() {
       setUploadStatus('Extracting photos from ZIP...');
       const JSZip = (await import('jszip')).default;
       const zip = await JSZip.loadAsync(zipFile);
-      const photosMap = new Map<string, Blob>();
+      
+      // Revoke any existing object URLs to avoid memory leaks
+      photosMap.forEach((val) => {
+        if (val.url) URL.revokeObjectURL(val.url);
+      });
+      const newPhotosMap = new Map<string, { blob: Blob; url: string }>();
       const filePromises: Promise<void>[] = [];
 
       zip.forEach((relativePath, file) => {
@@ -271,15 +205,18 @@ export default function OrdersPage() {
         if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
           const baseName = relativePath.split('/').pop()?.replace(ext, '').trim() || '';
           const promise = file.async('blob').then(blob => {
-            photosMap.set(baseName.toLowerCase(), blob);
+            const sanitizedKey = baseName.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
+            const url = URL.createObjectURL(blob);
+            newPhotosMap.set(sanitizedKey, { blob, url });
           });
           filePromises.push(promise);
         }
       });
       await Promise.all(filePromises);
+      setPhotosMap(newPhotosMap);
 
       // Parse and construct raw JSON cardholder objects
-      const parsedCardholders = rawData.map(row => {
+      const parsed = rawData.map((row, index) => {
         const name = String(row[nameCol] || '').trim();
         const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
         const uniqueKey = row[uniqueKeyCol] ? String(row[uniqueKeyCol]).trim() : null;
@@ -292,39 +229,118 @@ export default function OrdersPage() {
           }
         });
 
+        // Try matching a photo from the zip using uniqueKey or name
+        const matchKey = uniqueKey || name;
+        const sanitizedKey = matchKey.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
+        const hasPhoto = newPhotosMap.has(sanitizedKey);
+
         return {
+          id: index,
           name,
           designation,
           uniqueKey,
           photoUrl,
           customFields: custom,
+          hasPhoto,
+          sanitizedKey
         };
       }).filter(c => c.name);
 
-      // 3. Coordinate photo uploads to Cloudinary (signed direct upload) or Local fallback API
-      const cardholdersWithPhotos = parsedCardholders.filter(c => {
-        const matchKey = c.uniqueKey || c.name;
-        return photosMap.has(matchKey.toLowerCase());
+      setParsedCardholders(parsed);
+      setSelectedPreviewIndexes(parsed.map((_, i) => i));
+      setShowPreviewStep(true);
+    } catch (err: any) {
+      setError(err.message || 'Error parsing files');
+    } finally {
+      setSubmitting(false);
+      setUploadStatus('');
+    }
+  };
+
+  const handleCreateBatchFromPreview = async () => {
+    setError('');
+    setUploadStatus('Initializing photo uploads...');
+    setUploadProgress({ current: 0, total: selectedPreviewIndexes.length });
+    setSubmitting(true);
+
+    const compressImage = (blob: Blob, maxDimension = 800): Promise<Blob> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(blob);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          let width = img.width;
+          let height = img.height;
+          if (width <= maxDimension && height <= maxDimension && blob.size < 200 * 1024) {
+            return resolve(blob);
+          }
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((r) => resolve(r || blob), 'image/jpeg', 0.85);
+          } else {
+            resolve(blob);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(blob);
+        };
+        img.src = url;
       });
+    };
 
-      setUploadStatus(`Uploading photos (0/${cardholdersWithPhotos.length})...`);
-      setUploadProgress({ current: 0, total: cardholdersWithPhotos.length });
+    const fetchWithRetry = async (url: string, options: RequestInit, retries = 3, delay = 1000): Promise<Response> => {
+      try {
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
+        return res;
+      } catch (err) {
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, delay));
+          return fetchWithRetry(url, options, retries - 1, delay * 1.5);
+        }
+        throw err;
+      }
+    };
 
+    try {
+      if (!pressId) throw new Error('Press session could not be resolved. Please refresh.');
+      
+      const selectedCards = parsedCardholders.filter((_, idx) => selectedPreviewIndexes.includes(idx));
+      if (selectedCards.length === 0) {
+        throw new Error('Please select at least one record to print.');
+      }
+
+      // Filter cards that have a matching photo in ZIP
+      const cardsWithPhotos = selectedCards.filter(c => c.hasPhoto && photosMap.has(c.sanitizedKey));
+      
       let currentUpload = 0;
       const concurrency = 5;
       const failedUploads: string[] = [];
 
-      const uploadTasks = cardholdersWithPhotos.map(cardholder => {
+      const uploadTasks = cardsWithPhotos.map(card => {
         return async () => {
-          const matchKey = cardholder.uniqueKey || cardholder.name;
-          const photoBlob = photosMap.get(matchKey.toLowerCase())!;
+          const matchKey = card.uniqueKey || card.name;
+          const photoData = photosMap.get(card.sanitizedKey)!;
           
           try {
-            // Compress image client side
-            setUploadStatus(`Compressing photo for ${cardholder.name}...`);
-            const compressedBlob = await compressImage(photoBlob, 850);
+            setUploadStatus(`Compressing photo for ${card.name}...`);
+            const compressedBlob = await compressImage(photoData.blob, 850);
 
-            // Request signed upload payload from the server
+            // Request signed upload payload
             const signRes = await fetchWithRetry('/api/upload/sign', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -337,7 +353,6 @@ export default function OrdersPage() {
 
             const signData = await signRes.json();
             if (signRes.ok && signData.success) {
-              // Direct Cloudinary Upload
               const formData = new FormData();
               formData.append('file', compressedBlob);
               formData.append('api_key', signData.apiKey);
@@ -353,9 +368,9 @@ export default function OrdersPage() {
               });
 
               const cloudData = await cloudRes.json();
-              cardholder.photoUrl = cloudData.secure_url;
+              card.photoUrl = cloudData.secure_url;
             } else {
-              // Local upload fallback endpoint
+              // Local upload fallback
               const formData = new FormData();
               const ext = compressedBlob.type.split('/')[1] || 'jpeg';
               formData.append('file', new File([compressedBlob], `${matchKey}.${ext}`, { type: compressedBlob.type }));
@@ -363,26 +378,24 @@ export default function OrdersPage() {
 
               const localRes = await fetchWithRetry('/api/upload', {
                 method: 'POST',
-                headers: {
-                  'x-press-id': String(pressId),
-                },
+                headers: { 'x-press-id': String(pressId) },
                 body: formData,
               });
               const localData = await localRes.json();
-              cardholder.photoUrl = localData.url;
+              card.photoUrl = localData.url;
             }
           } catch (err: any) {
-            console.error(`Upload error for ${cardholder.name}:`, err);
-            failedUploads.push(cardholder.name);
+            console.error(`Upload error for ${card.name}:`, err);
+            failedUploads.push(card.name);
           } finally {
             currentUpload++;
-            setUploadStatus(`Uploading photos (${currentUpload}/${cardholdersWithPhotos.length})...`);
-            setUploadProgress({ current: currentUpload, total: cardholdersWithPhotos.length });
+            setUploadStatus(`Uploading photos (${currentUpload}/${cardsWithPhotos.length})...`);
+            setUploadProgress({ current: currentUpload, total: cardsWithPhotos.length });
           }
         };
       });
 
-      // Concurrency queue processor
+      // Concurrency helper
       const queue = async (tasks: (() => Promise<void>)[], maxConcurrency: number) => {
         const executing = new Set<Promise<void>>();
         for (const task of tasks) {
@@ -399,21 +412,29 @@ export default function OrdersPage() {
 
       await queue(uploadTasks, concurrency);
 
-      // Warning prompt for failed uploads
       if (failedUploads.length > 0) {
         const proceed = window.confirm(
-          `${failedUploads.length} photo(s) failed to upload after retries:\n` +
+          `${failedUploads.length} photo(s) failed to upload:\n` +
           failedUploads.slice(0, 5).map(name => `• ${name}`).join('\n') +
           (failedUploads.length > 5 ? `\n...and ${failedUploads.length - 5} more` : '') +
           `\n\nDo you want to proceed with creating the order without these photos?`
         );
         if (!proceed) {
-          throw new Error('Batch process cancelled by user due to failed photo uploads.');
+          throw new Error('Batch process cancelled by user.');
         }
       }
 
-      // 4. Send complete JSON batch metadata to /api/orders/batch-process
       setUploadStatus('Syncing registry changes with database...');
+      
+      // Clean up the temporary UI props like id/hasPhoto/sanitizedKey before sending to backend
+      const cardholdersToSubmit = selectedCards.map(({ name, designation, uniqueKey, photoUrl, customFields }) => ({
+        name,
+        designation,
+        uniqueKey,
+        photoUrl,
+        customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields),
+      }));
+
       const res = await fetch('/api/orders/batch-process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -423,7 +444,7 @@ export default function OrdersPage() {
           pricePerCard: Number(pricePerCard),
           taxPercent: Number(taxPercent),
           validTill: validTill || null,
-          cardholders: parsedCardholders,
+          cardholders: cardholdersToSubmit,
         }),
       });
 
@@ -433,9 +454,19 @@ export default function OrdersPage() {
       setShowForm(false);
       setExcelFile(null);
       setZipFile(null);
+      setParsedCardholders([]);
+      setSelectedPreviewIndexes([]);
+      setShowPreviewStep(false);
+      
+      // Revoke urls
+      photosMap.forEach((val) => {
+        if (val.url) URL.revokeObjectURL(val.url);
+      });
+      setPhotosMap(new Map());
+
       setUploadStatus('');
       fetchData();
-      window.dispatchEvent(new Event('refresh-profile')); // update available credits count
+      window.dispatchEvent(new Event('refresh-profile'));
     } catch (err: any) {
       setError(err.message || 'Error occurred during batch processing');
     } finally {
@@ -496,102 +527,255 @@ export default function OrdersPage() {
             </div>
           )}
 
-          <form onSubmit={orderMethod === 'standard' ? handleCreate : handleBatchCreate} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <div className="form-group">
-              <label className="form-label">Client Registry Folder</label>
-              <select className="form-select" value={clientId} onChange={e => setClientId(e.target.value)}>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Card Template</label>
-              <select className="form-select" value={templateId} onChange={e => setTemplateId(e.target.value)}>
-                {templates.map(t => <option key={t.id} value={t.id}>{t.name} (v{t.version})</option>)}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Price Per Card (Rs)</label>
-              <input type="number" required className="form-input" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">GST / Tax Percent (%)</label>
-              <input type="number" required className="form-input" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} />
-            </div>
-
-            <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label className="form-label">Card Expiry Validity Date</label>
-              <input 
-                type="date" 
-                required 
-                className="form-input" 
-                value={validTill} 
-                onChange={e => setValidTill(e.target.value)} 
-                onClick={(e) => {
-                  try {
-                    e.currentTarget.showPicker();
-                  } catch (err) {
-                    console.warn('showPicker is not supported:', err);
-                  }
-                }}
-              />
-            </div>
-
-            {orderMethod === 'batch' && (
-              <>
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Excel Data Sheet (.xlsx, .csv)</label>
-                  <input type="file" required accept=".xlsx,.xls,.csv" className="form-input" onChange={e => setExcelFile(e.target.files?.[0] || null)} />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
-                    First row must contain headers. Unique student ID column will be auto-detected.
-                  </span>
+          <form onSubmit={orderMethod === 'standard' ? handleCreate : handleAnalyzeBatchFiles} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            {orderMethod === 'batch' && showPreviewStep ? (
+              <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h4 style={{ margin: 0 }}>Roster Preview & Selection</h4>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>
+                      Verify and select which cardholders to import and print. Missing photos are flagged.
+                    </p>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>
+                    Selected: <strong>{selectedPreviewIndexes.length}</strong> / {parsedCardholders.length}
+                  </div>
                 </div>
+
+                <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }} className="custom-table">
+                    <thead>
+                      <tr style={{ background: 'rgba(255,255,255,0.02)', textAlign: 'left' }}>
+                        <th style={{ width: '40px', padding: '8px 12px' }}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedPreviewIndexes.length === parsedCardholders.length}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedPreviewIndexes(parsedCardholders.map((_, i) => i));
+                              } else {
+                                setSelectedPreviewIndexes([]);
+                              }
+                            }}
+                          />
+                        </th>
+                        <th style={{ padding: '8px 12px' }}>Photo</th>
+                        <th style={{ padding: '8px 12px' }}>Name</th>
+                        <th style={{ padding: '8px 12px' }}>ID / Roll Number</th>
+                        <th style={{ padding: '8px 12px' }}>Designation</th>
+                        <th style={{ padding: '8px 12px' }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedCardholders.map((c, idx) => {
+                        const isSelected = selectedPreviewIndexes.includes(idx);
+                        const photoData = photosMap.get(c.sanitizedKey);
+                        return (
+                          <tr 
+                            key={idx} 
+                            style={{ 
+                              borderTop: '1px solid rgba(255,255,255,0.05)', 
+                              background: isSelected ? 'rgba(255,255,255,0.02)' : 'transparent',
+                              opacity: isSelected ? 1 : 0.6
+                            }}
+                          >
+                            <td style={{ padding: '8px 12px' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedPreviewIndexes(prev => [...prev, idx]);
+                                  } else {
+                                    setSelectedPreviewIndexes(prev => prev.filter(i => i !== idx));
+                                  }
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px 12px' }}>
+                              {c.hasPhoto && photoData?.url ? (
+                                <img 
+                                  src={photoData.url} 
+                                  alt={c.name} 
+                                  style={{ width: '36px', height: '36px', borderRadius: '4px', objectFit: 'cover', border: '1px solid rgba(255,255,255,0.1)' }}
+                                />
+                              ) : (
+                                <div style={{ width: '36px', height: '36px', borderRadius: '4px', background: 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff6b6b', border: '1px dashed rgba(239,68,68,0.3)' }} title="No image found in ZIP">
+                                  <ImageIcon size={16} />
+                                </div>
+                              )}
+                            </td>
+                            <td style={{ padding: '8px 12px', fontWeight: 500 }}>{c.name}</td>
+                            <td style={{ padding: '8px 12px', fontFamily: 'monospace' }}>{c.uniqueKey || '—'}</td>
+                            <td style={{ padding: '8px 12px' }}>{c.designation || '—'}</td>
+                            <td style={{ padding: '8px 12px' }}>
+                              {c.hasPhoto ? (
+                                <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }}>
+                                  <CheckCircle size={12} /> Ready
+                                </span>
+                              ) : (
+                                <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.75rem' }} title="No photo matched. ID will compile with placeholder.">
+                                  <AlertTriangle size={12} /> Missing Photo
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {uploadStatus && (
+                  <div style={{ background: 'rgba(255,255,255,0.05)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
+                      <span style={{ color: 'var(--primary)' }}>{uploadStatus}</span>
+                      {uploadProgress.total > 0 && (
+                        <span>{uploadProgress.current} / {uploadProgress.total}</span>
+                      )}
+                    </div>
+                    {uploadProgress.total > 0 && (
+                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            height: '100%', 
+                            background: 'var(--primary)', 
+                            width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                            transition: 'width 0.2s ease-out' 
+                          }} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button 
+                    type="button" 
+                    className="btn btn-secondary" 
+                    disabled={submitting}
+                    onClick={() => {
+                      setShowPreviewStep(false);
+                      setParsedCardholders([]);
+                      setSelectedPreviewIndexes([]);
+                      // Revoke URLs to free memory
+                      photosMap.forEach((val) => {
+                        if (val.url) URL.revokeObjectURL(val.url);
+                      });
+                      setPhotosMap(new Map());
+                    }}
+                  >
+                    Back to Files
+                  </button>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary" 
+                    disabled={submitting || selectedPreviewIndexes.length === 0}
+                    onClick={handleCreateBatchFromPreview}
+                  >
+                    {submitting ? 'Uploading...' : `Create Order (${selectedPreviewIndexes.length} cards)`}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Client Registry Folder</label>
+                  <select className="form-select" value={clientId} onChange={e => setClientId(e.target.value)}>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Card Template</label>
+                  <select className="form-select" value={templateId} onChange={e => setTemplateId(e.target.value)}>
+                    {templates.map(t => <option key={t.id} value={t.id}>{t.name} (v{t.version})</option>)}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Price Per Card (Rs)</label>
+                  <input type="number" required className="form-input" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">GST / Tax Percent (%)</label>
+                  <input type="number" required className="form-input" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} />
+                </div>
+
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Student Photos ZIP Archive (.zip)</label>
-                  <input type="file" required accept=".zip" className="form-input" onChange={e => setZipFile(e.target.files?.[0] || null)} />
-                  <span style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
-                    Each photo filename should match the student's unique ID in the excel sheet.
-                  </span>
+                  <label className="form-label">Card Expiry Validity Date</label>
+                  <input 
+                    type="date" 
+                    required 
+                    className="form-input" 
+                    value={validTill} 
+                    onChange={e => setValidTill(e.target.value)} 
+                    onClick={(e) => {
+                      try {
+                        e.currentTarget.showPicker();
+                      } catch (err) {
+                        console.warn('showPicker is not supported:', err);
+                      }
+                    }}
+                  />
+                </div>
+
+                {orderMethod === 'batch' && (
+                  <>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Excel Data Sheet (.xlsx, .csv)</label>
+                      <input type="file" required accept=".xlsx,.xls,.csv" className="form-input" onChange={e => setExcelFile(e.target.files?.[0] || null)} />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                        First row must contain headers. Unique student ID column will be auto-detected.
+                      </span>
+                    </div>
+                    <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                      <label className="form-label">Student Photos ZIP Archive (.zip)</label>
+                      <input type="file" required accept=".zip" className="form-input" onChange={e => setZipFile(e.target.files?.[0] || null)} />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '4px', display: 'block' }}>
+                        Each photo filename should match the student's unique ID in the excel sheet.
+                      </span>
+                    </div>
+                  </>
+                )}
+
+                {uploadStatus && (
+                  <div style={{ gridColumn: 'span 2', background: 'rgba(255,255,255,0.05)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '10px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
+                      <span style={{ color: 'var(--primary)' }}>{uploadStatus}</span>
+                      {uploadProgress.total > 0 && (
+                        <span>{uploadProgress.current} / {uploadProgress.total}</span>
+                      )}
+                    </div>
+                    {uploadProgress.total > 0 && (
+                      <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                        <div 
+                          style={{ 
+                            height: '100%', 
+                            background: 'var(--primary)', 
+                            width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
+                            transition: 'width 0.2s ease-out' 
+                          }} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => {
+                    setShowForm(false);
+                    setExcelFile(null);
+                    setZipFile(null);
+                    setUploadStatus('');
+                  }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={submitting}>
+                    {submitting ? 'Analyzing...' : (orderMethod === 'batch' ? 'Analyze & Match Files' : 'Initialize Order')}
+                  </button>
                 </div>
               </>
             )}
-
-            {uploadStatus && (
-              <div style={{ gridColumn: 'span 2', background: 'rgba(255,255,255,0.05)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', marginBottom: '10px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '8px' }}>
-                  <span style={{ color: 'var(--primary)' }}>{uploadStatus}</span>
-                  {uploadProgress.total > 0 && (
-                    <span>{uploadProgress.current} / {uploadProgress.total}</span>
-                  )}
-                </div>
-                {uploadProgress.total > 0 && (
-                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div 
-                      style={{ 
-                        height: '100%', 
-                        background: 'var(--primary)', 
-                        width: `${(uploadProgress.current / uploadProgress.total) * 100}%`,
-                        transition: 'width 0.2s ease-out' 
-                      }} 
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
-              <button type="button" className="btn btn-secondary" onClick={() => {
-                setShowForm(false);
-                setExcelFile(null);
-                setZipFile(null);
-                setUploadStatus('');
-              }}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={submitting}>
-                {submitting ? 'Processing...' : (orderMethod === 'batch' ? 'Upload & Process' : 'Initialize Order')}
-              </button>
-            </div>
           </form>
         </div>
       )}

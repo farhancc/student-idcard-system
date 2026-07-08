@@ -266,7 +266,7 @@ export default function LoginPage() {
           <p style={{ fontSize: '0.875rem' }}>
             New Printing Press?{' '}
             <a href="/signup" style={{ color: 'var(--primary)', fontWeight: '500' }}>
-              Start 14-Day Free Trial
+              Sign Up for Free
             </a>
           </p>
         </div>

@@ -69,13 +69,13 @@ export default function SignupPage() {
               <CheckCircle2 size={40} />
             </div>
             <h3>Press Registered Successfully!</h3>
-            <p style={{ marginTop: '12px' }}>Your 14-day free trial has been activated. Redirecting you to login...</p>
+            <p style={{ marginTop: '12px' }}>Your Printing Press account has been registered successfully. Redirecting you to login...</p>
           </div>
         ) : (
           <>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-              <h2>Start Free Trial</h2>
-              <p style={{ marginTop: '8px' }}>Get 14 days, 200 free credits, and full feature access</p>
+              <h2>Register Your Press</h2>
+              <p style={{ marginTop: '8px' }}>Create your Printing Press tenant account for free</p>
             </div>
 
             {error && (
@@ -218,7 +218,7 @@ export default function SignupPage() {
                 style={{ width: '100%', padding: '12px', fontSize: '0.9375rem', marginTop: '10px' }}
                 disabled={loading}
               >
-                {loading ? <div className="spinner" style={{ width: '20px', height: '20px' }}></div> : 'Create Trial Account'}
+                {loading ? <div className="spinner" style={{ width: '20px', height: '20px' }}></div> : 'Register Press Account'}
               </button>
             </form>
 

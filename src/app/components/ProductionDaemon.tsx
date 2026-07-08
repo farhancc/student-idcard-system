@@ -39,8 +39,6 @@ export default function ProductionDaemon() {
 
   // Background polling loop
   useEffect(() => {
-    if (!isDesktop) return;
-
     const pollInterval = setInterval(async () => {
       if (isProcessingRef.current) return; // Busy compiling
       
@@ -99,7 +97,7 @@ export default function ProductionDaemon() {
     }, 4000);
 
     return () => clearInterval(pollInterval);
-  }, [isDesktop]);
+  }, []);
 
   // Periodically refresh the queue count display
   useEffect(() => {
@@ -161,6 +159,41 @@ export default function ProductionDaemon() {
       } catch (queueErr: any) {
         addLog(`Failed to queue offline: ${queueErr.message}`);
       }
+    }
+  };
+
+  const saveAndCompleteJob = async (
+    job: any,
+    order: any,
+    pdfBytes: Uint8Array,
+    base64Data: string
+  ) => {
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI) {
+      addLog('Saving file using native bridge...');
+      const saveResult = await electronAPI.savePdfLocally(job.fileName, base64Data, order?.clientName || 'Client');
+      if (!saveResult.success) {
+        throw new Error(saveResult.error || 'Failed to save file');
+      }
+      addLog(`Saved successfully to: ${saveResult.path}`);
+      await updateProgress(job.id, 100, 'PROCESSING');
+      await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
+    } else {
+      addLog('Web client detected. Triggering browser file download and uploading to server...');
+      
+      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = job.fileName || 'document.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+
+      await updateProgress(job.id, 100, 'PROCESSING');
+      await reportJobComplete(job.id, true, undefined, base64Data, undefined);
+      addLog('Job completed successfully. Download started.');
     }
   };
 
@@ -271,15 +304,7 @@ export default function ProductionDaemon() {
       reader.readAsDataURL(blob);
     });
 
-    addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order.clientName);
-    if (!saveResult.success) {
-      throw new Error(saveResult.error || 'Failed to save file');
-    }
-
-    addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
+    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
 
   const compileApprovalLocally = async (jobPayload: any) => {
@@ -334,15 +359,7 @@ export default function ProductionDaemon() {
       reader.readAsDataURL(blob);
     });
 
-    addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order.clientName);
-    if (!saveResult.success) {
-      throw new Error(saveResult.error || 'Failed to save file');
-    }
-
-    addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
+    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
 
   const processJob = async (jobPayload: any) => {
@@ -563,18 +580,10 @@ export default function ProductionDaemon() {
       reader.readAsDataURL(blob);
     });
 
-    addLog('Saving file using native bridge...');
-    const saveResult = await (window as any).electronAPI.savePdfLocally(job.fileName, base64Data, order?.clientName || 'Client');
-    if (!saveResult.success) {
-      throw new Error(saveResult.error || 'Failed to save file');
-    }
-
-    addLog(`Saved successfully to: ${saveResult.path}`);
-    await updateProgress(job.id, 100, 'PROCESSING');
-    await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
+    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
 
-  if (!isDesktop || !activeJob) return null;
+  if (!activeJob) return null;
 
   return (
     <div style={{

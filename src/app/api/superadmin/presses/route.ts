@@ -24,9 +24,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
-
     const passwordHash = await hashPassword(password);
 
     const result = await prisma.$transaction(async (tx) => {
@@ -39,7 +36,7 @@ export async function POST(request: Request) {
           plan: plan || 'BASIC',
           isActive: true,
           credits: credits !== undefined ? Number(credits) : 0,
-          trialEndsAt,
+          trialEndsAt: null,
         },
       });
 

@@ -1,11 +1,5 @@
 const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET'];
 
-// In production mode, Stripe integration credentials are also mandatory
-if (process.env.NODE_ENV === 'production') {
-  requiredEnvVars.push('STRIPE_SECRET_KEY');
-  requiredEnvVars.push('STRIPE_WEBHOOK_SECRET');
-}
-
 const isBuildTime = process.env.NEXT_PHASE === 'phase-production-build' || process.env.SKIP_ENV_VALIDATION === 'true';
 
 for (const envVar of requiredEnvVars) {
@@ -15,6 +9,15 @@ for (const envVar of requiredEnvVars) {
     } else {
       throw new Error(`CRITICAL CONFIGURATION ERROR: Required environment variable "${envVar}" is missing.`);
     }
+  }
+}
+
+// Billing system mode log
+if (process.env.NODE_ENV === 'production' && !isBuildTime) {
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+    console.log('[Billing System] Running in manual credit allocation mode (no payment gateway configured).');
+  } else {
+    console.log('[Billing System] Stripe payment automation is enabled.');
   }
 }
 

@@ -185,6 +185,235 @@ export default function ClientDetailsPage() {
   };
   const closeConfirm = () => { setConfirmOpen(false); setConfirmConfig(null); };
 
+  const [zipping, setZipping] = useState(false);
+  const [zipProgress, setZipProgress] = useState('');
+
+  const handleDownloadAllDataZip = async () => {
+    try {
+      if (cardholders.length === 0) {
+        toast('No cardholders to export.', 'warning');
+        return;
+      }
+
+      setZipping(true);
+      setZipProgress('Deducting credits...');
+
+      // Deduct 20 credits for ZIP export (or ZIP Export reason)
+      const deductRes = await fetch('/api/press/deduct-credits', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: 20,
+          reason: 'ZIP Export'
+        })
+      });
+
+      if (!deductRes.ok) {
+        const deductData = await deductRes.json();
+        toast(deductData.error || 'Failed to deduct credits for ZIP export.', 'error');
+        setZipping(false);
+        return;
+      }
+
+      window.dispatchEvent(new CustomEvent('refresh-profile'));
+
+      setZipProgress('Preparing Excel spreadsheet...');
+
+      const escapeFormula = (val: any): any => {
+        if (typeof val === 'string' && /^[=\+\-\@\t\r\n]/.test(val)) {
+          return `'${val}`;
+        }
+        return val;
+      };
+
+      // Format data for Excel
+      const formattedData = cardholders.map((ch: any) => {
+        const row: any = {
+          'Name': escapeFormula(ch.name),
+          'ID / Unique Key': escapeFormula(ch.uniqueKey || ''),
+          'Date of Adding': ch.createdAt ? new Date(ch.createdAt).toLocaleDateString() : '',
+          'Template Name': escapeFormula(ch.templateName || ''),
+          'Photo URL': escapeFormula(ch.photoUrl || ''),
+        };
+
+        // Flatten custom fields
+        if (ch.customFields) {
+          try {
+            const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+            if (parsed && typeof parsed === 'object') {
+              Object.entries(parsed).forEach(([key, val]) => {
+                row[`Field: ${key}`] = escapeFormula(val);
+              });
+            }
+          } catch (e) {
+            console.error('Failed to parse custom fields for excel export', e);
+          }
+        }
+        return row;
+      });
+
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Cardholders');
+
+      const sample = formattedData[0] || {};
+      sheet.columns = Object.keys(sample).map(key => ({
+        header: key,
+        key: key,
+        width: 20
+      }));
+
+      formattedData.forEach(row => {
+        sheet.addRow(row);
+      });
+
+      const xlsxBuffer = await workbook.xlsx.writeBuffer();
+
+      // Load JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      // Add the Excel spreadsheet
+      zip.file('cardholders.xlsx', xlsxBuffer);
+
+      // Add photos folder
+      const photosFolder = zip.folder('photos');
+
+      // Fetch photo blobs
+      let processedCount = 0;
+      const totalPhotos = cardholders.filter(ch => ch.photoUrl).length;
+
+      const usedNames = new Set<string>();
+
+      await Promise.all(
+        cardholders.map(async (ch) => {
+          if (!ch.photoUrl) return;
+          try {
+            const res = await fetch(ch.photoUrl);
+            if (res.ok) {
+              const blob = await res.blob();
+              
+              // Guess extension
+              let ext = '.png';
+              const cleanUrl = ch.photoUrl.split('?')[0].split('#')[0].toLowerCase();
+              if (cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.jpeg')) {
+                ext = '.jpg';
+              } else if (cleanUrl.endsWith('.webp')) {
+                ext = '.webp';
+              } else if (cleanUrl.endsWith('.gif')) {
+                ext = '.gif';
+              }
+
+              // Determine base name by checking uniqueKey or customFields for Roll No / ID / Employee ID
+              let baseName = '';
+              
+              if (ch.uniqueKey && ch.uniqueKey.trim() !== '') {
+                baseName = ch.uniqueKey.trim();
+              } else if (ch.customFields) {
+                try {
+                  const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+                  if (parsed && typeof parsed === 'object') {
+                    const targetKeys = [
+                      'roll number', 'rollno', 'roll no', 'rollnumber',
+                      'employee id', 'empid', 'emp id', 'employeeid',
+                      'student id', 'studentid', 'student_id',
+                      'id', 'admission number', 'admissionno'
+                    ];
+                    
+                    for (const targetKey of targetKeys) {
+                      const matchedKey = Object.keys(parsed).find(
+                        k => k.toLowerCase().trim() === targetKey
+                      );
+                      if (matchedKey && parsed[matchedKey] && String(parsed[matchedKey]).trim() !== '') {
+                        baseName = String(parsed[matchedKey]).trim();
+                        break;
+                      }
+                    }
+                  }
+                } catch (e) {
+                  console.error('Error parsing custom fields for image filename', e);
+                }
+              }
+
+              // Fallback to name or student ID if still empty
+              if (!baseName || baseName === '') {
+                baseName = ch.name || `student_${ch.id}`;
+              }
+
+              // Build a unique and clean filename
+              const cleanKey = baseName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+              
+              // Ensure name uniqueness in ZIP file
+              let finalName = cleanKey;
+              let counter = 1;
+              while (usedNames.has(finalName.toLowerCase())) {
+                finalName = `${cleanKey}_${counter}`;
+                counter++;
+              }
+              usedNames.add(finalName.toLowerCase());
+              
+              photosFolder?.file(`${finalName}${ext}`, blob);
+            }
+          } catch (err) {
+            console.error(`Failed to fetch photo for cardholder ${ch.id}:`, err);
+          } finally {
+            processedCount++;
+            setZipProgress(`Downloading photos (${processedCount}/${totalPhotos})...`);
+          }
+        })
+      );
+
+      setZipProgress('Compiling ZIP archive...');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+
+      const fileName = `Client_${(client?.name || 'export').replace(/\s+/g, '_')}_Data.zip`;
+      const url = window.URL.createObjectURL(zipBlob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+
+      toast('ZIP downloaded successfully!', 'success');
+    } catch (err: any) {
+      console.error('Failed to export ZIP:', err);
+      toast('Error exporting ZIP: ' + err.message, 'error');
+    } finally {
+      setZipping(false);
+      setZipProgress('');
+    }
+  };
+
+  const handlePurgeClient = () => {
+    showConfirm({
+      title: 'DANGER: Permanently Purge Client?',
+      message: 'This will permanently delete all cardholders, templates, completed PDF jobs, and local backup assets associated with this client. In addition, all student/employee photos and PDFs stored in Cloudinary will be permanently destroyed. This action cannot be undone. Are you absolutely sure?',
+      confirmLabel: 'Purge Permanently',
+      variant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          toast('Purging client data and assets...', 'info');
+          const deleteRes = await fetch(`/api/clients/${clientId}`, {
+            method: 'DELETE',
+          });
+
+          if (!deleteRes.ok) {
+            const deleteData = await deleteRes.json();
+            toast(deleteData.error || 'Failed to purge client data.', 'error');
+            return;
+          }
+
+          toast('Client and all associated data purged permanently!', 'success');
+          router.push('/dashboard/clients');
+        } catch (err: any) {
+          console.error('Failed to purge client:', err);
+          toast('Error purging client: ' + err.message, 'error');
+        }
+      }
+    });
+  };
+
   const fetchData = async () => {
     try {
       const clientRes = await fetch(`/api/clients/${clientId}`);
@@ -804,25 +1033,61 @@ export default function ClientDetailsPage() {
   return (
     <div>
       {/* Header breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-        <a href="/dashboard/clients" style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          width: '36px',
-          height: '36px',
-          borderRadius: '50%',
-          border: '1px solid var(--glass-border)',
-          background: 'rgba(255,255,255,0.02)',
-          color: '#fff'
-        }}>
-          <ArrowLeft size={16} />
-        </a>
-        <div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase' }}>Client Directory</span>
-          <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px', fontSize: '1.75rem' }}>
-            <Building2 size={24} color="var(--primary)" /> {client?.name}
-          </h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <a href="/dashboard/clients" style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            border: '1px solid var(--glass-border)',
+            background: 'rgba(255,255,255,0.02)',
+            color: '#fff'
+          }}>
+            <ArrowLeft size={16} />
+          </a>
+          <div>
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase' }}>Client Directory</span>
+            <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px', fontSize: '1.75rem' }}>
+              <Building2 size={24} color="var(--primary)" /> {client?.name}
+            </h1>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            className="btn btn-secondary"
+            style={{
+              fontSize: '0.85rem',
+              padding: '8px 14px',
+              gap: '6px',
+              background: 'rgba(59,130,246,0.1)',
+              border: '1px solid rgba(59,130,246,0.3)',
+              color: '#60a5fa'
+            }}
+            onClick={handleDownloadAllDataZip}
+            disabled={zipping}
+          >
+            <Download size={14} />
+            {zipping ? (zipProgress || 'Zipping...') : `Download Data ZIP (${cardholders.length})`}
+          </button>
+
+          <button
+            className="btn btn-secondary"
+            style={{
+              fontSize: '0.85rem',
+              padding: '8px 14px',
+              gap: '6px',
+              background: 'rgba(239,68,68,0.1)',
+              border: '1px solid rgba(239,68,68,0.3)',
+              color: '#ef4444'
+            }}
+            onClick={handlePurgeClient}
+          >
+            <Trash2 size={14} /> Purge Client Data
+          </button>
         </div>
       </div>
 

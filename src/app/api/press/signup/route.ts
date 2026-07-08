@@ -47,10 +47,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Set trial expiration to 14 days from now
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
-
     const passwordHash = await hashPassword(password);
 
     // Create Press and Owner user in a single transaction
@@ -64,7 +60,7 @@ export async function POST(request: Request) {
           plan: 'BASIC',
           isActive: true,
           credits: 200,
-          trialEndsAt,
+          trialEndsAt: null,
         },
       });
 

@@ -173,7 +173,9 @@ p {
 /* Custom Table Design */
 .table-container {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  display: block;
   border: 1px solid var(--glass-border);
   border-radius: 12px;
 }
