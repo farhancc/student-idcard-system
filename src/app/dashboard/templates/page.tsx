@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -254,6 +254,32 @@ export default function TemplatesPage() {
       setFrontFields(frontFields.filter((_, i) => i !== index));
     } else {
       setBackFields(backFields.filter((_, i) => i !== index));
+    }
+  };
+
+  const handleCopyField = (side: 'front' | 'back', index: number) => {
+    const fields = side === 'front' ? frontFields : backFields;
+    const original = fields[index];
+    const newField: FieldCoordinate = {
+      ...original,
+      x: Math.min(cardWidth - 50, original.x + 15),
+      y: Math.min(cardHeight - 20, original.y + 15),
+    };
+
+    if (side === 'front') {
+      const updated = [...frontFields, newField];
+      setFrontFields(updated);
+      setSelectedFieldIndex(frontFields.length);
+      setSelectedSide('front');
+      setActiveTooltipIndex(frontFields.length);
+      setActiveTooltipSide('front');
+    } else {
+      const updated = [...backFields, newField];
+      setBackFields(updated);
+      setSelectedFieldIndex(backFields.length);
+      setSelectedSide('back');
+      setActiveTooltipIndex(backFields.length);
+      setActiveTooltipSide('back');
     }
   };
 
@@ -2800,56 +2826,88 @@ export default function TemplatesPage() {
                                   {(() => {
                                     const isTooltipActive = activeTooltipIndex === i && activeTooltipSide === 'front';
                                     return (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isTooltipActive) {
-                                            setActiveTooltipIndex(null);
-                                            setActiveTooltipSide(null);
-                                          } else {
-                                            setActiveTooltipIndex(i);
-                                            setActiveTooltipSide('front');
-                                            setSelectedFieldIndex(i);
-                                            setSelectedSide('front');
-                                          }
-                                        }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${x + w}px`,
-                                          top: `${y}px`,
-                                          transform: 'translate(-50%, -50%)',
-                                          width: '18px',
-                                          height: '18px',
-                                          borderRadius: '50%',
-                                          background: isTooltipActive ? '#ef4444' : '#3b82f6',
-                                          border: '1px solid rgba(255,255,255,0.3)',
-                                          color: '#ffffff',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          cursor: 'pointer',
-                                          padding: 0,
-                                          boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                          zIndex: isTooltipActive ? 10001 : 500,
-                                        }}
-                                        title={isTooltipActive ? "Close Editor" : "Open Editor"}
-                                      >
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                          {isTooltipActive ? (
-                                            <>
-                                              <line x1="18" y1="6" x2="6" y2="18"></line>
-                                              <line x1="6" y1="6" x2="18" y2="18"></line>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <path d="M12 20h9"></path>
-                                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                            </>
-                                          )}
-                                        </svg>
-                                      </button>
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyField('front', i);
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${x + w - 20}px`,
+                                            top: `${y}px`,
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            background: '#10b981',
+                                            border: '1px solid rgba(255,255,255,0.3)',
+                                            color: '#ffffff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                            zIndex: 500,
+                                          }}
+                                          title="Copy Field"
+                                        >
+                                          <Copy size={10} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isTooltipActive) {
+                                              setActiveTooltipIndex(null);
+                                              setActiveTooltipSide(null);
+                                            } else {
+                                              setActiveTooltipIndex(i);
+                                              setActiveTooltipSide('front');
+                                              setSelectedFieldIndex(i);
+                                              setSelectedSide('front');
+                                            }
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${x + w}px`,
+                                            top: `${y}px`,
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            background: isTooltipActive ? '#ef4444' : '#3b82f6',
+                                            border: '1px solid rgba(255,255,255,0.3)',
+                                            color: '#ffffff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                            zIndex: isTooltipActive ? 10001 : 500,
+                                          }}
+                                          title={isTooltipActive ? "Close Editor" : "Open Editor"}
+                                        >
+                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            {isTooltipActive ? (
+                                              <>
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <path d="M12 20h9"></path>
+                                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                              </>
+                                            )}
+                                          </svg>
+                                        </button>
+                                      </>
                                     );
                                   })()}
                                   {activeTooltipIndex === i && activeTooltipSide === 'front' && renderFieldTooltip('front', i, f, scale)}
@@ -3154,56 +3212,88 @@ export default function TemplatesPage() {
                                   {(() => {
                                     const isTooltipActive = activeTooltipIndex === i && activeTooltipSide === 'back';
                                     return (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (isTooltipActive) {
-                                            setActiveTooltipIndex(null);
-                                            setActiveTooltipSide(null);
-                                          } else {
-                                            setActiveTooltipIndex(i);
-                                            setActiveTooltipSide('back');
-                                            setSelectedFieldIndex(i);
-                                            setSelectedSide('back');
-                                          }
-                                        }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        style={{
-                                          position: 'absolute',
-                                          left: `${x + w}px`,
-                                          top: `${y}px`,
-                                          transform: 'translate(-50%, -50%)',
-                                          width: '18px',
-                                          height: '18px',
-                                          borderRadius: '50%',
-                                          background: isTooltipActive ? '#ef4444' : '#3b82f6',
-                                          border: '1px solid rgba(255,255,255,0.3)',
-                                          color: '#ffffff',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          cursor: 'pointer',
-                                          padding: 0,
-                                          boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                          zIndex: isTooltipActive ? 10001 : 500,
-                                        }}
-                                        title={isTooltipActive ? "Close Editor" : "Open Editor"}
-                                      >
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                          {isTooltipActive ? (
-                                            <>
-                                              <line x1="18" y1="6" x2="6" y2="18"></line>
-                                              <line x1="6" y1="6" x2="18" y2="18"></line>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <path d="M12 20h9"></path>
-                                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-                                            </>
-                                          )}
-                                        </svg>
-                                      </button>
+                                      <>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleCopyField('back', i);
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${x + w - 20}px`,
+                                            top: `${y}px`,
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            background: '#10b981',
+                                            border: '1px solid rgba(255,255,255,0.3)',
+                                            color: '#ffffff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                            zIndex: 500,
+                                          }}
+                                          title="Copy Field"
+                                        >
+                                          <Copy size={10} />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isTooltipActive) {
+                                              setActiveTooltipIndex(null);
+                                              setActiveTooltipSide(null);
+                                            } else {
+                                              setActiveTooltipIndex(i);
+                                              setActiveTooltipSide('back');
+                                              setSelectedFieldIndex(i);
+                                              setSelectedSide('back');
+                                            }
+                                          }}
+                                          onMouseDown={(e) => e.stopPropagation()}
+                                          style={{
+                                            position: 'absolute',
+                                            left: `${x + w}px`,
+                                            top: `${y}px`,
+                                            transform: 'translate(-50%, -50%)',
+                                            width: '18px',
+                                            height: '18px',
+                                            borderRadius: '50%',
+                                            background: isTooltipActive ? '#ef4444' : '#3b82f6',
+                                            border: '1px solid rgba(255,255,255,0.3)',
+                                            color: '#ffffff',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            cursor: 'pointer',
+                                            padding: 0,
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                            zIndex: isTooltipActive ? 10001 : 500,
+                                          }}
+                                          title={isTooltipActive ? "Close Editor" : "Open Editor"}
+                                        >
+                                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            {isTooltipActive ? (
+                                              <>
+                                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                                              </>
+                                            ) : (
+                                              <>
+                                                <path d="M12 20h9"></path>
+                                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                                              </>
+                                            )}
+                                          </svg>
+                                        </button>
+                                      </>
                                     );
                                   })()}
                                   {activeTooltipIndex === i && activeTooltipSide === 'back' && renderFieldTooltip('back', i, f, scale)}

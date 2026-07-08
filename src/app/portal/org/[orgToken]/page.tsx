@@ -7,7 +7,6 @@ import { ToastProvider, useToast } from '@/components/ui/toast';
 
 import { 
   Users, 
-  FileText, 
   Copy, 
   Check, 
   Plus, 
@@ -64,11 +63,6 @@ interface Template {
   validTillDate?: string | null;
 }
 
-interface ApprovalJob {
-  id: number;
-  downloadUrl?: string;
-}
-
 interface Department {
   id: number;
   name: string;
@@ -100,7 +94,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [client, setClient] = useState<Client | null>(null);
   const [template, setTemplate] = useState<Template | null>(null);
   const [enrollToken, setEnrollToken] = useState('');
-  const [latestApprovalJob, setLatestApprovalJob] = useState<ApprovalJob | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [newDeptName, setNewDeptName] = useState('');
@@ -154,7 +147,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       setTemplate(shareData.template);
       setEnrollToken(shareData.share.enrollToken);
       setShowPreview(shareData.share.showPreview ?? false);
-      setLatestApprovalJob(shareData.latestApprovalJob);
 
       // Parse fields
       const front = JSON.parse(shareData.template.frontFields || '[]');
@@ -546,37 +538,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               {copied ? <Check size={16} /> : <Copy size={16} />}
               Copy Global Staff Link
             </button>
-            {latestApprovalJob && latestApprovalJob.downloadUrl ? (
-              <a
-                href={latestApprovalJob.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-primary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  textDecoration: 'none'
-                }}
-              >
-                <FileText size={16} /> Download Approval PDF
-              </a>
-            ) : (
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  opacity: 0.5,
-                  cursor: 'not-allowed'
-                }}
-                title="Approval PDF has not been compiled by the print provider yet."
-              >
-                <FileText size={16} /> Approval PDF Not Ready
-              </button>
-            )}
           </div>
         </div>
 
