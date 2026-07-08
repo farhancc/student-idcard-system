@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { getCreditSettings } from '@/lib/system-settings';
 
 const productionRequestSchema = z.object({
   orderId: z.union([z.number(), z.string().transform(Number)]),
@@ -75,12 +76,13 @@ export async function POST(request: Request) {
     const isProduction = pdfType === 'PRODUCTION';
     const isDoubleSided = !!template.backImageUrl;
     
+    const creditSettings = await getCreditSettings();
     let totalCreditsNeeded = 0;
     if (isProduction) {
-      const costPerCard = isDoubleSided ? 15 : 10;
+      const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
       totalCreditsNeeded = cardCount * costPerCard;
     } else if (pdfType === 'APPROVAL') {
-      totalCreditsNeeded = 20; // 20 credit for approval print (per export)
+      totalCreditsNeeded = creditSettings.costApprovalPdf;
     }
 
     const jobOptions = {

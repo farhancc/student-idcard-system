@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getCreditSettings } from '@/lib/system-settings';
 
 import AdmZip from 'adm-zip';
 import sharp from 'sharp';
@@ -352,9 +353,10 @@ export async function POST(request: Request) {
 
     // Credit Check & Lock for batch jobs
     const isDoubleSided = !!template.backImageUrl;
-    const costPerCard = isDoubleSided ? 15 : 10;
+    const creditSettings = await getCreditSettings();
+    const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
     const productionCreditsNeeded = cardCount * costPerCard;
-    const approvalCreditsNeeded = 20;
+    const approvalCreditsNeeded = creditSettings.costApprovalPdf;
     const totalCreditsNeeded = productionCreditsNeeded + approvalCreditsNeeded;
 
     const press = await prisma.press.findUnique({ where: { id: pressId } });

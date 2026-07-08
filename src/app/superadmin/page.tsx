@@ -7,7 +7,7 @@ import {
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
   DollarSign, TrendingUp, BarChart3, Search, Plus,
   Eye, X, CreditCard, FileText, Type,
-  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield
+  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders
 } from 'lucide-react';
 
 interface PressClient {
@@ -69,7 +69,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs'>('presses');
+  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings'>('presses');
 
   // Audit Logs State
   const [logs, setLogs] = useState<any[]>([]);
@@ -145,6 +145,13 @@ export default function SuperAdminDashboard() {
 
   // Press Detail Drawer
   const [detailPress, setDetailPress] = useState<Press | null>(null);
+
+  // Settings Tab State
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [costSingleSided, setCostSingleSided] = useState('10');
+  const [costDoubleSided, setCostDoubleSided] = useState('15');
+  const [costApprovalPdf, setCostApprovalPdf] = useState('20');
+  const [settingsSuccess, setSettingsSuccess] = useState('');
 
   const handleOnboardPress = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,8 +284,8 @@ export default function SuperAdminDashboard() {
       fetchGlobalTemplates();
     } else if (activeTab === 'fonts') {
       fetchGlobalFonts();
-    } else if (activeTab === 'auditLogs') {
-      fetchAuditLogs();
+    } else if (activeTab === 'settings') {
+      fetchSettings();
     }
   }, [activeTab, logPage, logCategory, logSeverity]);
 
@@ -397,6 +404,51 @@ export default function SuperAdminDashboard() {
       setError(err.message || 'Failed to update credits.');
     } finally {
       setCreditsSubmitting(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/superadmin/settings');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch settings');
+      if (data.settings) {
+        setCostSingleSided(String(data.settings.costSingleSided));
+        setCostDoubleSided(String(data.settings.costDoubleSided));
+        setCostApprovalPdf(String(data.settings.costApprovalPdf));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to load system settings.');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSettingsLoading(true);
+    setSettingsSuccess('');
+    setError('');
+    try {
+      const res = await fetch('/api/superadmin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          costSingleSided: Number(costSingleSided),
+          costDoubleSided: Number(costDoubleSided),
+          costApprovalPdf: Number(costApprovalPdf),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save settings');
+      setSettingsSuccess('System settings updated successfully!');
+      setTimeout(() => setSettingsSuccess(''), 3000);
+    } catch (err: any) {
+      setError(err.message || 'Failed to save system settings.');
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
@@ -706,6 +758,7 @@ export default function SuperAdminDashboard() {
               activeTab === 'analytics' ? fetchAnalytics : 
               activeTab === 'templates' ? fetchGlobalTemplates : 
               activeTab === 'fonts' ? fetchGlobalFonts :
+              activeTab === 'settings' ? fetchSettings :
               fetchAuditLogs
             }
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -846,6 +899,27 @@ export default function SuperAdminDashboard() {
           }}
         >
           <Shield size={16} /> System Audit Logs
+        </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('settings')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'settings' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'settings' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'settings' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Sliders size={16} /> Credit Settings
         </button>
       </div>
 
@@ -1657,6 +1731,98 @@ export default function SuperAdminDashboard() {
                 )}
               </>
             )}
+          </div>
+        </>
+      ) : activeTab === 'settings' ? (
+        <>
+          <div className="glass-panel" style={{ padding: '24px', maxWidth: '600px', margin: '0 auto' }}>
+            <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sliders size={18} color="var(--primary)" />
+              System Credit Configuration
+            </h3>
+            
+            <p style={{ fontSize: '0.95rem', color: 'var(--muted)', marginBottom: '24px', lineHeight: '1.5' }}>
+              Configure the number of credits charged to printing presses for generating and exporting different PDF formats.
+            </p>
+
+            {settingsSuccess && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '16px',
+                background: 'rgba(52, 211, 153, 0.12)',
+                border: '1px solid rgba(52, 211, 153, 0.3)',
+                borderRadius: '8px',
+                color: '#34d399',
+                marginBottom: '24px'
+              }}>
+                <span>✓ {settingsSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveSettings}>
+              <div style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="costSingleSided" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Single-sided ID Card Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costSingleSided"
+                  className="form-input"
+                  value={costSingleSided}
+                  onChange={(e) => setCostSingleSided(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for single-sided templates.</span>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="costDoubleSided" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Double-sided ID Card Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costDoubleSided"
+                  className="form-input"
+                  value={costDoubleSided}
+                  onChange={(e) => setCostDoubleSided(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for double-sided templates.</span>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="form-label" htmlFor="costApprovalPdf" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Approval PDF Generation Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costApprovalPdf"
+                  className="form-input"
+                  value={costApprovalPdf}
+                  onChange={(e) => setCostApprovalPdf(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated (regardless of cardholder count).</span>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={settingsLoading}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '44px' }}
+              >
+                {settingsLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    Saving Changes...
+                  </>
+                ) : (
+                  'Save Settings'
+                )}
+              </button>
+            </form>
           </div>
         </>
       ) : null}

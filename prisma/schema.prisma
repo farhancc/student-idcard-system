@@ -460,3 +460,11 @@ model SystemAuditLog {
   @@index([createdAt])
   @@map("system_audit_logs")
 }
+
+model SystemSetting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String
+
+  @@map("system_settings")
+}
