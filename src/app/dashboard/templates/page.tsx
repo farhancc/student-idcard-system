@@ -1138,6 +1138,25 @@ export default function TemplatesPage() {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button 
               type="button" 
+              onClick={() => handleCopyField(side, index)}
+              style={{ 
+                background: '#10b981', 
+                border: 'none', 
+                borderRadius: '4px', 
+                color: '#ffffff', 
+                padding: '2px 6px', 
+                fontSize: '0.7rem', 
+                cursor: 'pointer', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '4px',
+                fontWeight: 500
+              }}
+            >
+              <Copy size={10} /> Copy
+            </button>
+            <button 
+              type="button" 
               onClick={deleteField}
               style={{ 
                 background: '#ef4444', 
