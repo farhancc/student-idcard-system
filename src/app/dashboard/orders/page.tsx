@@ -36,6 +36,8 @@ export default function OrdersPage() {
   const [selectedPreviewIndexes, setSelectedPreviewIndexes] = useState<number[]>([]);
   const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string }>>(new Map());
   const [selectedCardholderForDetails, setSelectedCardholderForDetails] = useState<any | null>(null);
+  const [selectedCardholderIndexForDetails, setSelectedCardholderIndexForDetails] = useState<number | null>(null);
+  const [isEditingDetail, setIsEditingDetail] = useState(false);
   const [detailsPreviewSide, setDetailsPreviewSide] = useState<'front' | 'back'>('front');
   const [loadedPressFonts, setLoadedPressFonts] = useState<any[]>([]);
 
@@ -53,6 +55,16 @@ export default function OrdersPage() {
         .catch(err => console.error('Failed to load press fonts for preview:', err));
     }
   }, [pressId]);
+
+  const handleSaveCardholderEdit = () => {
+    if (selectedCardholderIndexForDetails === null || !selectedCardholderForDetails) return;
+    const updated = [...parsedCardholders];
+    updated[selectedCardholderIndexForDetails] = {
+      ...selectedCardholderForDetails
+    };
+    setParsedCardholders(updated);
+    setIsEditingDetail(false);
+  };
 
   // Layout options for client-side batch processing
   const [paperSize, setPaperSize] = useState<'A3' | 'A4'>('A3');
@@ -764,7 +776,11 @@ export default function OrdersPage() {
                                   alignItems: 'center',
                                   gap: '4px'
                                 }}
-                                onClick={() => setSelectedCardholderForDetails(c)}
+                                onClick={() => {
+                                  setSelectedCardholderForDetails(c);
+                                  setSelectedCardholderIndexForDetails(idx);
+                                  setIsEditingDetail(false);
+                                }}
                               >
                                 <Eye size={12} /> View Details
                               </button>
@@ -1123,6 +1139,8 @@ export default function OrdersPage() {
                 type="button"
                 onClick={() => {
                   setSelectedCardholderForDetails(null);
+                  setSelectedCardholderIndexForDetails(null);
+                  setIsEditingDetail(false);
                   setDetailsPreviewSide('front');
                 }}
                 style={{
@@ -1222,7 +1240,14 @@ export default function OrdersPage() {
 
               {/* Right Column: Key-Value Field Explorer */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>Record Fields (Excel Data)</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 600, color: 'var(--primary)' }}>Record Fields (Excel Data)</h4>
+                  {isEditingDetail && (
+                    <span style={{ fontSize: '0.75rem', color: '#ffc107', background: 'rgba(255,193,7,0.1)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                      Editing Mode (Live Preview)
+                    </span>
+                  )}
+                </div>
                 
                 <div style={{
                   border: '1px solid rgba(255,255,255,0.08)',
@@ -1239,15 +1264,51 @@ export default function OrdersPage() {
                     <tbody>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <td style={{ padding: '10px 16px', color: 'var(--muted)', fontWeight: 500 }}>Name</td>
-                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>{selectedCardholderForDetails.name}</td>
+                        <td style={{ padding: '10px 16px', fontWeight: 600 }}>
+                          {isEditingDetail ? (
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              style={{ padding: '4px 8px', fontSize: '0.85rem', width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                              value={selectedCardholderForDetails.name || ''} 
+                              onChange={e => setSelectedCardholderForDetails((prev: any) => ({ ...prev, name: e.target.value }))}
+                            />
+                          ) : (
+                            selectedCardholderForDetails.name
+                          )}
+                        </td>
                       </tr>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Designation</td>
-                        <td style={{ padding: '10px 16px' }}>{selectedCardholderForDetails.designation || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>}</td>
+                        <td style={{ padding: '10px 16px' }}>
+                          {isEditingDetail ? (
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              style={{ padding: '4px 8px', fontSize: '0.85rem', width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                              value={selectedCardholderForDetails.designation || ''} 
+                              onChange={e => setSelectedCardholderForDetails((prev: any) => ({ ...prev, designation: e.target.value }))}
+                            />
+                          ) : (
+                            selectedCardholderForDetails.designation || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>
+                          )}
+                        </td>
                       </tr>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Unique Key / ID</td>
-                        <td style={{ padding: '10px 16px', fontFamily: 'monospace' }}>{selectedCardholderForDetails.uniqueKey || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>}</td>
+                        <td style={{ padding: '10px 16px', fontFamily: 'monospace' }}>
+                          {isEditingDetail ? (
+                            <input 
+                              type="text" 
+                              className="form-input" 
+                              style={{ padding: '4px 8px', fontSize: '0.85rem', width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                              value={selectedCardholderForDetails.uniqueKey || ''} 
+                              onChange={e => setSelectedCardholderForDetails((prev: any) => ({ ...prev, uniqueKey: e.target.value }))}
+                            />
+                          ) : (
+                            selectedCardholderForDetails.uniqueKey || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>
+                          )}
+                        </td>
                       </tr>
                       <tr style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                         <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>Photo Filename (sanitized)</td>
@@ -1265,7 +1326,23 @@ export default function OrdersPage() {
                                 <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Image Asset</span>
                               </div>
                             ) : (
-                              String(val || '') || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>
+                              isEditingDetail ? (
+                                <input 
+                                  type="text" 
+                                  className="form-input" 
+                                  style={{ padding: '4px 8px', fontSize: '0.85rem', width: '100%', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: '4px' }}
+                                  value={String(val || '')} 
+                                  onChange={e => {
+                                    const newVal = e.target.value;
+                                    setSelectedCardholderForDetails((prev: any) => {
+                                      const updatedCustom = { ...prev.customFields, [key]: newVal };
+                                      return { ...prev, customFields: updatedCustom };
+                                    });
+                                  }}
+                                />
+                              ) : (
+                                String(val || '') || <em style={{ color: 'rgba(255,255,255,0.3)' }}>empty</em>
+                              )
                             )}
                           </td>
                         </tr>
@@ -1285,16 +1362,51 @@ export default function OrdersPage() {
               background: 'rgba(255,255,255,0.02)',
               gap: '12px'
             }}>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setSelectedCardholderForDetails(null);
-                  setDetailsPreviewSide('front');
-                }}
-              >
-                Close Details
-              </button>
+              {isEditingDetail ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      if (selectedCardholderIndexForDetails !== null) {
+                        setSelectedCardholderForDetails(parsedCardholders[selectedCardholderIndexForDetails]);
+                      }
+                      setIsEditingDetail(false);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleSaveCardholderEdit}
+                  >
+                    Save Changes
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ border: '1px solid rgba(255, 255, 255, 0.15)', background: 'transparent' }}
+                    onClick={() => setIsEditingDetail(true)}
+                  >
+                    Edit Profile Details
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      setSelectedCardholderForDetails(null);
+                      setSelectedCardholderIndexForDetails(null);
+                      setDetailsPreviewSide('front');
+                    }}
+                  >
+                    Close Details
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
