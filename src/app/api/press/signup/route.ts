@@ -59,7 +59,7 @@ export async function POST(request: Request) {
           city,
           plan: 'BASIC',
           isActive: true,
-          credits: 200,
+          credits: 500,
           trialEndsAt: null,
         },
       });
