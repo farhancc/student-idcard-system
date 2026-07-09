@@ -123,21 +123,44 @@ export async function GET(request: Request) {
       },
     });
 
-    // ── Monthly production trend (last 6 months) ──────────────────────────────
+    // ── Monthly production and financial trend (last 6 months) ──────────────────
 
     const monthlyTrend: { month: string; cards: number }[] = [];
+    const financialTrend: { month: string; invoiced: number; paid: number; pending: number; cards: number }[] = [];
+
     for (let i = 5; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      
       const jobs = await prisma.pdfJob.findMany({
         where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: start, lt: end } },
         include: { order: { include: { _count: { select: { cardholders: true } } } } },
       });
+      
       const cards = jobs.reduce((acc: number, job: any) => {
         return acc + (job.order?._count?.cardholders || 0);
       }, 0);
+
       monthlyTrend.push({
         month: start.toLocaleString('default', { month: 'short' }),
+        cards,
+      });
+
+      // Fetch financial invoices for this specific month range
+      const invoices = await prisma.orderInvoice.findMany({
+        where: { pressId, createdAt: { gte: start, lt: end } },
+        select: { totalAmount: true, paidAmount: true }
+      });
+
+      const invoiced = invoices.reduce((acc: number, inv: any) => acc + Number(inv.totalAmount || 0), 0);
+      const paid = invoices.reduce((acc: number, inv: any) => acc + Number(inv.paidAmount || 0), 0);
+      const pending = Math.max(0, invoiced - paid);
+
+      financialTrend.push({
+        month: start.toLocaleString('default', { month: 'long', year: 'numeric' }),
+        invoiced,
+        paid,
+        pending,
         cards,
       });
     }
@@ -182,6 +205,7 @@ export async function GET(request: Request) {
         cardCount: o._count.cardholders,
       })),
       monthlyTrend,
+      financialTrend,
     });
   } catch (error) {
     console.error('Fetch analytics summary error:', error);

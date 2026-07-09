@@ -95,6 +95,14 @@ interface AnalyticsMonthlyTrend {
   cards: number;
 }
 
+interface AnalyticsFinancialTrend {
+  month: string;
+  invoiced: number;
+  paid: number;
+  pending: number;
+  cards: number;
+}
+
 interface AnalyticsData {
   success: boolean;
   summary: AnalyticsSummary;
@@ -103,6 +111,7 @@ interface AnalyticsData {
   recentJobs: AnalyticsJob[];
   recentOrders: AnalyticsOrder[];
   monthlyTrend: AnalyticsMonthlyTrend[];
+  financialTrend: AnalyticsFinancialTrend[];
 }
 
 function MiniBarChart({ data }: { data: { month: string; cards: number }[] }) {
@@ -227,12 +236,18 @@ export default function DashboardPage() {
   const recentJobs: any[] = data?.recentJobs || [];
   const recentOrders: any[] = data?.recentOrders || [];
   const monthlyTrend: any[] = data?.monthlyTrend || [];
+  const financialTrend: any[] = data?.financialTrend || [];
 
   const cardsLastMonth = s.cardsLastMonth || 0;
   const cardsGenerated = s.cardsGenerated || 0;
   const cardChange = cardsLastMonth > 0
     ? `${cardsGenerated >= cardsLastMonth ? '+' : ''}${Math.round(((cardsGenerated - cardsLastMonth) / cardsLastMonth) * 100)}% vs last month`
     : 'No prior month data';
+
+  const totalInvoiced = financialTrend.reduce((acc, curr) => acc + (curr.invoiced || 0), 0);
+  const totalPaid = financialTrend.reduce((acc, curr) => acc + (curr.paid || 0), 0);
+  const totalPending = financialTrend.reduce((acc, curr) => acc + (curr.pending || 0), 0);
+  const overallCollectionRate = totalInvoiced > 0 ? Math.round((totalPaid / totalInvoiced) * 100) : 0;
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: '100px 0' }}>
@@ -284,6 +299,137 @@ export default function DashboardPage() {
           sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
           color="#a855f7"
         />
+      </div>
+
+      {/* Monthly Financial Ledger & Cost Analytics */}
+      <div className="glass-panel" style={{ marginBottom: '28px', padding: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>
+              <BarChart2 size={20} color="var(--primary)" /> Monthly Financial Performance & Cost Ledger
+            </h3>
+            <p style={{ color: 'var(--muted)', fontSize: '0.78rem', margin: '4px 0 0 0' }}>Multi-month billing, collections, and production cost volume metrics.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '0.65rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Overall Collection Rate</div>
+              <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#10b981' }}>{overallCollectionRate}%</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Financial KPI sub-row */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '16px',
+          padding: '16px',
+          borderRadius: '12px',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255,255,255,0.04)',
+          marginBottom: '20px'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Gross Invoiced (6M)</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '4px', color: '#fff' }}>Rs. {totalInvoiced.toLocaleString('en-IN')}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Received Collections</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '4px', color: '#10b981' }}>Rs. {totalPaid.toLocaleString('en-IN')}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Outstanding</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '4px', color: '#f59e0b' }}>Rs. {totalPending.toLocaleString('en-IN')}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', fontWeight: 600 }}>Total Cards (6M)</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '4px', color: '#0ea5e9' }}>
+              {financialTrend.reduce((acc, curr) => acc + (curr.cards || 0), 0).toLocaleString('en-IN')} units
+            </div>
+          </div>
+        </div>
+
+        {/* Detailed Table */}
+        <div className="table-container" style={{ margin: 0 }}>
+          <table className="custom-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th style={{ textAlign: 'center' }}>Cards Produced</th>
+                <th style={{ textAlign: 'right' }}>Gross Invoiced</th>
+                <th style={{ textAlign: 'right' }}>Collected (Paid)</th>
+                <th style={{ textAlign: 'right' }}>Outstanding (Pending)</th>
+                <th style={{ width: '150px' }}>Settlement %</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {financialTrend.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'center', color: 'var(--muted)', padding: '24px 0' }}>No financial history available yet.</td>
+                </tr>
+              ) : (
+                financialTrend.map((t, idx) => {
+                  const pct = t.invoiced > 0 ? Math.round((t.paid / t.invoiced) * 100) : 0;
+                  
+                  let statusLabel = 'No Invoices';
+                  let badgeBg = 'rgba(255,255,255,0.05)';
+                  let badgeColor = 'var(--muted)';
+                  
+                  if (t.invoiced > 0) {
+                    if (t.pending === 0) {
+                      statusLabel = 'Fully Settled';
+                      badgeBg = 'rgba(16,185,129,0.15)';
+                      badgeColor = '#10b981';
+                    } else if (t.paid > 0) {
+                      statusLabel = 'Partially Paid';
+                      badgeBg = 'rgba(99,102,241,0.15)';
+                      badgeColor = '#6366f1';
+                    } else {
+                      statusLabel = 'Unpaid';
+                      badgeBg = 'rgba(239,68,68,0.15)';
+                      badgeColor = '#ef4444';
+                    }
+                  }
+
+                  return (
+                    <tr key={idx}>
+                      <td style={{ fontWeight: '600' }}>{t.month}</td>
+                      <td style={{ textAlign: 'center', fontWeight: '500' }}>{t.cards}</td>
+                      <td style={{ textAlign: 'right', fontWeight: '500', color: '#fff' }}>Rs. {t.invoiced.toLocaleString('en-IN')}</td>
+                      <td style={{ textAlign: 'right', fontWeight: '500', color: '#10b981' }}>Rs. {t.paid.toLocaleString('en-IN')}</td>
+                      <td style={{ textAlign: 'right', fontWeight: '500', color: t.pending > 0 ? '#f59e0b' : 'var(--muted)' }}>
+                        Rs. {t.pending.toLocaleString('en-IN')}
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#10b981' : 'var(--primary-gradient)', borderRadius: '3px' }} />
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--muted)', minWidth: '28px', textAlign: 'right' }}>{pct}%</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{
+                          display: 'inline-block',
+                          padding: '3px 8px',
+                          borderRadius: '12px',
+                          background: badgeBg,
+                          color: badgeColor,
+                          fontSize: '0.68rem',
+                          fontWeight: '600',
+                          border: `1px solid ${badgeColor}30`
+                        }}>
+                          {statusLabel}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Main grid */}
