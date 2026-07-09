@@ -147,6 +147,75 @@ function timeAgo(date: string) {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+function GettingStartedSection() {
+  return (
+    <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', maxWidth: '800px', margin: '20px auto 40px auto' }}>
+      <div style={{
+        display: 'inline-flex', width: '64px', height: '64px', borderRadius: '50%',
+        background: 'rgba(99,102,241,0.15)', color: '#6366f1', alignItems: 'center', justifyContent: 'center',
+        marginBottom: '24px', border: '1px solid rgba(99,102,241,0.3)'
+      }}>
+        <Zap size={32} style={{ animation: 'pulse 2s infinite' }} />
+      </div>
+      <h2 style={{ fontSize: '1.75rem', fontWeight: '700', marginBottom: '12px' }}>Welcome to your IDexo Press Portal!</h2>
+      <p style={{ color: 'var(--muted)', fontSize: '0.95rem', maxWidth: '580px', margin: '0 auto 32px auto', lineHeight: '1.6' }}>
+        You're just a few steps away from printing high-fidelity student ID cards. Follow this quick setup guide to get started.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', textAlign: 'left', marginBottom: '32px' }}>
+        {/* Step 1 */}
+        <div style={{ padding: '24px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '20px', background: 'rgba(99,102,241,0.2)', color: '#6366f1', fontWeight: '700' }}>STEP 1</span>
+            <Users size={16} color="var(--muted)" />
+          </div>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: '600' }}>Add a Client</h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
+            Register the schools, colleges, or organizations you'll be printing ID cards for.
+          </p>
+          <a href="/dashboard/clients" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+            Go to Clients <ArrowRight size={12} style={{ marginLeft: '6px' }} />
+          </a>
+        </div>
+
+        {/* Step 2 */}
+        <div style={{ padding: '24px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '20px', background: 'rgba(14,165,233,0.2)', color: '#0ea5e9', fontWeight: '700' }}>STEP 2</span>
+            <Layers size={16} color="var(--muted)" />
+          </div>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: '600' }}>Create a Template</h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
+            Set up the card layouts, dimensions (vertical/horizontal), background graphics, and dynamic text fields.
+          </p>
+          <a href="/dashboard/templates" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+            Design Template <ArrowRight size={12} style={{ marginLeft: '6px' }} />
+          </a>
+        </div>
+
+        {/* Step 3 */}
+        <div style={{ padding: '24px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '20px', background: 'rgba(16,185,129,0.2)', color: '#10b981', fontWeight: '700' }}>STEP 3</span>
+            <PlusCircle size={16} color="var(--muted)" />
+          </div>
+          <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: '600' }}>Launch an Order</h4>
+          <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
+            Upload student records (names, photos, designations) and generate high-fidelity print-ready PDFs.
+          </p>
+          <a href="/dashboard/orders" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+            Create First Order <ArrowRight size={12} style={{ marginLeft: '6px' }} />
+          </a>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+        <Clock size={14} /> Need test data? Run a mock production job to automatically populate your dashboard charts!
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { toast } = useToast();
   const [data, setData] = useState<AnalyticsData | null>(null);
@@ -249,6 +318,8 @@ export default function DashboardPage() {
   const totalPending = financialTrend.reduce((acc, curr) => acc + (curr.pending || 0), 0);
   const overallCollectionRate = totalInvoiced > 0 ? Math.round((totalPaid / totalInvoiced) * 100) : 0;
 
+  const isNewTenant = (s.totalCardholders ?? 0) === 0 && (s.ordersThisMonth ?? 0) === 0 && (s.cardsGenerated ?? 0) === 0 && (s.revenueThisMonth ?? 0) === 0;
+
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: '100px 0' }}>
       <div className="spinner" />
@@ -301,8 +372,12 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Monthly Financial Ledger & Cost Analytics */}
-      <div className="glass-panel" style={{ marginBottom: '28px', padding: '24px' }}>
+      {isNewTenant ? (
+        <GettingStartedSection />
+      ) : (
+        <>
+          {/* Monthly Financial Ledger & Cost Analytics */}
+          <div className="glass-panel" style={{ marginBottom: '28px', padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>
@@ -654,6 +729,8 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+    </>
+  )}
 
       <style>{`
         @keyframes pulse {
