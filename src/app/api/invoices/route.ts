@@ -32,9 +32,20 @@ export async function GET(request: Request) {
 export async function PUT(request: Request) {
   try {
     const pressIdStr = request.headers.get('x-press-id');
+    const userRole   = request.headers.get('x-user-role');
+
     if (!pressIdStr) {
       return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
     }
+
+    // Only OWNER can modify invoice details
+    if (userRole !== 'OWNER') {
+      return NextResponse.json(
+        { error: 'Forbidden: Only the Press Owner can edit invoice details' },
+        { status: 403 }
+      );
+    }
+
     const pressId = Number(pressIdStr);
 
     const { id, pricePerCard, cardCount, taxPercent, paymentStatus, paymentMethod, notes } = await request.json();

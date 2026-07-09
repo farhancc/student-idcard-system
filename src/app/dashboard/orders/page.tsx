@@ -11,6 +11,8 @@ export default function OrdersPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState('OWNER');
+  const isOwner = role === 'OWNER';
 
   // Form toggling
   const [showForm, setShowForm] = useState(false);
@@ -116,6 +118,12 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchData();
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/me');
+        if (res.ok) { const j = await res.json(); if (j.user?.role) setRole(j.user.role); }
+      } catch { /* silent */ }
+    })();
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -979,15 +987,19 @@ export default function OrdersPage() {
                   </select>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Price Per Card (Rs)</label>
-                  <input type="number" required className="form-input" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
-                </div>
+                {isOwner && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Price Per Card (Rs)</label>
+                      <input type="number" required className="form-input" value={pricePerCard} onChange={e => setPricePerCard(e.target.value)} />
+                    </div>
 
-                <div className="form-group">
-                  <label className="form-label">GST / Tax Percent (%)</label>
-                  <input type="number" required className="form-input" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} />
-                </div>
+                    <div className="form-group">
+                      <label className="form-label">GST / Tax Percent (%)</label>
+                      <input type="number" required className="form-input" value={taxPercent} onChange={e => setTaxPercent(e.target.value)} />
+                    </div>
+                  </>
+                )}
 
                 {orderMethod === 'standard' && (
                   <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -1089,8 +1101,12 @@ export default function OrdersPage() {
                 <th>Template</th>
                 <th>Validity till</th>
                 <th>Total Cardholders</th>
-                <th>Payment</th>
-                <th>Invoice total</th>
+                {isOwner && (
+                  <>
+                    <th>Payment</th>
+                    <th>Invoice total</th>
+                  </>
+                )}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -1119,8 +1135,12 @@ export default function OrdersPage() {
                       </div>
                     </td>
                     <td>{cardholderCount} cards</td>
-                    <td>{paymentStatus}</td>
-                    <td>{totalInvoiceAmount}</td>
+                    {isOwner && (
+                      <>
+                        <td>{paymentStatus}</td>
+                        <td>{totalInvoiceAmount}</td>
+                      </>
+                    )}
                     <td>
                       <a href={`/dashboard/orders/${ord.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }}>
                         <FolderOpen size={12} /> Open Pipeline

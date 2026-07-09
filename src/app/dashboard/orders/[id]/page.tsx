@@ -100,6 +100,19 @@ export default function OrderDetailsPage() {
   const [notes, setNotes] = useState<OrderNote[]>([]);
   const [noteContent, setNoteContent] = useState('');
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState('OWNER');
+
+  // Fetch role
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/me');
+        if (res.ok) { const j = await res.json(); if (j.user?.role) setRole(j.user.role); }
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  const isOwner = role === 'OWNER';
 
   // Status transitions
   const [transitioning, setTransitioning] = useState(false);
@@ -376,7 +389,7 @@ export default function OrderDetailsPage() {
         await handleCompilePdf('APPROVAL');
       } else if (newStatus === 'PRINTING') {
         await handleCompilePdf('PRODUCTION');
-      } else if (newStatus === 'DELIVERED') {
+      } else if (newStatus === 'DELIVERED' && isOwner) {
         await handleCompilePdf('INVOICE');
       }
     } catch (err: any) {
@@ -643,9 +656,12 @@ export default function OrderDetailsPage() {
             actionDescription = 'This will compile the CMYK print grids on A3 layout sheets and lock printing credits.';
             break;
           case 'PRINTING':
-            nextActionLabel = 'Mark as Delivered';
-            nextStatus = 'DELIVERED';
-            actionDescription = 'The cards have been printed and delivered. This will generate the invoice PDF.';
+            if (isOwner) {
+              nextActionLabel = 'Mark as Delivered';
+              nextStatus = 'DELIVERED';
+              actionDescription = 'The cards have been printed and delivered. This will generate the invoice PDF.';
+            }
+            // OPERATOR cannot advance to DELIVERED — no nextStatus set
             break;
           case 'DELIVERED':
             break;
@@ -756,14 +772,14 @@ export default function OrderDetailsPage() {
                     <option value="APPROVAL_PDF_SENT">2. Approval Sent</option>
                     <option value="APPROVED">3. Approved layout</option>
                     <option value="PRINTING">4. Printing Press</option>
-                    <option value="DELIVERED">5. Delivered</option>
+                    {isOwner && <option value="DELIVERED">5. Delivered</option>}
                   </select>
                 </div>
               </div>
             </div>
 
             {/* Display status indicators for active jobs if compiling */}
-            {(getLatestJob('APPROVAL') || getLatestJob('PRODUCTION') || getLatestJob('INVOICE') || getLatestJob('INDIVIDUAL')) && (
+            {(getLatestJob('APPROVAL') || getLatestJob('PRODUCTION') || (isOwner && getLatestJob('INVOICE')) || getLatestJob('INDIVIDUAL')) && (
               <div style={{ 
                 marginTop: '20px', 
                 paddingTop: '20px', 
@@ -794,7 +810,7 @@ export default function OrderDetailsPage() {
                       {renderJobStatus('INDIVIDUAL')}
                     </div>
                   )}
-                  {getLatestJob('INVOICE') && (
+                  {isOwner && getLatestJob('INVOICE') && (
                     <div style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
                       <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>Invoice Receipt</div>
                       {renderJobStatus('INVOICE')}
@@ -972,123 +988,125 @@ export default function OrderDetailsPage() {
         {/* Right Column: Billing Invoice & Discussion Notes */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           {/* Invoice Summary */}
-          <div className="glass-panel">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
-                <CreditCard size={18} color="var(--info)" /> Billing Invoice
-              </h3>
-              {order?.invoice && (
-                <button
-                  className="btn btn-secondary"
-                  style={{ padding: '5px 12px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-                  onClick={handleOpenInvoiceEdit}
-                >
-                  <Edit size={12} /> Edit
-                </button>
-              )}
-            </div>
-            {order?.invoice ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.875rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted)' }}>Cards Quantity:</span>
-                  <span style={{ fontWeight: '600' }}>{order?.invoice?.cardCount} cards</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted)' }}>Price Per Card:</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.pricePerCard).toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                  <span style={{ color: 'var(--muted)' }}>Subtotal:</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.subtotal).toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: 'var(--muted)' }}>GST/Tax ({order?.invoice?.taxPercent}%):</span>
-                  <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.taxAmount).toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                  <span style={{ fontWeight: '600' }}>Total Bill:</span>
-                  <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--info)' }}>Rs. {Number(order?.invoice?.totalAmount).toFixed(2)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--muted)' }}>Status:</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {order?.invoice?.paymentStatus === 'PAID' ? (
-                      <>
-                        <span className="badge badge-success">Paid ({order?.invoice?.paymentMethod})</span>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                          disabled={transitioning}
-                          onClick={async () => {
-                            setTransitioning(true);
-                            try {
-                              const res = await fetch(`/api/orders/${orderId}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ paymentStatus: 'UNPAID' }),
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
-                              fetchData();
-                            } catch (err: any) {
-                              toast(err.message || 'Error updating payment status', 'error');
-                            } finally {
-                              setTransitioning(false);
-                            }
-                          }}
-                        >
-                          Mark Unpaid
-                        </button>
-                      </>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span className="badge badge-danger">Unpaid</span>
-                        <select
-                          id="paymentMethodSelect"
-                          className="form-select"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}
-                          defaultValue="CASH"
-                        >
-                          <option value="CASH">Cash</option>
-                          <option value="UPI">UPI</option>
-                          <option value="BANK_TRANSFER">Bank Transfer</option>
-                          <option value="CHEQUE">Cheque</option>
-                        </select>
-                        <button
-                          className="btn btn-primary"
-                          style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                          disabled={transitioning}
-                          onClick={async () => {
-                            const selectEl = document.getElementById('paymentMethodSelect') as HTMLSelectElement;
-                            const method = selectEl ? selectEl.value : 'CASH';
-                            setTransitioning(true);
-                            try {
-                              const res = await fetch(`/api/orders/${orderId}`, {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ paymentStatus: 'PAID', paymentMethod: method }),
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
-                              fetchData();
-                            } catch (err: any) {
-                              toast(err.message || 'Error updating payment status', 'error');
-                            } finally {
-                              setTransitioning(false);
-                            }
-                          }}
-                        >
-                          Mark Paid
-                        </button>
-                      </div>
-                    )}
+          {isOwner && (
+            <div className="glass-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                  <CreditCard size={18} color="var(--info)" /> Billing Invoice
+                </h3>
+                {order?.invoice && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ padding: '5px 12px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                    onClick={handleOpenInvoiceEdit}
+                  >
+                    <Edit size={12} /> Edit
+                  </button>
+                )}
+              </div>
+              {order?.invoice ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.875rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--muted)' }}>Cards Quantity:</span>
+                    <span style={{ fontWeight: '600' }}>{order?.invoice?.cardCount} cards</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--muted)' }}>Price Per Card:</span>
+                    <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.pricePerCard).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '10px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ color: 'var(--muted)' }}>Subtotal:</span>
+                    <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.subtotal).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--muted)' }}>GST/Tax ({order?.invoice?.taxPercent}%):</span>
+                    <span style={{ fontWeight: '600' }}>Rs. {Number(order?.invoice?.taxAmount).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderTop: '1px solid rgba(255,255,255,0.08)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                    <span style={{ fontWeight: '600' }}>Total Bill:</span>
+                    <span style={{ fontWeight: '700', fontSize: '1.05rem', color: 'var(--info)' }}>Rs. {Number(order?.invoice?.totalAmount).toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--muted)' }}>Status:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {order?.invoice?.paymentStatus === 'PAID' ? (
+                        <>
+                          <span className="badge badge-success">Paid ({order?.invoice?.paymentMethod})</span>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            disabled={transitioning}
+                            onClick={async () => {
+                              setTransitioning(true);
+                              try {
+                                const res = await fetch(`/api/orders/${orderId}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ paymentStatus: 'UNPAID' }),
+                                });
+                                const data = await res.json();
+                                if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
+                                fetchData();
+                              } catch (err: any) {
+                                toast(err.message || 'Error updating payment status', 'error');
+                              } finally {
+                                setTransitioning(false);
+                              }
+                            }}
+                          >
+                            Mark Unpaid
+                          </button>
+                        </>
+                      ) : (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="badge badge-danger">Unpaid</span>
+                          <select
+                            id="paymentMethodSelect"
+                            className="form-select"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)' }}
+                            defaultValue="CASH"
+                          >
+                            <option value="CASH">Cash</option>
+                            <option value="UPI">UPI</option>
+                            <option value="BANK_TRANSFER">Bank Transfer</option>
+                            <option value="CHEQUE">Cheque</option>
+                          </select>
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                            disabled={transitioning}
+                            onClick={async () => {
+                              const selectEl = document.getElementById('paymentMethodSelect') as HTMLSelectElement;
+                              const method = selectEl ? selectEl.value : 'CASH';
+                              setTransitioning(true);
+                              try {
+                                const res = await fetch(`/api/orders/${orderId}`, {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ paymentStatus: 'PAID', paymentMethod: method }),
+                                });
+                                const data = await res.json();
+                                if (!res.ok) throw new Error(data.error || 'Failed to update payment status');
+                                fetchData();
+                              } catch (err: any) {
+                                toast(err.message || 'Error updating payment status', 'error');
+                              } finally {
+                                setTransitioning(false);
+                              }
+                            }}
+                          >
+                            Mark Paid
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : (
-              <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>No invoice found.</span>
-            )}
-          </div>
+              ) : (
+                <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>No invoice found.</span>
+              )}
+            </div>
+          )}
 
           {/* Notes section */}
           <div className="glass-panel">
@@ -1209,7 +1227,7 @@ export default function OrderDetailsPage() {
       )}
 
       {/* Invoice Edit Modal */}
-      {showInvoiceEdit && (
+      {isOwner && showInvoiceEdit && (
         <div
           onClick={() => setShowInvoiceEdit(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(3,4,7,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}

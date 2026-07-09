@@ -80,6 +80,7 @@ export async function PUT(
     const pressId = Number(pressIdStr);
     const userId = Number(userIdStr);
     const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
+    const userRole = request.headers.get('x-user-role');
     const { id } = await params;
     const orderId = Number(id);
 
@@ -95,6 +96,23 @@ export async function PUT(
       return NextResponse.json({ error: message }, { status: 400 });
     }
     const { status, notes, validTill, deliveredTo, deliveredBy, deliveryRemarks, paymentStatus, paymentMethod } = parsed.data;
+
+    // OPERATOR cannot mark as DELIVERED (which triggers invoice generation)
+    // or touch payment status
+    if (userRole === 'OPERATOR') {
+      if (status === 'DELIVERED') {
+        return NextResponse.json(
+          { error: 'Forbidden: Only the Press Owner can mark an order as Delivered and generate invoices' },
+          { status: 403 }
+        );
+      }
+      if (paymentStatus) {
+        return NextResponse.json(
+          { error: 'Forbidden: Only the Press Owner can update payment status' },
+          { status: 403 }
+        );
+      }
+    }
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: orderId, pressId },
