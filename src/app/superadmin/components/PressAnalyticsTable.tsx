@@ -28,18 +28,59 @@ function Spark({ data, color }: { data: number[]; color: string }) {
 
 // 6 tiny month bars
 function MonthBars({ data, color }: { data: Record<string, number>; color: string }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const vals = Object.values(data);
+  const keys = Object.keys(data);
   const max = Math.max(...vals, 1);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 28, width: 72 }}>
       {vals.map((v, i) => {
         const barHeight = Math.max((v / max) * 24, 2);
+        const isHovered = hoveredIdx === i;
+        const key = keys[i];
+        const [, m] = key.split('-');
+        const monthName = new Date(0, parseInt(m) - 1).toLocaleString('default', { month: 'short' });
         return (
-          <div key={i} style={{
-            flex: 1, background: color, borderRadius: '2px 2px 0 0',
-            height: `${barHeight}px`, opacity: 0.7,
-            boxShadow: v > 0 ? `0 0 4px ${color}` : 'none',
-          }} />
+          <div
+            key={i}
+            onMouseEnter={() => setHoveredIdx(i)}
+            onMouseLeave={() => setHoveredIdx(null)}
+            style={{
+              flex: 1,
+              position: 'relative',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'flex-end'
+            }}
+          >
+            <div style={{
+              width: '100%', background: color, borderRadius: '2px 2px 0 0',
+              height: `${barHeight}px`, opacity: isHovered ? 0.95 : 0.7,
+              boxShadow: v > 0 ? (isHovered ? `0 0 6px ${color}` : `0 0 4px ${color}88`) : 'none',
+              cursor: 'pointer'
+            }} />
+            {isHovered && (
+              <div style={{
+                position: 'absolute',
+                bottom: `${barHeight + 6}px`,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: '#0f172a',
+                border: '1px solid rgba(255,255,255,0.15)',
+                borderRadius: '3px',
+                padding: '2px 5px',
+                fontSize: '0.55rem',
+                color: '#f1f5f9',
+                whiteSpace: 'nowrap',
+                zIndex: 20,
+                boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                pointerEvents: 'none',
+                fontWeight: 700
+              }}>
+                {monthName}: {v.toLocaleString()}
+              </div>
+            )}
+          </div>
         );
       })}
     </div>

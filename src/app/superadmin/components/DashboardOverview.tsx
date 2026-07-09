@@ -79,27 +79,67 @@ function Sparkline({ values, color }: { values: number[]; color: string }) {
 function BarChart({ data, color, label }: {
   data: Record<string, number>; color: string; label: string;
 }) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const entries = Object.entries(data);
   const max = Math.max(...entries.map(([, v]) => v), 1);
+  const isRevenue = label.toLowerCase().includes('revenue') || label.toLowerCase().includes('rs.');
+
   return (
     <div style={{ width: '100%' }}>
       <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 60 }}>
-        {entries.map(([month, val]) => {
+        {entries.map(([month, val], idx) => {
           const barHeight = Math.max((val / max) * 40, 3); // Max bar height of 40px, min 3px
           const [, m] = month.split('-');
           const monthName = new Date(0, parseInt(m) - 1).toLocaleString('default', { month: 'short' });
+          const isHovered = hoveredIdx === idx;
+
           return (
-            <div key={month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+            <div 
+              key={month} 
+              onMouseEnter={() => setHoveredIdx(idx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              style={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'flex-end', 
+                height: '100%',
+                position: 'relative',
+                cursor: 'pointer'
+              }}
+            >
+              {isHovered && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: `${barHeight + 20}px`,
+                    background: '#0f172a',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    borderRadius: '4px',
+                    padding: '4px 8px',
+                    fontSize: '0.65rem',
+                    color: '#f1f5f9',
+                    whiteSpace: 'nowrap',
+                    zIndex: 10,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                    pointerEvents: 'none',
+                    fontWeight: 700
+                  }}
+                >
+                  {monthName}: {isRevenue ? `Rs. ${val.toLocaleString()}` : val.toLocaleString()}
+                </div>
+              )}
               <div
                 style={{
                   width: '100%', background: color, borderRadius: '3px 3px 0 0',
-                  height: `${barHeight}px`, opacity: 0.75,
-                  transition: 'height 0.6s ease',
-                  boxShadow: val > 0 ? `0 0 6px ${color}55` : 'none'
+                  height: `${barHeight}px`, opacity: isHovered ? 0.95 : 0.75,
+                  transition: 'height 0.6s ease, opacity 0.15s ease',
+                  boxShadow: val > 0 ? (isHovered ? `0 0 10px ${color}` : `0 0 6px ${color}55`) : 'none'
                 }}
               />
-              <span style={{ fontSize: '0.55rem', color: '#475569', marginTop: 4, display: 'block', lineHeight: 1 }}>{monthName}</span>
+              <span style={{ fontSize: '0.55rem', color: isHovered ? '#cbd5e1' : '#475569', marginTop: 4, display: 'block', lineHeight: 1, fontWeight: isHovered ? 600 : 400 }}>{monthName}</span>
             </div>
           );
         })}
