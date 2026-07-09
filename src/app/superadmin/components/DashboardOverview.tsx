@@ -285,9 +285,10 @@ export default function DashboardOverview() {
           color="#8b5cf6" bg="rgba(139,92,246,0.15)"
           sparkValues={cardValues}
         />
-        <KpiCard icon={<DollarSign size={18} />} label="Total Revenue" value={`Rs. ${k?.totalRevenue?.toLocaleString(undefined, { maximumFractionDigits: 0 }) ?? '0'}`}
+        <KpiCard icon={<DollarSign size={18} />} label="Platform Revenue" value={`Rs. ${k?.totalRevenue?.toLocaleString(undefined, { maximumFractionDigits: 0 }) ?? '0'}`}
           color="#f59e0b" bg="rgba(245,158,11,0.15)"
           sparkValues={revValues}
+          sub="calculated from credit rates"
         />
         <KpiCard icon={<Package size={18} />} label="Total Orders" value={k?.totalOrders ?? '—'}
           color="#34d399" bg="rgba(52,211,153,0.15)"
