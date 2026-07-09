@@ -5,8 +5,22 @@ export async function GET() {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-    // ── Platform-wide KPIs (all parallel) ──────────────────────────
+    // ── Helper: build empty 6-month keys ──────────────────────────
+    const buildMonthKeys = (): string[] => {
+      const keys: string[] = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        keys.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+      }
+      return keys;
+    };
+    const monthKeys = buildMonthKeys();
+    const emptyMonths = (): Record<string, number> =>
+      Object.fromEntries(monthKeys.map((k) => [k, 0]));
+
+    // ── Platform-wide KPIs (parallel) ────────────────────────────
     const [
       totalPresses,
       activePresses,
@@ -20,10 +34,9 @@ export async function GET() {
       newPressesThisMonth,
       newOrdersThisMonth,
       totalCardholders,
+      creditAgg,
       recentLogs,
       recentCreditRequests,
-      creditAgg,
-      invoices,
     ] = await Promise.all([
       prisma.press.count(),
       prisma.press.count({ where: { isActive: true } }),
@@ -37,17 +50,13 @@ export async function GET() {
       prisma.press.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.cardOrder.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.cardholder.count(),
+      prisma.press.aggregate({ _sum: { credits: true } }),
       (prisma as any).systemAuditLog.findMany({
         orderBy: { createdAt: 'desc' },
         take: 8,
         select: {
-          id: true,
-          action: true,
-          category: true,
-          severity: true,
-          createdAt: true,
-          description: true,
-          actorName: true,
+          id: true, action: true, category: true, severity: true,
+          createdAt: true, description: true, actorName: true,
         },
       }),
       prisma.creditRequest.findMany({
@@ -55,117 +64,163 @@ export async function GET() {
         take: 5,
         include: { press: { select: { name: true, credits: true } } },
       }),
-      prisma.press.aggregate({ _sum: { credits: true } }),
-      prisma.orderInvoice.findMany({
-        select: { totalAmount: true, createdAt: true },
-      }),
     ]);
 
-    // ── Revenue aggregation ─────────────────────────────────────────
-    const totalRevenue = invoices.reduce(
-      (sum: number, inv: { totalAmount: any }) => sum + Number(inv.totalAmount),
-      0
+    // ── All invoices (for revenue) ────────────────────────────────
+    const allInvoices = await prisma.orderInvoice.findMany({
+      select: { pressId: true, totalAmount: true, createdAt: true },
+    });
+
+    const totalRevenue = allInvoices.reduce(
+      (s, inv) => s + Number(inv.totalAmount), 0
     );
 
-    // Revenue by month (last 6 months)
-    const monthlyRevenue: Record<string, number> = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthlyRevenue[key] = 0;
-    }
-    invoices.forEach((inv: { totalAmount: any; createdAt: Date }) => {
-      const d = new Date(inv.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (key in monthlyRevenue) {
-        monthlyRevenue[key] += Number(inv.totalAmount);
-      }
+    // ── All PdfJobs with creditsLocked > 0 (credit usage) ─────────
+    const allJobs = await prisma.pdfJob.findMany({
+      where: { creditsLocked: { gt: 0 }, generatedAt: { gte: sixMonthsAgo } },
+      select: { pressId: true, creditsLocked: true, generatedAt: true },
     });
 
-    // ── Monthly cardholders (last 6 months) ────────────────────────
-    const monthlyCards: Record<string, number> = {};
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthlyCards[key] = 0;
-    }
-    // Fetch cardholders in the last 6-month window
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const recentCardholders = await prisma.cardholder.findMany({
-      where: { createdAt: { gte: sixMonthsAgo } },
-      select: { createdAt: true },
-    });
-    recentCardholders.forEach((ch: { createdAt: Date }) => {
-      const d = new Date(ch.createdAt);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (key in monthlyCards) {
-        monthlyCards[key] = (monthlyCards[key] || 0) + 1;
-      }
-    });
-
-    // ── Top 5 presses by cards printed ────────────────────────────
-    const allPresses = await prisma.press.findMany({
-      include: {
-        clients: {
-          include: {
-            orders: {
-              include: {
-                _count: { select: { cardholders: true } },
-                invoice: { select: { totalAmount: true } },
-              },
-            },
-          },
-        },
+    // ── All OrderCardholders in last 6 months (cards per press) ──
+    const recentOrderCards = await prisma.orderCardholder.findMany({
+      where: { addedAt: { gte: sixMonthsAgo } },
+      select: {
+        addedAt: true,
+        order: { select: { pressId: true } },
       },
     });
 
-    const topPresses = allPresses
-      .map((p) => {
-        let cards = 0;
-        let revenue = 0;
-        p.clients.forEach((c: any) =>
-          c.orders.forEach((o: any) => {
-            cards += o._count?.cardholders || 0;
-            revenue += Number(o.invoice?.totalAmount || 0);
-          })
-        );
-        return {
+    // ── All invoices in last 6 months (for monthly revenue) ───────
+    const recentInvoices = allInvoices.filter(
+      (inv) => new Date(inv.createdAt) >= sixMonthsAgo
+    );
+
+    // ── All presses (for per-press breakdown) ─────────────────────
+    const allPresses = await prisma.press.findMany({
+      select: { id: true, name: true, plan: true, isActive: true, credits: true },
+    });
+
+    // ── Build per-press stats ─────────────────────────────────────
+    interface PressStat {
+      id: number;
+      name: string;
+      plan: string;
+      isActive: boolean;
+      currentCredits: number;
+      creditsUsed: number;
+      cards: number;
+      revenue: number;
+      monthlyCredits: Record<string, number>;
+      monthlyCards: Record<string, number>;
+      monthlyRevenue: Record<string, number>;
+    }
+
+    const pressMap: Map<number, PressStat> = new Map(
+      allPresses.map((p) => [
+        p.id,
+        {
           id: p.id,
           name: p.name,
           plan: p.plan,
           isActive: p.isActive,
-          credits: p.credits,
-          cards,
-          revenue,
-        };
-      })
+          currentCredits: p.credits,
+          creditsUsed: 0,
+          cards: 0,
+          revenue: 0,
+          monthlyCredits: emptyMonths(),
+          monthlyCards: emptyMonths(),
+          monthlyRevenue: emptyMonths(),
+        },
+      ])
+    );
+
+    // Credits used (last 6 months from PdfJob.creditsLocked)
+    allJobs.forEach((job) => {
+      const stat = pressMap.get(job.pressId);
+      if (!stat) return;
+      stat.creditsUsed += job.creditsLocked;
+      const d = new Date(job.generatedAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (k in stat.monthlyCredits) stat.monthlyCredits[k] += job.creditsLocked;
+    });
+
+    // Cards per press (last 6 months)
+    recentOrderCards.forEach((oc) => {
+      const pressId = oc.order?.pressId;
+      if (!pressId) return;
+      const stat = pressMap.get(pressId);
+      if (!stat) return;
+      stat.cards += 1;
+      const d = new Date(oc.addedAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '00')}`;
+      // fix zero-pad
+      const kFixed = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (kFixed in stat.monthlyCards) stat.monthlyCards[kFixed] += 1;
+    });
+
+    // Revenue per press (all time total + last 6 months monthly)
+    allInvoices.forEach((inv) => {
+      const stat = pressMap.get(inv.pressId);
+      if (!stat) return;
+      stat.revenue += Number(inv.totalAmount);
+    });
+    recentInvoices.forEach((inv) => {
+      const stat = pressMap.get(inv.pressId);
+      if (!stat) return;
+      const d = new Date(inv.createdAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (k in stat.monthlyRevenue) stat.monthlyRevenue[k] += Number(inv.totalAmount);
+    });
+
+    // Top 5 by cards
+    const pressStats = Array.from(pressMap.values());
+    const topPresses = [...pressStats]
       .sort((a, b) => b.cards - a.cards)
       .slice(0, 5);
 
+    // ── Platform monthly aggregates (all presses combined) ────────
+    const platformMonthlyRevenue = emptyMonths();
+    const platformMonthlyCards = emptyMonths();
+    const platformMonthlyCredits = emptyMonths();
+
+    recentInvoices.forEach((inv) => {
+      const d = new Date(inv.createdAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (k in platformMonthlyRevenue) platformMonthlyRevenue[k] += Number(inv.totalAmount);
+    });
+    recentOrderCards.forEach((oc) => {
+      const d = new Date(oc.addedAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (k in platformMonthlyCards) platformMonthlyCards[k] += 1;
+    });
+    allJobs.forEach((job) => {
+      const d = new Date(job.generatedAt);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (k in platformMonthlyCredits) platformMonthlyCredits[k] += job.creditsLocked;
+    });
+
+    // Total credits used across system (sum of creditsLocked on all jobs ever)
+    const allTimeJobs = await prisma.pdfJob.aggregate({ _sum: { creditsLocked: true } });
+    const totalCreditsUsed = allTimeJobs._sum.creditsLocked ?? 0;
     const totalCreditsInSystem = creditAgg._sum.credits ?? 0;
 
     return NextResponse.json({
       success: true,
       kpis: {
-        totalPresses,
-        activePresses,
+        totalPresses, activePresses,
         suspendedPresses: totalPresses - activePresses,
-        totalClients,
-        totalOrders,
-        totalJobs,
-        totalUsers,
-        totalTemplates,
-        totalFonts,
-        pendingCreditRequests,
-        totalRevenue,
-        totalCardholders,
-        totalCreditsInSystem,
-        newPressesThisMonth,
-        newOrdersThisMonth,
+        totalClients, totalOrders, totalJobs, totalUsers,
+        totalTemplates, totalFonts, pendingCreditRequests,
+        totalRevenue, totalCardholders,
+        totalCreditsInSystem, totalCreditsUsed,
+        newPressesThisMonth, newOrdersThisMonth,
       },
-      monthlyRevenue,
-      monthlyCards,
+      monthKeys,
+      monthlyRevenue: platformMonthlyRevenue,
+      monthlyCards: platformMonthlyCards,
+      monthlyCredits: platformMonthlyCredits,
       topPresses,
+      pressStats,       // full per-press breakdown
       recentLogs,
       recentCreditRequests,
     });

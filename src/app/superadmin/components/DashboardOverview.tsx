@@ -7,6 +7,16 @@ import {
   BarChart3, DollarSign, RefreshCw, ArrowUpRight, ArrowDownRight,
   Printer, FileText, Type, Package, AlertTriangle, Info
 } from 'lucide-react';
+import PressAnalyticsTable from './PressAnalyticsTable';
+
+interface PressStat {
+  id: number; name: string; plan: string; isActive: boolean;
+  currentCredits: number; creditsUsed: number;
+  cards: number; revenue: number;
+  monthlyCredits: Record<string, number>;
+  monthlyCards: Record<string, number>;
+  monthlyRevenue: Record<string, number>;
+}
 
 interface DashboardData {
   kpis: {
@@ -23,15 +33,16 @@ interface DashboardData {
     totalRevenue: number;
     totalCardholders: number;
     totalCreditsInSystem: number;
+    totalCreditsUsed: number;
     newPressesThisMonth: number;
     newOrdersThisMonth: number;
   };
+  monthKeys: string[];
   monthlyRevenue: Record<string, number>;
   monthlyCards: Record<string, number>;
-  topPresses: Array<{
-    id: number; name: string; plan: string;
-    isActive: boolean; credits: number; cards: number; revenue: number;
-  }>;
+  monthlyCredits: Record<string, number>;
+  topPresses: PressStat[];
+  pressStats: PressStat[];
   recentLogs: Array<{
     id: number; action: string; category: string;
     severity: string; createdAt: string; description: string; actorName: string;
@@ -186,6 +197,7 @@ export default function DashboardOverview() {
   const k = data?.kpis;
   const revValues = data ? Object.values(data.monthlyRevenue) : [];
   const cardValues = data ? Object.values(data.monthlyCards) : [];
+  const credValues = data ? Object.values(data.monthlyCredits) : [];
   const planColor: Record<string, string> = { ENTERPRISE: '#818cf8', PRO: '#34d399', BASIC: '#60a5fa', TRIAL: '#fbbf24' };
 
   return (
@@ -245,6 +257,11 @@ export default function DashboardOverview() {
           color="#a78bfa" bg="rgba(167,139,250,0.15)"
           sub={`${k?.pendingCreditRequests ?? 0} pending requests`}
         />
+        <KpiCard icon={<Zap size={18} />} label="Credits Used (Total)" value={k?.totalCreditsUsed?.toLocaleString() ?? '—'}
+          color="#f87171" bg="rgba(239,68,68,0.12)"
+          sparkValues={credValues}
+          sub="all PDF jobs"
+        />
       </div>
 
       {/* ── Secondary KPIs ── */}
@@ -266,12 +283,15 @@ export default function DashboardOverview() {
       </div>
 
       {/* ── Charts row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 20 }}>
           <BarChart data={data?.monthlyRevenue ?? {}} color="#f59e0b" label="Revenue (last 6 months) · Rs." />
         </div>
         <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 20 }}>
           <BarChart data={data?.monthlyCards ?? {}} color="#8b5cf6" label="Cards Printed (last 6 months)" />
+        </div>
+        <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 20 }}>
+          <BarChart data={data?.monthlyCredits ?? {}} color="#f87171" label="Credits Used (last 6 months)" />
         </div>
       </div>
 
@@ -394,6 +414,7 @@ export default function DashboardOverview() {
             { icon: <DollarSign size={16} />, label: 'Avg. Revenue / Press', value: k ? `Rs. ${Math.round(k.totalRevenue / Math.max(k.totalPresses, 1)).toLocaleString()}` : '—', color: '#f59e0b' },
             { icon: <Users size={16} />, label: 'Avg. Users / Press', value: k ? `${(k.totalUsers / Math.max(k.totalPresses, 1)).toFixed(1)}` : '—', color: '#60a5fa' },
             { icon: <Activity size={16} />, label: 'Avg. Clients / Press', value: k ? `${(k.totalClients / Math.max(k.totalPresses, 1)).toFixed(1)}` : '—', color: '#34d399' },
+            { icon: <Zap size={16} />, label: 'Avg. Credits Used / Press', value: k ? `${Math.round(k.totalCreditsUsed / Math.max(k.totalPresses, 1)).toLocaleString()}` : '—', color: '#f87171' },
           ].map(item => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid rgba(255,255,255,0.05)' }}>
               <span style={{ color: item.color }}>{item.icon}</span>
@@ -404,6 +425,22 @@ export default function DashboardOverview() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Per-press analytics table ── */}
+      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+          <BarChart3 size={16} color="#6366f1" />
+          <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#f1f5f9' }}>Per-Press Breakdown</span>
+          <span style={{ fontSize: '0.72rem', color: '#475569', marginLeft: 4 }}>— credits used · cards printed · revenue · last 6 months</span>
+        </div>
+        <PressAnalyticsTable
+          pressStats={data?.pressStats ?? []}
+          monthKeys={data?.monthKeys ?? []}
+          totalCreditsUsed={k?.totalCreditsUsed ?? 0}
+          totalRevenue={k?.totalRevenue ?? 0}
+          totalCards={k?.totalCardholders ?? 0}
+        />
       </div>
 
     </div>
