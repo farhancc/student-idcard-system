@@ -4,6 +4,9 @@ export interface CreditSettings {
   costSingleSided: number;
   costDoubleSided: number;
   costApprovalPdf: number;
+  priceCreditBasic: number;
+  priceCreditPro: number;
+  priceCreditEnterprise: number;
 }
 
 export async function getCreditSettings(): Promise<CreditSettings> {
@@ -14,7 +17,10 @@ export async function getCreditSettings(): Promise<CreditSettings> {
           in: [
             'credit_cost_single_sided',
             'credit_cost_double_sided',
-            'credit_cost_approval_pdf'
+            'credit_cost_approval_pdf',
+            'price_credit_basic',
+            'price_credit_pro',
+            'price_credit_enterprise'
           ]
         }
       }
@@ -26,6 +32,9 @@ export async function getCreditSettings(): Promise<CreditSettings> {
       costSingleSided: Number(settingsMap.get('credit_cost_single_sided') || '10'),
       costDoubleSided: Number(settingsMap.get('credit_cost_double_sided') || '15'),
       costApprovalPdf: Number(settingsMap.get('credit_cost_approval_pdf') || '20'),
+      priceCreditBasic: Number(settingsMap.get('price_credit_basic') || '1.5'),
+      priceCreditPro: Number(settingsMap.get('price_credit_pro') || '1.2'),
+      priceCreditEnterprise: Number(settingsMap.get('price_credit_enterprise') || '1.0'),
     };
   } catch (error) {
     console.error('Failed to fetch credit settings from database:', error);
@@ -33,6 +42,9 @@ export async function getCreditSettings(): Promise<CreditSettings> {
       costSingleSided: 10,
       costDoubleSided: 15,
       costApprovalPdf: 20,
+      priceCreditBasic: 1.5,
+      priceCreditPro: 1.2,
+      priceCreditEnterprise: 1.0,
     };
   }
 }

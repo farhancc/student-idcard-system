@@ -14,12 +14,22 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { costSingleSided, costDoubleSided, costApprovalPdf } = await request.json();
+    const {
+      costSingleSided,
+      costDoubleSided,
+      costApprovalPdf,
+      priceCreditBasic,
+      priceCreditPro,
+      priceCreditEnterprise
+    } = await request.json();
 
     if (
       costSingleSided === undefined ||
       costDoubleSided === undefined ||
-      costApprovalPdf === undefined
+      costApprovalPdf === undefined ||
+      priceCreditBasic === undefined ||
+      priceCreditPro === undefined ||
+      priceCreditEnterprise === undefined
     ) {
       return NextResponse.json({ error: 'Missing required configuration keys' }, { status: 400 });
     }
@@ -28,6 +38,9 @@ export async function POST(request: Request) {
       { key: 'credit_cost_single_sided', value: String(Number(costSingleSided)) },
       { key: 'credit_cost_double_sided', value: String(Number(costDoubleSided)) },
       { key: 'credit_cost_approval_pdf', value: String(Number(costApprovalPdf)) },
+      { key: 'price_credit_basic', value: String(Number(priceCreditBasic)) },
+      { key: 'price_credit_pro', value: String(Number(priceCreditPro)) },
+      { key: 'price_credit_enterprise', value: String(Number(priceCreditEnterprise)) },
     ];
 
     // Perform upserts in a transaction
@@ -49,7 +62,7 @@ export async function POST(request: Request) {
         actorName: 'Super Admin',
         action: 'CREDIT_COSTS_UPDATED',
         category: 'SYSTEM',
-        description: `Updated credit costs: Single-sided = ${costSingleSided}, Double-sided = ${costDoubleSided}, Approval PDF = ${costApprovalPdf}`,
+        description: `Updated credit costs & plan pricing. Credit prices: Basic = Rs. ${priceCreditBasic}, Pro = Rs. ${priceCreditPro}, Enterprise = Rs. ${priceCreditEnterprise}`,
         ipAddress: ip,
         severity: 'INFO',
       },
@@ -62,6 +75,9 @@ export async function POST(request: Request) {
         costSingleSided: Number(costSingleSided),
         costDoubleSided: Number(costDoubleSided),
         costApprovalPdf: Number(costApprovalPdf),
+        priceCreditBasic: Number(priceCreditBasic),
+        priceCreditPro: Number(priceCreditPro),
+        priceCreditEnterprise: Number(priceCreditEnterprise),
       },
     });
   } catch (error: any) {

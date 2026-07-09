@@ -158,6 +158,9 @@ export default function SuperAdminDashboard() {
   const [costSingleSided, setCostSingleSided] = useState('10');
   const [costDoubleSided, setCostDoubleSided] = useState('15');
   const [costApprovalPdf, setCostApprovalPdf] = useState('20');
+  const [priceCreditBasic, setPriceCreditBasic] = useState('1.5');
+  const [priceCreditPro, setPriceCreditPro] = useState('1.2');
+  const [priceCreditEnterprise, setPriceCreditEnterprise] = useState('1.0');
   const [settingsSuccess, setSettingsSuccess] = useState('');
 
   const handleOnboardPress = async (e: React.FormEvent) => {
@@ -480,6 +483,9 @@ export default function SuperAdminDashboard() {
         setCostSingleSided(String(data.settings.costSingleSided));
         setCostDoubleSided(String(data.settings.costDoubleSided));
         setCostApprovalPdf(String(data.settings.costApprovalPdf));
+        setPriceCreditBasic(String(data.settings.priceCreditBasic));
+        setPriceCreditPro(String(data.settings.priceCreditPro));
+        setPriceCreditEnterprise(String(data.settings.priceCreditEnterprise));
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load system settings.');
@@ -501,6 +507,9 @@ export default function SuperAdminDashboard() {
           costSingleSided: Number(costSingleSided),
           costDoubleSided: Number(costDoubleSided),
           costApprovalPdf: Number(costApprovalPdf),
+          priceCreditBasic: Number(priceCreditBasic),
+          priceCreditPro: Number(priceCreditPro),
+          priceCreditEnterprise: Number(priceCreditEnterprise),
         }),
       });
       const data = await res.json();
@@ -1929,6 +1938,56 @@ export default function SuperAdminDashboard() {
                   style={{ width: '100%' }}
                 />
                 <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated (regardless of cardholder count).</span>
+              </div>
+
+              <div style={{ margin: '28px 0 16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+                <h4 style={{ fontSize: '0.9rem', color: '#f1f5f9', fontWeight: 600, marginBottom: '4px' }}>Platform Credit Pricing</h4>
+                <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '16px' }}>Configure the price of a single credit in Rupees (Rs.) for each subscription plan. This controls calculated revenue reports on the dashboard.</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '28px' }}>
+                <div>
+                  <label className="form-label" htmlFor="priceCreditBasic" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>BASIC Rate (Rs.)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="priceCreditBasic"
+                    className="form-input"
+                    value={priceCreditBasic}
+                    onChange={(e) => setPriceCreditBasic(e.target.value)}
+                    min="0"
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="priceCreditPro" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>PRO Rate (Rs.)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="priceCreditPro"
+                    className="form-input"
+                    value={priceCreditPro}
+                    onChange={(e) => setPriceCreditPro(e.target.value)}
+                    min="0"
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="priceCreditEnterprise" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>ENTERPRISE Rate (Rs.)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="priceCreditEnterprise"
+                    className="form-input"
+                    value={priceCreditEnterprise}
+                    onChange={(e) => setPriceCreditEnterprise(e.target.value)}
+                    min="0"
+                    required
+                    style={{ width: '100%' }}
+                  />
+                </div>
               </div>
 
               <button
