@@ -513,14 +513,34 @@ export default function OrdersPage() {
         pressFonts
       );
 
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Approval_Proof_${clientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `Approval_Proof_${clientName.replace(/\s+/g, '_')}_${Date.now()}.pdf`;
+      const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+      if (electronAPI) {
+        setUploadStatus('Saving PDF locally via Desktop bridge...');
+        const base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          };
+          reader.readAsDataURL(pdfBlob);
+        });
+
+        const saveRes = await electronAPI.savePdfLocally(fileName, base64Data, clientName);
+        if (!saveRes.success) {
+          throw new Error(saveRes.error || 'Failed to save PDF locally');
+        }
+      } else {
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
 
       setUploadStatus('Success!');
       setTimeout(() => setUploadStatus(''), 2000);
@@ -593,14 +613,34 @@ export default function OrdersPage() {
       const selectedClient = clients.find(c => String(c.id) === clientId);
       const clientName = selectedClient ? selectedClient.name : 'Client';
 
-      const url = URL.createObjectURL(pdfBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Production_Print_${clientName.replace(/\s+/g, '_')}_${paperSize}_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const fileName = `Production_Print_${clientName.replace(/\s+/g, '_')}_${paperSize}_${Date.now()}.pdf`;
+      const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+      if (electronAPI) {
+        setUploadStatus('Saving PDF locally via Desktop bridge...');
+        const base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          };
+          reader.readAsDataURL(pdfBlob);
+        });
+
+        const saveRes = await electronAPI.savePdfLocally(fileName, base64Data, clientName);
+        if (!saveRes.success) {
+          throw new Error(saveRes.error || 'Failed to save PDF locally');
+        }
+      } else {
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
 
       setUploadStatus('Success!');
       setTimeout(() => setUploadStatus(''), 2000);

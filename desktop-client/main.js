@@ -319,7 +319,7 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
       subfolder = 'invoices';
     }
     const safeClientName = (clientName || 'Client').trim().replace(/[^a-z0-9_-]/gi, '_');
-    const targetDir = path.join(documentsPath, 'idexo-prints', safeClientName, subfolder);
+    const targetDir = path.join(documentsPath, 'idexo_prints', safeClientName, subfolder);
 
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
