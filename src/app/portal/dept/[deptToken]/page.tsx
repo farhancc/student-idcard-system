@@ -134,6 +134,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const [latestApprovalJob, setLatestApprovalJob] = useState<ApprovalJob | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterWarningsOnly, setFilterWarningsOnly] = useState(false);
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
@@ -393,13 +394,54 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     });
   };
 
+  const getCardholderWarnings = (ch: Cardholder) => {
+    const warnings: string[] = [];
+    if (hasName && (!ch.name || ch.name.trim() === '')) {
+      warnings.push('Name is required');
+    }
+    if (hasPhoto && (!ch.photoUrl || ch.photoUrl.trim() === '')) {
+      warnings.push('Photo is missing');
+    }
+    if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
+      warnings.push('Designation is missing');
+    }
+    if (hasUniqueKey && (!ch.uniqueKey || ch.uniqueKey.trim() === '')) {
+      warnings.push('Unique ID/Key is missing');
+    }
+    
+    // Parse custom fields
+    let parsedCustom: Record<string, any> = {};
+    if (ch.customFields) {
+      parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+    }
+    
+    formFields.forEach(k => {
+      if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+        warnings.push(`${label} is missing`);
+      }
+    });
+    
+    customImgFields.forEach(field => {
+      const k = field.field;
+      if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+        warnings.push(`${label} image is missing`);
+      }
+    });
+    
+    return warnings;
+  };
+
   const filtered = cardholders.filter(ch => {
     const q = searchQuery.toLowerCase();
-    return (
-      ch.name.toLowerCase().includes(q) ||
+    const matchesSearch = ch.name.toLowerCase().includes(q) ||
       (ch.designation && ch.designation.toLowerCase().includes(q)) ||
-      (ch.uniqueKey && ch.uniqueKey.toLowerCase().includes(q))
-    );
+      (ch.uniqueKey && ch.uniqueKey.toLowerCase().includes(q));
+      
+    const matchesWarnings = !filterWarningsOnly || getCardholderWarnings(ch).length > 0;
+    
+    return matchesSearch && matchesWarnings;
   });
 
   if (loading && cardholders.length === 0 && !error) {
@@ -471,6 +513,56 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
             You have <strong style={{ color: 'var(--foreground)' }}>Department Head</strong> access — you can manage cardholders, export their details to Excel, and download approval PDFs for verification.
           </p>
         </div>
+
+        {/* Automatic Review Warning Banner */}
+        {(() => {
+          const problematicCount = cardholders.filter(c => getCardholderWarnings(c).length > 0).length;
+          if (problematicCount > 0) {
+            return (
+              <div 
+                style={{ 
+                  background: 'rgba(245, 158, 11, 0.04)', 
+                  border: '1px solid rgba(245, 158, 11, 0.25)', 
+                  padding: '16px 20px', 
+                  marginBottom: '20px', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  borderRadius: '10px',
+                  gap: '16px',
+                  flexWrap: 'wrap',
+                  width: '100%'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <AlertCircle size={22} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                  <div>
+                    <h4 style={{ color: '#fff', fontSize: '0.92rem', margin: '0 0 2px 0', fontWeight: '600' }}>Automatic Review Warnings</h4>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: 0 }}>
+                      We detected <strong>{problematicCount}</strong> record(s) with missing mandatory fields (photos, IDs, or custom attributes) required by the card template.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  className="btn"
+                  onClick={() => setFilterWarningsOnly(!filterWarningsOnly)}
+                  style={{
+                    fontSize: '0.78rem',
+                    padding: '6px 12px',
+                    background: filterWarningsOnly ? '#fbbf24' : 'rgba(245, 158, 11, 0.12)',
+                    color: filterWarningsOnly ? '#000' : '#fbbf24',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    fontWeight: '600',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {filterWarningsOnly ? 'Show All Cardholders' : 'Filter Issues Only'}
+                </button>
+              </div>
+            );
+          }
+          return null;
+        })()}
 
         {/* Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -605,7 +697,40 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                           );
                         }
                         if (tf.isName) {
-                          return <td key={tf.field} style={{ fontWeight: 'bold' }}>{ch.name}</td>;
+                          return (
+                            <td key={tf.field} style={{ fontWeight: 'bold' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {ch.name}
+                                {(() => {
+                                  const warnings = getCardholderWarnings(ch);
+                                  if (warnings.length > 0) {
+                                    return (
+                                      <span 
+                                        title={warnings.join('\n')}
+                                        style={{
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '4px',
+                                          background: 'rgba(245,158,11,0.15)',
+                                          color: '#fbbf24',
+                                          padding: '2px 6px',
+                                          borderRadius: '4px',
+                                          fontSize: '0.7rem',
+                                          fontWeight: 'normal',
+                                          border: '1px solid rgba(245,158,11,0.3)',
+                                          cursor: 'help'
+                                        }}
+                                      >
+                                        <AlertCircle size={12} />
+                                        {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                      </span>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            </td>
+                          );
                         }
                         if (tf.field === 'designation' || tf.field === 'role') {
                           return <td key={tf.field}>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>;

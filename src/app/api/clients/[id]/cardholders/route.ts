@@ -41,7 +41,7 @@ export async function GET(
         ],
         pressId
       },
-      select: { id: true, name: true }
+      select: { id: true, name: true, frontFields: true, backFields: true }
     });
     const templateMap = new Map(templates.map(t => [t.id, t.name]));
 
@@ -79,7 +79,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ success: true, cardholders: cardholdersWithTemplate });
+    return NextResponse.json({ success: true, cardholders: cardholdersWithTemplate, templates });
   } catch (error) {
     console.error('Get cardholders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

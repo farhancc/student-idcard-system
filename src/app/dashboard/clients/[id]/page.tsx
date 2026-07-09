@@ -100,6 +100,8 @@ export default function ClientDetailsPage() {
 
   const [client, setClient] = useState<Client | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
+  const [clientTemplates, setClientTemplates] = useState<any[]>([]);
+  const [filterWarningsOnly, setFilterWarningsOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
 
@@ -506,6 +508,9 @@ export default function ClientDetailsPage() {
       if (cardholdersRes.ok) {
         const cardholdersData = await cardholdersRes.json();
         setCardholders(cardholdersData.cardholders || []);
+        if (cardholdersData.templates) {
+          setClientTemplates(cardholdersData.templates);
+        }
       }
     } catch (err) {
       console.error(err);
@@ -977,6 +982,76 @@ export default function ClientDetailsPage() {
     }
   };
 
+  const getCardholderWarnings = (ch: Cardholder) => {
+    const warnings: string[] = [];
+    
+    // Find the template by resolvedTemplateId or templateName
+    const tmpl = clientTemplates.find(t => t.id === ch.resolvedTemplateId) || 
+                 clientTemplates.find(t => t.name === ch.templateName) ||
+                 clientTemplates[0];
+                 
+    if (!tmpl) return [];
+    
+    try {
+      const front = JSON.parse(tmpl.frontFields || '[]');
+      const back = JSON.parse(tmpl.backFields || '[]');
+      const allFields = [...front, ...back];
+      
+      const hasName = allFields.some(f => f.field === 'name' || f.field === 'fullName');
+      const hasDesignation = allFields.some(f => f.field === 'designation' || f.field === 'role');
+      const mainPhotoField = allFields.find(f => f.type === 'image' && (f.field === 'photo' || f.field === 'avatar' || f.field === 'photoUrl'));
+      const hasPhoto = !!mainPhotoField;
+      const hasUniqueKey = allFields.some(f => f.field === 'uniqueKey');
+      
+      if (hasName && (!ch.name || ch.name.trim() === '')) {
+        warnings.push('Name is required');
+      }
+      if (hasPhoto && (!ch.photoUrl || ch.photoUrl.trim() === '')) {
+        warnings.push('Photo is missing');
+      }
+      if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
+        warnings.push('Designation is missing');
+      }
+      if (hasUniqueKey && (!ch.uniqueKey || ch.uniqueKey.trim() === '')) {
+        warnings.push('Unique ID/Key is missing');
+      }
+      
+      // Parse custom fields
+      let parsedCustom: Record<string, any> = {};
+      if (ch.customFields) {
+        parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+      }
+      
+      // Get custom text fields
+      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'qr' || f.type === 'barcode' || f.type === 'id');
+      const customTextKeys = Array.from(new Set(textFields.map(f => f.field))).filter(k => 
+        k !== 'name' && k !== 'fullName' && k !== 'designation' && k !== 'role' && k !== 'uniqueKey' && k !== 'cardSerial' && k !== 'validTill' && k !== 'validTillDate'
+      );
+      
+      customTextKeys.forEach(k => {
+        if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+          const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          warnings.push(`${label} is missing`);
+        }
+      });
+      
+      // Get custom image fields
+      const imageFields = allFields.filter(f => f.type === 'image');
+      const customImageKeys = imageFields.filter(f => f !== mainPhotoField).map(f => f.field);
+      
+      customImageKeys.forEach(k => {
+        if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+          const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          warnings.push(`${label} image is missing`);
+        }
+      });
+    } catch (e) {
+      console.error('Error validating cardholder', e);
+    }
+    
+    return warnings;
+  };
+
   const filteredCardholders = cardholders.filter((c: any) => {
     // 1. General search: Name, Designation
     const matchesSearch = !search.trim() || 
@@ -1004,7 +1079,10 @@ export default function ClientDetailsPage() {
       }
     }
 
-    return matchesSearch && matchesSearchId && matchesTemplate && matchesDate;
+    // 5. Warnings filter
+    const matchesWarnings = !filterWarningsOnly || getCardholderWarnings(c).length > 0;
+
+    return matchesSearch && matchesSearchId && matchesTemplate && matchesDate && matchesWarnings;
   });
 
   const handleExportExcel = async () => {
@@ -1214,7 +1292,57 @@ export default function ClientDetailsPage() {
 
       {activeTab === 'list' && (
         <>
-               {/* Advanced Filter Panel */}
+          {/* Automatic Review Warnings Banner */}
+          {(() => {
+            const problematicCount = cardholders.filter(c => getCardholderWarnings(c).length > 0).length;
+            if (problematicCount > 0) {
+              return (
+                <div 
+                  className="glass-panel animate-pulse-subtle" 
+                  style={{ 
+                    background: 'rgba(245, 158, 11, 0.04)', 
+                    border: '1px solid rgba(245, 158, 11, 0.25)', 
+                    padding: '16px 20px', 
+                    marginBottom: '20px', 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center',
+                    borderRadius: '12px',
+                    gap: '16px',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <AlertTriangle size={22} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                    <div>
+                      <h4 style={{ color: '#fff', fontSize: '0.95rem', margin: '0 0 2px 0', fontWeight: '600' }}>Automatic Review Warnings</h4>
+                      <p style={{ color: 'var(--muted)', fontSize: '0.82rem', margin: 0 }}>
+                        We detected <strong>{problematicCount}</strong> cardholder record(s) with empty or missing fields required by their assigned card layouts.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    className="btn"
+                    onClick={() => setFilterWarningsOnly(!filterWarningsOnly)}
+                    style={{
+                      fontSize: '0.8rem',
+                      padding: '6px 12px',
+                      background: filterWarningsOnly ? '#fbbf24' : 'rgba(245, 158, 11, 0.12)',
+                      color: filterWarningsOnly ? '#000' : '#fbbf24',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      fontWeight: '600',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {filterWarningsOnly ? 'Show All Cardholders' : 'Filter Issues Only'}
+                  </button>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Advanced Filter Panel */}
           <div className="glass-panel" style={{ padding: '20px', marginBottom: '24px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '16px' }}>
               <div>
@@ -1433,7 +1561,38 @@ export default function ClientDetailsPage() {
                           </div>
                         )}
                       </td>
-                      <td style={{ fontWeight: '500' }}>{ch.name}</td>
+                      <td style={{ fontWeight: '500' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {ch.name}
+                          {(() => {
+                            const warnings = getCardholderWarnings(ch);
+                            if (warnings.length > 0) {
+                              return (
+                                <span 
+                                  title={warnings.join('\n')}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    background: 'rgba(245,158,11,0.15)',
+                                    color: '#fbbf24',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 'normal',
+                                    border: '1px solid rgba(245,158,11,0.3)',
+                                    cursor: 'help'
+                                  }}
+                                >
+                                  <AlertTriangle size={12} />
+                                  {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      </td>
                       <td>{ch.templateName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                       <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
                       <td>{ch.uniqueKey || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
