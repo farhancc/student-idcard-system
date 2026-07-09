@@ -106,6 +106,16 @@ export default function SettingsPage() {
   const [requestAmount, setRequestAmount] = useState('');
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
+  // Staff Users State
+  const [currentUserRole, setCurrentUserRole] = useState('');
+  const [staffUsers, setStaffUsers] = useState<any[]>([]);
+  const [staffName, setStaffName] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [staffRole, setStaffRole] = useState<'OPERATOR' | 'DESIGNER'>('OPERATOR');
+  const [showStaffForm, setShowStaffForm] = useState(false);
+  const [staffLoading, setStaffLoading] = useState(false);
+
   const handleRequestCredits = async (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = Number(requestAmount);
@@ -147,30 +157,84 @@ export default function SettingsPage() {
     }
   };
 
-  const fetchData = async () => {
+  const fetchStaffUsers = async () => {
     try {
-      // Fetch API Keys
-      const keysRes = await fetch('/api/settings/api-keys');
-      if (keysRes.ok) {
-        const json = await keysRes.json();
-        setKeys(json.keys || []);
+      const res = await fetch('/api/settings/users');
+      if (res.ok) {
+        const json = await res.json();
+        setStaffUsers(json.users || []);
       }
+    } catch (err) {
+      console.error('Fetch staff users error:', err);
+    }
+  };
 
-      // Fetch Print Vendors
-      const vendorsRes = await fetch('/api/print-vendors');
-      if (vendorsRes.ok) {
-        const json = await vendorsRes.json();
-        setVendors(json.vendors || []);
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!staffName.trim() || !staffEmail.trim() || !staffPassword.trim() || !staffRole) return;
+    setStaffLoading(true);
+
+    try {
+      const res = await fetch('/api/settings/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: staffName,
+          email: staffEmail,
+          password: staffPassword,
+          role: staffRole,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`Staff user "${data.user.name}" created successfully.`, 'success');
+        setStaffName('');
+        setStaffEmail('');
+        setStaffPassword('');
+        setStaffRole('OPERATOR');
+        setShowStaffForm(false);
+        fetchStaffUsers();
+      } else {
+        toast(data.error || 'Failed to create staff user.', 'error');
       }
+    } catch (err) {
+      console.error(err);
+      toast('Failed to create staff user.', 'error');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
 
-      // Fetch Press Fonts
-      const fontsRes = await fetch('/api/fonts');
-      if (fontsRes.ok) {
-        const json = await fontsRes.json();
-        setFonts((json.fonts || []).filter((f: Font & { pressId: number | null }) => f.pressId !== null));
-      }
+  const handleDeleteStaff = (id: number, name: string) => {
+    showConfirm({
+      title: 'Remove Staff User',
+      message: `Are you sure you want to remove ${name} from your printing press team? This user will no longer be able to log in.`,
+      confirmLabel: 'Remove Staff',
+      variant: 'danger',
+      onConfirm: async () => {
+        closeConfirm();
+        try {
+          const res = await fetch(`/api/settings/users/${id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (res.ok) {
+            toast(`Staff user "${name}" removed successfully.`, 'success');
+            fetchStaffUsers();
+          } else {
+            toast(data.error || 'Failed to delete staff user.', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          toast('Failed to delete staff user.', 'error');
+        }
+      },
+    });
+  };
 
-      // Fetch Press Profile
+  const fetchData = async () => {
+    // ── Each fetch is isolated so one failure cannot block the rest ──────────
+
+    // Fetch Press Profile FIRST — sets currentUserRole which controls UI visibility
+    try {
       const profileRes = await fetch('/api/press/profile');
       if (profileRes.ok) {
         const json = await profileRes.json();
@@ -182,14 +246,51 @@ export default function SettingsPage() {
         }
         if (json.user) {
           setOwnerName(json.user.name || '');
+          setCurrentUserRole(json.user.role || '');
         }
       }
-
-      // Fetch Credit Requests
-      await fetchCreditRequests();
     } catch (err) {
-      console.error(err);
+      console.error('Fetch profile error:', err);
     }
+
+    // Fetch API Keys
+    try {
+      const keysRes = await fetch('/api/settings/api-keys');
+      if (keysRes.ok) {
+        const json = await keysRes.json();
+        setKeys(json.keys || []);
+      }
+    } catch (err) {
+      console.error('Fetch API keys error:', err);
+    }
+
+    // Fetch Print Vendors
+    try {
+      const vendorsRes = await fetch('/api/print-vendors');
+      if (vendorsRes.ok) {
+        const json = await vendorsRes.json();
+        setVendors(json.vendors || []);
+      }
+    } catch (err) {
+      console.error('Fetch vendors error:', err);
+    }
+
+    // Fetch Press Fonts
+    try {
+      const fontsRes = await fetch('/api/fonts');
+      if (fontsRes.ok) {
+        const json = await fontsRes.json();
+        setFonts((json.fonts || []).filter((f: Font & { pressId: number | null }) => f.pressId !== null));
+      }
+    } catch (err) {
+      console.error('Fetch fonts error:', err);
+    }
+
+    // Fetch Credit Requests
+    await fetchCreditRequests();
+
+    // Fetch Staff Users
+    await fetchStaffUsers();
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
@@ -224,6 +325,23 @@ export default function SettingsPage() {
       setProfileSaving(false);
     }
   };
+
+  // ── Eagerly fetch role so the Staff panel isn't blocked by other API calls ──
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/me');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.user?.role) {
+            setCurrentUserRole(json.user.role);
+          }
+        }
+      } catch (err) {
+        console.error('Fetch me error:', err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -744,6 +862,114 @@ export default function SettingsPage() {
         {/* Right Column: Print vendors directory and Credit Requests */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           
+          {/* Staff Management Panel */}
+          {currentUserRole === 'OWNER' && (
+            <div className="glass-panel">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <User size={18} color="var(--primary)" /> Staff User Management
+                </h3>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '6px 12px', fontSize: '0.75rem' }} 
+                  onClick={() => setShowStaffForm(!showStaffForm)}
+                >
+                  <Plus size={12} /> {showStaffForm ? 'Close Form' : 'Add Staff'}
+                </button>
+              </div>
+              <p style={{ fontSize: '0.8rem', marginBottom: '20px', color: 'var(--muted)' }}>
+                Add and manage printing press Operators and Designers. Only the Press Owner can manage staff users.
+              </p>
+
+              {showStaffForm && (
+                <form onSubmit={handleAddStaff} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                  <div className="form-group">
+                    <label className="form-label">Full Name</label>
+                    <input type="text" required className="form-input" placeholder="e.g. John Doe" value={staffName} onChange={e => setStaffName(e.target.value)} />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label">Email Address</label>
+                      <input type="email" required className="form-input" placeholder="john@example.com" value={staffEmail} onChange={e => setStaffEmail(e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Password</label>
+                      <input type="password" required className="form-input" placeholder="••••••••" value={staffPassword} onChange={e => setStaffPassword(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Role</label>
+                    <select 
+                      className="form-input" 
+                      value={staffRole} 
+                      onChange={e => setStaffRole(e.target.value as 'OPERATOR' | 'DESIGNER')}
+                    >
+                      <option value="OPERATOR">Operator (Print / Job processing)</option>
+                      <option value="DESIGNER">Designer (Template customization only)</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowStaffForm(false)}>Cancel</button>
+                    <button type="submit" className="btn btn-primary" disabled={staffLoading}>
+                      {staffLoading ? 'Adding...' : 'Save Staff User'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Staff list table */}
+              {staffUsers.length === 0 ? (
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>No staff users added yet.</span>
+              ) : (
+                <div className="table-container">
+                  <table className="custom-table" style={{ fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {staffUsers.map(u => (
+                        <tr key={u.id}>
+                          <td style={{ fontWeight: '500' }}>{u.name}</td>
+                          <td>{u.email}</td>
+                          <td>
+                            <span style={{
+                              fontSize: '0.7rem', 
+                              fontWeight: '600', 
+                              padding: '2px 8px', 
+                              borderRadius: '4px',
+                              background: u.role === 'OWNER' ? 'rgba(99,102,241,0.1)' : u.role === 'OPERATOR' ? 'rgba(52,211,153,0.1)' : 'rgba(251,191,36,0.1)',
+                              color: u.role === 'OWNER' ? '#818cf8' : u.role === 'OPERATOR' ? '#34d399' : '#fbbf24',
+                              border: `1px solid ${u.role === 'OWNER' ? 'rgba(99,102,241,0.2)' : u.role === 'OPERATOR' ? 'rgba(52,211,153,0.2)' : 'rgba(251,191,36,0.2)'}`
+                            }}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td>
+                            {u.role !== 'OWNER' ? (
+                              <button className="btn btn-danger" style={{ padding: '6px' }} onClick={() => handleDeleteStaff(u.id, u.name)}>
+                                <Trash2 size={12} />
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="glass-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
