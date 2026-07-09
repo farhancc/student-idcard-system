@@ -5,6 +5,9 @@ import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import { 
   Key, 
+  KeyRound,
+  Eye,
+  EyeOff,
   Printer, 
   Trash2, 
   Plus, 
@@ -106,6 +109,15 @@ export default function SettingsPage() {
   const [requestAmount, setRequestAmount] = useState('');
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
+  // Change Password State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [pwLoading, setPwLoading] = useState(false);
+
   // Staff Users State
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [staffUsers, setStaffUsers] = useState<any[]>([]);
@@ -115,6 +127,41 @@ export default function SettingsPage() {
   const [staffRole, setStaffRole] = useState<'OPERATOR' | 'DESIGNER'>('OPERATOR');
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) return;
+    if (newPassword !== confirmPassword) {
+      toast('New passwords do not match.', 'error');
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast('New password must be at least 8 characters.', 'error');
+      return;
+    }
+    setPwLoading(true);
+    try {
+      const res = await fetch('/api/settings/change-password', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast('Password changed successfully.', 'success');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        toast(data.error || 'Failed to change password.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      toast('An unexpected error occurred.', 'error');
+    } finally {
+      setPwLoading(false);
+    }
+  };
 
   const handleRequestCredits = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -581,6 +628,111 @@ export default function SettingsPage() {
 
               <button type="submit" className="btn btn-primary" style={{ marginTop: '6px', gap: '8px', justifyContent: 'center' }} disabled={profileSaving}>
                 <Save size={16} /> {profileSaving ? 'Saving Changes...' : 'Save Profile Details'}
+              </button>
+            </form>
+          </div>
+
+          {/* ── Change Password ──────────────────────────────────────────────── */}
+          <div className="glass-panel">
+            <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <KeyRound size={18} color="var(--primary)" /> Change Password
+            </h3>
+            <p style={{ fontSize: '0.8rem', marginBottom: '20px', color: 'var(--muted)' }}>
+              Update your account password. You must enter your current password to confirm the change.
+            </p>
+
+            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Current Password */}
+              <div className="form-group">
+                <label className="form-label">Current Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showCurrentPw ? 'text' : 'password'}
+                    required
+                    className="form-input"
+                    placeholder="••••••••"
+                    value={currentPassword}
+                    onChange={e => setCurrentPassword(e.target.value)}
+                    style={{ paddingRight: '40px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPw(v => !v)}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px', display: 'flex', alignItems: 'center' }}
+                    tabIndex={-1}
+                  >
+                    {showCurrentPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* New Password */}
+                <div className="form-group">
+                  <label className="form-label">New Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showNewPw ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      className="form-input"
+                      placeholder="min. 8 characters"
+                      value={newPassword}
+                      onChange={e => setNewPassword(e.target.value)}
+                      style={{ paddingRight: '40px' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPw(v => !v)}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px', display: 'flex', alignItems: 'center' }}
+                      tabIndex={-1}
+                    >
+                      {showNewPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirm New Password */}
+                <div className="form-group">
+                  <label className="form-label">Confirm New Password</label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showConfirmPw ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      className="form-input"
+                      placeholder="repeat new password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      style={{
+                        paddingRight: '40px',
+                        borderColor: confirmPassword && newPassword !== confirmPassword ? 'var(--danger)' : undefined,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPw(v => !v)}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px', display: 'flex', alignItems: 'center' }}
+                      tabIndex={-1}
+                    >
+                      {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                  {confirmPassword && newPassword !== confirmPassword && (
+                    <span style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>
+                      Passwords do not match
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ marginTop: '4px', gap: '8px', justifyContent: 'center' }}
+                disabled={pwLoading || (!!confirmPassword && newPassword !== confirmPassword)}
+              >
+                <KeyRound size={16} /> {pwLoading ? 'Updating Password...' : 'Update Password'}
               </button>
             </form>
           </div>
