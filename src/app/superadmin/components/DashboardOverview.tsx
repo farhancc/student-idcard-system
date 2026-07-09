@@ -84,22 +84,22 @@ function BarChart({ data, color, label }: {
   return (
     <div style={{ width: '100%' }}>
       <div style={{ fontSize: '0.72rem', color: '#64748b', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 56 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 60 }}>
         {entries.map(([month, val]) => {
-          const pct = (val / max) * 100;
+          const barHeight = Math.max((val / max) * 40, 3); // Max bar height of 40px, min 3px
           const [, m] = month.split('-');
           const monthName = new Date(0, parseInt(m) - 1).toLocaleString('default', { month: 'short' });
           return (
-            <div key={month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+            <div key={month} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
               <div
                 style={{
                   width: '100%', background: color, borderRadius: '3px 3px 0 0',
-                  height: `${Math.max(pct, 4)}%`, opacity: 0.75,
-                  transition: 'height 0.6s ease', minHeight: 3,
-                  boxShadow: `0 0 6px ${color}55`
+                  height: `${barHeight}px`, opacity: 0.75,
+                  transition: 'height 0.6s ease',
+                  boxShadow: val > 0 ? `0 0 6px ${color}55` : 'none'
                 }}
               />
-              <span style={{ fontSize: '0.55rem', color: '#475569' }}>{monthName}</span>
+              <span style={{ fontSize: '0.55rem', color: '#475569', marginTop: 4, display: 'block', lineHeight: 1 }}>{monthName}</span>
             </div>
           );
         })}

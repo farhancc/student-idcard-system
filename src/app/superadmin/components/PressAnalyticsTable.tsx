@@ -32,13 +32,16 @@ function MonthBars({ data, color }: { data: Record<string, number>; color: strin
   const max = Math.max(...vals, 1);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 28, width: 72 }}>
-      {vals.map((v, i) => (
-        <div key={i} style={{
-          flex: 1, background: color, borderRadius: '2px 2px 0 0',
-          height: `${Math.max((v / max) * 100, 4)}%`, opacity: 0.7,
-          boxShadow: v > 0 ? `0 0 4px ${color}` : 'none',
-        }} />
-      ))}
+      {vals.map((v, i) => {
+        const barHeight = Math.max((v / max) * 24, 2);
+        return (
+          <div key={i} style={{
+            flex: 1, background: color, borderRadius: '2px 2px 0 0',
+            height: `${barHeight}px`, opacity: 0.7,
+            boxShadow: v > 0 ? `0 0 4px ${color}` : 'none',
+          }} />
+        );
+      })}
     </div>
   );
 }
