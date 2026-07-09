@@ -6,7 +6,26 @@ async function main() {
   console.log('Seeding analytics data...');
 
   const pressId = 1; // Springfield Printing Press
-  const templateId = 2; // Testing template for pressId 1
+  
+  // Dynamic template creation to avoid FK violations
+  let template = await prisma.cardTemplate.findFirst({
+    where: { pressId }
+  });
+  if (!template) {
+    template = await prisma.cardTemplate.create({
+      data: {
+        pressId,
+        name: 'Standard School Card',
+        cardWidth: 673,
+        cardHeight: 1039,
+        frontImageUrl: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        frontFields: '[]',
+        backImageUrl: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        backFields: '[]',
+      }
+    });
+  }
+  const templateId = template.id;
   const clientId = 1; // Greenwood Public School
   const userId = 1; // Ravi Kumar
 
