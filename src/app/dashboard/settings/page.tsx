@@ -104,7 +104,6 @@ export default function SettingsPage() {
   // Credit Requests State
   const [creditRequests, setCreditRequests] = useState<any[]>([]);
   const [requestAmount, setRequestAmount] = useState('');
-  const [requestReason, setRequestReason] = useState('');
   const [requestSubmitting, setRequestSubmitting] = useState(false);
 
   const handleRequestCredits = async (e: React.FormEvent) => {
@@ -117,13 +116,12 @@ export default function SettingsPage() {
       const res = await fetch('/api/settings/credit-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: amountNum, reason: requestReason }),
+        body: JSON.stringify({ amount: amountNum }),
       });
       const data = await res.json();
       if (res.ok) {
         toast('Credit request submitted successfully to admin.', 'success');
         setRequestAmount('');
-        setRequestReason('');
         // Refresh credit requests list
         fetchCreditRequests();
       } else {
@@ -853,17 +851,6 @@ export default function SettingsPage() {
                   placeholder="e.g. 500" 
                   value={requestAmount} 
                   onChange={e => setRequestAmount(e.target.value)} 
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Reason / Purpose</label>
-                <textarea 
-                  className="form-input" 
-                  placeholder="Explain why you need additional credits..." 
-                  style={{ minHeight: '80px', resize: 'vertical', paddingTop: '8px' }}
-                  value={requestReason} 
-                  onChange={e => setRequestReason(e.target.value)} 
                 />
               </div>
 
