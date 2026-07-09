@@ -2732,65 +2732,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                       <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>
                         Created on {new Date(share.createdAt).toLocaleDateString()} · <strong>Enrolled: {share.enrolledCount ?? 0} members</strong>
                       </div>
-                       {(share.latestApprovalJob || share.latestProductionJob) && (
-                        <div style={{ display: 'flex', gap: '16px', marginTop: '12px', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: '500' }}>Compiled PDFs:</span>
-                          {share.latestApprovalJob && (
-                            share.latestApprovalJob.isLocalJob ? (
-                              <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                📄 Approval Proof (Saved)
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setPreviewJob({ id: share.latestApprovalJob.id, pdfType: 'APPROVAL', fileName: `Approval_Proof_Share_${share.id}.pdf` })}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  fontSize: '0.75rem',
-                                  color: 'var(--primary)',
-                                  textDecoration: 'underline',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: '600',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                📄 Approval Proof (A4)
-                              </button>
-                            )
-                          )}
-                          {share.latestProductionJob && (
-                            share.latestProductionJob.isLocalJob ? (
-                              <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: '600', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                📄 Production Grid (Saved)
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setPreviewJob({ id: share.latestProductionJob.id, pdfType: 'PRODUCTION', fileName: `Production_Grid_Share_${share.id}.pdf` })}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  padding: 0,
-                                  fontSize: '0.75rem',
-                                  color: '#10b981',
-                                  textDecoration: 'underline',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  fontWeight: '600',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                📄 Production Grid (A3)
-                              </button>
-                            )
-                          )}
-                        </div>
-                      )}
+
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
