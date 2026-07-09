@@ -240,8 +240,8 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  const fetchCreditRequests = async () => {
-    setRequestsLoading(true);
+  const fetchCreditRequests = async (silent = false) => {
+    if (!silent) setRequestsLoading(true);
     setError('');
     try {
       const res = await fetch('/api/superadmin/credit-requests');
@@ -249,9 +249,9 @@ export default function SuperAdminDashboard() {
       if (!res.ok) throw new Error(data.error || 'Failed to fetch credit requests');
       setCreditRequests(data.requests || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to load credit requests.');
+      if (!silent) setError(err.message || 'Failed to load credit requests.');
     } finally {
-      setRequestsLoading(false);
+      if (!silent) setRequestsLoading(false);
     }
   };
 
@@ -268,12 +268,12 @@ export default function SuperAdminDashboard() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to process request');
       
-      // Update local state
+      // Update local state safely
       setCreditRequests(prev => prev.map(r => r.id === requestId ? { 
         ...r, 
         status, 
         adminNotes: notes, 
-        press: { ...r.press, credits: data.request.press.credits } 
+        press: r.press ? { ...r.press, credits: data.request?.press?.credits ?? r.press.credits } : r.press
       } : r));
       // Refresh presses list since their credits might have changed
       fetchPresses();
@@ -286,6 +286,15 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     fetchPresses();
+    fetchCreditRequests(true); // Silent fetch on mount to populate tab badge
+  }, []);
+
+  useEffect(() => {
+    // Poll credit requests silently every 20 seconds for real-time tracking
+    const interval = setInterval(() => {
+      fetchCreditRequests(true);
+    }, 20000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchGlobalFonts = async () => {
@@ -735,6 +744,9 @@ export default function SuperAdminDashboard() {
     );
   });
 
+  // Pending Credit Requests count
+  const pendingCount = creditRequests.filter(r => r.status === 'PENDING').length;
+
   return (
     <div style={{ padding: '40px', minHeight: '100vh', background: 'var(--bg-gradient)', color: '#ffffff' }}>
       
@@ -811,7 +823,7 @@ export default function SuperAdminDashboard() {
               activeTab === 'templates' ? fetchGlobalTemplates : 
               activeTab === 'fonts' ? fetchGlobalFonts :
               activeTab === 'settings' ? fetchSettings :
-              activeTab === 'creditRequests' ? fetchCreditRequests :
+              activeTab === 'creditRequests' ? () => fetchCreditRequests(false) :
               fetchAuditLogs
             }
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -973,6 +985,19 @@ export default function SuperAdminDashboard() {
           }}
         >
           <CreditCard size={16} /> Credit Requests
+          {pendingCount > 0 && (
+            <span style={{
+              background: 'var(--danger)',
+              color: '#fff',
+              fontSize: '0.7rem',
+              fontWeight: '700',
+              padding: '2px 6px',
+              borderRadius: '10px',
+              marginLeft: '4px'
+            }}>
+              {pendingCount}
+            </span>
+          )}
         </button>
         <button 
           type="button" 
@@ -1932,17 +1957,21 @@ export default function SuperAdminDashboard() {
                 };
                 const colors = statusColors[req.status] || { bg: 'rgba(255,255,255,0.05)', text: 'var(--muted)', border: 'rgba(255,255,255,0.1)' };
                 
+                const pressName = req.press?.name || 'Unknown Press';
+                const pressEmail = req.press?.email || 'N/A';
+                const pressCredits = req.press?.credits ?? 0;
+                
                 return (
                   <div key={req.id} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-                          <h4 style={{ fontSize: '1.1rem', fontWeight: '600' }}>{req.press.name}</h4>
-                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>({req.press.email})</span>
+                          <h4 style={{ fontSize: '1.1rem', fontWeight: '600' }}>{pressName}</h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>({pressEmail})</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-                            Current Balance: <strong>{req.press.credits} cr</strong>
+                            Current Balance: <strong>{pressCredits} cr</strong>
                           </span>
                           <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>•</span>
                           <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
