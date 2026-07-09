@@ -118,7 +118,6 @@ export default function SettingsPage() {
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 
-  // Staff Users State
   const [currentUserRole, setCurrentUserRole] = useState('');
   const [staffUsers, setStaffUsers] = useState<any[]>([]);
   const [staffName, setStaffName] = useState('');
@@ -127,6 +126,12 @@ export default function SettingsPage() {
   const [staffRole, setStaffRole] = useState<'OPERATOR' | 'DESIGNER'>('OPERATOR');
   const [showStaffForm, setShowStaffForm] = useState(false);
   const [staffLoading, setStaffLoading] = useState(false);
+
+  // Reset Staff Password Modal State
+  const [resetPwTarget, setResetPwTarget] = useState<{ id: number; name: string } | null>(null);
+  const [resetPwValue, setResetPwValue] = useState('');
+  const [resetPwShow, setResetPwShow] = useState(false);
+  const [resetPwLoading, setResetPwLoading] = useState(false);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,6 +280,37 @@ export default function SettingsPage() {
         }
       },
     });
+  };
+
+  const handleResetStaffPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPwTarget || !resetPwValue) return;
+    if (resetPwValue.length < 8) {
+      toast('Password must be at least 8 characters.', 'error');
+      return;
+    }
+    setResetPwLoading(true);
+    try {
+      const res = await fetch(`/api/settings/users/${resetPwTarget.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: resetPwValue }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast(`Password for "${resetPwTarget.name}" reset successfully.`, 'success');
+        setResetPwTarget(null);
+        setResetPwValue('');
+        setResetPwShow(false);
+      } else {
+        toast(data.error || 'Failed to reset password.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      toast('An unexpected error occurred.', 'error');
+    } finally {
+      setResetPwLoading(false);
+    }
   };
 
   const fetchData = async () => {
@@ -1106,9 +1142,24 @@ export default function SettingsPage() {
                           </td>
                           <td>
                             {u.role !== 'OWNER' ? (
-                              <button className="btn btn-danger" style={{ padding: '6px' }} onClick={() => handleDeleteStaff(u.id, u.name)}>
-                                <Trash2 size={12} />
-                              </button>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  className="btn btn-secondary"
+                                  style={{ padding: '5px 8px', fontSize: '0.7rem', gap: '4px', display: 'flex', alignItems: 'center' }}
+                                  onClick={() => { setResetPwTarget({ id: u.id, name: u.name }); setResetPwValue(''); setResetPwShow(false); }}
+                                  title="Reset password"
+                                >
+                                  <KeyRound size={12} /> Reset PW
+                                </button>
+                                <button
+                                  className="btn btn-danger"
+                                  style={{ padding: '6px' }}
+                                  onClick={() => handleDeleteStaff(u.id, u.name)}
+                                  title="Remove user"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
                             ) : (
                               <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>—</span>
                             )}
@@ -1295,6 +1346,94 @@ export default function SettingsPage() {
           onConfirm={confirmConfig.onConfirm}
           onCancel={closeConfirm}
         />
+      )}
+
+      {/* ── Reset Staff Password Modal ──────────────────────────────────────── */}
+      {resetPwTarget && (
+        <div
+          onClick={() => { setResetPwTarget(null); setResetPwValue(''); }}
+          style={{
+            position: 'fixed', inset: 0,
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 2000,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="glass-panel"
+            style={{
+              width: '100%', maxWidth: '420px', padding: '28px',
+              borderRadius: '16px', border: '1px solid var(--glass-border)',
+              display: 'flex', flexDirection: 'column', gap: '20px',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(79,70,229,0.15)', border: '1px solid rgba(79,70,229,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <KeyRound size={18} color="var(--primary)" />
+              </div>
+              <div>
+                <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>Reset Password</h4>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--muted)' }}>
+                  Setting new password for <strong style={{ color: '#fff' }}>{resetPwTarget.name}</strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleResetStaffPassword} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">New Password <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(min. 8 characters)</span></label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={resetPwShow ? 'text' : 'password'}
+                    required
+                    autoFocus
+                    minLength={8}
+                    className="form-input"
+                    placeholder="••••••••"
+                    value={resetPwValue}
+                    onChange={e => setResetPwValue(e.target.value)}
+                    style={{ paddingRight: '42px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setResetPwShow(v => !v)}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '2px', display: 'flex', alignItems: 'center' }}
+                    tabIndex={-1}
+                  >
+                    {resetPwShow ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {resetPwValue.length > 0 && resetPwValue.length < 8 && (
+                  <span style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '4px', display: 'block' }}>
+                    Password too short
+                  </span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setResetPwTarget(null); setResetPwValue(''); setResetPwShow(false); }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={resetPwLoading || resetPwValue.length < 8}
+                  style={{ gap: '8px' }}
+                >
+                  <KeyRound size={14} /> {resetPwLoading ? 'Resetting...' : 'Set New Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </>
   );
