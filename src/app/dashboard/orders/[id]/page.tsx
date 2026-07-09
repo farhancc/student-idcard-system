@@ -22,7 +22,9 @@ import {
   Eye,
   X,
   AlertCircle,
-  Edit
+  Edit,
+  Zap,
+  Activity
 } from 'lucide-react';
 
 interface OrderClient {
@@ -352,8 +354,8 @@ export default function OrderDetailsPage() {
     );
   };
 
-  // Update Status
-  const handleUpdateStatus = async (newStatus: string) => {
+  // Update Status and automate pipeline actions (PDF compilation)
+  const handleWorkflowAction = async (newStatus: string) => {
     setTransitioning(true);
     try {
       const res = await fetch(`/api/orders/${orderId}`, {
@@ -364,7 +366,19 @@ export default function OrderDetailsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update status');
 
-      fetchData();
+      toast(`Order stage updated to: ${newStatus}`, 'success');
+
+      // Refresh order details first to display status change
+      await fetchData();
+
+      // Automate PDF compilation depending on the new status
+      if (newStatus === 'APPROVAL_PDF_SENT') {
+        await handleCompilePdf('APPROVAL');
+      } else if (newStatus === 'PRINTING') {
+        await handleCompilePdf('PRODUCTION');
+      } else if (newStatus === 'DELIVERED') {
+        await handleCompilePdf('INVOICE');
+      }
     } catch (err: any) {
       toast(err.message || 'Status transition error', 'error');
     } finally {
@@ -574,9 +588,7 @@ export default function OrderDetailsPage() {
                 flex: 1,
                 minWidth: '100px'
               }}>
-                <button
-                  disabled={transitioning || step.num > currentStep + 1}
-                  onClick={() => handleUpdateStatus(step.key)}
+                <div
                   style={{
                     width: '44px',
                     height: '44px',
@@ -588,12 +600,11 @@ export default function OrderDetailsPage() {
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: '700',
-                    cursor: transitioning ? 'not-allowed' : 'pointer',
                     boxShadow: isActive ? '0 0 15px var(--primary-glow)' : 'none'
                   }}
                 >
                   {step.num}
-                </button>
+                </div>
                 <span style={{
                   marginTop: '12px',
                   fontSize: '0.8rem',
@@ -607,206 +618,323 @@ export default function OrderDetailsPage() {
         </div>
       </div>
 
+      {/* Workflow Action Control */}
+      {(() => {
+        if (!order) return null;
+
+        let nextActionLabel = '';
+        let nextStatus = '';
+        let actionDescription = '';
+
+        switch (order.status) {
+          case 'DRAFT':
+            nextActionLabel = 'Send for Approval';
+            nextStatus = 'APPROVAL_PDF_SENT';
+            actionDescription = 'This will generate watermarked PDF proofs and transition the order to the "Approval Sent" stage.';
+            break;
+          case 'APPROVAL_PDF_SENT':
+            nextActionLabel = 'Approve Layout';
+            nextStatus = 'APPROVED';
+            actionDescription = 'The client has approved the layout. Transition the order to the "Approved layout" stage.';
+            break;
+          case 'APPROVED':
+            nextActionLabel = 'Send to Printing Press';
+            nextStatus = 'PRINTING';
+            actionDescription = 'This will compile the CMYK print grids on A3 layout sheets and lock printing credits.';
+            break;
+          case 'PRINTING':
+            nextActionLabel = 'Mark as Delivered';
+            nextStatus = 'DELIVERED';
+            actionDescription = 'The cards have been printed and delivered. This will generate the invoice PDF.';
+            break;
+          case 'DELIVERED':
+            break;
+        }
+
+        return (
+          <div className="glass-panel" style={{ 
+            marginBottom: '32px', 
+            padding: '24px', 
+            border: '1px solid rgba(99, 102, 241, 0.15)', 
+            background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.03) 0%, rgba(0, 0, 0, 0.2) 100%)',
+            position: 'relative',
+            overflow: 'hidden'
+          }}>
+            {/* Ambient glow accent */}
+            <div style={{
+              position: 'absolute',
+              top: '-30px',
+              right: '-30px',
+              width: '120px',
+              height: '120px',
+              background: 'var(--primary)',
+              filter: 'blur(60px)',
+              opacity: 0.1,
+              pointerEvents: 'none'
+            }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '10px',
+                  background: 'rgba(99, 102, 241, 0.1)',
+                  border: '1px solid rgba(99, 102, 241, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'var(--primary)'
+                }}>
+                  <Zap size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '600' }}>
+                    Pipeline Workflow Controller
+                  </h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>
+                    Current status: <span className="badge badge-info" style={{ textTransform: 'uppercase', fontSize: '0.7rem' }}>{order.status.replace(/_/g, ' ')}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                {nextStatus ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end' }}>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => handleWorkflowAction(nextStatus)}
+                      disabled={transitioning || pdfLoading !== null}
+                      style={{
+                        padding: '10px 20px',
+                        fontSize: '0.85rem',
+                        fontWeight: '600',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        boxShadow: '0 4px 14px 0 rgba(99, 102, 241, 0.25)',
+                        background: nextStatus === 'PRINTING' ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : 'var(--primary-gradient)'
+                      }}
+                    >
+                      {transitioning || pdfLoading ? (
+                        <>
+                          <span className="spinner" style={{ width: '12px', height: '12px', borderWidth: '1px' }}></span>
+                          <span>Processing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Zap size={14} />
+                          <span>{nextActionLabel}</span>
+                        </>
+                      )}
+                    </button>
+                    {actionDescription && (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'right', maxWidth: '350px' }}>
+                        {actionDescription}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', borderRadius: '6px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', color: '#10b981', fontSize: '0.8rem', fontWeight: '500' }}>
+                    <CheckCircle size={14} /> Order Completed & Delivered
+                  </div>
+                )}
+
+                <div style={{ height: '36px', width: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 8px' }} />
+
+                {/* Manual Stage override */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>Force Jump Stage</label>
+                  <select
+                    className="form-input"
+                    style={{ padding: '6px 12px', fontSize: '0.78rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)', borderRadius: '6px', cursor: 'pointer' }}
+                    value={order.status}
+                    onChange={(e) => handleWorkflowAction(e.target.value)}
+                    disabled={transitioning || pdfLoading !== null}
+                  >
+                    <option value="DRAFT">1. Draft Config</option>
+                    <option value="APPROVAL_PDF_SENT">2. Approval Sent</option>
+                    <option value="APPROVED">3. Approved layout</option>
+                    <option value="PRINTING">4. Printing Press</option>
+                    <option value="DELIVERED">5. Delivered</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Display status indicators for active jobs if compiling */}
+            {(getLatestJob('APPROVAL') || getLatestJob('PRODUCTION') || getLatestJob('INVOICE') || getLatestJob('INDIVIDUAL')) && (
+              <div style={{ 
+                marginTop: '20px', 
+                paddingTop: '20px', 
+                borderTop: '1px solid rgba(255,255,255,0.06)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <h4 style={{ fontSize: '0.8rem', margin: 0, fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--primary)' }}>
+                  <Activity size={14} /> Active PDF Compile Queue
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  {getLatestJob('APPROVAL') && (
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>Approval Proofs</div>
+                      {renderJobStatus('APPROVAL')}
+                    </div>
+                  )}
+                  {getLatestJob('PRODUCTION') && (
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>Production Grid</div>
+                      {renderJobStatus('PRODUCTION')}
+                    </div>
+                  )}
+                  {getLatestJob('INDIVIDUAL') && (
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>CR-80 Cards</div>
+                      {renderJobStatus('INDIVIDUAL')}
+                    </div>
+                  )}
+                  {getLatestJob('INVOICE') && (
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div style={{ fontSize: '0.75rem', fontWeight: '600', color: '#fff', marginBottom: '4px' }}>Invoice Receipt</div>
+                      {renderJobStatus('INVOICE')}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Grid panels */}
       <div className="dashboard-grid-32">
         {/* Left Column: Quick actions & Logs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          {/* Action triggers */}
-          <div className="glass-panel">
-            <h3 style={{ marginBottom: '20px' }}>PDF Compilation Actions</h3>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '16px'
-            }}>
-              {/* Approval Sheet trigger */}
-              <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)', padding: '16px' }}>
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>1. Layout Approval Proofs</h4>
-                <p style={{ fontSize: '0.75rem', marginBottom: '16px' }}>
-                  Generates an A4 compilation sheet watermarked for client review.
-                </p>
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button 
-                    className="btn btn-primary" 
-                    style={{ fontSize: '0.8rem', padding: '8px 12px', flex: 1 }}
-                    onClick={() => handleCompilePdf('APPROVAL')}
+          {/* Print Layout Configuration */}
+          <div className="glass-panel" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.1rem' }}>
+                ⚙ Print Layout Configuration
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowLayoutSettings(v => !v)}
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--glass-border)',
+                  background: showLayoutSettings ? 'rgba(99,102,241,0.15)' : 'transparent',
+                  color: showLayoutSettings ? 'var(--primary)' : 'var(--muted)',
+                  cursor: 'pointer',
+                }}
+              >
+                {showLayoutSettings ? 'Collapse' : 'Expand'}
+              </button>
+            </div>
+
+            {showLayoutSettings && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '12px',
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Paper Size</label>
+                    <select
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)' }}
+                      value={layoutPaperSize}
+                      onChange={e => handleUpdateLayoutConfig('paperSize', e.target.value)}
+                    >
+                      <option value="A3">A3 Sheet</option>
+                      <option value="A4">A4 Sheet</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Orientation</label>
+                    <select
+                      className="form-input"
+                      style={{ padding: '6px 10px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)' }}
+                      value={layoutOrientation}
+                      onChange={e => handleUpdateLayoutConfig('orientation', e.target.value)}
+                    >
+                      <option value="PORTRAIT">Portrait</option>
+                      <option value="LANDSCAPE">Landscape</option>
+                    </select>
+                  </div>
+
+                   {([
+                     { label: 'Left Margin (pt)',   value: layoutMarginLeft,   field: 'marginLeft' },
+                     { label: 'Top Margin (pt)',    value: layoutMarginTop,    field: 'marginTop' },
+                     { label: 'Right Margin (pt)',  value: layoutMarginRight,  field: 'marginRight' },
+                     { label: 'Bottom Margin (pt)', value: layoutMarginBottom, field: 'marginBottom' },
+                     { label: 'Col Gap (pt)',       value: layoutColGap,       field: 'colGap' },
+                     { label: 'Row Gap (pt)',       value: layoutRowGap,       field: 'rowGap' },
+                     { label: 'Bleed (pt)',         value: layoutBleed,        field: 'bleed' },
+                   ] as const).map(({ label, value, field }) => (
+                     <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                       <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{label}</label>
+                       <input
+                         type="number"
+                         min={0}
+                         max={200}
+                         className="form-input"
+                         style={{ padding: '6px 10px', fontSize: '0.8rem' }}
+                         value={value}
+                         onChange={e => handleUpdateLayoutConfig(field, Number(e.target.value))}
+                       />
+                     </div>
+                   ))}
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px', gridColumn: 'span 2', marginTop: '4px' }}>
+                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--muted)', cursor: 'pointer' }}>
+                       <input
+                         type="checkbox"
+                         checked={layoutCropMarks}
+                         onChange={e => handleUpdateLayoutConfig('cropMarks', e.target.checked)}
+                         style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
+                       />
+                       Crop Marks
+                     </label>
+                     <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: 'var(--muted)', cursor: 'pointer' }}>
+                       <input
+                         type="checkbox"
+                         checked={layoutFoldLine}
+                         onChange={e => handleUpdateLayoutConfig('foldLine', e.target.checked)}
+                         style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
+                       />
+                       Fold Lines
+                     </label>
+                   </div>
+                </div>
+
+                <div style={{ fontSize: '0.7rem', color: 'var(--muted)', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '10px' }}>
+                  Default: Margins 40 pt · Col/Row Gap 15 pt · Bleed 0 pt · Values in PDF points (1 pt ≈ 0.35 mm)
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '8px 12px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                    onClick={() => handleCompilePdf('INDIVIDUAL')}
                     disabled={pdfLoading !== null}
                   >
-                    {pdfLoading === 'APPROVAL' ? 'Queueing...' : 'Compile Proofs'}
+                    Compile CR-80 Cards
                   </button>
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ padding: '8px' }}
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.8rem', padding: '8px 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                     onClick={handleWhatsAppShare}
                   >
-                    <Share2 size={16} />
+                    <Share2 size={12} /> Share Proofs Link
                   </button>
                 </div>
-                {renderJobStatus('APPROVAL')}
               </div>
-
-              {/* Production Layout Sheet trigger */}
-              <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)', padding: '16px' }}>
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>2. Production Layout grid</h4>
-                <p style={{ fontSize: '0.75rem', marginBottom: '12px' }}>
-                  Generates CMYK PDF/X grids on A3 layout sheets with crop and fold marks.
-                </p>
-
-                {/* Layout Settings Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setShowLayoutSettings(v => !v)}
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '4px 10px',
-                    marginBottom: '10px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--glass-border)',
-                    background: showLayoutSettings ? 'rgba(99,102,241,0.15)' : 'transparent',
-                    color: showLayoutSettings ? 'var(--primary)' : 'var(--muted)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  ⚙ Layout Settings {showLayoutSettings ? '▲' : '▼'}
-                </button>
-
-                {showLayoutSettings && (
-                  <div style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--glass-border)',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    marginBottom: '12px',
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: '10px',
-                  }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <label style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>Paper Size</label>
-                      <select
-                        className="form-input"
-                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)' }}
-                        value={layoutPaperSize}
-                        onChange={e => handleUpdateLayoutConfig('paperSize', e.target.value)}
-                      >
-                        <option value="A3">A3 Sheet</option>
-                        <option value="A4">A4 Sheet</option>
-                      </select>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <label style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>Orientation</label>
-                      <select
-                        className="form-input"
-                        style={{ padding: '4px 8px', fontSize: '0.8rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)' }}
-                        value={layoutOrientation}
-                        onChange={e => handleUpdateLayoutConfig('orientation', e.target.value)}
-                      >
-                        <option value="PORTRAIT">Portrait</option>
-                        <option value="LANDSCAPE">Landscape</option>
-                      </select>
-                    </div>
-
-                     {([
-                       { label: 'Left Margin (pt)',   value: layoutMarginLeft,   field: 'marginLeft' },
-                       { label: 'Top Margin (pt)',    value: layoutMarginTop,    field: 'marginTop' },
-                       { label: 'Right Margin (pt)',  value: layoutMarginRight,  field: 'marginRight' },
-                       { label: 'Bottom Margin (pt)', value: layoutMarginBottom, field: 'marginBottom' },
-                       { label: 'Col Gap (pt)',       value: layoutColGap,       field: 'colGap' },
-                       { label: 'Row Gap (pt)',       value: layoutRowGap,       field: 'rowGap' },
-                       { label: 'Bleed (pt)',         value: layoutBleed,        field: 'bleed' },
-                     ] as const).map(({ label, value, field }) => (
-                       <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                         <label style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{label}</label>
-                         <input
-                           type="number"
-                           min={0}
-                           max={200}
-                           className="form-input"
-                           style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                           value={value}
-                           onChange={e => handleUpdateLayoutConfig(field, Number(e.target.value))}
-                         />
-                       </div>
-                     ))}
-                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', gridColumn: 'span 2', marginTop: '6px' }}>
-                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--muted)', cursor: 'pointer' }}>
-                         <input
-                           type="checkbox"
-                           checked={layoutCropMarks}
-                           onChange={e => handleUpdateLayoutConfig('cropMarks', e.target.checked)}
-                           style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
-                         />
-                         Crop Marks
-                       </label>
-                       <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.72rem', color: 'var(--muted)', cursor: 'pointer' }}>
-                         <input
-                           type="checkbox"
-                           checked={layoutFoldLine}
-                           onChange={e => handleUpdateLayoutConfig('foldLine', e.target.checked)}
-                           style={{ cursor: 'pointer', accentColor: 'var(--primary)' }}
-                         />
-                         Fold Lines
-                       </label>
-                     </div>
-                     <div style={{ gridColumn: 'span 2', fontSize: '0.68rem', color: 'var(--muted)', marginTop: '2px' }}>
-                       Default: Margins 40 pt · Col/Row Gap 15 pt · Bleed 0 pt · Values in PDF points (1 pt ≈ 0.35 mm)
-                     </div>
-                  </div>
-                )}
-
-                <button
-                  className="btn btn-primary"
-                  style={{ fontSize: '0.8rem', padding: '8px 12px', width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 14px 0 rgba(16,185,129,0.25)' }}
-                  onClick={() => handleCompilePdf('PRODUCTION')}
-                  disabled={pdfLoading !== null || (order?.status !== 'APPROVED' && order?.status !== 'PRINTING')}
-                >
-                  {pdfLoading === 'PRODUCTION' ? 'Queueing...' : 'Compile Production PDF'}
-                </button>
-                {order?.status !== 'APPROVED' && order?.status !== 'PRINTING' && (
-                  <span style={{ display: 'block', fontSize: '0.65rem', color: '#f87171', marginTop: '6px', textAlign: 'center' }}>
-                    * Requires order status set to APPROVED.
-                  </span>
-                )}
-                {renderJobStatus('PRODUCTION')}
-              </div>
-
-              {/* Individual ID card PDF trigger */}
-              <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)', padding: '16px' }}>
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>3. CR-80 Individual Cards</h4>
-                <p style={{ fontSize: '0.75rem', marginBottom: '16px' }}>
-                  Generates individual CR-80 sized card cuts (front + back) for printing.
-                </p>
-                <button 
-                  className="btn btn-secondary" 
-                  style={{ fontSize: '0.8rem', padding: '8px 12px', width: '100%' }}
-                  onClick={() => handleCompilePdf('INDIVIDUAL')}
-                  disabled={pdfLoading !== null}
-                >
-                  {pdfLoading === 'INDIVIDUAL' ? 'Queueing...' : 'Compile Individual PDF'}
-                </button>
-                {renderJobStatus('INDIVIDUAL')}
-              </div>
-
-              {/* Order Invoice PDF trigger */}
-              <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.01)', padding: '16px' }}>
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '8px' }}>4. Billing Invoice PDF</h4>
-                <p style={{ fontSize: '0.75rem', marginBottom: '16px' }}>
-                  Compiles automated invoice bill containing details and tax summary.
-                </p>
-                <button 
-                  className="btn btn-secondary" 
-                  style={{ fontSize: '0.8rem', padding: '8px 12px', width: '100%' }}
-                  onClick={() => handleCompilePdf('INVOICE')}
-                  disabled={pdfLoading !== null}
-                >
-                  {pdfLoading === 'INVOICE' ? 'Queueing...' : 'Compile Invoice PDF'}
-                </button>
-                {renderJobStatus('INVOICE')}
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Activity Log Tracker */}
