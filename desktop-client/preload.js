@@ -32,4 +32,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('flush-print-queue', { authToken }),
   getQueueStatus: () =>
     ipcRenderer.invoke('get-queue-status'),
+  saveBackupLocally: (clientName, monthName, base64ZipData) =>
+    ipcRenderer.invoke('save-backup', { clientName, monthName, base64ZipData }),
 });

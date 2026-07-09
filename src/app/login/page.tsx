@@ -16,6 +16,79 @@ export default function LoginPage() {
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
   const [isElectron, setIsElectron] = useState(false);
 
+  const runAutoBackupFlow = async () => {
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI) return;
+
+    const today = new Date();
+    if (today.getDate() !== 15) return;
+
+    let targetMonth = today.getMonth() - 2;
+    let targetYear = today.getFullYear();
+    if (targetMonth < 0) {
+      targetMonth += 12;
+      targetYear -= 1;
+    }
+    const monthStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+    const monthName = new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long', year: 'numeric' }).replace(/\s+/g, '_');
+
+    if (localStorage.getItem(`backup_completed_${monthStr}`) === 'true') {
+      return;
+    }
+
+    try {
+      console.log('Running auto-backup for second last month:', monthStr);
+      const res = await fetch(`/api/backup/prepare?year=${targetYear}&month=${targetMonth + 1}`);
+      if (!res.ok) {
+        console.warn('Auto-backup preparation request returned an error. Might be unauthenticated.');
+        return;
+      }
+
+      const data = await res.json();
+      if (!data.success || !data.clients || data.clients.length === 0) {
+        console.log('No data to backup for target month:', monthStr);
+        localStorage.setItem(`backup_completed_${monthStr}`, 'true');
+        return;
+      }
+
+      console.log(`Found data to backup for ${data.clients.length} clients.`);
+      const savedClientIds = [];
+
+      for (const client of data.clients) {
+        const saveRes = await electronAPI.saveBackupLocally(client.name, monthName, client.zipBase64);
+        if (saveRes && saveRes.success) {
+          console.log(`Successfully stored backup zip locally for client ${client.name}`);
+          savedClientIds.push(client.id);
+        } else {
+          console.error(`Failed to store backup zip locally for client ${client.name}:`, saveRes?.error);
+        }
+      }
+
+      if (savedClientIds.length > 0) {
+        console.log('Triggering server purge for successfully backed up client IDs:', savedClientIds);
+        const purgeRes = await fetch('/api/backup/purge', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            year: targetYear,
+            month: targetMonth + 1,
+            clientIds: savedClientIds,
+          }),
+        });
+
+        if (purgeRes.ok) {
+          const purgeData = await purgeRes.json();
+          console.log('Purge completed successfully:', purgeData);
+          localStorage.setItem(`backup_completed_${monthStr}`, 'true');
+        } else {
+          console.error('Failed to trigger purge on server');
+        }
+      }
+    } catch (err) {
+      console.error('Error during auto-backup process:', err);
+    }
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
       setIsElectron(true);
@@ -24,6 +97,12 @@ export default function LoginPage() {
           setHasSavedCredentials(true);
         }
       }).catch(() => {});
+
+      // On mount: if today is the 15th, check if we have a valid session and trigger backup
+      const today = new Date();
+      if (today.getDate() === 15) {
+        runAutoBackupFlow();
+      }
     }
   }, []);
 
@@ -68,6 +147,12 @@ export default function LoginPage() {
           await (window as any).electronAPI.saveCredentials(email, password);
         } else {
           await (window as any).electronAPI.clearCredentials();
+        }
+
+        // Successful login: trigger backup check immediately
+        const today = new Date();
+        if (today.getDate() === 15) {
+          await runAutoBackupFlow();
         }
       }
 

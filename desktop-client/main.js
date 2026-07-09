@@ -339,6 +339,27 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
   }
 });
 
+// IPC handler to save backup ZIP files locally
+ipcMain.handle('save-backup', async (event, { clientName, monthName, base64ZipData }) => {
+  try {
+    const documentsPath = app.getPath('documents');
+    const safeClientName = (clientName || 'Client').trim().replace(/[^a-z0-9_-]/gi, '_');
+    const targetDir = path.join(documentsPath, 'idexo_prints', safeClientName, 'backups');
+
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const filePath = path.join(targetDir, `${monthName}.zip`);
+    const buffer = Buffer.from(base64ZipData, 'base64');
+    fs.writeFileSync(filePath, buffer);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('Failed to save backup zip file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC handler to detect desktop context
 ipcMain.handle('is-desktop', () => {
   return true;
