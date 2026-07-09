@@ -759,6 +759,12 @@ export default function ClientDetailsPage() {
     setEditDesignation(ch.designation || '');
     setEditUniqueKey(ch.uniqueKey || '');
     setEditPhotoUrl(ch.photoUrl || '');
+    
+    // Find active template coordinates
+    const tmpl = clientTemplates.find(t => t.id === ch.resolvedTemplateId) || 
+                 clientTemplates.find(t => t.name === ch.templateName) ||
+                 clientTemplates[0];
+
     // Parse customFields JSON into a flat key->value map for the structured editor
     let parsedMap: Record<string, string> = {};
     if (ch.customFields) {
@@ -771,6 +777,38 @@ export default function ClientDetailsPage() {
         }
       } catch (e) { /* ignore parse error, start with empty */ }
     }
+
+    // Prepopulate missing custom fields from template coordinates
+    if (tmpl) {
+      try {
+        const front = JSON.parse(tmpl.frontFields || '[]');
+        const back = JSON.parse(tmpl.backFields || '[]');
+        const allFields = [...front, ...back];
+        
+        allFields.forEach(f => {
+          if (
+            f.field !== 'name' &&
+            f.field !== 'fullName' &&
+            f.field !== 'designation' &&
+            f.field !== 'role' &&
+            f.field !== 'photo' &&
+            f.field !== 'avatar' &&
+            f.field !== 'photoUrl' &&
+            f.field !== 'uniqueKey' &&
+            f.field !== 'validTill' &&
+            f.field !== 'validTillDate' &&
+            f.field !== 'cardSerial'
+          ) {
+            if (parsedMap[f.field] === undefined) {
+              parsedMap[f.field] = '';
+            }
+          }
+        });
+      } catch (e) {
+        console.error('Error prepopulating edit custom fields map:', e);
+      }
+    }
+
     setEditCustomFieldsMap(parsedMap);
     setEditError('');
   };
