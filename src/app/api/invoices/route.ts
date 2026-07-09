@@ -38,10 +38,10 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
     }
 
-    // Only OWNER can modify invoice details
-    if (userRole !== 'OWNER') {
+    // Only OWNER and OPERATOR can modify invoice details
+    if (userRole !== 'OWNER' && userRole !== 'OPERATOR') {
       return NextResponse.json(
-        { error: 'Forbidden: Only the Press Owner can edit invoice details' },
+        { error: 'Forbidden: Only the Press Owner or Operator can edit invoice details' },
         { status: 403 }
       );
     }

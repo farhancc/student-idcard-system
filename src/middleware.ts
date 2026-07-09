@@ -95,12 +95,12 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // ── OPERATOR: no invoices ──────────────────────────────────────────────────
+    // ── OPERATOR: no billing ──────────────────────────────────────────────────
     if (payload.role === 'OPERATOR') {
-      const blocked = ['/api/billing', '/dashboard/billing', '/dashboard/invoices'];
+      const blocked = ['/api/billing', '/dashboard/billing'];
       if (blocked.some(b => pathname.startsWith(b))) {
         if (pathname.startsWith('/api/')) {
-          return NextResponse.json({ error: 'Forbidden: Operators cannot access billing or invoices' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden: Operators cannot access billing' }, { status: 403 });
         }
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }

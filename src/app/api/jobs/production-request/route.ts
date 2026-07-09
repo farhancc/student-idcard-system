@@ -5,7 +5,7 @@ import { getCreditSettings } from '@/lib/system-settings';
 
 const productionRequestSchema = z.object({
   orderId: z.union([z.number(), z.string().transform(Number)]),
-  pdfType: z.enum(['PRODUCTION', 'APPROVAL']),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INVOICE']),
   paperSize: z.string().optional().default('A3'),
   orientation: z.string().optional().default('PORTRAIT'),
   bleed: z.union([z.number(), z.string().transform(Number)]).optional().default(0),
