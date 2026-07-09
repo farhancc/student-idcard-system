@@ -91,15 +91,19 @@ export default function DashboardLayoutClient({
     }
   };
 
-  const menuItems = [
-    { label: 'Overview', path: '/dashboard', icon: <LayoutDashboard size={18} /> },
-    { label: 'Clients', path: '/dashboard/clients', icon: <Users size={18} /> },
-    { label: 'Orders', path: '/dashboard/orders', icon: <FileText size={18} /> },
-    { label: 'Invoices', path: '/dashboard/invoices', icon: <CreditCard size={18} /> },
-    { label: 'Templates', path: '/dashboard/templates', icon: <Layers size={18} /> },
-    { label: 'PDF Jobs', path: '/dashboard/pdf-jobs', icon: <Clock size={18} /> },
-    { label: 'Settings', path: '/dashboard/settings', icon: <Settings size={18} /> },
+  const role = profile?.user?.role ?? 'OPERATOR';
+
+  const allMenuItems = [
+    { label: 'Overview',   path: '/dashboard',           icon: <LayoutDashboard size={18} />, roles: ['OWNER', 'OPERATOR'] },
+    { label: 'Clients',    path: '/dashboard/clients',   icon: <Users size={18} />,           roles: ['OWNER', 'OPERATOR'] },
+    { label: 'Orders',     path: '/dashboard/orders',    icon: <FileText size={18} />,        roles: ['OWNER', 'OPERATOR'] },
+    { label: 'Invoices',   path: '/dashboard/invoices',  icon: <CreditCard size={18} />,      roles: ['OWNER'] },
+    { label: 'Templates',  path: '/dashboard/templates', icon: <Layers size={18} />,          roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
+    { label: 'PDF Jobs',   path: '/dashboard/pdf-jobs',  icon: <Clock size={18} />,           roles: ['OWNER', 'OPERATOR'] },
+    { label: 'Settings',   path: '/dashboard/settings',  icon: <Settings size={18} />,        roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
   ];
+
+  const menuItems = allMenuItems.filter(item => item.roles.includes(role));
 
   const sidebarContent = (
     <>

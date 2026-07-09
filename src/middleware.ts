@@ -72,21 +72,35 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // Role-based route checks
-    // DESIGNER role cannot access order creation, status modification, or production PDFs.
+    // ── DESIGNER: only allowed on /dashboard/templates and /dashboard/settings ──
     if (payload.role === 'DESIGNER') {
+      const isApiCall = pathname.startsWith('/api/');
       const isPostOrPut = request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE';
-      // Restrict order execution, invoices, billing modifications
-      if (isPostOrPut && (pathname.includes('/api/orders') || pathname.includes('/api/billing') || pathname.includes('/api/invoices'))) {
+
+      // Block mutating API calls on orders/billing/invoices/clients
+      if (isApiCall && isPostOrPut &&
+        (pathname.includes('/api/orders') || pathname.includes('/api/billing') ||
+         pathname.includes('/api/invoices') || pathname.includes('/api/clients') ||
+         pathname.includes('/api/cardholders'))) {
         return NextResponse.json({ error: 'Forbidden: Designers cannot perform this action' }, { status: 403 });
+      }
+
+      // Block dashboard page navigation to anything except templates + settings
+      if (!isApiCall) {
+        const allowedPagePrefixes = ['/dashboard/templates', '/dashboard/settings'];
+        const isAllowed = allowedPagePrefixes.some(p => pathname.startsWith(p));
+        if (!isAllowed) {
+          return NextResponse.redirect(new URL('/dashboard/templates', request.url));
+        }
       }
     }
 
-    // OPERATOR role cannot access billing/subscription tiers
+    // ── OPERATOR: no invoices ──────────────────────────────────────────────────
     if (payload.role === 'OPERATOR') {
-      if (pathname.includes('/api/billing') || pathname.includes('/dashboard/billing')) {
+      const blocked = ['/api/billing', '/dashboard/billing', '/dashboard/invoices'];
+      if (blocked.some(b => pathname.startsWith(b))) {
         if (pathname.startsWith('/api/')) {
-          return NextResponse.json({ error: 'Forbidden: Operators cannot access billing' }, { status: 403 });
+          return NextResponse.json({ error: 'Forbidden: Operators cannot access billing or invoices' }, { status: 403 });
         }
         return NextResponse.redirect(new URL('/dashboard', request.url));
       }
