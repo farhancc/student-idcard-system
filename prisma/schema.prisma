@@ -33,8 +33,9 @@ model Press {
   vendors    PrintVendor[]
   downloads  PdfDownloadLog[]
   printRecs  CardPrintRecord[]
-  jobs       PdfJob[]
-  activities OrderActivityLog[]
+  jobs           PdfJob[]
+  activities     OrderActivityLog[]
+  creditRequests CreditRequest[]
 
   @@map("press")
 }
@@ -467,4 +468,20 @@ model SystemSetting {
   value String
 
   @@map("system_settings")
+}
+
+model CreditRequest {
+  id           Int      @id @default(autoincrement())
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  amount       Int
+  status       String   @default("PENDING") // PENDING | APPROVED | REJECTED
+  reason       String?
+  adminNotes   String?  @map("admin_notes")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([pressId])
+  @@index([status])
+  @@map("credit_requests")
 }

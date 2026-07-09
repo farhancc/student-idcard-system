@@ -69,7 +69,13 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings'>('presses');
+  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests'>('presses');
+
+  // Credit Requests State
+  const [creditRequests, setCreditRequests] = useState<any[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [processingRequestId, setProcessingRequestId] = useState<number | null>(null);
+  const [adminNotesText, setAdminNotesText] = useState<Record<number, string>>({});
 
   // Audit Logs State
   const [logs, setLogs] = useState<any[]>([]);
@@ -234,6 +240,50 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const fetchCreditRequests = async () => {
+    setRequestsLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/superadmin/credit-requests');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch credit requests');
+      setCreditRequests(data.requests || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load credit requests.');
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
+  const handleProcessRequest = async (requestId: number, status: 'APPROVED' | 'REJECTED') => {
+    setProcessingRequestId(requestId);
+    setError('');
+    try {
+      const notes = adminNotesText[requestId] || '';
+      const res = await fetch('/api/superadmin/credit-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId, status, adminNotes: notes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to process request');
+      
+      // Update local state
+      setCreditRequests(prev => prev.map(r => r.id === requestId ? { 
+        ...r, 
+        status, 
+        adminNotes: notes, 
+        press: { ...r.press, credits: data.request.press.credits } 
+      } : r));
+      // Refresh presses list since their credits might have changed
+      fetchPresses();
+    } catch (err: any) {
+      setError(err.message || 'Failed to process request.');
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
   useEffect(() => {
     fetchPresses();
   }, []);
@@ -286,6 +336,8 @@ export default function SuperAdminDashboard() {
       fetchGlobalFonts();
     } else if (activeTab === 'settings') {
       fetchSettings();
+    } else if (activeTab === 'creditRequests') {
+      fetchCreditRequests();
     }
   }, [activeTab, logPage, logCategory, logSeverity]);
 
@@ -759,6 +811,7 @@ export default function SuperAdminDashboard() {
               activeTab === 'templates' ? fetchGlobalTemplates : 
               activeTab === 'fonts' ? fetchGlobalFonts :
               activeTab === 'settings' ? fetchSettings :
+              activeTab === 'creditRequests' ? fetchCreditRequests :
               fetchAuditLogs
             }
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -899,6 +952,27 @@ export default function SuperAdminDashboard() {
           }}
         >
           <Shield size={16} /> System Audit Logs
+        </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('creditRequests')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'creditRequests' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'creditRequests' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'creditRequests' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <CreditCard size={16} /> Credit Requests
         </button>
         <button 
           type="button" 
@@ -1824,6 +1898,130 @@ export default function SuperAdminDashboard() {
               </button>
             </form>
           </div>
+        </>
+      ) : activeTab === 'creditRequests' ? (
+        <>
+          <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CreditCard size={20} color="var(--primary)" /> Credit Request Tickets
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '4px' }}>
+                Review, approve, or reject credit request tickets submitted by printing presses.
+              </p>
+            </div>
+          </div>
+
+          {requestsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px' }}>
+              <Loader2 className="animate-spin" size={32} color="var(--primary)" />
+            </div>
+          ) : creditRequests.length === 0 ? (
+            <div className="glass-panel" style={{ textAlign: 'center', padding: '48px 0', color: 'var(--muted)' }}>
+              <CreditCard size={48} style={{ marginBottom: '16px', opacity: 0.3 }} />
+              <p>No credit requests submitted yet.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {creditRequests.map((req) => {
+                const isPending = req.status === 'PENDING';
+                const statusColors: Record<string, { bg: string, text: string, border: string }> = {
+                  PENDING: { bg: 'rgba(245, 158, 11, 0.12)', text: 'var(--warning)', border: 'rgba(245, 158, 11, 0.3)' },
+                  APPROVED: { bg: 'rgba(16, 185, 129, 0.12)', text: 'var(--success)', border: 'rgba(16, 185, 129, 0.3)' },
+                  REJECTED: { bg: 'rgba(239, 68, 68, 0.12)', text: 'var(--danger)', border: 'rgba(239, 68, 68, 0.3)' },
+                };
+                const colors = statusColors[req.status] || { bg: 'rgba(255,255,255,0.05)', text: 'var(--muted)', border: 'rgba(255,255,255,0.1)' };
+                
+                return (
+                  <div key={req.id} className="glass-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+                          <h4 style={{ fontSize: '1.1rem', fontWeight: '600' }}>{req.press.name}</h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>({req.press.email})</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                            Current Balance: <strong>{req.press.credits} cr</strong>
+                          </span>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>•</span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
+                            Requested on: {new Date(req.createdAt).toLocaleDateString()} at {new Date(req.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--primary)' }}>
+                            +{req.amount.toLocaleString()} Credits
+                          </div>
+                          <span style={{
+                            display: 'inline-block', fontSize: '0.7rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px',
+                            background: colors.bg, color: colors.text, border: `1px solid ${colors.border}`, marginTop: '4px'
+                          }}>
+                            {req.status}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {req.reason && (
+                      <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Press Reason</span>
+                        <p style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>{req.reason}</p>
+                      </div>
+                    )}
+
+                    {isPending ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderTop: '1px solid var(--glass-border)', paddingTop: '16px' }}>
+                        <div className="form-group">
+                          <label className="form-label" style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '6px', display: 'block' }}>Admin Response Notes (Optional)</label>
+                          <input 
+                            type="text" 
+                            className="form-input" 
+                            placeholder="e.g. Approved as per phone conversation / Request rejected due to outstanding payment"
+                            value={adminNotesText[req.id] || ''}
+                            onChange={(e) => setAdminNotesText(prev => ({ ...prev, [req.id]: e.target.value }))}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                          <button 
+                            className="btn btn-danger" 
+                            style={{ padding: '8px 20px', fontSize: '0.85rem' }}
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleProcessRequest(req.id, 'REJECTED')}
+                          >
+                            Reject Request
+                          </button>
+                          <button 
+                            className="btn btn-primary" 
+                            style={{ padding: '8px 20px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+                            disabled={processingRequestId === req.id}
+                            onClick={() => handleProcessRequest(req.id, 'APPROVED')}
+                          >
+                            {processingRequestId === req.id ? (
+                              <Loader2 className="animate-spin" size={14} />
+                            ) : null}
+                            Approve & Add Credits
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      req.adminNotes && (
+                        <div style={{ background: 'rgba(79, 70, 229, 0.04)', padding: '12px 16px', borderRadius: '8px', borderLeft: '3px solid var(--primary)' }}>
+                          <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Admin Notes</span>
+                          <p style={{ fontSize: '0.9rem', margin: 0, color: '#e2e8f0' }}>{req.adminNotes}</p>
+                        </div>
+                      )
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       ) : null}
 

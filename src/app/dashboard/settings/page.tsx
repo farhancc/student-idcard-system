@@ -21,7 +21,8 @@ import {
   Save,
   Type,
   Upload,
-  FileType
+  FileType,
+  CreditCard
 } from 'lucide-react';
 
 interface ApiKey {
@@ -100,6 +101,54 @@ export default function SettingsPage() {
   const showConfirm = (cfg: typeof confirmConfig) => { setConfirmConfig(cfg); setConfirmOpen(true); };
   const closeConfirm = () => { setConfirmOpen(false); setConfirmConfig(null); };
 
+  // Credit Requests State
+  const [creditRequests, setCreditRequests] = useState<any[]>([]);
+  const [requestAmount, setRequestAmount] = useState('');
+  const [requestReason, setRequestReason] = useState('');
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+
+  const handleRequestCredits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amountNum = Number(requestAmount);
+    if (isNaN(amountNum) || amountNum <= 0) return;
+    setRequestSubmitting(true);
+
+    try {
+      const res = await fetch('/api/settings/credit-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amountNum, reason: requestReason }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast('Credit request submitted successfully to admin.', 'success');
+        setRequestAmount('');
+        setRequestReason('');
+        // Refresh credit requests list
+        fetchCreditRequests();
+      } else {
+        toast(data.error || 'Failed to submit credit request.', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      toast('Failed to submit request.', 'error');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
+  const fetchCreditRequests = async () => {
+    try {
+      const res = await fetch('/api/settings/credit-requests');
+      if (res.ok) {
+        const json = await res.json();
+        setCreditRequests(json.requests || []);
+      }
+    } catch (err) {
+      console.error('Fetch credit requests error:', err);
+    }
+  };
+
   const fetchData = async () => {
     try {
       // Fetch API Keys
@@ -137,6 +186,9 @@ export default function SettingsPage() {
           setOwnerName(json.user.name || '');
         }
       }
+
+      // Fetch Credit Requests
+      await fetchCreditRequests();
     } catch (err) {
       console.error(err);
     }
@@ -691,92 +743,179 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Right Column: Print vendors directory */}
-        <div className="glass-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Printer size={18} color="var(--info)" /> Print Vendors Directory
-            </h3>
-            <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => setShowVendorForm(!showVendorForm)}>
-              <Plus size={12} /> {showVendorForm ? 'Close Form' : 'Register Vendor'}
-            </button>
+        {/* Right Column: Print vendors directory and Credit Requests */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          
+          <div className="glass-panel">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Printer size={18} color="var(--info)" /> Print Vendors Directory
+              </h3>
+              <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => setShowVendorForm(!showVendorForm)}>
+                <Plus size={12} /> {showVendorForm ? 'Close Form' : 'Register Vendor'}
+              </button>
+            </div>
+
+            {showVendorForm && (
+              <form onSubmit={handleAddVendor} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+                <div className="form-group">
+                  <label className="form-label">Vendor Business Name</label>
+                  <input type="text" required className="form-input" placeholder="Mega Prints PVT" value={vendorName} onChange={e => setVendorName(e.target.value)} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Phone</label>
+                    <input type="text" className="form-input" placeholder="9876543210" value={vendorPhone} onChange={e => setVendorPhone(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email</label>
+                    <input type="email" className="form-input" placeholder="orders@megaprints.com" value={vendorEmail} onChange={e => setVendorEmail(e.target.value)} />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">City</label>
+                  <input type="text" className="form-input" placeholder="Bengaluru" value={vendorCity} onChange={e => setVendorCity(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Notes (Capabilities, pricing deals)</label>
+                  <input type="text" className="form-input" placeholder="Offers bulk A3 card print runs at Rs. 10/card" value={vendorNotes} onChange={e => setVendorNotes(e.target.value)} />
+                </div>
+
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowVendorForm(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={vendorLoading}>
+                    {vendorLoading ? 'Adding...' : 'Save Vendor'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Vendors list table */}
+            {vendors.length === 0 ? (
+              <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>No print vendors listed in your directory yet.</span>
+            ) : (
+              <div className="table-container">
+                <table className="custom-table" style={{ fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr>
+                      <th>Vendor Name</th>
+                      <th>City</th>
+                      <th>Contact details</th>
+                      <th>Notes</th>
+                      <th>Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vendors.map(v => (
+                      <tr key={v.id}>
+                        <td style={{ fontWeight: '500' }}>{v.name}</td>
+                        <td>{v.city || '—'}</td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' }}>
+                            {v.phone && <span>Ph: {v.phone}</span>}
+                            {v.email && <span style={{ color: 'var(--muted)' }}>{v.email}</span>}
+                          </div>
+                        </td>
+                        <td style={{ fontSize: '0.75rem', color: 'var(--muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.notes}>{v.notes || '—'}</td>
+                        <td>
+                          <button className="btn btn-danger" style={{ padding: '6px' }} onClick={() => handleDeleteVendor(v.id)}>
+                            <Trash2 size={12} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
-          {showVendorForm && (
-            <form onSubmit={handleAddVendor} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--glass-border)' }}>
+          {/* Credit Requests */}
+          <div className="glass-panel">
+            <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <CreditCard size={18} color="var(--primary)" /> Request Print Credits
+            </h3>
+            <p style={{ fontSize: '0.8rem', marginBottom: '20px', color: 'var(--muted)' }}>
+              Submit a request to the Super Admin to add more credits to your press account.
+            </p>
+
+            <form onSubmit={handleRequestCredits} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px', paddingBottom: '20px', borderBottom: '1px solid var(--glass-border)' }}>
               <div className="form-group">
-                <label className="form-label">Vendor Business Name</label>
-                <input type="text" required className="form-input" placeholder="Mega Prints PVT" value={vendorName} onChange={e => setVendorName(e.target.value)} />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div className="form-group">
-                  <label className="form-label">Phone</label>
-                  <input type="text" className="form-input" placeholder="9876543210" value={vendorPhone} onChange={e => setVendorPhone(e.target.value)} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email</label>
-                  <input type="email" className="form-input" placeholder="orders@megaprints.com" value={vendorEmail} onChange={e => setVendorEmail(e.target.value)} />
-                </div>
+                <label className="form-label">Credit Amount</label>
+                <input 
+                  type="number" 
+                  required 
+                  min="1" 
+                  className="form-input" 
+                  placeholder="e.g. 500" 
+                  value={requestAmount} 
+                  onChange={e => setRequestAmount(e.target.value)} 
+                />
               </div>
 
               <div className="form-group">
-                <label className="form-label">City</label>
-                <input type="text" className="form-input" placeholder="Bengaluru" value={vendorCity} onChange={e => setVendorCity(e.target.value)} />
+                <label className="form-label">Reason / Purpose</label>
+                <textarea 
+                  className="form-input" 
+                  placeholder="Explain why you need additional credits..." 
+                  style={{ minHeight: '80px', resize: 'vertical', paddingTop: '8px' }}
+                  value={requestReason} 
+                  onChange={e => setRequestReason(e.target.value)} 
+                />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Notes (Capabilities, pricing deals)</label>
-                <input type="text" className="form-input" placeholder="Offers bulk A3 card print runs at Rs. 10/card" value={vendorNotes} onChange={e => setVendorNotes(e.target.value)} />
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowVendorForm(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary" disabled={vendorLoading}>
-                  {vendorLoading ? 'Adding...' : 'Save Vendor'}
-                </button>
-              </div>
+              <button type="submit" className="btn btn-primary" style={{ gap: '8px', justifyContent: 'center' }} disabled={requestSubmitting}>
+                <Plus size={16} /> {requestSubmitting ? 'Submitting Request...' : 'Submit Credit Request'}
+              </button>
             </form>
-          )}
 
-          {/* Vendors list table */}
-          {vendors.length === 0 ? (
-            <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>No print vendors listed in your directory yet.</span>
-          ) : (
-            <div className="table-container">
-              <table className="custom-table" style={{ fontSize: '0.8rem' }}>
-                <thead>
-                  <tr>
-                    <th>Vendor Name</th>
-                    <th>City</th>
-                    <th>Contact details</th>
-                    <th>Notes</th>
-                    <th>Delete</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {vendors.map(v => (
-                    <tr key={v.id}>
-                      <td style={{ fontWeight: '500' }}>{v.name}</td>
-                      <td>{v.city || '—'}</td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.75rem' }}>
-                          {v.phone && <span>Ph: {v.phone}</span>}
-                          {v.email && <span style={{ color: 'var(--muted)' }}>{v.email}</span>}
+            <h4 style={{ fontSize: '0.9rem', fontWeight: '600', marginBottom: '12px' }}>Request History</h4>
+            {creditRequests.length === 0 ? (
+              <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>No credit requests submitted yet.</span>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+                {creditRequests.map(r => {
+                  const statusColors: Record<string, { bg: string, text: string, border: string }> = {
+                    PENDING: { bg: 'rgba(245, 158, 11, 0.1)', text: 'var(--warning)', border: 'rgba(245, 158, 11, 0.2)' },
+                    APPROVED: { bg: 'rgba(16, 185, 129, 0.1)', text: 'var(--success)', border: 'rgba(16, 185, 129, 0.2)' },
+                    REJECTED: { bg: 'rgba(239, 68, 68, 0.1)', text: 'var(--danger)', border: 'rgba(239, 68, 68, 0.2)' },
+                  };
+                  const color = statusColors[r.status] || { bg: 'rgba(255,255,255,0.05)', text: 'var(--muted)', border: 'rgba(255,255,255,0.1)' };
+                  return (
+                    <div key={r.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--glass-border)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: '600', fontSize: '0.85rem', color: '#fff' }}>
+                          {r.amount.toLocaleString()} Credits
+                        </span>
+                        <span style={{
+                          fontSize: '0.65rem', fontWeight: '700', padding: '2px 8px', borderRadius: '4px',
+                          background: color.bg, color: color.text, border: `1px solid ${color.border}`,
+                        }}>
+                          {r.status}
+                        </span>
+                      </div>
+                      {r.reason && (
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: 0 }}>
+                          <span style={{ fontWeight: '500', color: '#ccc' }}>Reason:</span> {r.reason}
+                        </p>
+                      )}
+                      {r.adminNotes && (
+                        <div style={{ fontSize: '0.75rem', padding: '8px', background: 'rgba(255,255,255,0.02)', borderLeft: '2px solid var(--primary)', borderRadius: '4px', margin: 0 }}>
+                          <span style={{ fontWeight: '600', color: 'var(--primary)' }}>Admin Notes:</span> {r.adminNotes}
                         </div>
-                      </td>
-                      <td style={{ fontSize: '0.75rem', color: 'var(--muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.notes}>{v.notes || '—'}</td>
-                      <td>
-                        <button className="btn btn-danger" style={{ padding: '6px' }} onClick={() => handleDeleteVendor(v.id)}>
-                          <Trash2 size={12} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                      )}
+                      <span style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>
+                        Requested on {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
