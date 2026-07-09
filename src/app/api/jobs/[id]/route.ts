@@ -117,6 +117,8 @@ export async function POST(
           status: 'FAILED',
           progress: 0,
           creditsLocked: 0,
+          creditsUsed: 0,
+          revenueGenerated: 0,
           errorMsg: 'Cancelled by user',
           completedAt: new Date(),
         },

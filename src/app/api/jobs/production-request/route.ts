@@ -105,7 +105,7 @@ export async function POST(request: Request) {
     const transactionResult = await prisma.$transaction(async (tx) => {
       // 1. Acquire pessimistic write lock on the press
       const presses = await tx.$queryRaw<any[]>`
-        SELECT id, credits FROM "press" WHERE id = ${pressId} FOR UPDATE
+        SELECT id, credits, plan FROM "press" WHERE id = ${pressId} FOR UPDATE
       `;
       const press = presses[0];
 
@@ -129,6 +129,16 @@ export async function POST(request: Request) {
         });
       }
 
+      // Calculate credit rates at the moment of queuing
+      const plan = press.plan || 'BASIC';
+      let rate = creditSettings.priceCreditBasic;
+      if (plan === 'PRO') {
+        rate = creditSettings.priceCreditPro;
+      } else if (plan === 'ENTERPRISE') {
+        rate = creditSettings.priceCreditEnterprise;
+      }
+      const calculatedRevenue = totalCreditsNeeded * rate;
+
       // 2. Job Version calculation
       const existingJobCount = await tx.pdfJob.count({
         where: { orderId: order.id, pdfType },
@@ -151,6 +161,8 @@ export async function POST(request: Request) {
           metadata: JSON.stringify(jobOptions),
           isLocalJob: true,
           creditsLocked: cardCountLocked,
+          rateApplied: rate,
+          revenueGenerated: calculatedRevenue,
           version: nextVersion,
           label: versionLabel,
         },

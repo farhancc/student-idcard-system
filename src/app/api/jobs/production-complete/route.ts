@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock the PDF job row
       const jobs = await tx.$queryRaw<any[]>`
-        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked"
+        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked", rate_applied AS "rateApplied", revenue_generated AS "revenueGenerated"
         FROM "pdf_jobs"
         WHERE id = ${Number(jobId)} AND press_id = ${pressId}
         FOR UPDATE
@@ -108,12 +108,36 @@ export async function POST(request: Request) {
         }
 
         // Success Flow
+        const creditsUsed = job.creditsLocked || 0;
+        let rate = Number(job.rateApplied || 0);
+        let rev = Number(job.revenueGenerated || 0);
+        if (rate === 0 && creditsUsed > 0) {
+          const press = await tx.press.findUnique({
+            where: { id: pressId },
+            select: { plan: true },
+          });
+          const { getCreditSettings } = require('@/lib/system-settings');
+          const creditSettings = await getCreditSettings();
+          const plan = press?.plan || 'BASIC';
+          if (plan === 'PRO') {
+            rate = creditSettings.priceCreditPro;
+          } else if (plan === 'ENTERPRISE') {
+            rate = creditSettings.priceCreditEnterprise;
+          } else {
+            rate = creditSettings.priceCreditBasic;
+          }
+          rev = creditsUsed * rate;
+        }
+
         await tx.pdfJob.update({
           where: { id: job.id },
           data: {
             status: 'COMPLETED',
             progress: 100,
             creditsLocked: 0, // Unlock credits as they are successfully used
+            creditsUsed: creditsUsed,
+            rateApplied: rate,
+            revenueGenerated: rev,
             completedAt: new Date(),
             downloadUrl: downloadUrl || undefined,
           },
@@ -154,7 +178,7 @@ export async function POST(request: Request) {
                 action: 'PDF_PRODUCTION_GENERATED_DESKTOP',
                 fromStatus: order.status,
                 toStatus: 'PRINTING',
-                note: `Compiled production layout. Deducted ${job.creditsLocked} credits.`,
+                note: `Compiled production layout. Deducted ${creditsUsed} credits.`,
               },
             });
           }
@@ -187,6 +211,8 @@ export async function POST(request: Request) {
             status: 'FAILED',
             progress: 0,
             creditsLocked: 0,
+            creditsUsed: 0,
+            revenueGenerated: 0,
             errorMsg: errorMsg || 'Compilation failed',
             completedAt: new Date(),
           },

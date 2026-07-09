@@ -216,6 +216,14 @@ export async function POST(request: Request) {
     });
 
     // Create APPROVAL Job
+    const plan = press.plan || 'BASIC';
+    let rate = creditSettings.priceCreditBasic;
+    if (plan === 'PRO') {
+      rate = creditSettings.priceCreditPro;
+    } else if (plan === 'ENTERPRISE') {
+      rate = creditSettings.priceCreditEnterprise;
+    }
+
     const approvalJobCount = await prisma.pdfJob.count({
       where: { orderId: order.id, pdfType: 'APPROVAL' },
     });
@@ -235,6 +243,8 @@ export async function POST(request: Request) {
         label: `Approval v${nextApprovalVersion} (Local)`,
         isLocalJob: true,
         creditsLocked: approvalCreditsNeeded,
+        rateApplied: rate,
+        revenueGenerated: approvalCreditsNeeded * rate,
       },
     });
 
@@ -258,6 +268,8 @@ export async function POST(request: Request) {
         label: `Production v${nextProdVersion} (Local)`,
         isLocalJob: true,
         creditsLocked: productionCreditsNeeded,
+        rateApplied: rate,
+        revenueGenerated: productionCreditsNeeded * rate,
       },
     });
 

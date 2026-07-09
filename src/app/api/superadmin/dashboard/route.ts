@@ -76,20 +76,51 @@ export async function GET() {
       }),
       prisma.pdfJob.groupBy({
         by: ['pressId'],
-        where: { creditsLocked: { gt: 0 } },
-        _sum: { creditsLocked: true },
+        where: {
+          OR: [
+            { creditsLocked: { gt: 0 } },
+            { creditsUsed: { gt: 0 } }
+          ]
+        },
+        _sum: {
+          creditsLocked: true,
+          creditsUsed: true,
+          revenueGenerated: true
+        },
       }),
     ]);
 
-    // Create a map for all-time credit usage per press
+    // Create a map for all-time credit usage and revenue per press
     const allTimeCreditsMap = new Map<number, number>(
-      allTimeCreditsByPress.map(item => [item.pressId, item._sum.creditsLocked ?? 0])
+      allTimeCreditsByPress.map(item => [
+        item.pressId,
+        (item._sum.creditsUsed ?? 0) + (item._sum.creditsLocked ?? 0)
+      ])
     );
 
-    // ── All PdfJobs with creditsLocked > 0 in last 6 months (credit usage trend) ──
+    const allTimeRevenueMap = new Map<number, number>(
+      allTimeCreditsByPress.map(item => [
+        item.pressId,
+        item._sum.revenueGenerated ?? 0
+      ])
+    );
+
+    // ── All PdfJobs with creditsLocked > 0 or creditsUsed > 0 in last 6 months ──
     const recentJobs = await prisma.pdfJob.findMany({
-      where: { creditsLocked: { gt: 0 }, generatedAt: { gte: sixMonthsAgo } },
-      select: { pressId: true, creditsLocked: true, generatedAt: true },
+      where: {
+        OR: [
+          { creditsLocked: { gt: 0 } },
+          { creditsUsed: { gt: 0 } }
+        ],
+        generatedAt: { gte: sixMonthsAgo }
+      },
+      select: {
+        pressId: true,
+        creditsLocked: true,
+        creditsUsed: true,
+        revenueGenerated: true,
+        generatedAt: true
+      },
     });
 
     // ── All OrderCardholders in last 6 months (cards per press) ──
@@ -130,23 +161,25 @@ export async function GET() {
           plan: p.plan,
           isActive: p.isActive,
           currentCredits: p.credits,
-          creditsUsed: allTimeCreditsMap.get(p.id) || 0, // All-time credits used
+          creditsUsed: allTimeCreditsMap.get(p.id) || 0, // All-time credits (locked + consumed)
           cards: 0,
-          revenue: 0, // calculated from creditsUsed * rate
+          revenue: allTimeRevenueMap.get(p.id) || 0, // Stored historical revenue
           monthlyCredits: emptyMonths(),
           monthlyCards: emptyMonths(),
-          monthlyRevenue: emptyMonths(), // calculated from monthlyCredits * rate
+          monthlyRevenue: emptyMonths(),
         },
       ])
     );
 
-    // Monthly credits used (last 6 months)
+    // Monthly credits used and revenue generated (last 6 months)
     recentJobs.forEach((job) => {
       const stat = pressMap.get(job.pressId);
       if (!stat) return;
       const d = new Date(job.generatedAt);
       const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (k in stat.monthlyCredits) stat.monthlyCredits[k] += job.creditsLocked;
+      const totalCredits = (job.creditsUsed || 0) + (job.creditsLocked || 0);
+      if (k in stat.monthlyCredits) stat.monthlyCredits[k] += totalCredits;
+      if (k in stat.monthlyRevenue) stat.monthlyRevenue[k] += (job.revenueGenerated || 0);
     });
 
     // Cards per press (last 6 months)
@@ -159,15 +192,6 @@ export async function GET() {
       const d = new Date(oc.addedAt);
       const kFixed = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (kFixed in stat.monthlyCards) stat.monthlyCards[kFixed] += 1;
-    });
-
-    // Calculate calculated revenue (all-time + monthly) using settings rate map
-    pressMap.forEach((stat) => {
-      const rate = rateMap[stat.plan] || rateMap.BASIC;
-      stat.revenue = stat.creditsUsed * rate;
-      Object.keys(stat.monthlyCredits).forEach((k) => {
-        stat.monthlyRevenue[k] = stat.monthlyCredits[k] * rate;
-      });
     });
 
     const pressStats = Array.from(pressMap.values());
@@ -190,10 +214,11 @@ export async function GET() {
     recentJobs.forEach((job) => {
       const d = new Date(job.generatedAt);
       const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (k in platformMonthlyCredits) platformMonthlyCredits[k] += job.creditsLocked;
+      const totalCredits = (job.creditsUsed || 0) + (job.creditsLocked || 0);
+      if (k in platformMonthlyCredits) platformMonthlyCredits[k] += totalCredits;
     });
 
-    // Calculate platform monthly revenue based on rates of individual presses that used them
+    // Calculate platform monthly revenue based on stored monthly values of individual presses
     pressStats.forEach((p) => {
       Object.keys(p.monthlyRevenue).forEach((k) => {
         platformMonthlyRevenue[k] += p.monthlyRevenue[k];
@@ -203,9 +228,14 @@ export async function GET() {
     // Total platform-wide calculated revenue
     const totalRevenue = pressStats.reduce((s, p) => s + p.revenue, 0);
 
-    // Total credits used across system (sum of creditsLocked on all jobs ever)
-    const allTimeJobs = await prisma.pdfJob.aggregate({ _sum: { creditsLocked: true } });
-    const totalCreditsUsed = allTimeJobs._sum.creditsLocked ?? 0;
+    // Total credits used across system (sum of creditsUsed and creditsLocked on all jobs ever)
+    const allTimeJobs = await prisma.pdfJob.aggregate({
+      _sum: {
+        creditsLocked: true,
+        creditsUsed: true,
+      }
+    });
+    const totalCreditsUsed = (allTimeJobs._sum.creditsLocked ?? 0) + (allTimeJobs._sum.creditsUsed ?? 0);
     const totalCreditsInSystem = creditAgg._sum.credits ?? 0;
 
     return NextResponse.json({

@@ -206,6 +206,9 @@ model PdfJob {
   progress       Int      @default(0)
   isLocalJob     Boolean  @default(false) @map("is_local_job")
   creditsLocked  Int      @default(0) @map("credits_locked")
+  creditsUsed    Int      @default(0) @map("credits_used")
+  rateApplied    Float    @default(0) @map("rate_applied")
+  revenueGenerated Float  @default(0) @map("revenue_generated")
   errorMsg       String?  @map("error_msg")
   metadata       String?  // JSON: { paperSize, bleed, ... }
   urlExpiresAt   DateTime? @map("url_expires_at")
