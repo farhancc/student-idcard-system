@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import DashboardOverview from './components/DashboardOverview';
 import { useRouter } from 'next/navigation';
 import { 
   Building2, Users, FolderKanban, ShieldCheck, 
@@ -69,7 +70,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests'>('presses');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests'>('dashboard');
 
   // Credit Requests State
   const [creditRequests, setCreditRequests] = useState<any[]>([]);
@@ -818,6 +819,7 @@ export default function SuperAdminDashboard() {
           <button 
             className="btn btn-secondary" 
             onClick={
+              activeTab === 'dashboard' ? () => {} :
               activeTab === 'presses' ? fetchPresses : 
               activeTab === 'analytics' ? fetchAnalytics : 
               activeTab === 'templates' ? fetchGlobalTemplates : 
@@ -859,7 +861,28 @@ export default function SuperAdminDashboard() {
       )}
 
       {/* Tabs Navigation */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '28px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginBottom: '28px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', flexWrap: 'wrap' }}>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('dashboard')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'dashboard' ? 'rgba(99,102,241,0.2)' : 'transparent',
+            color: activeTab === 'dashboard' ? '#818cf8' : 'var(--muted)',
+            borderBottom: activeTab === 'dashboard' ? '2px solid #6366f1' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <BarChart3 size={16} /> Dashboard
+        </button>
         <button 
           type="button" 
           onClick={() => setActiveTab('presses')}
@@ -1022,7 +1045,9 @@ export default function SuperAdminDashboard() {
         </button>
       </div>
 
-      {activeTab === 'presses' ? (
+      {activeTab === 'dashboard' ? (
+        <DashboardOverview />
+      ) : activeTab === 'presses' ? (
         <>
           {/* Stats Cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '32px' }}>
