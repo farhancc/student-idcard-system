@@ -220,6 +220,26 @@ export default function DashboardPage() {
   const { toast } = useToast();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<string>('OWNER'); // default to most permissive until fetched
+
+  // Fetch current user's role
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/settings/me');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.user?.role) setRole(json.user.role);
+        }
+      } catch { /* silent */ }
+    })();
+  }, []);
+
+  const isOwner    = role === 'OWNER';
+  const isOperator = role === 'OPERATOR';
+  const isDesigner = role === 'DESIGNER';
+  const canSeeFinancials = isOwner;          // only OWNER sees money
+  const canSeeOrders     = !isDesigner;      // OWNER + OPERATOR
 
   async function fetchAnalytics() {
     try {
@@ -351,33 +371,42 @@ export default function DashboardPage() {
           <button className="btn btn-secondary" style={{ gap: '8px', padding: '8px 16px' }} onClick={fetchAnalytics}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <a href="/dashboard/orders" className="btn btn-primary" style={{ gap: '8px', padding: '8px 16px' }}>
-            <PlusCircle size={14} /> New Order
-          </a>
+          {canSeeOrders && (
+            <a href="/dashboard/orders" className="btn btn-primary" style={{ gap: '8px', padding: '8px 16px' }}>
+              <PlusCircle size={14} /> New Order
+            </a>
+          )}
         </div>
       </div>
 
       {/* Top KPI row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '28px' }}>
         <StatCard icon={<TrendingUp size={22} />} label="Cards This Month" value={s.cardsGenerated ?? 0} sub={cardChange} color="#10b981" />
-        <StatCard icon={<ShoppingCart size={22} />} label="Orders This Month" value={s.ordersThisMonth ?? 0} sub={`${s.totalCardholders ?? 0} total cardholders`} color="#6366f1" />
-        <StatCard icon={<Users size={22} />} label="Active Clients" value={s.clientsServed ?? 0} color="#0ea5e9" badge={`${s.pdfsGenerated ?? 0} PDFs`} />
+        {canSeeOrders && (
+          <StatCard icon={<ShoppingCart size={22} />} label="Orders This Month" value={s.ordersThisMonth ?? 0} sub={`${s.totalCardholders ?? 0} total cardholders`} color="#6366f1" />
+        )}
+        {canSeeOrders && (
+          <StatCard icon={<Users size={22} />} label="Active Clients" value={s.clientsServed ?? 0} color="#0ea5e9" badge={`${s.pdfsGenerated ?? 0} PDFs`} />
+        )}
         <StatCard icon={<CreditCard size={22} />} label="Print Credits" value={s.credits ?? 0} sub={(s.lockedCredits ?? 0) > 0 ? `${s.lockedCredits} locked` : 'Available'} color="#f59e0b" />
-        <StatCard
-          icon={<FileText size={22} />}
-          label="Revenue (This Month)"
-          value={`Rs. ${(s.revenueThisMonth ?? 0).toLocaleString('en-IN')}`}
-          sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
-          color="#a855f7"
-        />
+        {canSeeFinancials && (
+          <StatCard
+            icon={<FileText size={22} />}
+            label="Revenue (This Month)"
+            value={`Rs. ${(s.revenueThisMonth ?? 0).toLocaleString('en-IN')}`}
+            sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
+            color="#a855f7"
+          />
+        )}
       </div>
 
       {isNewTenant ? (
         <GettingStartedSection />
       ) : (
         <>
-          {/* Monthly Financial Ledger & Cost Analytics */}
-          <div className="glass-panel" style={{ marginBottom: '28px', padding: '24px' }}>
+          {/* Monthly Financial Ledger — OWNER ONLY */}
+      {canSeeFinancials && (
+        <div className="glass-panel" style={{ marginBottom: '28px', padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, fontSize: '1.2rem', fontWeight: 600 }}>
@@ -505,7 +534,8 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
+      )}
 
       {/* Main grid */}
       <div className="dashboard-grid">
@@ -568,7 +598,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Recent Orders */}
+          {canSeeOrders && (
           <div className="glass-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -611,6 +641,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Right column */}
@@ -623,12 +654,12 @@ export default function DashboardPage() {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { href: '/dashboard/clients', icon: <PlusCircle size={16} color="#6366f1" />, label: 'Add New Client', sub: 'Register a school or org' },
-                { href: '/dashboard/templates', icon: <Layers size={16} color="#0ea5e9" />, label: 'Create Template', sub: 'Design card layout' },
-                { href: '/dashboard/orders', icon: <FileSpreadsheet size={16} color="#10b981" />, label: 'New Print Order', sub: 'Queue a batch job' },
-                { href: '/dashboard/pdf-jobs', icon: <Activity size={16} color="#a855f7" />, label: 'Monitor PDF Jobs', sub: 'View compile queue' },
-                { href: '/dashboard/invoices', icon: <CreditCard size={16} color="#f59e0b" />, label: 'View Invoices', sub: 'Billing & payments' },
-              ].map(item => (
+                canSeeOrders  && { href: '/dashboard/clients',   icon: <PlusCircle size={16} color="#6366f1" />,    label: 'Add New Client',    sub: 'Register a school or org' },
+                              { href: '/dashboard/templates',  icon: <Layers size={16} color="#0ea5e9" />,         label: 'Create Template',   sub: 'Design card layout' },
+                canSeeOrders  && { href: '/dashboard/orders',    icon: <FileSpreadsheet size={16} color="#10b981" />, label: 'New Print Order',   sub: 'Queue a batch job' },
+                canSeeOrders  && { href: '/dashboard/pdf-jobs',  icon: <Activity size={16} color="#a855f7" />,       label: 'Monitor PDF Jobs',  sub: 'View compile queue' },
+                canSeeFinancials && { href: '/dashboard/invoices', icon: <CreditCard size={16} color="#f59e0b" />,  label: 'View Invoices',     sub: 'Billing & payments' },
+              ].filter(Boolean).map((item: any) => (
                 <a key={item.href} href={item.href} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px',
                   borderRadius: '10px', background: 'rgba(255,255,255,0.025)',
@@ -690,7 +721,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Top Clients */}
+          {canSeeOrders && (
           <div className="glass-panel">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -727,6 +758,7 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
     </>
