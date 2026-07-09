@@ -1,12 +1,43 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Clock, Download, RefreshCw, AlertCircle, CheckCircle, XCircle, Eye, X } from 'lucide-react';
+import { Clock, Download, RefreshCw, AlertCircle, CheckCircle, XCircle, Eye, X, StopCircle } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 export default function PdfJobsPage() {
+  const { toast } = useToast();
   const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [previewJob, setPreviewJob] = useState<any | null>(null);
+  const [cancellingId, setCancellingId] = useState<number | null>(null);
+
+  const handleCancelJob = async (jobId: number) => {
+    if (!confirm(`Are you sure you want to cancel job #${jobId} and refund the locked credits?`)) {
+      return;
+    }
+    try {
+      setCancellingId(jobId);
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: 'POST',
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          toast(`Job #${jobId} cancelled successfully. Refunded ${data.refundedCredits} credits.`, 'success');
+          fetchJobs();
+        } else {
+          toast(`Error: ${data.error || 'Failed to cancel job'}`, 'error');
+        }
+      } else {
+        const errorData = await res.json();
+        toast(`Error: ${errorData.error || 'Failed to cancel job'}`, 'error');
+      }
+    } catch (err: any) {
+      toast(`Error cancelling job: ${err.message}`, 'error');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const fetchJobs = async () => {
     try {
@@ -169,9 +200,30 @@ export default function PdfJobsPage() {
                           <AlertCircle size={14} /> Failed
                         </div>
                       ) : (
-                        <span style={{ color: 'var(--muted)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <Clock size={12} /> Pending...
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <Clock size={12} /> Pending...
+                          </span>
+                          <button
+                            className="btn"
+                            style={{ 
+                              padding: '4px 8px', 
+                              fontSize: '0.7rem', 
+                              display: 'inline-flex', 
+                              alignItems: 'center', 
+                              gap: '4px',
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              color: '#ef4444',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => handleCancelJob(job.id)}
+                            disabled={cancellingId === job.id}
+                          >
+                            <StopCircle size={12} /> {cancellingId === job.id ? 'Cancelling...' : 'Cancel'}
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
