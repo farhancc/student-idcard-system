@@ -440,11 +440,13 @@ export default function InvoicesPage() {
                       key={p}
                       onClick={() => setPage(p as number)}
                       style={{
-                        width: '32px', height: '32px', borderRadius: '6px', border: 'none', fontSize: '0.82rem', cursor: 'pointer',
-                        background: page === p ? 'var(--primary-gradient)' : 'rgba(255,255,255,0.05)',
-                        color: page === p ? '#fff' : 'var(--muted)',
-                        fontWeight: page === p ? '600' : '400',
+                        width: '32px', height: '32px', borderRadius: '6px', fontSize: '0.82rem', cursor: 'pointer',
+                        border: page === p ? 'none' : '1px solid var(--glass-border)',
+                        background: page === p ? '#4f46e5' : 'rgba(255,255,255,0.04)',
+                        color: page === p ? '#ffffff' : 'var(--muted)',
+                        fontWeight: page === p ? '700' : '400',
                         transition: 'all 0.15s',
+                        outline: 'none',
                       }}
                     >
                       {p}
