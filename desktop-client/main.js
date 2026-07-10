@@ -493,6 +493,58 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
   }
 });
 
+// IPC handler to download and cache student photos locally
+ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'cached_photos');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Extract file extension from URL or fallback to .jpg
+    let ext = '.jpg';
+    try {
+      const parsedUrl = new URL(photoUrl);
+      const pathname = parsedUrl.pathname;
+      const dotIndex = pathname.lastIndexOf('.');
+      if (dotIndex !== -1) {
+        const urlExt = pathname.slice(dotIndex).toLowerCase();
+        if (['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(urlExt)) {
+          ext = urlExt;
+        }
+      }
+    } catch (e) {
+      // Ignored: fallback to .jpg
+    }
+
+    const filePath = path.join(dir, `${cardholderId}${ext}`);
+
+    // If it's already a data URI, write it directly
+    if (photoUrl.startsWith('data:')) {
+      const matches = photoUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        fs.writeFileSync(filePath, buffer);
+        return { success: true, localUrl: `local://${filePath}` };
+      }
+    }
+
+    // Otherwise download the file
+    const response = await fetch(photoUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch photo from ${photoUrl}: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    fs.writeFileSync(filePath, buffer);
+
+    return { success: true, localUrl: `local://${filePath}` };
+  } catch (error) {
+    console.error(`[Main Process] cache-photo error for cardholder ${cardholderId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC handler to get Portal URL for the offline page
 ipcMain.handle('get-portal-url', () => {
   return getPortalUrl();

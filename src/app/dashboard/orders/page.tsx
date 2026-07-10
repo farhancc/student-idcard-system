@@ -663,6 +663,27 @@ export default function OrdersPage() {
         };
       });
 
+      const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+      if (electronAPI) {
+        setUploadStatus('Caching photos locally...');
+        setUploadProgress({ current: 0, total: cardholdersForPdf.length });
+        for (let i = 0; i < cardholdersForPdf.length; i++) {
+          const ch = cardholdersForPdf[i];
+          if (ch.photoUrl) {
+            try {
+              setUploadStatus(`Caching photo ${i + 1} of ${cardholdersForPdf.length}...`);
+              setUploadProgress({ current: i, total: cardholdersForPdf.length });
+              const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
+              if (res && res.success && res.localUrl) {
+                ch.photoUrl = res.localUrl;
+              }
+            } catch (err: any) {
+              console.warn(`Failed to cache photo locally for cardholder ${ch.id}:`, err);
+            }
+          }
+        }
+      }
+
       setUploadStatus('Compiling print-ready sheets...');
       const bleedPt = Number(bleedMm) * 2.83464567; // mm to points
       const pdfBlob = await generateProductionPdfClient(
@@ -685,7 +706,6 @@ export default function OrdersPage() {
       const clientName = selectedClient ? selectedClient.name : 'Client';
 
       const fileName = `Production_Print_${clientName.replace(/\s+/g, '_')}_${paperSize}_${Date.now()}.pdf`;
-      const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
       if (electronAPI) {
         setUploadStatus('Saving PDF locally via Desktop bridge...');
         const base64Data = await new Promise<string>((resolve) => {

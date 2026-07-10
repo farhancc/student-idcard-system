@@ -217,6 +217,27 @@ export default function ProductionDaemon() {
     page.drawLine({ start: { x: x + cw, y: y - markLen }, end: { x: x + cw, y: y - 2 }, thickness, color: strokeColor });
   };
 
+  const cachePhotosForJob = async (cardholdersList: any[]) => {
+    const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+    if (!electronAPI) return;
+
+    addLog(`Pre-caching ${cardholdersList.length} photo(s) locally...`);
+    for (let i = 0; i < cardholdersList.length; i++) {
+      const ch = cardholdersList[i];
+      if (ch.photoUrl) {
+        try {
+          const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
+          if (res && res.success && res.localUrl) {
+            ch.photoUrl = res.localUrl;
+          }
+        } catch (err: any) {
+          console.warn(`Failed to cache photo locally for cardholder ${ch.id}:`, err);
+        }
+      }
+    }
+    addLog('Photo caching phase complete.');
+  };
+
   const compileInvoiceLocally = async (jobPayload: any) => {
     const { job, order, press } = jobPayload;
     if (!press || !order || !order.invoice) {
@@ -333,6 +354,9 @@ export default function ProductionDaemon() {
       customFields: typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields || {},
     }));
 
+    // Pre-cache photos locally in desktop client to enable robust offline rendering
+    await cachePhotosForJob(clientCardholders);
+
     const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
 
     const pdfBlob = await generateApprovalPdfClient(
@@ -391,6 +415,10 @@ export default function ProductionDaemon() {
     await updateProgress(job.id, 5, 'PROCESSING');
     addLog(`Preparing PDF Document (${paperSize} ${orientation}). Total cardholders: ${cardholders.length}`);
 
+    // Pre-cache photos locally in desktop client to enable robust offline rendering
+    const localCardholders = cardholders.map((ch: any) => ({ ...ch }));
+    await cachePhotosForJob(localCardholders);
+
     const pdfDoc = await PDFDocument.create();
     pdfDoc.setTitle('Production Print File');
     pdfDoc.setCreator('ID Card Press Desktop Client');
@@ -447,7 +475,7 @@ export default function ProductionDaemon() {
       cardsPerPage = cols * rowsPerHalf;
     }
 
-    const total = cardholders.length;
+    const total = localCardholders.length;
     const totalPages = Math.ceil(total / cardsPerPage);
     addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}`);
 
@@ -460,7 +488,7 @@ export default function ProductionDaemon() {
 
       const startIdx = pIdx * cardsPerPage;
       const endIdx = Math.min(startIdx + cardsPerPage, total);
-      const batchCardholders = cardholders.slice(startIdx, endIdx);
+      const batchCardholders = localCardholders.slice(startIdx, endIdx);
 
       // Draw fold line only for duplex templates
       if (!isSingleSided && foldLine) {

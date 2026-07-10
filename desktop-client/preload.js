@@ -34,4 +34,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-queue-status'),
   saveBackupLocally: (clientName, monthName, base64ZipData) =>
     ipcRenderer.invoke('save-backup', { clientName, monthName, base64ZipData }),
+  cachePhoto: (cardholderId, photoUrl) =>
+    ipcRenderer.invoke('cache-photo', { cardholderId, photoUrl }),
 });
