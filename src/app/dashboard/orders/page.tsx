@@ -17,7 +17,7 @@ export default function OrdersPage() {
   // Pagination & sorting
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 30;
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 
@@ -1136,7 +1136,8 @@ export default function OrdersPage() {
           <p style={{ marginTop: '8px' }}>Create your first order to assemble layout sheets, assign serials, and print.</p>
         </div>
       ) : (
-        <div className="table-container" style={{ overflowX: 'auto' }}>
+        <>
+          <div className="table-container" style={{ overflowX: 'auto' }}>
           <table className="custom-table" style={{ minWidth: '800px' }}>
             <thead>
               <tr>
@@ -1266,6 +1267,7 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+        </>
       )}
 
       {selectedCardholderForDetails && (
