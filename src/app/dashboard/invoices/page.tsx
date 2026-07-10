@@ -23,7 +23,7 @@ interface Invoice {
   order?: { client?: { name: string } };
 }
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 30;
 
 export default function InvoicesPage() {
   const { toast } = useToast();
