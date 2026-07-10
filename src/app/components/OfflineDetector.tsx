@@ -26,6 +26,11 @@ export default function OfflineDetector() {
   const [isChecking, setIsChecking] = useState(false);
   const [showRestored, setShowRestored] = useState(false);
   const [countdown, setCountdown] = useState(12);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setIsDesktop(typeof window !== 'undefined' && !!(window as any).electronAPI);
+  }, []);
 
   // Check the connection health
   const checkHealth = useCallback(async () => {
@@ -321,79 +326,111 @@ export default function OfflineDetector() {
 
       {/* Main Block Overlay */}
       {isOffline && (
-        <div className="offline-overlay">
-          <div className="offline-card">
-            
-            <div className="icon-container">
-              <div className={`ring-pulse ${isChecking ? 'ring-checking' : offlineType === 'network' ? 'ring-network' : 'ring-server'}`} />
-              <div className={`icon-box ${isChecking ? 'icon-checking' : offlineType === 'network' ? 'icon-network' : 'icon-server'}`}>
-                {isChecking ? (
-                  <svg className="spin-loader" style={{ width: '22px', height: '22px' }} viewBox="0 0 24 24"></svg>
-                ) : offlineType === 'network' ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.83-2.84M7.36 7.36A15 15 0 0 1 12 6c3.27 0 6.27 1.05 8.72 2.8M10.88 5.4A19.82 19.82 0 0 1 12 5c6.08 0 11.3 3.47 13.9 8.6M10.22 15.65a4.7 4.7 0 0 1 3.56 0M12 18.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-                    <line x1="6" y1="6" x2="6.01" y2="6"/>
-                    <line x1="6" y1="18" x2="6.01" y2="18"/>
-                  </svg>
-                )}
-              </div>
-            </div>
-
-            <h2>
-              {isChecking 
-                ? 'Reconnecting...' 
-                : offlineType === 'network' 
-                  ? 'No Internet Connection' 
-                  : 'Server Unreachable'}
-            </h2>
-
-            <div className="offline-badge">
-              <div className={`badge-dot ${isChecking ? 'dot-checking' : offlineType === 'network' ? 'dot-network' : 'dot-server'}`} />
-              <span>
-                {isChecking 
-                  ? 'Verifying...' 
-                  : offlineType === 'network' 
-                    ? 'Network Disconnected' 
-                    : 'Server Offline'}
-              </span>
-            </div>
-
-            <p>
-              {isChecking
-                ? 'Checking connection to central printing server...'
-                : offlineType === 'network'
-                  ? 'Your internet connection is currently offline. Please verify your network settings, Wi-Fi router, or Ethernet cable connection.'
-                  : 'Central printing server is currently unreachable. The server may be offline for maintenance or restarting. Please check back shortly.'}
-            </p>
-
-            <button 
-              className="btn btn-primary" 
-              style={{ width: '100%', padding: '12px', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}
-              onClick={handleRetry} 
-              disabled={isChecking}
-            >
-              {isChecking ? (
-                <>
-                  <div className="spin-loader" />
-                  <span>Connecting...</span>
-                </>
-              ) : (
-                <span>Retry Connection</span>
-              )}
-            </button>
-
-            {!isChecking && (
-              <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '16px' }}>
-                Auto-retrying connection in <span style={{ fontWeight: '600' }}>{countdown}</span>s...
-              </div>
-            )}
+        isDesktop ? (
+          <div style={{
+            position: 'fixed',
+            top: '24px',
+            right: '24px',
+            zIndex: 99999,
+            background: 'rgba(239, 68, 68, 0.95)',
+            border: '1px solid rgba(239, 68, 68, 0.4)',
+            boxShadow: '0 10px 25px rgba(239, 68, 68, 0.3)',
+            borderRadius: '30px',
+            padding: '10px 20px',
+            color: '#ffffff',
+            fontSize: '0.875rem',
+            fontFamily: 'system-ui, sans-serif',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            animation: 'slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+          }}>
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: offlineType === 'network' ? '#ef4444' : '#f59e0b',
+              animation: 'blink 0.8s infinite alternate',
+            }} />
+            <span>
+              {offlineType === 'network' ? 'Offline (Network Disconnected)' : 'Offline (Server Unreachable)'}
+            </span>
           </div>
-        </div>
+        ) : (
+          <div className="offline-overlay">
+            <div className="offline-card">
+              
+              <div className="icon-container">
+                <div className={`ring-pulse ${isChecking ? 'ring-checking' : offlineType === 'network' ? 'ring-network' : 'ring-server'}`} />
+                <div className={`icon-box ${isChecking ? 'icon-checking' : offlineType === 'network' ? 'icon-network' : 'icon-server'}`}>
+                  {isChecking ? (
+                    <svg className="spin-loader" style={{ width: '22px', height: '22px' }} viewBox="0 0 24 24"></svg>
+                  ) : offlineType === 'network' ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.83-2.84M7.36 7.36A15 15 0 0 1 12 6c3.27 0 6.27 1.05 8.72 2.8M10.88 5.4A19.82 19.82 0 0 1 12 5c6.08 0 11.3 3.47 13.9 8.6M10.22 15.65a4.7 4.7 0 0 1 3.56 0M12 18.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                      <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                      <line x1="6" y1="6" x2="6.01" y2="6"/>
+                      <line x1="6" y1="18" x2="6.01" y2="18"/>
+                    </svg>
+                  )}
+                </div>
+              </div>
+
+              <h2>
+                {isChecking 
+                  ? 'Reconnecting...' 
+                  : offlineType === 'network' 
+                    ? 'No Internet Connection' 
+                    : 'Server Unreachable'}
+              </h2>
+
+              <div className="offline-badge">
+                <div className={`badge-dot ${isChecking ? 'dot-checking' : offlineType === 'network' ? 'dot-network' : 'dot-server'}`} />
+                <span>
+                  {isChecking 
+                    ? 'Verifying...' 
+                    : offlineType === 'network' 
+                      ? 'Network Disconnected' 
+                      : 'Server Offline'}
+                </span>
+              </div>
+
+              <p>
+                {isChecking
+                  ? 'Checking connection to central printing server...'
+                  : offlineType === 'network'
+                    ? 'Your internet connection is currently offline. Please verify your network settings, Wi-Fi router, or Ethernet cable connection.'
+                    : 'Central printing server is currently unreachable. The server may be offline for maintenance or restarting. Please check back shortly.'}
+              </p>
+
+              <button 
+                className="btn btn-primary" 
+                style={{ width: '100%', padding: '12px', display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}
+                onClick={handleRetry} 
+                disabled={isChecking}
+              >
+                {isChecking ? (
+                  <>
+                    <div className="spin-loader" />
+                    <span>Connecting...</span>
+                  </>
+                ) : (
+                  <span>Retry Connection</span>
+                )}
+              </button>
+
+              {!isChecking && (
+                <div style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '16px' }}>
+                  Auto-retrying connection in <span style={{ fontWeight: '600' }}>{countdown}</span>s...
+                </div>
+              )}
+            </div>
+          </div>
+        )
       )}
     </>
   );
