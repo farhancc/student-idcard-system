@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 // Configure Cloudinary if environment variables are set
 const isCloudinaryConfigured =
@@ -101,6 +102,18 @@ async function generatePreviewBuffer(
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rl = await rateLimit(`upload:${ip}`, 60, 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many upload requests. Please wait a minute.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
+
   try {
     const pressIdStr = request.headers.get('x-press-id');
     if (!pressIdStr) {

@@ -4,6 +4,7 @@ import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 // Photo Quality Validation (M4)
 interface ValidationResult {
@@ -55,6 +56,18 @@ async function validatePhoto(buffer: Buffer): Promise<ValidationResult> {
 }
 
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rl = await rateLimit(`import-photos:${ip}`, 5, 10 * 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many batch import requests. Please wait a few minutes.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
+
   try {
     const pressIdStr = request.headers.get('x-press-id');
     if (!pressIdStr) {

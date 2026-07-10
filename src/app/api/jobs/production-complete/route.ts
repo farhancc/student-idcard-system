@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock the PDF job row
       const jobs = await tx.$queryRaw<any[]>`
-        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked", rate_applied AS "rateApplied", revenue_generated AS "revenueGenerated"
+        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked", rate_applied AS "rateApplied", revenue_generated AS "revenueGenerated", error_msg AS "errorMsg"
         FROM "pdf_jobs"
         WHERE id = ${Number(jobId)} AND press_id = ${pressId}
         FOR UPDATE
@@ -50,8 +50,10 @@ export async function POST(request: Request) {
         throw new Error('PDF Job not found');
       }
 
-      if (job.status !== 'PENDING' && job.status !== 'PROCESSING') {
-        throw new Error('Job is already completed or failed');
+      // Allow FAILED jobs (cancelled by user) to be reconciled as completed retroactively
+      const wasCancelled = job.status === 'FAILED';
+      if (job.status !== 'PENDING' && job.status !== 'PROCESSING' && !wasCancelled) {
+        throw new Error('Job is already completed');
       }
 
       if (success) {
@@ -108,7 +110,35 @@ export async function POST(request: Request) {
         }
 
         // Success Flow
-        const creditsUsed = job.creditsLocked || 0;
+        let creditsUsed = job.creditsLocked || 0;
+
+        // If the job was previously cancelled/failed, creditsLocked was reset to 0. We must calculate the credit cost.
+        if (wasCancelled && success) {
+          const order = await tx.cardOrder.findUnique({
+            where: { id: job.orderId },
+            include: {
+              _count: { select: { cardholders: true } }
+            }
+          });
+          const cardCount = order?._count.cardholders || 0;
+
+          if (job.pdfType === 'PRODUCTION' && order) {
+            const template = await tx.cardTemplate.findUnique({
+              where: { id: order.templateId },
+            });
+            const isDoubleSided = !!template?.backImageUrl;
+
+            const { getCreditSettings } = require('@/lib/system-settings');
+            const creditSettings = await getCreditSettings();
+            const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
+            creditsUsed = cardCount * costPerCard;
+          } else if (job.pdfType === 'APPROVAL') {
+            const { getCreditSettings } = require('@/lib/system-settings');
+            const creditSettings = await getCreditSettings();
+            creditsUsed = creditSettings.costApprovalPdf;
+          }
+        }
+
         let rate = Number(job.rateApplied || 0);
         let rev = Number(job.revenueGenerated || 0);
         if (rate === 0 && creditsUsed > 0) {
@@ -127,6 +157,26 @@ export async function POST(request: Request) {
             rate = creditSettings.priceCreditBasic;
           }
           rev = creditsUsed * rate;
+        } else if (wasCancelled && creditsUsed > 0 && rate > 0 && rev === 0) {
+          rev = creditsUsed * rate;
+        }
+
+        // If the job was previously cancelled/failed, we must deduct the credits now (since they were refunded)
+        if (wasCancelled && creditsUsed > 0) {
+          // Lock the Press row first before updating to prevent concurrency locks/clashes
+          await tx.$queryRaw`
+            SELECT id FROM "press" WHERE id = ${pressId} FOR UPDATE
+          `;
+
+          // Deduct from the Press active balance (even if it goes negative)
+          await tx.press.update({
+            where: { id: pressId },
+            data: {
+              credits: {
+                decrement: creditsUsed,
+              },
+            },
+          });
         }
 
         await tx.pdfJob.update({
@@ -140,6 +190,7 @@ export async function POST(request: Request) {
             revenueGenerated: rev,
             completedAt: new Date(),
             downloadUrl: downloadUrl || undefined,
+            errorMsg: null, // Clear failure/cancellation error message
           },
         });
 
@@ -168,6 +219,10 @@ export async function POST(request: Request) {
               });
             }
 
+            const logNote = wasCancelled
+              ? `Compiled production layout (Retroactive Sync). Charged ${creditsUsed} credits due to previous cancellation.`
+              : `Compiled production layout. Deducted ${creditsUsed} credits.`;
+
             // Create activity log
             await tx.orderActivityLog.create({
               data: {
@@ -178,7 +233,7 @@ export async function POST(request: Request) {
                 action: 'PDF_PRODUCTION_GENERATED_DESKTOP',
                 fromStatus: order.status,
                 toStatus: 'PRINTING',
-                note: `Compiled production layout. Deducted ${creditsUsed} credits.`,
+                note: logNote,
               },
             });
           }
@@ -186,6 +241,11 @@ export async function POST(request: Request) {
 
         return { success: true, message: 'Job completed and credits captured' };
       } else {
+        // If the job was already cancelled, do not refund again
+        if (wasCancelled) {
+          return { success: true, message: 'Job was already cancelled/failed. No action taken.' };
+        }
+
         // Failure Flow (Refund Credits)
         const refundedCredits = job.creditsLocked;
 
