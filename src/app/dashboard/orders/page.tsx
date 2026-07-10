@@ -1195,7 +1195,6 @@ export default function OrdersPage() {
                 >
                   Template <SortIcon col="template" />
                 </th>
-                <th>Validity</th>
                 <th>Cards</th>
                 {isOwner && (
                   <>
@@ -1224,12 +1223,6 @@ export default function OrdersPage() {
                     <td style={{ fontWeight: '500' }}>{ord.client?.name}</td>
                     <td>{getStatusBadge(ord.status)}</td>
                     <td>{ord.template?.name} (v{ord.templateVersion})</td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                        <Calendar size={12} />
-                        <span>{ord.validTill ? new Date(ord.validTill).toLocaleDateString() : '—'}</span>
-                      </div>
-                    </td>
                     <td>{cardholderCount}</td>
                     {isOwner && (
                       <>
