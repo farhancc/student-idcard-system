@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle, Eye } from 'lucide-react';
+import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle, Eye, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { generateApprovalPdfClient } from '@/lib/pdf/approval-pdf-generator';
 import { generateProductionPdfClient } from '@/lib/pdf/production-pdf-generator';
 import CardPreview from '@/app/components/CardPreview';
@@ -13,6 +13,13 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState('OWNER');
   const isOwner = role === 'OWNER';
+
+  // Pagination & sorting
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const PAGE_SIZE = 20;
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
 
   // Form toggling
   const [showForm, setShowForm] = useState(false);
@@ -75,12 +82,16 @@ export default function OrdersPage() {
   const [cropMarks, setCropMarks] = useState<boolean>(true);
   const [foldLine, setFoldLine] = useState<boolean>(true);
 
-  const fetchData = async () => {
+  const fetchData = async (p = page, sb = sortBy, sd = sortDir) => {
     try {
-      const ordersRes = await fetch('/api/orders');
+      const params = new URLSearchParams({
+        page: String(p), pageSize: String(PAGE_SIZE), sortBy: sb, sortDir: sd,
+      });
+      const ordersRes = await fetch(`/api/orders?${params}`);
       if (ordersRes.ok) {
         const json = await ordersRes.json();
         setOrders(json.orders || []);
+        setTotal(json.total ?? 0);
       }
 
       const clientsRes = await fetch('/api/clients');
@@ -117,14 +128,31 @@ export default function OrdersPage() {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(page, sortBy, sortDir);
     (async () => {
       try {
         const res = await fetch('/api/settings/me');
         if (res.ok) { const j = await res.json(); if (j.user?.role) setRole(j.user.role); }
       } catch { /* silent */ }
     })();
-  }, []);
+  }, [page, sortBy, sortDir]);
+
+  const handleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(col);
+      setSortDir('desc');
+    }
+    setPage(1);
+  };
+
+  const SortIcon = ({ col }: { col: string }) => {
+    if (sortBy !== col) return <ChevronsUpDown size={12} style={{ marginLeft: 4, opacity: 0.4 }} />;
+    return sortDir === 'asc'
+      ? <ChevronUp size={12} style={{ marginLeft: 4, color: '#4f46e5' }} />
+      : <ChevronDown size={12} style={{ marginLeft: 4, color: '#4f46e5' }} />;
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1091,20 +1119,35 @@ export default function OrdersPage() {
           <p style={{ marginTop: '8px' }}>Create your first order to assemble layout sheets, assign serials, and print.</p>
         </div>
       ) : (
-        <div className="table-container">
-          <table className="custom-table">
+        <div className="table-container" style={{ overflowX: 'auto' }}>
+          <table className="custom-table" style={{ minWidth: '800px' }}>
             <thead>
               <tr>
                 <th>Order ID</th>
-                <th>Client Registry</th>
-                <th>Status</th>
-                <th>Template</th>
-                <th>Validity till</th>
-                <th>Total Cardholders</th>
+                <th
+                  onClick={() => handleSort('client')}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                >
+                  Client Registry <SortIcon col="client" />
+                </th>
+                <th
+                  onClick={() => handleSort('status')}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                >
+                  Status <SortIcon col="status" />
+                </th>
+                <th
+                  onClick={() => handleSort('template')}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                >
+                  Template <SortIcon col="template" />
+                </th>
+                <th>Validity</th>
+                <th>Cards</th>
                 {isOwner && (
                   <>
                     <th>Payment</th>
-                    <th>Invoice total</th>
+                    <th>Total</th>
                   </>
                 )}
                 <th>Actions</th>
@@ -1134,7 +1177,7 @@ export default function OrdersPage() {
                         <span>{ord.validTill ? new Date(ord.validTill).toLocaleDateString() : '—'}</span>
                       </div>
                     </td>
-                    <td>{cardholderCount} cards</td>
+                    <td>{cardholderCount}</td>
                     {isOwner && (
                       <>
                         <td>{paymentStatus}</td>
@@ -1142,8 +1185,8 @@ export default function OrdersPage() {
                       </>
                     )}
                     <td>
-                      <a href={`/dashboard/orders/${ord.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }}>
-                        <FolderOpen size={12} /> Open Pipeline
+                      <a href={`/dashboard/orders/${ord.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                        <FolderOpen size={12} /> Open
                       </a>
                     </td>
                   </tr>
@@ -1152,6 +1195,60 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {total > PAGE_SIZE && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', flexWrap: 'wrap', gap: '12px' }}>
+            <span style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+              Showing {Math.min((page - 1) * PAGE_SIZE + 1, total)}–{Math.min(page * PAGE_SIZE, total)} of {total} orders
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+              >
+                <ChevronLeft size={14} /> Prev
+              </button>
+              {Array.from({ length: Math.ceil(total / PAGE_SIZE) }, (_, i) => i + 1)
+                .filter(p => p === 1 || p === Math.ceil(total / PAGE_SIZE) || Math.abs(p - page) <= 1)
+                .reduce<(number | '…')[]>((acc, p, idx, arr) => {
+                  if (idx > 0 && p - (arr[idx - 1] as number) > 1) acc.push('…');
+                  acc.push(p);
+                  return acc;
+                }, [])
+                .map((p, i) =>
+                  p === '…' ? (
+                    <span key={`e${i}`} style={{ padding: '0 4px', color: 'var(--muted)', fontSize: '0.82rem' }}>…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p as number)}
+                      style={{
+                        width: '32px', height: '32px', borderRadius: '6px', fontSize: '0.82rem', cursor: 'pointer',
+                        border: page === p ? 'none' : '1px solid var(--glass-border)',
+                        background: page === p ? '#4f46e5' : 'rgba(255,255,255,0.04)',
+                        color: page === p ? '#ffffff' : 'var(--muted)',
+                        fontWeight: page === p ? '700' : '400',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                )}
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '6px 10px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                disabled={page * PAGE_SIZE >= total}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       )}
 
       {selectedCardholderForDetails && (

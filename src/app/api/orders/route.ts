@@ -9,27 +9,43 @@ export async function GET(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    const orders = await prisma.cardOrder.findMany({
-      where: { pressId },
-      include: {
-        client: true,
-        template: true,
-        invoice: true,
-        cardholders: {
-          select: {
-            cardholderId: true,
-          },
+    const { searchParams } = new URL(request.url);
+    const page     = Math.max(1, Number(searchParams.get('page')     || 1));
+    const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || 20)));
+    const sortBy   = searchParams.get('sortBy')  || 'createdAt';
+    const sortDir  = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
+
+    let orderBy: any;
+    switch (sortBy) {
+      case 'client':   orderBy = { client:   { name: sortDir } }; break;
+      case 'template': orderBy = { template: { name: sortDir } }; break;
+      case 'status':   orderBy = { status:   sortDir };            break;
+      default:         orderBy = { createdAt: sortDir };
+    }
+
+    const where = { pressId };
+    const [total, orders] = await Promise.all([
+      prisma.cardOrder.count({ where }),
+      prisma.cardOrder.findMany({
+        where,
+        include: {
+          client: true,
+          template: true,
+          invoice: true,
+          cardholders: { select: { cardholderId: true } },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy,
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
     const ordersWithLegacyField = orders.map(ord => ({
       ...ord,
       cardholderIds: JSON.stringify(ord.cardholders.map(oc => oc.cardholderId)),
     }));
 
-    return NextResponse.json({ success: true, orders: ordersWithLegacyField });
+    return NextResponse.json({ success: true, orders: ordersWithLegacyField, total, page, pageSize });
   } catch (error) {
     console.error('Get orders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
