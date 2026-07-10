@@ -257,9 +257,9 @@ export default function InvoicesPage() {
                 onClick={() => setStatusFilter(status)}
                 style={{
                   padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '0.8rem',
-                  fontWeight: statusFilter === status ? '600' : '400',
-                  background: statusFilter === status ? 'var(--primary-gradient)' : 'transparent',
-                  color: statusFilter === status ? '#fff' : 'var(--muted)',
+                  fontWeight: statusFilter === status ? '700' : '400',
+                  background: statusFilter === status ? '#4f46e5' : 'transparent',
+                  color: statusFilter === status ? '#ffffff' : 'var(--muted)',
                   cursor: 'pointer', transition: 'all 0.2s',
                 }}
               >
