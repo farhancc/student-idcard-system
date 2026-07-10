@@ -114,12 +114,19 @@ export default function InvoicesPage() {
             const job = data.jobs?.find((j: any) => j.id === state.jobId);
             if (job) {
               if (job.status === 'COMPLETED') {
-                setPdfJobProgress(prev => ({
-                  ...prev,
-                  [orderId]: { status: 'COMPLETED', progress: 100, jobId: job.id, isLocalJob: job.isLocalJob }
-                }));
-                // Auto open the download link only if not local
-                if (!job.isLocalJob) {
+                if (job.isLocalJob) {
+                  // Clear state so Compile PDF button reappears; notify via toast
+                  setPdfJobProgress(prev => {
+                    const next = { ...prev };
+                    delete next[orderId];
+                    return next;
+                  });
+                  toast('Invoice PDF saved to Documents folder', 'success');
+                } else {
+                  setPdfJobProgress(prev => ({
+                    ...prev,
+                    [orderId]: { status: 'COMPLETED', progress: 100, jobId: job.id, isLocalJob: false }
+                  }));
                   window.open(`/api/jobs/${job.id}/download`, '_blank');
                 }
               } else if (job.status === 'FAILED') {
@@ -430,8 +437,6 @@ export default function InvoicesPage() {
                                   <span className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1px' }}></span>
                                   <span>{jobState.progress}%</span>
                                 </div>
-                              ) : (jobState as any).isLocalJob ? (
-                                <span style={{ color: '#10b981', fontWeight: '500', fontSize: '0.75rem', padding: '6px 10px' }}>Saved to Documents</span>
                               ) : (
                                 <a
                                   href={`/api/jobs/${jobState.jobId}/download`}
