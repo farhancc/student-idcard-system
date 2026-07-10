@@ -82,17 +82,25 @@ export default function OrdersPage() {
   const [cropMarks, setCropMarks] = useState<boolean>(true);
   const [foldLine, setFoldLine] = useState<boolean>(true);
 
-  const fetchData = async (p = page, sb = sortBy, sd = sortDir) => {
+  const fetchOrders = async (p: number, sb: string, sd: string) => {
     try {
       const params = new URLSearchParams({
         page: String(p), pageSize: String(PAGE_SIZE), sortBy: sb, sortDir: sd,
       });
-      const ordersRes = await fetch(`/api/orders?${params}`);
-      if (ordersRes.ok) {
-        const json = await ordersRes.json();
+      const res = await fetch(`/api/orders?${params}`);
+      if (res.ok) {
+        const json = await res.json();
         setOrders(json.orders || []);
         setTotal(json.total ?? 0);
       }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchData = async () => {
+    try {
+      await fetchOrders(page, sortBy, sortDir);
 
       const clientsRes = await fetch('/api/clients');
       if (clientsRes.ok) {
@@ -112,7 +120,6 @@ export default function OrdersPage() {
         if (allTemplates.length > 0) setTemplateId(String(allTemplates[0].id));
       }
 
-      // Fetch profile to get pressId
       const profileRes = await fetch('/api/press/profile');
       if (profileRes.ok) {
         const profileJson = await profileRes.json();
@@ -127,14 +134,24 @@ export default function OrdersPage() {
     }
   };
 
+  // Initial mount: load everything
   useEffect(() => {
-    fetchData(page, sortBy, sortDir);
+    fetchData();
     (async () => {
       try {
         const res = await fetch('/api/settings/me');
         if (res.ok) { const j = await res.json(); if (j.user?.role) setRole(j.user.role); }
       } catch { /* silent */ }
     })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Re-fetch orders whenever page / sort changes (skip on first render — fetchData handles it)
+  const isFirstRender = React.useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    fetchOrders(page, sortBy, sortDir);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, sortBy, sortDir]);
 
   const handleSort = (col: string) => {
