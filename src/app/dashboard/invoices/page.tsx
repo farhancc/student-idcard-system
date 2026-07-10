@@ -15,7 +15,8 @@ import {
   FileText, 
   AlertCircle,
   Eye,
-  Check
+  Check,
+  Lock
 } from 'lucide-react';
 
 interface Invoice {
@@ -44,7 +45,11 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PAID' | 'UNPAID'>('ALL');
-  
+
+  // Role-based access control
+  const [userRole, setUserRole] = useState<string>('OPERATOR');
+  const isOwner = userRole === 'OWNER';
+
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
@@ -57,9 +62,9 @@ export default function InvoicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // PDF Download / Job compilation state
-  const [pdfCompilingId, setPdfCompilingId] = useState<number | null>(null);
-  const [pdfJobProgress, setPdfJobProgress] = useState<Record<number, { status: string; progress: number; jobId?: number }>>({});
+  // PDF Download / Job compilation state — Set allows multiple concurrent compilations
+  const [pdfCompilingIds, setPdfCompilingIds] = useState<Set<number>>(new Set());
+  const [pdfJobProgress, setPdfJobProgress] = useState<Record<number, { status: string; progress: number; jobId?: number }>>({}); 
 
   const fetchData = async () => {
     try {
@@ -77,6 +82,11 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     fetchData();
+    // Resolve the current user's role
+    fetch('/api/press/profile')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data?.user?.role) setUserRole(data.user.role); })
+      .catch(() => {});
   }, []);
 
   // Poll for compiling jobs
@@ -136,7 +146,7 @@ export default function InvoicesPage() {
   }, [pdfJobProgress]);
 
   const handleCompilePdf = async (orderId: number) => {
-    setPdfCompilingId(orderId);
+    setPdfCompilingIds(prev => new Set(prev).add(orderId));
     setPdfJobProgress(prev => ({
       ...prev,
       [orderId]: { status: 'PENDING', progress: 0 }
@@ -169,7 +179,11 @@ export default function InvoicesPage() {
         return next;
       });
     } finally {
-      setPdfCompilingId(null);
+      setPdfCompilingIds(prev => {
+        const next = new Set(prev);
+        next.delete(orderId);
+        return next;
+      });
     }
   };
 
@@ -382,60 +396,81 @@ export default function InvoicesPage() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <button 
-                          className="btn btn-secondary" 
-                          style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          onClick={() => handleOpenEdit(inv)}
-                        >
-                          <Edit size={12} /> Edit
-                        </button>
+                        {isOwner ? (
+                          <>
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              onClick={() => handleOpenEdit(inv)}
+                            >
+                              <Edit size={12} /> Edit
+                            </button>
 
-                        {inv.paymentStatus === 'PAID' ? (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)' }}
-                            onClick={() => handleQuickStatusChange(inv, 'UNPAID')}
-                          >
-                            Mark Unpaid
-                          </button>
+                            {inv.paymentStatus === 'PAID' ? (
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)' }}
+                                onClick={() => handleQuickStatusChange(inv, 'UNPAID')}
+                              >
+                                Mark Unpaid
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                                onClick={() => handleQuickStatusChange(inv, 'PAID')}
+                              >
+                                Mark Paid
+                              </button>
+                            )}
+
+                            {jobState ? (
+                              jobState.status === 'PENDING' || jobState.status === 'PROCESSING' ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--warning)', padding: '6px 10px' }}>
+                                  <span className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1px' }}></span>
+                                  <span>{jobState.progress}%</span>
+                                </div>
+                              ) : (jobState as any).isLocalJob ? (
+                                <span style={{ color: '#10b981', fontWeight: '500', fontSize: '0.75rem', padding: '6px 10px' }}>Saved to Documents</span>
+                              ) : (
+                                <a
+                                  href={`/api/jobs/${jobState.jobId}/download`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn btn-primary"
+                                  style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                >
+                                  <Download size={12} /> Get PDF
+                                </a>
+                              )
+                            ) : (
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                disabled={pdfCompilingIds.has(inv.orderId)}
+                                onClick={() => handleCompilePdf(inv.orderId)}
+                              >
+                                <Download size={12} /> Compile PDF
+                              </button>
+                            )}
+                          </>
                         ) : (
-                          <button
-                            className="btn btn-primary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => handleQuickStatusChange(inv, 'PAID')}
+                          <span
+                            title="Only the press Owner can edit invoices or compile PDFs"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                              fontSize: '0.72rem',
+                              color: 'var(--muted)',
+                              padding: '6px 10px',
+                              border: '1px solid var(--glass-border)',
+                              borderRadius: '6px',
+                              userSelect: 'none',
+                            }}
                           >
-                            Mark Paid
-                          </button>
-                        )}
-
-                         {jobState ? (
-                           jobState.status === 'PENDING' || jobState.status === 'PROCESSING' ? (
-                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--warning)', padding: '6px 10px' }}>
-                               <span className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1px' }}></span>
-                               <span>{jobState.progress}%</span>
-                             </div>
-                           ) : (jobState as any).isLocalJob ? (
-                             <span style={{ color: '#10b981', fontWeight: '500', fontSize: '0.75rem', padding: '6px 10px' }}>Saved to Documents</span>
-                           ) : (
-                             <a
-                               href={`/api/jobs/${jobState.jobId}/download`}
-                               target="_blank"
-                               rel="noreferrer"
-                               className="btn btn-primary"
-                               style={{ padding: '6px 10px', fontSize: '0.75rem', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                             >
-                               <Download size={12} /> Get PDF
-                             </a>
-                           )
-                         ) : (
-                          <button
-                            className="btn btn-secondary"
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            disabled={pdfCompilingId !== null}
-                            onClick={() => handleCompilePdf(inv.orderId)}
-                          >
-                            <Download size={12} /> Compile PDF
-                          </button>
+                            <Lock size={11} /> Owner only
+                          </span>
                         )}
                       </div>
                     </td>
