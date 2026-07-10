@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle, Eye, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as ImageIcon, CheckCircle, AlertTriangle, AlertCircle, Eye, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { generateApprovalPdfClient } from '@/lib/pdf/approval-pdf-generator';
 import { generateProductionPdfClient } from '@/lib/pdf/production-pdf-generator';
 import CardPreview from '@/app/components/CardPreview';
@@ -14,12 +14,14 @@ export default function OrdersPage() {
   const [role, setRole] = useState('OWNER');
   const isOwner = role === 'OWNER';
 
-  // Pagination & sorting
+  // Pagination & sorting & search
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const PAGE_SIZE = 30;
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
 
   // Form toggling
   const [showForm, setShowForm] = useState(false);
@@ -82,11 +84,27 @@ export default function OrdersPage() {
   const [cropMarks, setCropMarks] = useState<boolean>(true);
   const [foldLine, setFoldLine] = useState<boolean>(true);
 
-  const fetchOrders = async (p: number, sb: string, sd: string) => {
+  // Search debouncing
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 400);
+    return () => clearTimeout(handler);
+  }, [search]);
+
+  // Reset page to 1 when search query changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch]);
+
+  const fetchOrders = async (p: number, sb: string, sd: string, s: string) => {
     try {
       const params = new URLSearchParams({
         page: String(p), pageSize: String(PAGE_SIZE), sortBy: sb, sortDir: sd,
       });
+      if (s.trim()) {
+        params.append('search', s.trim());
+      }
       const res = await fetch(`/api/orders?${params}`);
       if (res.ok) {
         const json = await res.json();
@@ -100,7 +118,7 @@ export default function OrdersPage() {
 
   const fetchData = async () => {
     try {
-      await fetchOrders(page, sortBy, sortDir);
+      await fetchOrders(page, sortBy, sortDir, debouncedSearch);
 
       const clientsRes = await fetch('/api/clients');
       if (clientsRes.ok) {
@@ -146,13 +164,13 @@ export default function OrdersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Re-fetch orders whenever page / sort changes (skip on first render — fetchData handles it)
+  // Re-fetch orders whenever page / sort / search changes (skip on first render — fetchData handles it)
   const isFirstRender = React.useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
-    fetchOrders(page, sortBy, sortDir);
+    fetchOrders(page, sortBy, sortDir, debouncedSearch);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, sortBy, sortDir]);
+  }, [page, sortBy, sortDir, debouncedSearch]);
 
   const handleSort = (col: string) => {
     if (sortBy === col) {
@@ -1125,6 +1143,19 @@ export default function OrdersPage() {
         </div>
       )}
 
+      {/* Search filter */}
+      <div className="glass-panel" style={{ padding: '16px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Search size={18} color="var(--muted)" />
+        <input
+          type="text"
+          className="form-input"
+          style={{ background: 'transparent', border: 'none', padding: '4px', flex: 1 }}
+          placeholder="Search by Order ID, Client name, Template name, or Status..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+      </div>
+
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '50px 0' }}>
           <div className="spinner"></div>
@@ -1132,8 +1163,12 @@ export default function OrdersPage() {
       ) : orders.length === 0 ? (
         <div className="glass-panel" style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)' }}>
           <FileText size={40} style={{ marginBottom: '16px' }} />
-          <h3>No Orders Found</h3>
-          <p style={{ marginTop: '8px' }}>Create your first order to assemble layout sheets, assign serials, and print.</p>
+          <h3>{debouncedSearch ? 'No Matching Orders' : 'No Orders Found'}</h3>
+          <p style={{ marginTop: '8px' }}>
+            {debouncedSearch 
+              ? `We couldn't find any orders matching "${debouncedSearch}".` 
+              : 'Create your first order to assemble layout sheets, assign serials, and print.'}
+          </p>
         </div>
       ) : (
         <>

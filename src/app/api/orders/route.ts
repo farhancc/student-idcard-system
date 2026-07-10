@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const pageSize = Math.min(100, Math.max(1, Number(searchParams.get('pageSize') || 30)));
     const sortBy   = searchParams.get('sortBy')  || 'createdAt';
     const sortDir  = searchParams.get('sortDir') === 'asc' ? 'asc' : 'desc';
+    const search   = searchParams.get('search')  || '';
 
     let orderBy: any;
     switch (sortBy) {
@@ -23,7 +24,18 @@ export async function GET(request: Request) {
       default:         orderBy = { createdAt: sortDir };
     }
 
-    const where = { pressId };
+    const where: any = { pressId };
+    if (search.trim()) {
+      const q = search.trim();
+      const isNumeric = /^\d+$/.test(q);
+      where.OR = [
+        ...(isNumeric ? [{ id: Number(q) }] : []),
+        { client: { name: { contains: q, mode: 'insensitive' } } },
+        { template: { name: { contains: q, mode: 'insensitive' } } },
+        { status: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
     const [total, orders] = await Promise.all([
       prisma.cardOrder.count({ where }),
       prisma.cardOrder.findMany({
