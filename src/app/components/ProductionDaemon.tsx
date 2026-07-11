@@ -51,18 +51,31 @@ export default function ProductionDaemon() {
           throw new Error(`Polling request failed: ${res.statusText}`);
         }
         
-        // ── Online: flush any queued print logs ─────────────────────
-        if (wasOfflineRef.current) {
-          wasOfflineRef.current = false;
-          addLog('Connection restored. Flushing offline print queue...');
+        // ── Online: check and flush any queued print logs ───────────
+        const electronAPI = (window as any).electronAPI;
+        let currentQueueLength = offlineQueueCount;
+        if (electronAPI?.getQueueStatus) {
           try {
-            const electronAPI = (window as any).electronAPI;
+            const status = await electronAPI.getQueueStatus();
+            currentQueueLength = status?.queueLength ?? 0;
+            if (currentQueueLength !== offlineQueueCount) {
+              setOfflineQueueCount(currentQueueLength);
+            }
+          } catch (err) {
+            console.error('Failed to get queue status:', err);
+          }
+        }
+
+        if (currentQueueLength > 0) {
+          addLog(`Found ${currentQueueLength} pending offline record(s). Flushing offline print queue...`);
+          try {
             if (electronAPI?.flushPrintQueue) {
               const flushResult = await electronAPI.flushPrintQueue('');
               if (flushResult?.flushed > 0) {
                 addLog(`Sync complete: ${flushResult.flushed} queued record(s) sent to server.`);
               }
               setOfflineQueueCount(flushResult?.remaining ?? 0);
+              window.dispatchEvent(new Event('refresh-profile'));
             }
           } catch (flushErr: any) {
             addLog(`Offline queue flush error: ${flushErr.message}`);

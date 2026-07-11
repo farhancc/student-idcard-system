@@ -25,6 +25,7 @@ export default function PdfJobsPage() {
         if (data.success) {
           toast(`Job #${jobId} cancelled successfully. Refunded ${data.refundedCredits} credits.`, 'success');
           fetchJobs();
+          window.dispatchEvent(new Event('refresh-profile'));
         } else {
           toast(`Error: ${data.error || 'Failed to cancel job'}`, 'error');
         }

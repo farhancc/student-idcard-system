@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
@@ -61,6 +61,21 @@ async function flushQueueToServer(portalUrl, authToken) {
   const queue = readQueue();
   if (queue.length === 0) return { flushed: 0, failed: 0, remaining: 0 };
 
+  let token = authToken;
+  if (!token) {
+    try {
+      const cookies = await session.defaultSession.cookies.get({ name: 'press_auth_token' });
+      if (cookies && cookies.length > 0) {
+        token = cookies[0].value;
+        console.log('[OfflineQueue] Retrieved auth token from session cookies.');
+      } else {
+        console.warn('[OfflineQueue] No press_auth_token cookie found in default session.');
+      }
+    } catch (cookieErr) {
+      console.error('[OfflineQueue] Failed to read press_auth_token from session cookies:', cookieErr);
+    }
+  }
+
   const surviving = [];
   let flushed = 0;
   let failed = 0;
@@ -71,7 +86,7 @@ async function flushQueueToServer(portalUrl, authToken) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`,
+          'Authorization': token ? `Bearer ${token}` : '',
         },
         body: JSON.stringify(entry.payload),
         signal: AbortSignal.timeout(10000), // 10s timeout
@@ -83,8 +98,14 @@ async function flushQueueToServer(portalUrl, authToken) {
       } else {
         const errText = await res.text();
         console.warn(`[OfflineQueue] Server rejected entry (${res.status}): ${errText}`);
-        // Server rejected (4xx): discard — do not retry bad data
-        if (res.status >= 400 && res.status < 500) {
+        
+        // 401 Unauthorized / 403 Forbidden: do not discard immediately, keep for retry
+        if (res.status === 401 || res.status === 403) {
+          entry.retries = (entry.retries || 0) + 1;
+          surviving.push(entry);
+          failed++;
+        } else if (res.status >= 400 && res.status < 500) {
+          // Other 4xx client errors: discard — do not retry bad data
           failed++;
         } else {
           // 5xx server error: keep in queue for next attempt
