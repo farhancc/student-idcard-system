@@ -406,7 +406,29 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
       const { promisify } = require('util');
       const execAsync = promisify(exec);
       try {
-        await execAsync(`pdftoppm -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        const platform = process.platform;
+        const binaryName = platform === 'win32' ? 'pdftoppm.exe' : 'pdftoppm';
+
+        // 1. Check packaged resource path
+        const packagedBinPath = path.join(process.resourcesPath, 'bin', binaryName);
+        // 2. Check local project bin path
+        const devBinPath = path.join(__dirname, 'bin', platform, binaryName);
+
+        let pdftoppmPath = 'pdftoppm'; // default fallback to system path
+        if (fs.existsSync(packagedBinPath)) {
+          pdftoppmPath = packagedBinPath;
+          // Ensure executable permissions on Unix systems
+          if (platform !== 'win32') {
+            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+          }
+        } else if (fs.existsSync(devBinPath)) {
+          pdftoppmPath = devBinPath;
+          if (platform !== 'win32') {
+            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+          }
+        }
+
+        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);

@@ -46,6 +46,7 @@ next-env.d.ts
 /desktop-client/dist
 /desktop-client/build
 /desktop-client/node_modules
+/desktop-client/bin/
 
 # uploaded files
 /public/uploads/

@@ -7,7 +7,7 @@
     "start": "electron .",
     "start:local": "PORTAL_URL=http://localhost:3000 electron .",
     "dist": "electron-builder",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package && node scripts/download-binaries.js"
   },
   "dependencies": {
     "adm-zip": "^0.5.17",
@@ -30,6 +30,15 @@
       "preload.js",
       "offline.html",
       "icon.png"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/${platform}",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
     ],
     "publish": {
       "provider": "generic",
