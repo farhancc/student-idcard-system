@@ -331,7 +331,9 @@ export async function renderCardSideClient(
         side,
       });
       if (localPath) {
-        bgUrl = `local://${localPath}`;
+        const formattedPath = localPath.replace(/\\/g, '/');
+        const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
+        bgUrl = `local://${prefix}${formattedPath}`;
       } else if (originalUrl) {
         // No local cache → fall back to Cloudinary original (high-res)
         bgUrl = originalUrl;
@@ -777,7 +779,9 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       if (localPath) {
-        finalBgUrl = `local://${localPath}`;
+        const formattedPath = localPath.replace(/\\/g, '/');
+        const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
+        finalBgUrl = `local://${prefix}${formattedPath}`;
         resolvedLocally = true;
       }
     } catch (err) {

@@ -59,7 +59,9 @@ export async function POST(request: Request) {
       if (success) {
         let downloadUrl = '';
         if (localPath) {
-          downloadUrl = `local://${localPath}`;
+          const formattedPath = localPath.replace(/\\/g, '/');
+          const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
+          downloadUrl = `local://${prefix}${formattedPath}`;
         } else if (pdfBase64) {
           const pdfBuffer = Buffer.from(pdfBase64, 'base64');
           const isCloudinaryConfigured = !!(

@@ -8,11 +8,27 @@ const AdmZip = require('adm-zip');
 function getSystemPathFromLocalUrl(localUrl) {
   if (!localUrl) return '';
   let urlPath = localUrl.replace(/^local:\/\//i, '');
-  if (process.platform !== 'win32' && !urlPath.startsWith('/')) {
-    urlPath = '/' + urlPath;
+  if (process.platform === 'win32') {
+    if (urlPath.startsWith('/')) {
+      urlPath = urlPath.slice(1);
+    }
+  } else {
+    if (!urlPath.startsWith('/')) {
+      urlPath = '/' + urlPath;
+    }
   }
   return decodeURIComponent(urlPath);
 }
+
+function getLocalUrlFromSystemPath(systemPath) {
+  if (!systemPath) return '';
+  let formattedPath = systemPath.replace(/\\/g, '/');
+  if (process.platform === 'win32' && !formattedPath.startsWith('/')) {
+    formattedPath = '/' + formattedPath;
+  }
+  return `local://${formattedPath}`;
+}
+
 
 // Register local:// protocol scheme as privileged to avoid CORS/Fetch errors
 protocol.registerSchemesAsPrivileged([
@@ -432,14 +448,14 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
-        return { success: true, url: `local://${target}`, localPath: filePath };
+        return { success: true, url: getLocalUrlFromSystemPath(target), localPath: filePath };
       } catch (convErr) {
         console.error('PDF conversion error:', convErr);
-        return { success: true, url: `local://${filePath}`, localPath: filePath };
+        return { success: true, url: getLocalUrlFromSystemPath(filePath), localPath: filePath };
       }
     }
 
-    return { success: true, url: `local://${filePath}`, localPath: filePath };
+    return { success: true, url: getLocalUrlFromSystemPath(filePath), localPath: filePath };
   } catch (error) {
     console.error('save-template-image error:', error);
     return { success: false, error: error.message };
@@ -568,7 +584,7 @@ ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
       if (matches && matches.length === 3) {
         const buffer = Buffer.from(matches[2], 'base64');
         fs.writeFileSync(filePath, buffer);
-        return { success: true, localUrl: `local://${filePath}` };
+        return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
       }
     }
 
@@ -581,7 +597,7 @@ ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
     const buffer = Buffer.from(arrayBuffer);
     fs.writeFileSync(filePath, buffer);
 
-    return { success: true, localUrl: `local://${filePath}` };
+    return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
   } catch (error) {
     console.error(`[Main Process] cache-photo error for cardholder ${cardholderId}:`, error);
     return { success: false, error: error.message };

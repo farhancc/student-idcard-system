@@ -51,8 +51,14 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   // and read the file directly from disk using the absolute path embedded in the URL.
   if (fileUrl.startsWith('local://')) {
     let localPath = fileUrl.replace(/^local:\/\//i, '');
-    if (process.platform !== 'win32' && !localPath.startsWith('/')) {
-      localPath = '/' + localPath;
+    if (process.platform === 'win32') {
+      if (localPath.startsWith('/')) {
+        localPath = localPath.slice(1);
+      }
+    } else {
+      if (!localPath.startsWith('/')) {
+        localPath = '/' + localPath;
+      }
     }
     localPath = decodeURIComponent(localPath);
     if (fs.existsSync(localPath)) {

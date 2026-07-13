@@ -423,14 +423,18 @@ export default function TemplatesPage() {
           // Cloudinary upload completes. Uses local:// protocol so the Electron
           // protocol handler serves it as application/pdf.
           if (result.localPath) {
-            setFrontOriginalUrl(`local://${result.localPath}`);
+            const formattedPath = result.localPath.replace(/\\/g, '/');
+            const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
+            setFrontOriginalUrl(`local://${prefix}${formattedPath}`);
           }
         } else {
           setBackImageUrl(result.url);
           setBackLocalPath(result.localPath);
           setBackWebUrl(''); // Reset during upload
           if (result.localPath) {
-            setBackOriginalUrl(`local://${result.localPath}`);
+            const formattedPath = result.localPath.replace(/\\/g, '/');
+            const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
+            setBackOriginalUrl(`local://${prefix}${formattedPath}`);
           }
         }
 
