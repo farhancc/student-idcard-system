@@ -5,11 +5,11 @@ const { execSync } = require('child_process');
 const AdmZip = require('adm-zip');
 
 const BIN_DIR = path.join(__dirname, '..', 'bin');
-const WIN32_DIR = path.join(BIN_DIR, 'win32');
+const WIN_DIR = path.join(BIN_DIR, 'win');
 const LINUX_DIR = path.join(BIN_DIR, 'linux');
 
 // Ensure directories exist
-fs.mkdirSync(WIN32_DIR, { recursive: true });
+fs.mkdirSync(WIN_DIR, { recursive: true });
 fs.mkdirSync(LINUX_DIR, { recursive: true });
 
 async function downloadFile(url, dest) {
@@ -57,7 +57,7 @@ async function setupWindows() {
     for (const entry of zipEntries) {
       if (entry.entryName.includes('Library/bin/') && !entry.isDirectory) {
         const fileName = path.basename(entry.entryName);
-        const destPath = path.join(WIN32_DIR, fileName);
+        const destPath = path.join(WIN_DIR, fileName);
         
         // Extract file content
         const content = zip.readFile(entry);
@@ -66,7 +66,7 @@ async function setupWindows() {
       }
     }
 
-    console.log(`Successfully extracted ${extractedCount} Windows binaries/DLLs to bin/win32.`);
+    console.log(`Successfully extracted ${extractedCount} Windows binaries/DLLs to bin/win.`);
     
     // Clean up zip
     if (fs.existsSync(tmpZipPath)) {

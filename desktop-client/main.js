@@ -422,8 +422,8 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
       const { promisify } = require('util');
       const execAsync = promisify(exec);
       try {
-        const platform = process.platform;
-        const binaryName = platform === 'win32' ? 'pdftoppm.exe' : 'pdftoppm';
+        const platform = process.platform === 'win32' ? 'win' : process.platform;
+        const binaryName = platform === 'win' ? 'pdftoppm.exe' : 'pdftoppm';
 
         // 1. Check packaged resource path
         const packagedBinPath = path.join(process.resourcesPath, 'bin', binaryName);
@@ -434,12 +434,12 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         if (fs.existsSync(packagedBinPath)) {
           pdftoppmPath = packagedBinPath;
           // Ensure executable permissions on Unix systems
-          if (platform !== 'win32') {
+          if (platform !== 'win') {
             try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
           }
         } else if (fs.existsSync(devBinPath)) {
           pdftoppmPath = devBinPath;
-          if (platform !== 'win32') {
+          if (platform !== 'win') {
             try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
           }
         }
