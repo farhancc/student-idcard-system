@@ -230,6 +230,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: false,
     },
   });
 
@@ -448,14 +449,22 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
-        return { success: true, url: getLocalUrlFromSystemPath(target), localPath: filePath };
+
+        // Read the generated PNG preview as a base64 data URL
+        if (fs.existsSync(target)) {
+          const pngBuffer = fs.readFileSync(target);
+          const pngBase64 = pngBuffer.toString('base64');
+          return { success: true, url: `data:image/png;base64,${pngBase64}`, localPath: filePath };
+        }
+        return { success: true, url: `data:application/pdf;base64,${base64Data}`, localPath: filePath };
       } catch (convErr) {
         console.error('PDF conversion error:', convErr);
-        return { success: true, url: getLocalUrlFromSystemPath(filePath), localPath: filePath };
+        return { success: true, url: `data:application/pdf;base64,${base64Data}`, localPath: filePath };
       }
     }
 
-    return { success: true, url: getLocalUrlFromSystemPath(filePath), localPath: filePath };
+    const dataUrl = `data:${mimeType || 'image/png'};base64,${base64Data}`;
+    return { success: true, url: dataUrl, localPath: filePath };
   } catch (error) {
     console.error('save-template-image error:', error);
     return { success: false, error: error.message };
@@ -511,6 +520,19 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
       if (fs.existsSync(cleanFrontPath)) {
         fs.copyFileSync(cleanFrontPath, targetPath);
         console.log(`Finalized front template: copied ${cleanFrontPath} to ${targetPath}`);
+
+        // If PDF, also copy the generated PNG preview file
+        if (ext === '.pdf') {
+          const pngSrc = cleanFrontPath.replace('.pdf', '.png');
+          const pngTarget = targetPath.replace('.pdf', '.png');
+          if (fs.existsSync(pngSrc)) {
+            if (fs.existsSync(pngTarget)) {
+              try { fs.unlinkSync(pngTarget); } catch (e) {}
+            }
+            fs.copyFileSync(pngSrc, pngTarget);
+            console.log(`Finalized front template PNG preview: copied ${pngSrc} to ${pngTarget}`);
+          }
+        }
       }
     }
 
@@ -525,6 +547,19 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
       if (fs.existsSync(cleanBackPath)) {
         fs.copyFileSync(cleanBackPath, targetPath);
         console.log(`Finalized back template: copied ${cleanBackPath} to ${targetPath}`);
+
+        // If PDF, also copy the generated PNG preview file
+        if (ext === '.pdf') {
+          const pngSrc = cleanBackPath.replace('.pdf', '.png');
+          const pngTarget = targetPath.replace('.pdf', '.png');
+          if (fs.existsSync(pngSrc)) {
+            if (fs.existsSync(pngTarget)) {
+              try { fs.unlinkSync(pngTarget); } catch (e) {}
+            }
+            fs.copyFileSync(pngSrc, pngTarget);
+            console.log(`Finalized back template PNG preview: copied ${pngSrc} to ${pngTarget}`);
+          }
+        }
       }
     }
     return { success: true };
@@ -545,6 +580,44 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
     const buffer = Buffer.from(base64Data, 'base64');
     fs.writeFileSync(filePath, buffer);
     console.log(`[Main Process] Saved template original to: ${filePath}`);
+
+    // For PDFs: convert first page to PNG using pdftoppm so rendering preview can load it
+    if (ext === '.pdf') {
+      const pngPrefix = filePath.replace('.pdf', '');
+      try {
+        const platform = process.platform === 'win32' ? 'win' : process.platform;
+        const binaryName = platform === 'win' ? 'pdftoppm.exe' : 'pdftoppm';
+
+        const packagedBinPath = path.join(process.resourcesPath, 'bin', binaryName);
+        const devBinPath = path.join(__dirname, 'bin', platform, binaryName);
+
+        let pdftoppmPath = 'pdftoppm'; // default fallback
+        if (fs.existsSync(packagedBinPath)) {
+          pdftoppmPath = packagedBinPath;
+          if (platform !== 'win') {
+            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+          }
+        } else if (fs.existsSync(devBinPath)) {
+          pdftoppmPath = devBinPath;
+          if (platform !== 'win') {
+            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+          }
+        }
+
+        const { exec } = require('child_process');
+        const { promisify } = require('util');
+        const execAsync = promisify(exec);
+
+        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        const generated = `${pngPrefix}-1.png`;
+        const target = `${pngPrefix}.png`;
+        if (fs.existsSync(generated)) fs.renameSync(generated, target);
+        console.log(`[Main Process] Generated preview PNG for template original: ${target}`);
+      } catch (convErr) {
+        console.error('[Main Process] PDF preview generation error during save-template-original:', convErr);
+      }
+    }
+
     return { success: true, path: filePath };
   } catch (error) {
     console.error('[Main Process] save-template-original error:', error);
