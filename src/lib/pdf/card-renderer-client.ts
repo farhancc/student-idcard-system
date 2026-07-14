@@ -123,7 +123,9 @@ export async function ensureFontLoadedClient(fontName: string, fontUrl: string):
 function loadImageClient(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous'; // Prevent tainted canvas issues
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      img.crossOrigin = 'anonymous'; // Prevent tainted canvas issues
+    }
     img.onload = () => resolve(img);
     img.onerror = (e) => reject(new Error(`Failed to load image: ${url}`));
     img.src = url;

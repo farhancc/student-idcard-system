@@ -442,7 +442,9 @@ export default function TemplatesPage() {
         const createCheapCopyBase64 = async (previewUrl: string): Promise<string> => {
           return new Promise((resolve, reject) => {
             const img = new Image();
-            img.crossOrigin = 'anonymous';
+            if (previewUrl.startsWith('http://') || previewUrl.startsWith('https://')) {
+              img.crossOrigin = 'anonymous';
+            }
             img.onload = () => {
               try {
                 const canvas = document.createElement('canvas');
