@@ -520,22 +520,34 @@ export default function TemplatesPage() {
               if (side === 'front') {
                 setFrontOriginalUrl(result.originalUrl);
                 if (!localPreviewGenerated) {
-                  createCheapCopyBase64(result.originalUrl)
-                    .then(webUrl => {
-                      setFrontWebUrl(webUrl);
-                      toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
-                    })
-                    .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                  const isPdf = result.originalUrl.toLowerCase().endsWith('.pdf');
+                  if (isPdf && result.url && !result.url.toLowerCase().endsWith('.pdf')) {
+                    setFrontWebUrl(result.url);
+                    toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
+                  } else {
+                    createCheapCopyBase64(result.originalUrl)
+                      .then(webUrl => {
+                        setFrontWebUrl(webUrl);
+                        toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
+                      })
+                      .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                  }
                 }
               } else {
                 setBackOriginalUrl(result.originalUrl);
                 if (!localPreviewGenerated) {
-                  createCheapCopyBase64(result.originalUrl)
-                    .then(webUrl => {
-                      setBackWebUrl(webUrl);
-                      toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
-                    })
-                    .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                  const isPdf = result.originalUrl.toLowerCase().endsWith('.pdf');
+                  if (isPdf && result.url && !result.url.toLowerCase().endsWith('.pdf')) {
+                    setBackWebUrl(result.url);
+                    toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
+                  } else {
+                    createCheapCopyBase64(result.originalUrl)
+                      .then(webUrl => {
+                        setBackWebUrl(webUrl);
+                        toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
+                      })
+                      .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                  }
                 }
               }
             }
