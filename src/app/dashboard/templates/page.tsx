@@ -352,6 +352,14 @@ export default function TemplatesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file size limit (10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      toast(`⛔ File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the maximum limit of 10MB.`, 'error');
+      e.target.value = '';
+      return;
+    }
+
     const uploadFileWithFallback = async (fileToUpload: File): Promise<{ url: string; originalUrl?: string }> => {
       // 1. Try direct upload to Cloudinary using /api/upload/sign to bypass Vercel 4.5MB limit
       try {

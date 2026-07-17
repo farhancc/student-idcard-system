@@ -551,6 +551,14 @@ export default function SuperAdminDashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Check file size limit (10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the maximum limit of 10MB.`);
+      e.target.value = '';
+      return;
+    }
+
     if (side === 'front') setUploadingFront(true);
     else setUploadingBack(true);
 
