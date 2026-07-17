@@ -487,22 +487,27 @@ export default function TemplatesPage() {
         };
 
         let localPreviewGenerated = false;
+        const isPdfUrl = result.url.startsWith('data:application/pdf') || result.url.toLowerCase().endsWith('.pdf');
 
-        // Trigger base64 preview generation in background
-        createCheapCopyBase64(result.url)
-          .then(webUrl => {
-            localPreviewGenerated = true;
-            if (side === 'front') {
-              setFrontWebUrl(webUrl);
-            } else {
-              setBackWebUrl(webUrl);
-            }
-            toast(`Web preview prepared successfully for ${side} side`, 'success');
-          })
-          .catch(err => {
-            console.error('Failed to generate cheap copy base64:', err);
-            toast(`Failed to prepare ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
-          });
+        if (isPdfUrl) {
+          console.log(`Local conversion returned a PDF file. Deferring preview generation to server-side Cloudinary fallback...`);
+        } else {
+          // Trigger base64 preview generation in background
+          createCheapCopyBase64(result.url)
+            .then(webUrl => {
+              localPreviewGenerated = true;
+              if (side === 'front') {
+                setFrontWebUrl(webUrl);
+              } else {
+                setBackWebUrl(webUrl);
+              }
+              toast(`Web preview prepared successfully for ${side} side`, 'success');
+            })
+            .catch(err => {
+              console.error('Failed to generate cheap copy base64:', err);
+              toast(`Failed to prepare ${side} side web preview. Previews may not be visible to organizations.`, 'warning');
+            });
+        }
 
         // Upload original to Cloudinary in the background for high-res Electron fallback
         const arrayBufferForUpload = await file.arrayBuffer();
