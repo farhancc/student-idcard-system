@@ -9,15 +9,27 @@ import { computeYOffsets, wrapWords } from '@/lib/pdf/card-renderer-client';
 
 const getOptimizedImageUrl = (url: string) => {
   if (!url) return '';
-  if (url.endsWith('.pdf')) {
-    return url.replace('.pdf', '.png');
+  const lowerUrl = url.toLowerCase();
+
+  // If it's a local:// protocol URL or data URI, return as-is
+  if (url.startsWith('local://') || url.startsWith('data:')) {
+    return url;
   }
-  if (url.toLowerCase().endsWith('.svg')) {
-    if (url.includes('/image/upload/')) {
-      // Cloudinary URL: replace format and request w_2000 transformation for high clarity
-      return url.replace('/image/upload/', '/image/upload/w_2000/').replace('.svg', '.png');
+
+  // Handle PDF: map originals to previews folder and change ext to .png (ignoring query parameters)
+  if (lowerUrl.includes('.pdf')) {
+    if (url.includes('/templates/originals/')) {
+      return url.replace('/templates/originals/', '/templates/previews/').replace(/\.pdf(\?|$)/i, '.png$1');
     }
-    return url.replace('.svg', '.png');
+    return url.replace(/\.pdf(\?|$)/i, '.png$1');
+  }
+
+  // Handle SVG: request higher resolution PNG
+  if (lowerUrl.includes('.svg')) {
+    if (url.includes('/image/upload/')) {
+      return url.replace('/image/upload/', '/image/upload/w_2000/').replace(/\.svg(\?|$)/i, '.png$1');
+    }
+    return url.replace(/\.svg(\?|$)/i, '.png$1');
   }
   return url;
 };
@@ -522,17 +534,19 @@ export default function TemplatesPage() {
           .then(r => r.json())
           .then(result => {
             if (result.originalUrl) {
+              const isPdf = result.originalUrl.toLowerCase().includes('.pdf');
               if (side === 'front') {
                 setFrontOriginalUrl(result.originalUrl);
                 if (!localPreviewGenerated) {
-                  const isPdf = result.originalUrl.toLowerCase().endsWith('.pdf');
-                  if (isPdf && result.url && !result.url.toLowerCase().endsWith('.pdf')) {
+                  if (isPdf && result.url && !result.url.toLowerCase().includes('.pdf')) {
                     setFrontWebUrl(result.url);
+                    setFrontImageUrl(result.url);
                     toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
                   } else {
                     createCheapCopyBase64(result.originalUrl)
                       .then(webUrl => {
                         setFrontWebUrl(webUrl);
+                        setFrontImageUrl(result.url);
                         toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
                       })
                       .catch(err => console.error('Cloudinary fallback web preview failed:', err));
@@ -541,14 +555,15 @@ export default function TemplatesPage() {
               } else {
                 setBackOriginalUrl(result.originalUrl);
                 if (!localPreviewGenerated) {
-                  const isPdf = result.originalUrl.toLowerCase().endsWith('.pdf');
-                  if (isPdf && result.url && !result.url.toLowerCase().endsWith('.pdf')) {
+                  if (isPdf && result.url && !result.url.toLowerCase().includes('.pdf')) {
                     setBackWebUrl(result.url);
+                    setBackImageUrl(result.url);
                     toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
                   } else {
                     createCheapCopyBase64(result.originalUrl)
                       .then(webUrl => {
                         setBackWebUrl(webUrl);
+                        setBackImageUrl(result.url);
                         toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
                       })
                       .catch(err => console.error('Cloudinary fallback web preview failed:', err));
