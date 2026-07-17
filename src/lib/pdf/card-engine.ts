@@ -4,6 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { prisma } from '../prisma';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -319,6 +320,95 @@ function computeYOffsets(
   return offsets;
 }
 
+async function loadFieldsAndData(
+  template: {
+    id?: number;
+    frontFields: string;
+    backFields: string;
+  },
+  cardholder: {
+    id?: number;
+    name: string;
+    designation: string | null;
+    photoUrl: string | null;
+    cardSerial: string | null;
+    customFields: string | null;
+  },
+  side: 'front' | 'back',
+  formattedValidTill: string
+): Promise<{ fields: FieldCoordinate[]; data: Record<string, any> }> {
+  let fields: FieldCoordinate[] = [];
+  if (template.id) {
+    try {
+      const dbFields = await prisma.templateField.findMany({
+        where: { templateId: template.id, side }
+      });
+      if (dbFields && dbFields.length > 0) {
+        fields = dbFields.map(df => ({
+          field: df.field,
+          type: df.type as any,
+          x: df.x,
+          y: df.y,
+          width: df.width,
+          height: df.height,
+          fontSize: df.fontSize || undefined,
+          color: df.color || undefined,
+          align: (df.align as any) || undefined,
+          fontFamily: df.fontName || undefined,
+          required: df.isRequired
+        }));
+      }
+    } catch (err) {
+      console.error(`Error loading relational fields for template ID ${template.id}:`, err);
+    }
+  }
+
+  if (fields.length === 0) {
+    const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
+    fields = JSON.parse(fieldsJson || '[]');
+  }
+
+  let data: Record<string, any> = {
+    name: cardholder.name,
+    designation: cardholder.designation || '',
+    photo: cardholder.photoUrl || '',
+    cardSerial: cardholder.cardSerial || '',
+    validTill: formattedValidTill,
+  };
+
+  let valuesLoaded = false;
+  if (cardholder.id) {
+    try {
+      const dbValues = await prisma.cardholderValue.findMany({
+        where: { cardholderId: cardholder.id },
+        include: { field: true }
+      });
+      if (dbValues && dbValues.length > 0) {
+        dbValues.forEach(dv => {
+          data[dv.field.field] = dv.value;
+        });
+        valuesLoaded = true;
+      }
+    } catch (err) {
+      console.error(`Error loading relational values for cardholder ID ${cardholder.id}:`, err);
+    }
+  }
+
+  if (!valuesLoaded) {
+    const customFieldsObj = cardholder.customFields
+      ? (typeof cardholder.customFields === 'string'
+          ? JSON.parse(cardholder.customFields)
+          : cardholder.customFields)
+      : {};
+    data = {
+      ...data,
+      ...customFieldsObj
+    };
+  }
+
+  return { fields, data };
+}
+
 /**
  * Render a single card side (front/back) using Canvas
  */
@@ -347,8 +437,6 @@ export async function renderCardSide(
   const width = template.cardWidth;
   const height = template.cardHeight;
 
-  const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
-  const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
   const bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
 
   const canvas = createCanvas(width, height);
@@ -393,9 +481,6 @@ export async function renderCardSide(
     ctx.fillRect(0, 0, width, height);
   }
 
-  // 2. Parse Custom Fields JSON
-  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
-
   // Formatted date string for validTill
   let formattedValidTill = '';
   if (validTillDate) {
@@ -404,15 +489,7 @@ export async function renderCardSide(
     formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
-  // Combine core properties and custom properties
-  const data: Record<string, any> = {
-    name: cardholder.name,
-    designation: cardholder.designation || '',
-    photo: cardholder.photoUrl || '',
-    cardSerial: cardholder.cardSerial || '',
-    validTill: formattedValidTill,
-    ...customData,
-  };
+  const { fields, data } = await loadFieldsAndData(template, cardholder, side, formattedValidTill);
 
   // 3. Pre-compute Y offsets to reflow fields that wrap beyond their declared height
   // Pre-register fonts first to ensure accurate text width measurements
@@ -735,9 +812,6 @@ export async function renderCardSideToPdfBytes(
   const widthPt = widthPx * 0.24;
   const heightPt = heightPx * 0.24;
 
-  const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
-  const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
-
   // Prefer the original high-res vector/PDF asset over the display preview image
   const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
   const previewUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
@@ -833,8 +907,6 @@ export async function renderCardSideToPdfBytes(
   }
 
   // 3. Prepare data
-  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
-
   let formattedValidTill = '';
   if (validTillDate) {
     const date = new Date(validTillDate);
@@ -842,14 +914,7 @@ export async function renderCardSideToPdfBytes(
     formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
-  const data: Record<string, any> = {
-    name: cardholder.name,
-    designation: cardholder.designation || '',
-    photo: cardholder.photoUrl || '',
-    cardSerial: cardholder.cardSerial || '',
-    validTill: formattedValidTill,
-    ...customData,
-  };
+  const { fields, data } = await loadFieldsAndData(template, cardholder, side, formattedValidTill);
 
   // 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets
   const fontCache = new Map<string, any>();

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
+import { syncCardholderValues } from '@/lib/sync';
 
 export async function POST(request: Request) {
   try {
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
               photoUrl: photoUrl || duplicate.photoUrl,
             },
           });
+          await syncCardholderValues(updated.id, clientId, updated.customFields);
           // Mark cached asset stale if name/designation/custom changed
           if (
             name !== duplicate.name ||
@@ -188,15 +190,16 @@ export async function POST(request: Request) {
           }
           updatedItems.push(updated);
         } else if (importMode === 'overwrite') {
-          // Delete and recreate
           await prisma.cardholder.delete({ where: { id: duplicate.id } });
           const created = await prisma.cardholder.create({ data: cardholderPayload });
+          await syncCardholderValues(created.id, clientId, created.customFields);
           newItems.push(created);
         }
       } else {
         // Not a duplicate
         if (importMode !== 'check') {
           const created = await prisma.cardholder.create({ data: cardholderPayload });
+          await syncCardholderValues(created.id, clientId, created.customFields);
           newItems.push(created);
         }
       }

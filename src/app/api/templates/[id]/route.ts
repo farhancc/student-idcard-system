@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateTemplateSchema } from '@/lib/schemas';
 import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
+import { syncTemplateFields } from '@/lib/sync';
 
 export async function GET(
   request: Request,
@@ -91,6 +92,8 @@ export async function PUT(
         },
       });
     });
+
+    await syncTemplateFields(newTemplate.id, newTemplate.frontFields, newTemplate.backFields);
 
     // 2. Mark any cached CardAssets as stale
     await prisma.cardAsset.updateMany({

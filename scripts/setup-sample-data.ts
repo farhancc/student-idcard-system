@@ -8,7 +8,7 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import AdmZip from 'adm-zip';
 import { createCanvas, loadImage } from 'canvas';
 import fs from 'fs';
@@ -17,8 +17,8 @@ import path from 'path';
 const prisma = new PrismaClient();
 
 // ── CONFIGURATION ─────────────────────────────────────────
-const PRESS_ID = 1;
-const CLIENT_ID = 1;  // Springfield Elementary School
+const PRESS_ID = 3;
+let CLIENT_ID = 1;
 const TEMPLATE_FRONT_SRC = path.join(process.cwd(), 'scripts', 'assets', 'id_card_front.png');
 const TEMPLATE_BACK_SRC  = path.join(process.cwd(), 'scripts', 'assets', 'id_card_back.png');
 
@@ -108,6 +108,28 @@ async function generateStudentAvatar(student: typeof STUDENTS[0], index: number)
 
 async function main() {
   console.log('🚀 Starting sample data setup...\n');
+
+  // Ensure we have a client Springfield Elementary School
+  let client = await prisma.client.findFirst({
+    where: { pressId: PRESS_ID, name: 'Springfield Elementary School' }
+  });
+  if (!client) {
+    client = await prisma.client.create({
+      data: {
+        pressId: PRESS_ID,
+        name: 'Springfield Elementary School',
+        type: 'SCHOOL',
+        contactName: 'Seymour Skinner',
+        contactPhone: '555-0199',
+        contactEmail: 'skinner@springfield.edu',
+        address: '123 E. Elm St, Springfield'
+      }
+    });
+    console.log(`✅ Created Springfield client: ID=${client.id}`);
+  } else {
+    console.log(`✅ Found Springfield client: ID=${client.id}`);
+  }
+  CLIENT_ID = client.id;
 
   // ── 1. PREPARE TEMPLATE UPLOAD DIR ────────────────────────
   const templateUploadDir = path.join(process.cwd(), 'public', 'uploads', String(PRESS_ID), 'templates');
@@ -290,22 +312,22 @@ async function main() {
     bloodGroup: s.bloodGroup,
   }));
 
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(excelData);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Students');
 
-  // Set column widths for readability
-  worksheet['!cols'] = [
-    { wch: 25 }, // name
-    { wch: 12 }, // designation
-    { wch: 15 }, // uniqueKey
-    { wch: 15 }, // class
-    { wch: 10 }, // rollNo
-    { wch: 12 }, // bloodGroup
+  worksheet.columns = [
+    { header: 'name', key: 'name', width: 25 },
+    { header: 'designation', key: 'designation', width: 12 },
+    { header: 'uniqueKey', key: 'uniqueKey', width: 15 },
+    { header: 'class', key: 'class', width: 15 },
+    { header: 'rollNo', key: 'rollNo', width: 10 },
+    { header: 'bloodGroup', key: 'bloodGroup', width: 12 },
   ];
 
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Students');
+  excelData.forEach(s => worksheet.addRow(s));
+
   const excelPath = path.join(process.cwd(), 'scripts', 'sample_12_students.xlsx');
-  XLSX.writeFile(workbook, excelPath);
+  await workbook.xlsx.writeFile(excelPath);
   console.log(`✅ Excel file created: ${excelPath}`);
 
   // ── 5. CREATE PHOTOS ZIP ────────────────────────────────────

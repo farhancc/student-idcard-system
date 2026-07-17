@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cardholderUpdateSchema } from '@/lib/schemas';
+import { syncCardholderValues } from '@/lib/sync';
 
 export async function PUT(
   request: Request,
@@ -45,6 +46,8 @@ export async function PUT(
         active: active !== undefined ? active : cardholder.active,
       },
     });
+
+    await syncCardholderValues(cardholderId, cardholder.clientId, updatedCardholder.customFields);
 
     // Mark associated CardAsset as stale if data changed (Selective Regeneration)
     if (

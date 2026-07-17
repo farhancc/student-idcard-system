@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncCardholderValues } from '@/lib/sync';
 
 export async function GET(
   request: Request,
@@ -148,6 +149,8 @@ export async function POST(
         active: true,
       },
     });
+
+    await syncCardholderValues(cardholder.id, clientId, cardholder.customFields);
 
     return NextResponse.json({ success: true, cardholder });
   } catch (error: any) {

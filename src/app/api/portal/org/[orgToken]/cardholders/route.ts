@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncCardholderValues } from '@/lib/sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,6 +133,8 @@ export async function POST(
         enrollToken: share.enrollToken,
       },
     });
+
+    await syncCardholderValues(cardholder.id, share.clientId, cardholder.customFields);
 
     return NextResponse.json({ success: true, cardholder });
   } catch (error) {

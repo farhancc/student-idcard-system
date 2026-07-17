@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { enrollSchema } from '@/lib/schemas';
+import { syncCardholderValues } from '@/lib/sync';
 
 export async function POST(
   request: Request,
@@ -106,6 +107,8 @@ export async function POST(
         enrollToken, // Stores either the global enrollToken or the department enrollToken
       },
     });
+
+    await syncCardholderValues(cardholder.id, share.clientId, cardholder.customFields);
 
     return NextResponse.json({ success: true, cardholder });
   } catch (error) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { templateSchema } from '@/lib/schemas';
+import { syncTemplateFields } from '@/lib/sync';
 
 export async function GET(request: Request) {
   try {
@@ -60,6 +61,8 @@ export async function POST(request: Request) {
         isLatest: true,
       },
     });
+
+    await syncTemplateFields(template.id, template.frontFields, template.backFields);
 
     return NextResponse.json({ success: true, template });
   } catch (error) {

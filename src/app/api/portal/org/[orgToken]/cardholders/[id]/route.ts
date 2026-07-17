@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncCardholderValues } from '@/lib/sync';
 
 export async function PUT(
   request: Request,
@@ -53,6 +54,8 @@ export async function PUT(
         cardSerial: uniqueKey || cardholder.cardSerial,
       },
     });
+
+    await syncCardholderValues(cardholderId, share.clientId, updated.customFields);
 
     // Mark cache as stale to force a re-render of PDF/PNG assets
     await prisma.cardAsset.updateMany({

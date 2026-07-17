@@ -95,6 +95,7 @@ model Cardholder {
   cardAsset    CardAsset?
   printRecords CardPrintRecord[]
   orderCards   OrderCardholder[]
+  fieldValues  CardholderValue[]
 
   @@unique([clientId, uniqueKey])
   @@index([pressId])
@@ -124,6 +125,7 @@ model CardTemplate {
   createdAt       DateTime @default(now()) @map("created_at")
 
   orders        CardOrder[]
+  fields        TemplateField[]
 
   @@map("card_templates")
 }
@@ -487,4 +489,38 @@ model CreditRequest {
   @@index([pressId])
   @@index([status])
   @@map("credit_requests")
+}
+
+model TemplateField {
+  id              Int               @id @default(autoincrement())
+  templateId      Int               @map("template_id")
+  template        CardTemplate      @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  side            String            // "front" | "back"
+  field           String            // name of field, e.g., "name", "designation"
+  type            String            // "text" | "image" | "qr" | "barcode" | "id"
+  x               Float
+  y               Float
+  width           Float
+  height          Float
+  fontSize        Int?              @map("font_size")
+  color           String?
+  align           String?
+  fontName        String?           @map("font_name")
+  isRequired      Boolean           @default(false) @map("is_required")
+  cardholderValues CardholderValue[]
+
+  @@unique([templateId, side, field])
+  @@map("template_fields")
+}
+
+model CardholderValue {
+  id           Int           @id @default(autoincrement())
+  cardholderId Int           @map("cardholder_id")
+  cardholder   Cardholder    @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  fieldId      Int           @map("field_id")
+  field        TemplateField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  value        String
+
+  @@unique([cardholderId, fieldId])
+  @@map("cardholder_values")
 }
