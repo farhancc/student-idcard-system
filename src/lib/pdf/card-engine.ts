@@ -362,9 +362,14 @@ export async function renderCardSide(
   if (bgUrl) {
     try {
       let absoluteBgPath = bgUrl;
-      if (bgUrl.endsWith('.pdf')) {
-        absoluteBgPath = bgUrl.replace('.pdf', '.png');
-      } else if (bgUrl.toLowerCase().endsWith('.svg')) {
+      const lowerBg = bgUrl.toLowerCase();
+      if (lowerBg.includes('.pdf')) {
+        if (bgUrl.includes('/templates/originals/')) {
+          absoluteBgPath = bgUrl.replace('/templates/originals/', '/templates/previews/').replace(/\.pdf(\?|$)/i, '.png$1');
+        } else {
+          absoluteBgPath = bgUrl.replace(/\.pdf(\?|$)/i, '.png$1');
+        }
+      } else if (lowerBg.includes('.svg')) {
         absoluteBgPath = resolveSvgToPng(bgUrl, 2000);
       }
       // Resolve local path if relative

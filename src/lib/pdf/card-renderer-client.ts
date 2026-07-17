@@ -350,13 +350,18 @@ export async function renderCardSideClient(
   if (bgUrl) {
     try {
       let absoluteBgUrl = bgUrl;
-      if (bgUrl.endsWith('.pdf')) {
-        absoluteBgUrl = bgUrl.replace('.pdf', '.png');
-      } else if (bgUrl.toLowerCase().endsWith('.svg')) {
-        if (bgUrl.includes('/image/upload/')) {
-          absoluteBgUrl = bgUrl.replace('/image/upload/', '/image/upload/w_2000/').replace('.svg', '.png');
+      const lowerBg = bgUrl.toLowerCase();
+      if (lowerBg.includes('.pdf')) {
+        if (bgUrl.includes('/templates/originals/')) {
+          absoluteBgUrl = bgUrl.replace('/templates/originals/', '/templates/previews/').replace(/\.pdf(\?|$)/i, '.png$1');
         } else {
-          absoluteBgUrl = bgUrl.replace('.svg', '.png');
+          absoluteBgUrl = bgUrl.replace(/\.pdf(\?|$)/i, '.png$1');
+        }
+      } else if (lowerBg.includes('.svg')) {
+        if (bgUrl.includes('/image/upload/')) {
+          absoluteBgUrl = bgUrl.replace('/image/upload/', '/image/upload/w_2000/').replace(/\.svg(\?|$)/i, '.png$1');
+        } else {
+          absoluteBgUrl = bgUrl.replace(/\.svg(\?|$)/i, '.png$1');
         }
       }
       const bg = await loadImageClient(absoluteBgUrl);
