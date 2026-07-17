@@ -445,7 +445,15 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
           }
         }
 
-        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        const pdftoppmDir = path.dirname(pdftoppmPath);
+        const childEnv = { ...process.env };
+        if (process.platform === 'win32' && pdftoppmPath !== 'pdftoppm') {
+          childEnv.PATH = `${pdftoppmDir};${childEnv.PATH || ''}`;
+        }
+        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`, {
+          cwd: pdftoppmDir === '.' ? undefined : pdftoppmDir,
+          env: childEnv
+        });
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
@@ -608,7 +616,15 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
         const { promisify } = require('util');
         const execAsync = promisify(exec);
 
-        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`);
+        const pdftoppmDir = path.dirname(pdftoppmPath);
+        const childEnv = { ...process.env };
+        if (process.platform === 'win32' && pdftoppmPath !== 'pdftoppm') {
+          childEnv.PATH = `${pdftoppmDir};${childEnv.PATH || ''}`;
+        }
+        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`, {
+          cwd: pdftoppmDir === '.' ? undefined : pdftoppmDir,
+          env: childEnv
+        });
         const generated = `${pngPrefix}-1.png`;
         const target = `${pngPrefix}.png`;
         if (fs.existsSync(generated)) fs.renameSync(generated, target);
