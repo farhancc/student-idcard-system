@@ -17,7 +17,8 @@
   "devDependencies": {
     "electron": "^41.7.0",
     "electron-builder": "^26.15.0",
-    "patch-package": "^8.0.1"
+    "patch-package": "^8.0.1",
+    "png-to-ico": "^3.0.2"
   },
   "build": {
     "appId": "com.idexocards.pressclient",
@@ -54,6 +55,7 @@
       "target": [
         "zip"
       ],
+      "icon": "build/icon.ico",
       "signAndEditExecutable": false
     },
     "nsis": {

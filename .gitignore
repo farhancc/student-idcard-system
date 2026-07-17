@@ -44,7 +44,9 @@ next-env.d.ts
 
 # desktop-client
 /desktop-client/dist
-/desktop-client/build
+/desktop-client/build/*
+!/desktop-client/build/icon.png
+!/desktop-client/build/icon.ico
 /desktop-client/node_modules
 /desktop-client/bin/
 
