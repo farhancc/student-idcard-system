@@ -176,6 +176,10 @@ export async function POST(request: Request) {
             `${folder}/previews`,
             'image'
           );
+        } else if (fileExtension === '.pdf') {
+          previewUrl = originalUrl.replace(/\.pdf$/i, '.png');
+        } else if (fileExtension === '.svg') {
+          previewUrl = originalUrl.replace(/\.svg$/i, '.png');
         }
 
         return NextResponse.json({
