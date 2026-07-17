@@ -352,6 +352,88 @@ export default function TemplatesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const uploadFileWithFallback = async (fileToUpload: File): Promise<{ url: string; originalUrl?: string }> => {
+      // 1. Try direct upload to Cloudinary using /api/upload/sign to bypass Vercel 4.5MB limit
+      try {
+        const folder = `press_${pressId}/templates`;
+        const signRes = await fetch('/api/upload/sign', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-press-id': String(pressId ?? 0)
+          },
+          body: JSON.stringify({ folder })
+        });
+        
+        if (signRes.ok) {
+          const signData = await signRes.json();
+          if (signData.success && signData.signature) {
+            const { signature, timestamp, apiKey, cloudName } = signData;
+            const directFormData = new FormData();
+            directFormData.append('file', fileToUpload);
+            directFormData.append('api_key', apiKey);
+            directFormData.append('timestamp', String(timestamp));
+            directFormData.append('signature', signature);
+            directFormData.append('folder', folder);
+            
+            const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
+              method: 'POST',
+              body: directFormData
+            });
+            
+            if (cloudinaryRes.ok) {
+              const cloudinaryData = await cloudinaryRes.json();
+              const uploadedUrl = cloudinaryData.secure_url;
+              
+              const isPdf = fileToUpload.name.toLowerCase().endsWith('.pdf');
+              const isSvg = fileToUpload.name.toLowerCase().endsWith('.svg');
+              let previewUrl = uploadedUrl;
+              
+              if (isPdf) {
+                previewUrl = uploadedUrl.replace(/\.pdf$/i, '.png');
+              } else if (isSvg) {
+                previewUrl = uploadedUrl.replace(/\.svg$/i, '.png');
+              }
+              
+              return {
+                url: previewUrl,
+                originalUrl: uploadedUrl
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Direct Cloudinary upload failed or not configured, falling back to server...', err);
+      }
+
+      // 2. Fallback to /api/upload
+      const arrayBufferForUpload = await fileToUpload.arrayBuffer();
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', new Blob([arrayBufferForUpload], { type: fileToUpload.type }), fileToUpload.name);
+      uploadFormData.append('type', 'template');
+      
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        headers: { 'x-press-id': String(pressId ?? 0) },
+        body: uploadFormData,
+      });
+      
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result.error || `Upload failed with status ${res.status}`);
+        }
+        return result;
+      } else {
+        const text = await res.text();
+        if (res.status === 413) {
+          throw new Error('File size exceeds the server upload limit. Please optimize the PDF or upload a smaller file.');
+        }
+        throw new Error(text || `Server returned status ${res.status}`);
+      }
+    };
+
     // Automatically detect image dimensions for setting card width and height
     const isVector = file.type === 'application/pdf' || 
                      file.name.toLowerCase().endsWith('.pdf') || 
@@ -522,16 +604,7 @@ export default function TemplatesPage() {
         }
 
         // Upload original to Cloudinary in the background for high-res Electron fallback
-        const arrayBufferForUpload = await file.arrayBuffer();
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', new Blob([arrayBufferForUpload], { type: file.type }), file.name);
-        uploadFormData.append('type', 'template');
-        fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'x-press-id': String(pressId ?? 0) },
-          body: uploadFormData,
-        })
-          .then(r => r.json())
+        uploadFileWithFallback(file)
           .then(result => {
             if (result.originalUrl) {
               const isPdf = result.originalUrl.toLowerCase().includes('.pdf');
@@ -575,20 +648,8 @@ export default function TemplatesPage() {
           .catch(err => console.error('Background Cloudinary original upload failed:', err));
 
       } else {
-        // ── Web path: upload directly to /api/upload ─────────
-        const arrayBufferForUpload = await file.arrayBuffer();
-        const uploadFormData = new FormData();
-        uploadFormData.append('file', new Blob([arrayBufferForUpload], { type: file.type }), file.name);
-        uploadFormData.append('type', 'template');
-        
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'x-press-id': String(pressId ?? 0) },
-          body: uploadFormData,
-        });
-        
-        const result = await res.json();
-        if (!res.ok) throw new Error(result.error || 'Failed to upload template image');
+        // ── Web path: upload with direct Cloudinary sign fallback ─────────
+        const result = await uploadFileWithFallback(file);
         
         if (side === 'front') {
           setFrontImageUrl(result.url);
