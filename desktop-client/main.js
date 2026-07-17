@@ -432,16 +432,30 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         const devBinPath = path.join(__dirname, 'bin', platform, binaryName);
 
         let pdftoppmPath = 'pdftoppm'; // default fallback to system path
-        if (fs.existsSync(packagedBinPath)) {
-          pdftoppmPath = packagedBinPath;
-          // Ensure executable permissions on Unix systems
-          if (platform !== 'win') {
-            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+        let useBundled = true;
+
+        if (platform !== 'win') {
+          // On Linux/macOS, check if system pdftoppm is available first
+          try {
+            const { execSync } = require('child_process');
+            execSync('which pdftoppm', { stdio: 'ignore' });
+            useBundled = false; // System pdftoppm is available, use it!
+          } catch (e) {
+            useBundled = true;
           }
-        } else if (fs.existsSync(devBinPath)) {
-          pdftoppmPath = devBinPath;
-          if (platform !== 'win') {
-            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+        }
+
+        if (useBundled) {
+          if (fs.existsSync(packagedBinPath)) {
+            pdftoppmPath = packagedBinPath;
+            if (platform !== 'win') {
+              try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+            }
+          } else if (fs.existsSync(devBinPath)) {
+            pdftoppmPath = devBinPath;
+            if (platform !== 'win') {
+              try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+            }
           }
         }
 
@@ -610,15 +624,30 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
         const devBinPath = path.join(__dirname, 'bin', platform, binaryName);
 
         let pdftoppmPath = 'pdftoppm'; // default fallback
-        if (fs.existsSync(packagedBinPath)) {
-          pdftoppmPath = packagedBinPath;
-          if (platform !== 'win') {
-            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+        let useBundled = true;
+
+        if (platform !== 'win') {
+          // On Linux/macOS, check if system pdftoppm is available first
+          try {
+            const { execSync } = require('child_process');
+            execSync('which pdftoppm', { stdio: 'ignore' });
+            useBundled = false; // System pdftoppm is available, use it!
+          } catch (e) {
+            useBundled = true;
           }
-        } else if (fs.existsSync(devBinPath)) {
-          pdftoppmPath = devBinPath;
-          if (platform !== 'win') {
-            try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+        }
+
+        if (useBundled) {
+          if (fs.existsSync(packagedBinPath)) {
+            pdftoppmPath = packagedBinPath;
+            if (platform !== 'win') {
+              try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+            }
+          } else if (fs.existsSync(devBinPath)) {
+            pdftoppmPath = devBinPath;
+            if (platform !== 'win') {
+              try { fs.chmodSync(pdftoppmPath, '755'); } catch (e) {}
+            }
           }
         }
 
