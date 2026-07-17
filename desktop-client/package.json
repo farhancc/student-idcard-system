@@ -55,8 +55,7 @@
       "target": [
         "zip"
       ],
-      "icon": "build/icon.ico",
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "packElevateHelper": false
