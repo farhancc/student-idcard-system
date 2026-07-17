@@ -17,6 +17,7 @@ const publicRoutes = [
   '/api/health',
   '/api/desktop/version',
   '/api/v1',
+  '/api/test-db',
 ];
 
 export async function middleware(request: NextRequest) {
