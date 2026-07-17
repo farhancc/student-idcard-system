@@ -171,6 +171,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: true, url, provider: 'cloudinary' });
       }
     } else {
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+        return NextResponse.json(
+          { error: 'Cloudinary credentials are not configured on this Vercel deployment. Persistent file storage is unavailable.' },
+          { status: 503 }
+        );
+      }
       console.log(`Cloudinary not configured for global templates. Falling back to local upload…`);
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'global', 'templates');
       fs.mkdirSync(uploadDir, { recursive: true });

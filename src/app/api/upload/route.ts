@@ -192,6 +192,12 @@ export async function POST(request: Request) {
       }
     } else {
       // ── Local fallback (dev / no Cloudinary) ────────────────────
+      if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+        return NextResponse.json(
+          { error: 'Cloudinary credentials are not configured on this Vercel deployment. Persistent file storage is unavailable.' },
+          { status: 503 }
+        );
+      }
       console.log(`Cloudinary not configured. Falling back to local upload for Press #${pressId}…`);
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', String(pressId), `${type}s`);
       fs.mkdirSync(uploadDir, { recursive: true });
