@@ -419,9 +419,9 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
     // For PDFs: convert first page to PNG using pdftoppm
     if (safeExt === 'pdf') {
       const pngPrefix = filePath.replace('.pdf', '');
-      const { exec } = require('child_process');
+      const { execFile } = require('child_process');
       const { promisify } = require('util');
-      const execAsync = promisify(exec);
+      const execFileAsync = promisify(execFile);
       try {
         const platform = process.platform === 'win32' ? 'win' : process.platform;
         const binaryName = platform === 'win' ? 'pdftoppm.exe' : 'pdftoppm';
@@ -450,7 +450,17 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
         if (process.platform === 'win32' && pdftoppmPath !== 'pdftoppm') {
           childEnv.PATH = `${pdftoppmDir};${childEnv.PATH || ''}`;
         }
-        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`, {
+        await execFileAsync(pdftoppmPath, [
+          '-png',
+          '-r',
+          '600',
+          '-f',
+          '1',
+          '-l',
+          '1',
+          filePath,
+          pngPrefix
+        ], {
           cwd: pdftoppmDir === '.' ? undefined : pdftoppmDir,
           env: childEnv
         });
@@ -612,16 +622,26 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
           }
         }
 
-        const { exec } = require('child_process');
+        const { execFile } = require('child_process');
         const { promisify } = require('util');
-        const execAsync = promisify(exec);
+        const execFileAsync = promisify(execFile);
 
         const pdftoppmDir = path.dirname(pdftoppmPath);
         const childEnv = { ...process.env };
         if (process.platform === 'win32' && pdftoppmPath !== 'pdftoppm') {
           childEnv.PATH = `${pdftoppmDir};${childEnv.PATH || ''}`;
         }
-        await execAsync(`"${pdftoppmPath}" -png -r 600 -f 1 -l 1 "${filePath}" "${pngPrefix}"`, {
+        await execFileAsync(pdftoppmPath, [
+          '-png',
+          '-r',
+          '600',
+          '-f',
+          '1',
+          '-l',
+          '1',
+          filePath,
+          pngPrefix
+        ], {
           cwd: pdftoppmDir === '.' ? undefined : pdftoppmDir,
           env: childEnv
         });
