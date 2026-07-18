@@ -167,6 +167,8 @@ export default function ClientDetailsPage() {
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
   // Structured custom field editor: { fieldKey -> fieldValue }
   const [editCustomFieldsMap, setEditCustomFieldsMap] = useState<Record<string, string>>({});
+  const [editTemplateFields, setEditTemplateFields] = useState<any[]>([]);
+  const [uploadingCustomImages, setUploadingCustomImages] = useState<Record<string, boolean>>({});
   const [editHasName, setEditHasName] = useState(true);
   const [editHasDesignation, setEditHasDesignation] = useState(true);
   const [editHasPhoto, setEditHasPhoto] = useState(true);
@@ -776,18 +778,27 @@ export default function ClientDetailsPage() {
     let hasUniqueKey = true;
     let parsedMap: Record<string, string> = {};
 
+    let allFields: any[] = [];
+
     if (tmpl) {
       try {
         const front = JSON.parse(tmpl.frontFields || '[]');
         const back = JSON.parse(tmpl.backFields || '[]');
-        const allFields = [...front, ...back];
+        allFields = [...front, ...back];
         const mappedFields = allFields.map(f => f.field);
 
         hasName = mappedFields.includes('name') || mappedFields.includes('fullName');
         hasDesignation = mappedFields.includes('designation') || mappedFields.includes('role');
         
         const imageFields = allFields.filter(f => f.type === 'image');
-        const mainPhoto = imageFields.find(f => f.field === 'photo' || f.field === 'avatar') || imageFields[0] || null;
+        const mainPhoto = imageFields.find(f => 
+          f.field === 'photo' || 
+          f.field === 'avatar' || 
+          f.field === 'photoUrl' ||
+          f.field.toLowerCase().includes('photo') || 
+          f.field.toLowerCase().includes('avatar') || 
+          f.field.toLowerCase().includes('profile')
+        ) || null;
         hasPhoto = mainPhoto !== null;
         
         hasUniqueKey = mappedFields.includes('uniqueKey');
@@ -834,6 +845,7 @@ export default function ClientDetailsPage() {
       }
     }
 
+    setEditTemplateFields(allFields);
     setEditHasName(hasName);
     setEditHasDesignation(hasDesignation);
     setEditHasPhoto(hasPhoto);
@@ -906,6 +918,29 @@ export default function ClientDetailsPage() {
       toast(err.message || 'Failed to upload photo', 'error');
     } finally {
       setUploadingEditPhoto(false);
+    }
+  };
+
+  const handleCustomImageUpload = async (key: string, file: File) => {
+    setUploadingCustomImages(prev => ({ ...prev, [key]: true }));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'photo');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to upload image');
+
+      setEditCustomFieldsMap(prev => ({ ...prev, [key]: data.url }));
+    } catch (err: any) {
+      toast(err.message || `Failed to upload ${key}`, 'error');
+    } finally {
+      setUploadingCustomImages(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -1066,7 +1101,16 @@ export default function ClientDetailsPage() {
       
       const hasName = allFields.some(f => f.field === 'name' || f.field === 'fullName');
       const hasDesignation = allFields.some(f => f.field === 'designation' || f.field === 'role');
-      const mainPhotoField = allFields.find(f => f.type === 'image' && (f.field === 'photo' || f.field === 'avatar' || f.field === 'photoUrl'));
+      const mainPhotoField = allFields.find(f => 
+        f.type === 'image' && (
+          f.field === 'photo' || 
+          f.field === 'avatar' || 
+          f.field === 'photoUrl' ||
+          f.field.toLowerCase().includes('photo') || 
+          f.field.toLowerCase().includes('avatar') || 
+          f.field.toLowerCase().includes('profile')
+        )
+      ) || null;
       const hasPhoto = !!mainPhotoField;
       const hasUniqueKey = allFields.some(f => f.field === 'uniqueKey');
       
@@ -2348,24 +2392,61 @@ export default function ClientDetailsPage() {
                 {Object.keys(editCustomFieldsMap).length === 0 ? (
                   <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>No custom fields found for this cardholder.</p>
                 ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {Object.entries(editCustomFieldsMap).map(([key, val]) => (
-                      <div key={key} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        <span style={{
-                          fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500,
-                          minWidth: '120px', maxWidth: '160px', padding: '8px 10px',
-                          background: 'rgba(56,189,248,0.05)', border: '1px solid var(--glass-border)',
-                          borderRadius: '6px', wordBreak: 'break-all',
-                        }}>{key}</span>
-                        <input
-                          type="text"
-                          className="form-input"
-                          style={{ flex: 1, fontSize: '0.85rem' }}
-                          value={val}
-                          onChange={e => setEditCustomFieldsMap(prev => ({ ...prev, [key]: e.target.value }))}
-                        />
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {Object.entries(editCustomFieldsMap).map(([key, val]) => {
+                      const fieldMeta = editTemplateFields.find(f => f.field === key);
+                      const isImage = fieldMeta?.type === 'image';
+                      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+
+                      return (
+                        <div key={key} style={{ display: 'flex', gap: '12px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '8px' }}>
+                          <span style={{
+                            fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 500,
+                            minWidth: '120px', maxWidth: '160px', padding: '8px 10px',
+                            background: 'rgba(56,189,248,0.05)', border: '1px solid var(--glass-border)',
+                            borderRadius: '6px', wordBreak: 'break-all',
+                          }}>{label}</span>
+                          
+                          {isImage ? (
+                            <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
+                              {val ? (
+                                <img 
+                                  src={val} 
+                                  alt="Preview" 
+                                  style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                                />
+                              ) : (
+                                <div style={{ width: '45px', height: '45px', borderRadius: '4px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>
+                                  No Image
+                                </div>
+                              )}
+                              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <input 
+                                  type="file" 
+                                  accept="image/*" 
+                                  className="form-input" 
+                                  style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                  onChange={e => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleCustomImageUpload(key, file);
+                                  }}
+                                  disabled={!!uploadingCustomImages[key]}
+                                />
+                                {uploadingCustomImages[key] && <div style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>Uploading...</div>}
+                              </div>
+                            </div>
+                          ) : (
+                            <input
+                              type="text"
+                              className="form-input"
+                              style={{ flex: 1, fontSize: '0.85rem' }}
+                              value={val}
+                              onChange={e => setEditCustomFieldsMap(prev => ({ ...prev, [key]: e.target.value }))}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

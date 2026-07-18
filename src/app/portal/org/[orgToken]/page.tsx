@@ -171,7 +171,14 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
       // Find all image fields
       const imageFields = allFields.filter(f => f.type === 'image');
-      const mainPhoto = imageFields.find(f => f.field === 'photo' || f.field === 'avatar') || imageFields[0] || null;
+      const mainPhoto = imageFields.find(f => 
+        f.field === 'photo' || 
+        f.field === 'avatar' || 
+        f.field === 'photoUrl' ||
+        f.field.toLowerCase().includes('photo') || 
+        f.field.toLowerCase().includes('avatar') || 
+        f.field.toLowerCase().includes('profile')
+      ) || null;
       const customImages = imageFields.filter(f => f !== mainPhoto);
       setCustomImgFields(customImages);
 

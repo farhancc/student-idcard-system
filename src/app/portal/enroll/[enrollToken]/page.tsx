@@ -124,7 +124,14 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         // Find all non-restricted image fields
         const imageFields = allFields.filter(f => f.type === 'image' && !restrictedFields.has(f.field));
         // Main photo field is named 'photo' or 'avatar', or the first one if neither exists
-        const mainPhoto = imageFields.find(f => f.field === 'photo' || f.field === 'avatar') || imageFields[0] || null;
+        const mainPhoto = imageFields.find(f => 
+          f.field === 'photo' || 
+          f.field === 'avatar' || 
+          f.field === 'photoUrl' ||
+          f.field.toLowerCase().includes('photo') || 
+          f.field.toLowerCase().includes('avatar') || 
+          f.field.toLowerCase().includes('profile')
+        ) || null;
         // Custom image fields are all other image fields
         const customImages = imageFields.filter(f => f !== mainPhoto);
         setCustomImgFields(customImages);

@@ -60,9 +60,15 @@ export async function GET(
     const front = JSON.parse(template.frontFields || '[]');
     const back = JSON.parse(template.backFields || '[]');
     const allFields: any[] = [...front, ...back];
-    
     const imageFields = allFields.filter(f => f.type === 'image');
-    const mainPhoto = imageFields.find(f => f.field === 'photo' || f.field === 'avatar') || imageFields[0] || null;
+    const mainPhoto = imageFields.find(f => 
+      f.field === 'photo' || 
+      f.field === 'avatar' || 
+      f.field === 'photoUrl' ||
+      f.field.toLowerCase().includes('photo') || 
+      f.field.toLowerCase().includes('avatar') || 
+      f.field.toLowerCase().includes('profile')
+    ) || null;
 
     const templateFields: any[] = [];
     const seen = new Set<string>();
