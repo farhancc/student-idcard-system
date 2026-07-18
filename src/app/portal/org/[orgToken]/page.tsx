@@ -762,8 +762,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                       <th>Name</th>
                       <th>Template Name</th>
                       <th>Department</th>
-                      <th>Designation</th>
-                      <th>Unique Key</th>
+                      {hasDesignation && <th>Designation</th>}
+                      {hasUniqueKey && <th>Unique Key</th>}
                       {/* Dynamic Custom Text Fields */}
                       {formFields.map(field => {
                         const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
@@ -841,8 +841,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               {getCardholderDeptName(ch)}
                             </span>
                           </td>
-                          <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                          <td><code>{ch.uniqueKey || '—'}</code></td>
+                          {hasDesignation && <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>}
+                          {hasUniqueKey && <td><code>{ch.uniqueKey || '—'}</code></td>}
 
                           {/* Dynamic Custom Text Fields */}
                           {formFields.map(field => (
