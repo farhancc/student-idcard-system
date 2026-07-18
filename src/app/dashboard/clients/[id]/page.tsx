@@ -935,8 +935,10 @@ export default function ClientDetailsPage() {
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to upload image');
+      const uploadedUrl = data.url || '';
+      if (!uploadedUrl) throw new Error('Upload succeeded but no URL was returned');
 
-      setEditCustomFieldsMap(prev => ({ ...prev, [key]: data.url }));
+      setEditCustomFieldsMap(prev => ({ ...prev, [key]: uploadedUrl }));
     } catch (err: any) {
       toast(err.message || `Failed to upload ${key}`, 'error');
     } finally {
@@ -1151,7 +1153,9 @@ export default function ClientDetailsPage() {
       const customImageKeys = imageFields.filter(f => f !== mainPhotoField).map(f => f.field);
       
       customImageKeys.forEach(k => {
-        if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+        const v = parsedCustom[k];
+        const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
+        if (isEmpty) {
           const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
           warnings.push(`${label} image is missing`);
         }

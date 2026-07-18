@@ -211,13 +211,15 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
       }
 
       const data = await uploadRes.json();
+      const uploadedUrl = data.url || '';
+      if (!uploadedUrl) throw new Error('Upload succeeded but no URL was returned');
       
       if (activeCropField === 'photo') {
-        setPhotoUrl(data.url);
+        setPhotoUrl(uploadedUrl);
       } else if (activeCropField) {
         setCustomFields(prev => ({
           ...prev,
-          [activeCropField]: data.url,
+          [activeCropField]: uploadedUrl,
         }));
       }
     } catch (err: any) {

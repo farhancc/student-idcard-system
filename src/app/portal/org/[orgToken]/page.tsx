@@ -391,13 +391,15 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
       if (!uploadRes.ok) throw new Error('Failed to upload image');
       const data = await uploadRes.json();
+      const uploadedUrl = data.url || '';
+      if (!uploadedUrl) throw new Error('Upload succeeded but no URL was returned');
       
       if (activeCropField === 'photo') {
-        setPhotoUrl(data.url);
+        setPhotoUrl(uploadedUrl);
       } else if (activeCropField) {
         setCustomFields(prev => ({
           ...prev,
-          [activeCropField]: data.url,
+          [activeCropField]: uploadedUrl,
         }));
       }
     } catch (err: any) {
@@ -500,7 +502,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     
     customImgFields.forEach(field => {
       const k = field.field;
-      if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+      const v = parsedCustom[k];
+      const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
+      if (isEmpty) {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
         warnings.push(`${label} image is missing`);
       }
