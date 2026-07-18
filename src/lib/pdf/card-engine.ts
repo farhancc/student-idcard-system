@@ -996,6 +996,9 @@ export async function renderCardSideToPdfBytes(
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
 
+  const tempCanvas = createCanvas(1, 1);
+  const tempCtx = tempCanvas.getContext('2d');
+
   const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
     // Get preloaded font from cache — mirrors the weight-aware logic in getEmbeddedFont
     let embeddedFont;
@@ -1044,19 +1047,52 @@ export async function renderCardSideToPdfBytes(
       embeddedFont = fontCache.get(stdFont);
     }
     const fontSizePt = (f.fontSize || 20) * 0.24;
-    if (!embeddedFont) return s.length * fontSizePt * 0.55 / 0.24;
+
+    const localCanvasMeasure = (f: FieldCoordinate, textVal: string) => {
+      if (!tempCtx) return textVal.length * fontSizePt * 0.55 / 0.24;
+      let fontName = 'sans-serif';
+      if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+        const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+        if (matchingFont) {
+          fontName = matchingFont.name;
+        } else {
+          fontName = f.fontFamily;
+        }
+      }
+      const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+      const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+      tempCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+
+      const spacing = f.letterSpacing || 0;
+      if (!spacing) return tempCtx.measureText(textVal).width;
+
+      let totalWidth = 0;
+      for (let charIndex = 0; charIndex < textVal.length; charIndex++) {
+        totalWidth += tempCtx.measureText(textVal[charIndex]).width;
+        if (charIndex < textVal.length - 1) {
+          totalWidth += spacing;
+        }
+      }
+      return totalWidth;
+    };
+
+    if (!embeddedFont) return localCanvasMeasure(f, s);
 
     const letterSpacingPt = (f.letterSpacing || 0) * 0.24;
     let wPt = 0;
-    if (!letterSpacingPt) {
-      wPt = embeddedFont.widthOfTextAtSize(s, fontSizePt);
-    } else {
-      for (let ci = 0; ci < s.length; ci++) {
-        wPt += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
-        if (ci < s.length - 1) wPt += letterSpacingPt;
+    try {
+      if (!letterSpacingPt) {
+        wPt = embeddedFont.widthOfTextAtSize(s, fontSizePt);
+      } else {
+        for (let ci = 0; ci < s.length; ci++) {
+          wPt += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
+          if (ci < s.length - 1) wPt += letterSpacingPt;
+        }
       }
+      return wPt / 0.24;
+    } catch (e) {
+      return localCanvasMeasure(f, s);
     }
-    return wPt / 0.24;
   };
 
   const pdfYOffsets = computeYOffsets(fields, pdfMeasureProxy, getPdfValueStr);
@@ -1100,6 +1136,118 @@ export async function renderCardSideToPdfBytes(
             processedValue = valueStr.toLowerCase();
           } else if (f.textTransform === 'capitalize') {
             processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+          }
+
+          // Test if the font can encode the text
+          let canEncode = true;
+          try {
+            embeddedFont.encodeText(processedValue);
+          } catch (e) {
+            canEncode = false;
+          }
+
+          if (!canEncode) {
+            // Render text onto a canvas at high resolution, then embed as PNG
+            const scaleFactor = 4;
+            const textCanvas = createCanvas(f.width * scaleFactor, f.height * scaleFactor);
+            const textCtx = textCanvas.getContext('2d');
+            if (textCtx) {
+              textCtx.scale(scaleFactor, scaleFactor);
+              
+              let fontName = 'sans-serif';
+              if (f.fontFamily && f.fontFamily !== 'sans-serif') {
+                const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
+                if (matchingFont) {
+                  fontName = matchingFont.name;
+                } else {
+                  fontName = f.fontFamily;
+                }
+              }
+              const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+              const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+              
+              textCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+              textCtx.fillStyle = f.color || '#000000';
+              textCtx.textAlign = f.align || 'left';
+              textCtx.textBaseline = 'top';
+              
+              const measureTextSpacing = (s: string) => {
+                const spacing = f.letterSpacing || 0;
+                if (!spacing) return textCtx.measureText(s).width;
+                let totalWidth = 0;
+                for (let charIndex = 0; charIndex < s.length; charIndex++) {
+                  totalWidth += textCtx.measureText(s[charIndex]).width;
+                  if (charIndex < s.length - 1) {
+                    totalWidth += spacing;
+                  }
+                }
+                return totalWidth;
+              };
+              
+              const lines = wrapWords(processedValue, f.width, measureTextSpacing);
+              const lineHeight = (f.fontSize || 20) * (f.lineHeight ?? 1.2);
+              const renderedHeight = lines.length * lineHeight;
+              
+              const halfLeading = (lineHeight - (f.fontSize || 20)) / 2;
+              let startY = halfLeading;
+              if (f.verticalAlign === 'center') {
+                startY = (f.height - renderedHeight) / 2 + halfLeading;
+              } else if (f.verticalAlign === 'bottom') {
+                startY = f.height - renderedHeight + halfLeading;
+              }
+              
+              let currentY = startY;
+              lines.forEach(lineText => {
+                let lineDrawX = 0;
+                const lineWidth = measureTextSpacing(lineText);
+                if (f.align === 'center') {
+                  lineDrawX = (f.width - lineWidth) / 2;
+                } else if (f.align === 'right') {
+                  lineDrawX = f.width - lineWidth;
+                }
+                
+                const spacing = f.letterSpacing || 0;
+                if (spacing) {
+                  let charX = lineDrawX;
+                  textCtx.save();
+                  textCtx.textAlign = 'left';
+                  for (let charIndex = 0; charIndex < lineText.length; charIndex++) {
+                    const char = lineText[charIndex];
+                    textCtx.fillText(char, charX, currentY);
+                    charX += textCtx.measureText(char).width + spacing;
+                  }
+                  textCtx.restore();
+                } else {
+                  textCtx.fillText(lineText, f.align === 'center' ? f.width / 2 : f.align === 'right' ? f.width : 0, currentY);
+                }
+                
+                if (f.textDecoration && f.textDecoration !== 'none') {
+                  textCtx.save();
+                  textCtx.beginPath();
+                  textCtx.strokeStyle = f.color || '#000000';
+                  textCtx.lineWidth = Math.max(1, (f.fontSize || 20) * 0.08);
+                  
+                  let lineY = currentY;
+                  if (f.textDecoration === 'underline') {
+                    lineY = currentY + (f.fontSize || 20) * 0.95;
+                  } else if (f.textDecoration === 'line-through') {
+                    lineY = currentY + (f.fontSize || 20) * 0.55;
+                  }
+                  
+                  textCtx.moveTo(lineDrawX, lineY);
+                  textCtx.lineTo(lineDrawX + lineWidth, lineY);
+                  textCtx.stroke();
+                  textCtx.restore();
+                }
+                
+                currentY += lineHeight;
+              });
+              
+              const textPngBuffer = textCanvas.toBuffer('image/png');
+              const pdfImg = await pdfDoc.embedPng(textPngBuffer);
+              page.drawImage(pdfImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+            }
+            break;
           }
 
           // Helper to measure text width taking letterSpacing into account in PDF space

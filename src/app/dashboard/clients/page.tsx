@@ -7,7 +7,7 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  
+
   // Form State
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
@@ -109,12 +109,22 @@ export default function ClientsPage() {
 
             <div className="form-group">
               <label className="form-label">Client Type</label>
-              <select className="form-select" value={type} onChange={e => setType(e.target.value)}>
-                <option value="SCHOOL">School / Education</option>
-                <option value="COMPANY">Company / Corporate</option>
+
+              <select
+                className="form-select"
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+              >
+                <option value="PRINTING_PRESS"> Printing Press</option>
+                <option value="SCHOOL"> School</option>
+                <option value="COLLEGE_UNIVERSITY">College / University</option>
+                <option value="COMPANY"> Company / Corporate</option>
+                <option value="HOSPITAL"> Hospital</option>
+                <option value="GOVERNMENT"> Government</option>
                 <option value="NGO">NGO / Volunteer Group</option>
-                <option value="GOVERNMENT">Government Branch</option>
-                <option value="OTHER">Other / Social Group</option>
+
+                <option value="EVENT_ORGANIZER"> Event Organizer</option>
+                <option value="OTHER"> Other</option>
               </select>
             </div>
 

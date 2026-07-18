@@ -98,7 +98,7 @@ export default function SignupPage() {
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div className="form-group">
-                <label className="form-label" htmlFor="pressName">Printing Press Name</label>
+                <label className="form-label" htmlFor="pressName">Organisation Name</label>
                 <div style={{ position: 'relative' }}>
                   <Briefcase style={{
                     position: 'absolute',

@@ -1,6 +1,80 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, FieldCoordinate } from './card-renderer-client';
 
+async function safeDrawText(
+  page: any,
+  pdfDoc: any,
+  text: string,
+  options: {
+    x: number;
+    y: number;
+    size: number;
+    font: any;
+    color?: any;
+    opacity?: number;
+    rotate?: any;
+  }
+) {
+  try {
+    options.font.encodeText(text);
+    page.drawText(text, options);
+  } catch (err) {
+    try {
+      const scaleFactor = 4;
+      const fontSize = options.size;
+      const fontName = 'sans-serif';
+      
+      const tempCanvas = document.createElement('canvas');
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) throw new Error('Could not get 2d context');
+      tempCtx.font = `${fontSize}px "${fontName}"`;
+      const textWidth = tempCtx.measureText(text).width;
+      const textHeight = fontSize * 1.5;
+      
+      const textCanvas = document.createElement('canvas');
+      textCanvas.width = Math.ceil(textWidth * scaleFactor) || 1;
+      textCanvas.height = Math.ceil(textHeight * scaleFactor) || 1;
+      const ctx = textCanvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get 2d context');
+      ctx.scale(scaleFactor, scaleFactor);
+      
+      ctx.font = `${fontSize}px "${fontName}"`;
+      ctx.fillStyle = '#000000';
+      if (options.color) {
+        const rgbArr = options.color.asArray();
+        const r = Math.round((rgbArr[0] || 0) * 255);
+        const g = Math.round((rgbArr[1] || 0) * 255);
+        const b = Math.round((rgbArr[2] || 0) * 255);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+      }
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, 0, 0);
+      
+      const dataUrl = textCanvas.toDataURL('image/png');
+      const base64 = dataUrl.split(',')[1];
+      const pngBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      const embeddedPng = await pdfDoc.embedPng(pngBytes);
+      
+      page.drawImage(embeddedPng, {
+        x: options.x,
+        y: options.y - fontSize * 0.2,
+        width: textWidth,
+        height: textHeight,
+        opacity: options.opacity,
+        rotate: options.rotate,
+      });
+    } catch (fallbackErr) {
+      console.error('safeDrawText fallback failed:', fallbackErr);
+      const sanitized = text.replace(/[^\x00-\x7F]/g, '?');
+      try {
+        page.drawText(sanitized, options);
+      } catch (finalErr) {
+        // ignore
+      }
+    }
+  }
+}
+
 export async function generateApprovalPdfClient(
   clientName: string,
   deptName: string,
@@ -87,7 +161,7 @@ export async function generateApprovalPdfClient(
 
     // Draw Header
     page.drawText('PROOF SHEET — FOR CLIENT APPROVAL ONLY', { x: 50, y: 800, size: 16, font: fontBold, color: rgb(0.1, 0.1, 0.3) });
-    page.drawText(`Client: ${clientName} | Dept: ${deptName} | Portal Proof | Page: ${pageIdx + 1} of ${totalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+    await safeDrawText(page, pdfDoc, `Client: ${clientName} | Dept: ${deptName} | Portal Proof | Page: ${pageIdx + 1} of ${totalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
 
     // Draw watermark
     page.drawText('PROOF ONLY - DO NOT PRINT', {
@@ -184,7 +258,7 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw cardholder details
-        page.drawText(cardholder.name, {
+        await safeDrawText(page, pdfDoc, cardholder.name, {
           x: 480,
           y: yOffset - 40,
           size: 9,
@@ -196,7 +270,7 @@ export async function generateApprovalPdfClient(
         // Always draw ID if not already in uniqueFieldsMap and present
         const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
         if (!hasIdField && cardholder.uniqueKey) {
-          page.drawText(`ID: ${cardholder.uniqueKey}`, {
+          await safeDrawText(page, pdfDoc, `ID: ${cardholder.uniqueKey}`, {
             x: 480,
             y: currentY,
             size: 8,
@@ -218,7 +292,7 @@ export async function generateApprovalPdfClient(
                 .trim();
             }
             const textToDraw = `${label}: ${val}`;
-            page.drawText(textToDraw, {
+            await safeDrawText(page, pdfDoc, textToDraw, {
               x: 480,
               y: currentY,
               size: 8,
@@ -278,7 +352,7 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw details below the card
-        page.drawText(cardholder.name, {
+        await safeDrawText(page, pdfDoc, cardholder.name, {
           x: xOffset,
           y: yOffset - scaledHeight - 12,
           size: 8,
@@ -306,7 +380,7 @@ export async function generateApprovalPdfClient(
           }
         }
         const detailsLine = detailsList.join(' | ');
-        page.drawText(detailsLine, {
+        await safeDrawText(page, pdfDoc, detailsLine, {
           x: xOffset,
           y: yOffset - scaledHeight - 22,
           size: 7.5,

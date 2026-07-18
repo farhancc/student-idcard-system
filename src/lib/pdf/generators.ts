@@ -5,6 +5,77 @@ import { prisma } from '../prisma';
 import fs from 'fs';
 import path from 'path';
 import sharp from 'sharp';
+import { createCanvas } from 'canvas';
+
+async function safeDrawText(
+  page: any,
+  pdfDoc: any,
+  text: string,
+  options: {
+    x: number;
+    y: number;
+    size: number;
+    font: any;
+    color?: any;
+    opacity?: number;
+    rotate?: any;
+  }
+) {
+  try {
+    options.font.encodeText(text);
+    page.drawText(text, options);
+  } catch (err) {
+    try {
+      const scaleFactor = 4;
+      const fontSize = options.size;
+      const fontName = 'sans-serif';
+      
+      const tempCanvas = createCanvas(1, 1);
+      const tempCtx = tempCanvas.getContext('2d');
+      if (!tempCtx) throw new Error('Could not get 2d context');
+      tempCtx.font = `${fontSize}px "${fontName}"`;
+      const textWidth = tempCtx.measureText(text).width;
+      const textHeight = fontSize * 1.5;
+      
+      const textCanvas = createCanvas(Math.ceil(textWidth * scaleFactor) || 1, Math.ceil(textHeight * scaleFactor) || 1);
+      const ctx = textCanvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get 2d context');
+      ctx.scale(scaleFactor, scaleFactor);
+      
+      ctx.font = `${fontSize}px "${fontName}"`;
+      ctx.fillStyle = '#000000';
+      if (options.color) {
+        const rgbArr = options.color.asArray();
+        const r = Math.round((rgbArr[0] || 0) * 255);
+        const g = Math.round((rgbArr[1] || 0) * 255);
+        const b = Math.round((rgbArr[2] || 0) * 255);
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+      }
+      ctx.textBaseline = 'top';
+      ctx.fillText(text, 0, 0);
+      
+      const pngBuffer = textCanvas.toBuffer('image/png');
+      const embeddedPng = await pdfDoc.embedPng(pngBuffer);
+      
+      page.drawImage(embeddedPng, {
+        x: options.x,
+        y: options.y - fontSize * 0.2,
+        width: textWidth,
+        height: textHeight,
+        opacity: options.opacity,
+        rotate: options.rotate,
+      });
+    } catch (fallbackErr) {
+      console.error('safeDrawText fallback failed:', fallbackErr);
+      const sanitized = text.replace(/[^\x00-\x7F]/g, '?');
+      try {
+        page.drawText(sanitized, options);
+      } catch (finalErr) {
+        // ignore
+      }
+    }
+  }
+}
 
 
 export interface PdfGeneratorOptions {
@@ -153,7 +224,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
 
       // Draw Header on each page
       page.drawText('PROOF SHEET — FOR CLIENT APPROVAL ONLY', { x: 50, y: 800, size: 16, font: fontBold, color: rgb(0.1, 0.1, 0.3) });
-      page.drawText(`Client: ${order.client.name} | Order ID: #${order.id} | Page: ${pageIdx + 1} of ${totalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+      await safeDrawText(page, pdfDoc, `Client: ${order.client.name} | Order ID: #${order.id} | Page: ${pageIdx + 1} of ${totalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
 
       // Draw diagonal watermark
       page.drawText('PROOF ONLY - DO NOT PRINT', {
@@ -262,7 +333,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
           ...customData,
         };
 
-        page.drawText(cardholder.name, {
+        await safeDrawText(page, pdfDoc, cardholder.name, {
           x: 480,
           y: yOffset - 40,
           size: 9,
@@ -274,7 +345,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         // Always draw ID if not already in uniqueFieldsMap and present
         const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
         if (!hasIdField && cardholder.uniqueKey) {
-          page.drawText(`ID: ${cardholder.uniqueKey}`, {
+          await safeDrawText(page, pdfDoc, `ID: ${cardholder.uniqueKey}`, {
             x: 480,
             y: currentY,
             size: 8,
@@ -296,7 +367,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
                 .trim();
             }
             const textToDraw = `${label}: ${val}`;
-            page.drawText(textToDraw, {
+            await safeDrawText(page, pdfDoc, textToDraw, {
               x: 480,
               y: currentY,
               size: 8,
@@ -639,53 +710,53 @@ export class InvoicePdfGenerator implements IPdfGenerator {
     const inv = order.invoice;
 
     // Header / Branding
-    page.drawText(press.name, { x: 50, y: 760, size: 20, font: fontBold, color: rgb(0.1, 0.2, 0.4) });
-    page.drawText(`Email: ${press.email} | City: ${press.city || 'N/A'}`, { x: 50, y: 740, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+    await safeDrawText(page, pdfDoc, press.name, { x: 50, y: 760, size: 20, font: fontBold, color: rgb(0.1, 0.2, 0.4) });
+    await safeDrawText(page, pdfDoc, `Email: ${press.email} | City: ${press.city || 'N/A'}`, { x: 50, y: 740, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
 
-    page.drawText('INVOICE', { x: 450, y: 760, size: 24, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
-    page.drawText(`Invoice No: #INV-${inv.id}`, { x: 400, y: 740, size: 10, font });
-    page.drawText(`Date: ${new Date(inv.createdAt).toLocaleDateString()}`, { x: 400, y: 725, size: 10, font });
+    await safeDrawText(page, pdfDoc, 'INVOICE', { x: 450, y: 760, size: 24, font: fontBold, color: rgb(0.1, 0.1, 0.1) });
+    await safeDrawText(page, pdfDoc, `Invoice No: #INV-${inv.id}`, { x: 400, y: 740, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Date: ${new Date(inv.createdAt).toLocaleDateString()}`, { x: 400, y: 725, size: 10, font });
 
     // Client Billing Details
-    page.drawText('Billed To:', { x: 50, y: 670, size: 12, font: fontBold });
-    page.drawText(order.client.name, { x: 50, y: 650, size: 11, font });
-    page.drawText(`Phone: ${order.client.contactPhone || 'N/A'}`, { x: 50, y: 635, size: 10, font });
-    page.drawText(`Address: ${order.client.address || 'N/A'}`, { x: 50, y: 620, size: 10, font });
+    await safeDrawText(page, pdfDoc, 'Billed To:', { x: 50, y: 670, size: 12, font: fontBold });
+    await safeDrawText(page, pdfDoc, order.client.name, { x: 50, y: 650, size: 11, font });
+    await safeDrawText(page, pdfDoc, `Phone: ${order.client.contactPhone || 'N/A'}`, { x: 50, y: 635, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Address: ${order.client.address || 'N/A'}`, { x: 50, y: 620, size: 10, font });
 
     // Invoice Table Headers
     const tableY = 530;
     page.drawLine({ start: { x: 50, y: tableY }, end: { x: 545, y: tableY }, thickness: 1 });
-    page.drawText('Item Description', { x: 60, y: tableY - 15, size: 10, font: fontBold });
-    page.drawText('Qty', { x: 300, y: tableY - 15, size: 10, font: fontBold });
-    page.drawText('Unit Price', { x: 370, y: tableY - 15, size: 10, font: fontBold });
-    page.drawText('Amount', { x: 480, y: tableY - 15, size: 10, font: fontBold });
+    await safeDrawText(page, pdfDoc, 'Item Description', { x: 60, y: tableY - 15, size: 10, font: fontBold });
+    await safeDrawText(page, pdfDoc, 'Qty', { x: 300, y: tableY - 15, size: 10, font: fontBold });
+    await safeDrawText(page, pdfDoc, 'Unit Price', { x: 370, y: tableY - 15, size: 10, font: fontBold });
+    await safeDrawText(page, pdfDoc, 'Amount', { x: 480, y: tableY - 15, size: 10, font: fontBold });
     page.drawLine({ start: { x: 50, y: tableY - 22 }, end: { x: 545, y: tableY - 22 }, thickness: 0.5 });
 
     // Table Row
     const rowY = tableY - 40;
-    page.drawText(`ID Card Printing — ${order.status} batch`, { x: 60, y: rowY, size: 10, font });
-    page.drawText(String(inv.cardCount), { x: 300, y: rowY, size: 10, font });
-    page.drawText(`Rs. ${Number(inv.pricePerCard).toFixed(2)}`, { x: 370, y: rowY, size: 10, font });
-    page.drawText(`Rs. ${Number(inv.subtotal).toFixed(2)}`, { x: 480, y: rowY, size: 10, font });
+    await safeDrawText(page, pdfDoc, `ID Card Printing — ${order.status} batch`, { x: 60, y: rowY, size: 10, font });
+    await safeDrawText(page, pdfDoc, String(inv.cardCount), { x: 300, y: rowY, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Rs. ${Number(inv.pricePerCard).toFixed(2)}`, { x: 370, y: rowY, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Rs. ${Number(inv.subtotal).toFixed(2)}`, { x: 480, y: rowY, size: 10, font });
 
     // Totals section
     const totY = rowY - 100;
     page.drawLine({ start: { x: 350, y: totY }, end: { x: 545, y: totY }, thickness: 0.5 });
-    page.drawText('Subtotal:', { x: 360, y: totY - 15, size: 10, font });
-    page.drawText(`Rs. ${Number(inv.subtotal).toFixed(2)}`, { x: 485, y: totY - 15, size: 10, font });
+    await safeDrawText(page, pdfDoc, 'Subtotal:', { x: 360, y: totY - 15, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Rs. ${Number(inv.subtotal).toFixed(2)}`, { x: 485, y: totY - 15, size: 10, font });
 
-    page.drawText(`GST (${inv.taxPercent}%):`, { x: 360, y: totY - 30, size: 10, font });
-    page.drawText(`Rs. ${Number(inv.taxAmount).toFixed(2)}`, { x: 485, y: totY - 30, size: 10, font });
+    await safeDrawText(page, pdfDoc, `GST (${inv.taxPercent}%):`, { x: 360, y: totY - 30, size: 10, font });
+    await safeDrawText(page, pdfDoc, `Rs. ${Number(inv.taxAmount).toFixed(2)}`, { x: 485, y: totY - 30, size: 10, font });
 
-    page.drawText('Total Amount:', { x: 360, y: totY - 50, size: 11, font: fontBold });
-    page.drawText(`Rs. ${Number(inv.totalAmount).toFixed(2)}`, { x: 485, y: totY - 50, size: 11, font: fontBold });
+    await safeDrawText(page, pdfDoc, 'Total Amount:', { x: 360, y: totY - 50, size: 11, font: fontBold });
+    await safeDrawText(page, pdfDoc, `Rs. ${Number(inv.totalAmount).toFixed(2)}`, { x: 485, y: totY - 50, size: 11, font: fontBold });
 
     // Payment Status Badge
     const badgeY = totY - 120;
-    page.drawText('Payment Details:', { x: 50, y: badgeY + 20, size: 12, font: fontBold });
-    page.drawText(`Status: ${inv.paymentStatus}`, { x: 50, y: badgeY, size: 10, font: fontBold, color: inv.paymentStatus === 'PAID' ? rgb(0.1, 0.6, 0.1) : rgb(0.8, 0.1, 0.1) });
+    await safeDrawText(page, pdfDoc, 'Payment Details:', { x: 50, y: badgeY + 20, size: 12, font: fontBold });
+    await safeDrawText(page, pdfDoc, `Status: ${inv.paymentStatus}`, { x: 50, y: badgeY, size: 10, font: fontBold, color: inv.paymentStatus === 'PAID' ? rgb(0.1, 0.6, 0.1) : rgb(0.8, 0.1, 0.1) });
     if (inv.paymentMethod) {
-      page.drawText(`Method: ${inv.paymentMethod}`, { x: 50, y: badgeY - 15, size: 10, font });
+      await safeDrawText(page, pdfDoc, `Method: ${inv.paymentMethod}`, { x: 50, y: badgeY - 15, size: 10, font });
     }
 
     if (onProgress) await onProgress(100);
