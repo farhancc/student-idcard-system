@@ -342,10 +342,10 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     // Ensure all template fields exist in customFields
     const finalCustom: Record<string, string> = {};
     formFields.forEach(k => {
-      finalCustom[k] = parsedCustom[k] || '';
+      finalCustom[k] = getCustomFieldValueCaseInsensitive(parsedCustom, k) || '';
     });
     customImgFields.forEach(imgField => {
-      finalCustom[imgField.field] = parsedCustom[imgField.field] || '';
+      finalCustom[imgField.field] = getCustomFieldValueCaseInsensitive(parsedCustom, imgField.field) || '';
     });
     setCustomFields(finalCustom);
     setShowModal(true);
@@ -472,6 +472,21 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     });
   };
 
+  const getCustomFieldValueCaseInsensitive = (parsedCustom: Record<string, any>, key: string): any => {
+    if (!parsedCustom) return undefined;
+    if (parsedCustom[key] !== undefined && parsedCustom[key] !== null) {
+      return parsedCustom[key];
+    }
+    const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const targetClean = clean(key);
+    for (const k of Object.keys(parsedCustom)) {
+      if (clean(k) === targetClean) {
+        return parsedCustom[k];
+      }
+    }
+    return undefined;
+  };
+
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
     if (hasName && (!ch.name || ch.name.trim() === '')) {
@@ -494,7 +509,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     }
     
     formFields.forEach(k => {
-      if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+      const val = getCustomFieldValueCaseInsensitive(parsedCustom, k);
+      if (!val || String(val).trim() === '') {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
         warnings.push(`${label} is missing`);
       }
@@ -502,7 +518,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     
     customImgFields.forEach(field => {
       const k = field.field;
-      const v = parsedCustom[k];
+      const v = getCustomFieldValueCaseInsensitive(parsedCustom, k);
       const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
       if (isEmpty) {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());

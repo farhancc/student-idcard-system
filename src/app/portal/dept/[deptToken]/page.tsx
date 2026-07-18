@@ -294,8 +294,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
     } catch { parsedCustom = {}; }
     const finalCustom: Record<string, string> = {};
-    formFields.forEach(k => { finalCustom[k] = parsedCustom[k] || ''; });
-    customImgFields.forEach(imgField => { finalCustom[imgField.field] = parsedCustom[imgField.field] || ''; });
+    formFields.forEach(k => { finalCustom[k] = getCustomFieldValueCaseInsensitive(parsedCustom, k) || ''; });
+    customImgFields.forEach(imgField => { finalCustom[imgField.field] = getCustomFieldValueCaseInsensitive(parsedCustom, imgField.field) || ''; });
     setCustomFields(finalCustom);
     setShowModal(true);
   };
@@ -403,6 +403,21 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     });
   };
 
+  const getCustomFieldValueCaseInsensitive = (parsedCustom: Record<string, any>, key: string): any => {
+    if (!parsedCustom) return undefined;
+    if (parsedCustom[key] !== undefined && parsedCustom[key] !== null) {
+      return parsedCustom[key];
+    }
+    const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const targetClean = clean(key);
+    for (const k of Object.keys(parsedCustom)) {
+      if (clean(k) === targetClean) {
+        return parsedCustom[k];
+      }
+    }
+    return undefined;
+  };
+
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
     if (hasName && (!ch.name || ch.name.trim() === '')) {
@@ -425,7 +440,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     }
     
     formFields.forEach(k => {
-      if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+      const val = getCustomFieldValueCaseInsensitive(parsedCustom, k);
+      if (!val || String(val).trim() === '') {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
         warnings.push(`${label} is missing`);
       }
@@ -433,7 +449,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     
     customImgFields.forEach(field => {
       const k = field.field;
-      const v = parsedCustom[k];
+      const v = getCustomFieldValueCaseInsensitive(parsedCustom, k);
       const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
       if (isEmpty) {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());

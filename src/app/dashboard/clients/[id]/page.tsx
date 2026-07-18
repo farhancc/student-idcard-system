@@ -92,6 +92,21 @@ interface QuickJobResult {
   orderId?: number;
 }
 
+const getCustomFieldValueCaseInsensitive = (parsedCustom: Record<string, any>, key: string): any => {
+  if (!parsedCustom) return undefined;
+  if (parsedCustom[key] !== undefined && parsedCustom[key] !== null) {
+    return parsedCustom[key];
+  }
+  const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const targetClean = clean(key);
+  for (const k of Object.keys(parsedCustom)) {
+    if (clean(k) === targetClean) {
+      return parsedCustom[k];
+    }
+  }
+  return undefined;
+};
+
 export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -812,6 +827,7 @@ export default function ClientDetailsPage() {
         }
 
         allFields.forEach(f => {
+          const isMainPhotoField = mainPhoto && f.field === mainPhoto.field;
           if (
             f.field !== 'name' &&
             f.field !== 'fullName' &&
@@ -823,9 +839,11 @@ export default function ClientDetailsPage() {
             f.field !== 'uniqueKey' &&
             f.field !== 'validTill' &&
             f.field !== 'validTillDate' &&
-            f.field !== 'cardSerial'
+            f.field !== 'cardSerial' &&
+            !isMainPhotoField
           ) {
-            parsedMap[f.field] = String(existingCustom[f.field] ?? '');
+            const foundVal = getCustomFieldValueCaseInsensitive(existingCustom, f.field);
+            parsedMap[f.field] = foundVal !== undefined ? String(foundVal) : '';
           }
         });
       } catch (e) {
@@ -1142,7 +1160,8 @@ export default function ClientDetailsPage() {
       );
       
       customTextKeys.forEach(k => {
-        if (!parsedCustom[k] || String(parsedCustom[k]).trim() === '') {
+        const val = getCustomFieldValueCaseInsensitive(parsedCustom, k);
+        if (!val || String(val).trim() === '') {
           const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
           warnings.push(`${label} is missing`);
         }
@@ -1153,7 +1172,7 @@ export default function ClientDetailsPage() {
       const customImageKeys = imageFields.filter(f => f !== mainPhotoField).map(f => f.field);
       
       customImageKeys.forEach(k => {
-        const v = parsedCustom[k];
+        const v = getCustomFieldValueCaseInsensitive(parsedCustom, k);
         const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
         if (isEmpty) {
           const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
