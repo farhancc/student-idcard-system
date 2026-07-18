@@ -23,6 +23,7 @@ import {
   Zap,
   FileText,
   Settings2,
+  RefreshCw,
 } from 'lucide-react';
 
 interface Client {
@@ -554,6 +555,14 @@ export default function ClientDetailsPage() {
         if (list.length > 0) setQTemplateId(String(list[0].id));
       }
     } catch (err) { console.error(err); }
+  };
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    await Promise.all([
+      fetchData(),
+      fetchQuickTemplates()
+    ]);
   };
 
   useEffect(() => {
@@ -1350,6 +1359,27 @@ export default function ClientDetailsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button
+            className="btn btn-secondary"
+            style={{
+              fontSize: '0.85rem',
+              padding: '8px 14px',
+              gap: '6px',
+              background: 'rgba(16,185,129,0.1)',
+              border: '1px solid rgba(16,185,129,0.3)',
+              color: '#34d399',
+              cursor: 'pointer'
+            }}
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            <RefreshCw 
+              size={14} 
+              style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }}
+            />
+            {loading ? 'Refreshing...' : 'Refresh'}
+          </button>
+
           <button
             className="btn btn-secondary"
             style={{
