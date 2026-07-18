@@ -774,7 +774,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                         const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
                         return <th key={field.field}>{label}</th>;
                       })}
-                      <th>Card Serial</th>
                       <th>Enrolled On</th>
                       <th>Actions</th>
                     </tr>
@@ -865,7 +864,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                             );
                           })}
 
-                          <td><code>{ch.cardSerial || '—'}</code></td>
                           <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
                             {new Date(ch.createdAt).toLocaleDateString()}
                           </td>
