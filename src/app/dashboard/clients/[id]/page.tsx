@@ -167,6 +167,10 @@ export default function ClientDetailsPage() {
   const [editPhotoUrl, setEditPhotoUrl] = useState('');
   // Structured custom field editor: { fieldKey -> fieldValue }
   const [editCustomFieldsMap, setEditCustomFieldsMap] = useState<Record<string, string>>({});
+  const [editHasName, setEditHasName] = useState(true);
+  const [editHasDesignation, setEditHasDesignation] = useState(true);
+  const [editHasPhoto, setEditHasPhoto] = useState(true);
+  const [editHasUniqueKey, setEditHasUniqueKey] = useState(true);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [uploadingEditPhoto, setUploadingEditPhoto] = useState(false);
@@ -765,26 +769,37 @@ export default function ClientDetailsPage() {
                  clientTemplates.find(t => t.name === ch.templateName) ||
                  clientTemplates[0];
 
-    // Parse customFields JSON into a flat key->value map for the structured editor
+    // Determine field visibility based on template coordinates
+    let hasName = true;
+    let hasDesignation = true;
+    let hasPhoto = true;
+    let hasUniqueKey = true;
     let parsedMap: Record<string, string> = {};
-    if (ch.customFields) {
-      try {
-        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-        if (parsed && typeof parsed === 'object') {
-          Object.entries(parsed).forEach(([k, v]) => {
-            parsedMap[k] = String(v ?? '');
-          });
-        }
-      } catch (e) { /* ignore parse error, start with empty */ }
-    }
 
-    // Prepopulate missing custom fields from template coordinates
     if (tmpl) {
       try {
         const front = JSON.parse(tmpl.frontFields || '[]');
         const back = JSON.parse(tmpl.backFields || '[]');
         const allFields = [...front, ...back];
+        const mappedFields = allFields.map(f => f.field);
+
+        hasName = mappedFields.includes('name') || mappedFields.includes('fullName');
+        hasDesignation = mappedFields.includes('designation') || mappedFields.includes('role');
         
+        const imageFields = allFields.filter(f => f.type === 'image');
+        const mainPhoto = imageFields.find(f => f.field === 'photo' || f.field === 'avatar') || imageFields[0] || null;
+        hasPhoto = mainPhoto !== null;
+        
+        hasUniqueKey = mappedFields.includes('uniqueKey');
+
+        // Extract customFields map from record but ONLY keep those in the template
+        let existingCustom: Record<string, any> = {};
+        if (ch.customFields) {
+          try {
+            existingCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+          } catch {}
+        }
+
         allFields.forEach(f => {
           if (
             f.field !== 'name' &&
@@ -799,16 +814,30 @@ export default function ClientDetailsPage() {
             f.field !== 'validTillDate' &&
             f.field !== 'cardSerial'
           ) {
-            if (parsedMap[f.field] === undefined) {
-              parsedMap[f.field] = '';
-            }
+            parsedMap[f.field] = String(existingCustom[f.field] ?? '');
           }
         });
       } catch (e) {
-        console.error('Error prepopulating edit custom fields map:', e);
+        console.error('Error parsing template for editing:', e);
+      }
+    } else {
+      // Fallback: if no template is defined/resolved, show all fields currently on the record
+      if (ch.customFields) {
+        try {
+          const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+          if (parsed && typeof parsed === 'object') {
+            Object.entries(parsed).forEach(([k, v]) => {
+              parsedMap[k] = String(v ?? '');
+            });
+          }
+        } catch {}
       }
     }
 
+    setEditHasName(hasName);
+    setEditHasDesignation(hasDesignation);
+    setEditHasPhoto(hasPhoto);
+    setEditHasUniqueKey(hasUniqueKey);
     setEditCustomFieldsMap(parsedMap);
     setEditError('');
   };
@@ -832,9 +861,9 @@ export default function ClientDetailsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: editName,
-          designation: editDesignation,
-          photoUrl: editPhotoUrl,
-          uniqueKey: editUniqueKey,
+          designation: editHasDesignation ? editDesignation : null,
+          photoUrl: editHasPhoto ? editPhotoUrl : null,
+          uniqueKey: editHasUniqueKey ? editUniqueKey : null,
           customFields: customJson,
         }),
       });
@@ -2260,51 +2289,59 @@ export default function ClientDetailsPage() {
             )}
 
             <form onSubmit={handleSaveEditCardholder} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label">Full Name</label>
-                <input type="text" required className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
-              </div>
+              {editHasName && (
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Full Name</label>
+                  <input type="text" required className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
+                </div>
+              )}
+              
+              {editHasDesignation && (
+                <div className="form-group">
+                  <label className="form-label">Designation / Role</label>
+                  <input type="text" className="form-input" value={editDesignation} onChange={e => setEditDesignation(e.target.value)} />
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label">Designation / Role</label>
-                <input type="text" className="form-input" value={editDesignation} onChange={e => setEditDesignation(e.target.value)} />
-              </div>
+              {editHasUniqueKey && (
+                <div className="form-group">
+                  <label className="form-label">Institutional ID / Unique Key (ID from Template)</label>
+                  <input type="text" className="form-input" value={editUniqueKey} onChange={e => setEditUniqueKey(e.target.value)} />
+                </div>
+              )}
 
-              <div className="form-group">
-                <label className="form-label">Institutional ID / Unique Key (ID from Template)</label>
-                <input type="text" className="form-input" value={editUniqueKey} onChange={e => setEditUniqueKey(e.target.value)} />
-              </div>
-
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label" style={{ fontWeight: '500' }}>Cardholder Photo Image</label>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  {editPhotoUrl && (
-                    <img 
-                      src={editPhotoUrl} 
-                      alt="Preview" 
-                      style={{ width: '50px', height: '50px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                    />
-                  )}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="form-input" 
-                      style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                      onChange={handleEditPhotoUpload} 
-                      disabled={uploadingEditPhoto}
-                    />
-                    {uploadingEditPhoto && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Uploading...</div>}
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Or paste image URL" 
-                      value={editPhotoUrl} 
-                      onChange={e => setEditPhotoUrl(e.target.value)} 
-                    />
+              {editHasPhoto && (
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label" style={{ fontWeight: '500' }}>Cardholder Photo Image</label>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    {editPhotoUrl && (
+                      <img 
+                        src={editPhotoUrl} 
+                        alt="Preview" 
+                        style={{ width: '50px', height: '50px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                      />
+                    )}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="form-input" 
+                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+                        onChange={handleEditPhotoUpload} 
+                        disabled={uploadingEditPhoto}
+                      />
+                      {uploadingEditPhoto && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>Uploading...</div>}
+                      <input 
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Or paste image URL" 
+                        value={editPhotoUrl} 
+                        onChange={e => setEditPhotoUrl(e.target.value)} 
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Custom Fields</label>
