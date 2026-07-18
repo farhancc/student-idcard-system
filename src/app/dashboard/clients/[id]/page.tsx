@@ -2399,7 +2399,9 @@ export default function ClientDetailsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {Object.entries(editCustomFieldsMap).map(([key, val]) => {
                       const fieldMeta = editTemplateFields.find(f => f.field === key);
-                      const isImage = fieldMeta?.type === 'image';
+                      // Detect image field: either template says type=image, or the stored value is a URL
+                      const isImage = fieldMeta?.type === 'image' || 
+                        (!!val && (val.startsWith('http') || val.startsWith('data:')));
                       const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
 
                       return (
@@ -2456,6 +2458,25 @@ export default function ClientDetailsPage() {
               </div>
 
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '16px' }}>
+                {/* Inline warning summary based on current form state */}
+                {(() => {
+                  const inlineWarnings: string[] = [];
+                  if (editHasPhoto && !editPhotoUrl) inlineWarnings.push('Profile photo is missing');
+                  Object.entries(editCustomFieldsMap).forEach(([k, v]) => {
+                    const meta = editTemplateFields.find(f => f.field === k);
+                    const isImg = meta?.type === 'image';
+                    const isEmpty = !v || v.trim() === '';
+                    if (isImg && isEmpty) {
+                      const lbl = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                      inlineWarnings.push(`${lbl} image is missing`);
+                    }
+                  });
+                  return inlineWarnings.length > 0 ? (
+                    <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px', fontSize: '0.78rem', color: '#fbbf24' }}>
+                      <strong>⚠ Still missing:</strong> {inlineWarnings.join(' · ')}
+                    </div>
+                  ) : null;
+                })()}
                 <button type="button" className="btn btn-secondary" onClick={() => setEditingCardholder(null)}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={editLoading}>
                   {editLoading ? 'Saving...' : 'Save Changes'}
