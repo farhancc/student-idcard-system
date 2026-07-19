@@ -24,6 +24,7 @@ import {
   FileText,
   Settings2,
   RefreshCw,
+  CreditCard,
 } from 'lucide-react';
 
 interface Client {
@@ -2802,7 +2803,7 @@ export default function ClientDetailsPage() {
                     const hasPhotoUrl = editPhotoUrl && editPhotoUrl.trim() !== '' && editPhotoUrl !== 'null' && editPhotoUrl !== 'undefined';
 
                     if (!hasCustomVal && !hasPhotoUrl) {
-                      const lbl = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                      const lbl = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase());
                       inlineWarnings.push(`${lbl} is missing`);
                     }
                   });

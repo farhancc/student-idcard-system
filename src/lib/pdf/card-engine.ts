@@ -4,6 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { getResolvedFieldValue } from './field-resolver';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -436,7 +437,7 @@ export async function renderCardSide(
     if (f.staticValue !== undefined && f.staticValue !== null) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
-    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -478,7 +479,7 @@ export async function renderCardSide(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field]);
+    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder));
     if (f.type === 'image' && !rawValue) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -985,7 +986,7 @@ export async function renderCardSideToPdfBytes(
     if (f.staticValue !== undefined && f.staticValue !== null) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
-    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field];
+    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -1101,7 +1102,7 @@ export async function renderCardSideToPdfBytes(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : data[f.field]);
+    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder));
     if (f.type === 'image' && !rawValue) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
