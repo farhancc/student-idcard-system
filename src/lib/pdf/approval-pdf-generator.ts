@@ -259,7 +259,11 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw cardholder details
-        await safeDrawText(page, pdfDoc, cardholder.name, {
+        const displayName = (cardholder.name && String(cardholder.name).trim() !== '') 
+          ? cardholder.name 
+          : (getResolvedFieldValue('name', cardholderData, cardholder) || 'Cardholder');
+
+        await safeDrawText(page, pdfDoc, displayName, {
           x: 480,
           y: yOffset - 40,
           size: 9,
@@ -268,10 +272,12 @@ export async function generateApprovalPdfClient(
         });
 
         let currentY = yOffset - 53;
-        // Always draw ID if not already in uniqueFieldsMap and present
-        const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
-        if (!hasIdField && cardholder.uniqueKey) {
-          await safeDrawText(page, pdfDoc, `ID: ${cardholder.uniqueKey}`, {
+        const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
+          ? cardholder.uniqueKey
+          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder));
+
+        if (displayId) {
+          await safeDrawText(page, pdfDoc, `ID: ${displayId}`, {
             x: 480,
             y: currentY,
             size: 8,
@@ -354,7 +360,11 @@ export async function generateApprovalPdfClient(
         });
 
         // Draw details below the card
-        await safeDrawText(page, pdfDoc, cardholder.name, {
+        const displayName = (cardholder.name && String(cardholder.name).trim() !== '') 
+          ? cardholder.name 
+          : (getResolvedFieldValue('name', cardholderData, cardholder) || 'Cardholder');
+
+        await safeDrawText(page, pdfDoc, displayName, {
           x: xOffset,
           y: yOffset - scaledHeight - 12,
           size: 8,
@@ -363,9 +373,12 @@ export async function generateApprovalPdfClient(
         });
 
         const detailsList: string[] = [];
-        const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
-        if (!hasIdField && cardholder.uniqueKey) {
-          detailsList.push(`ID: ${cardholder.uniqueKey}`);
+        const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
+          ? cardholder.uniqueKey
+          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder));
+
+        if (displayId) {
+          detailsList.push(`ID: ${displayId}`);
         }
         for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
           const kClean = fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '');
