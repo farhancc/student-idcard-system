@@ -80,7 +80,14 @@ export async function getOrRenderCard(
     fs.existsSync(frontPdfCachePath) &&
     fs.existsSync(backPdfCachePath)
   ) {
-    useCache = true;
+    const chTime = (cardholder as any).updatedAt || cardholder.createdAt;
+    if (chTime && cachedAsset.generatedAt) {
+      if (new Date(chTime).getTime() <= new Date(cachedAsset.generatedAt).getTime()) {
+        useCache = true;
+      }
+    } else {
+      useCache = true;
+    }
   }
 
   if (useCache && cachedAsset) {

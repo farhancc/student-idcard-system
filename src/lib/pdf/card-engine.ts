@@ -411,6 +411,8 @@ export async function renderCardSide(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
+    uniqueKey: cardholder.uniqueKey || '',
+    id: cardholder.uniqueKey || cardholder.id || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -848,6 +850,8 @@ export async function renderCardSideToPdfBytes(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
+    uniqueKey: cardholder.uniqueKey || '',
+    id: cardholder.uniqueKey || cardholder.id || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -1296,7 +1300,7 @@ export async function renderCardSideToPdfBytes(
           const opacity = f.opacity != null ? f.opacity : 1.0;
 
           lines.forEach(lineText => {
-            if (currentYPt >= yPt) {
+            if (currentYPt >= yPt - lineHeightPt * 1.5 || lines.length === 1) {
               const textWidth = measureTextSpacingPt(lineText);
               let lineDrawX = xPt;
               if (f.align === 'center') {
