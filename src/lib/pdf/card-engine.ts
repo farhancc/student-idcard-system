@@ -143,6 +143,15 @@ export interface FieldCoordinate {
 // Map to keep track of registered font families to prevent double registration warnings
 const registeredFonts = new Set<string>();
 
+export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: string): boolean {
+  if (!staticVal) return true;
+  const s = staticVal.trim().toLowerCase();
+  if (!s) return true;
+  if (fieldKey && s === fieldKey.trim().toLowerCase()) return true;
+  const placeholders = ['name', 'fullname', 'studentname', 'employeename', 'photo', 'designation', 'uniquekey', 'id', 'empid', 'studentid', 'rollno', 'class', 'grade', 'static text', 'field_1'];
+  return placeholders.includes(s);
+}
+
 /**
  * Downloads a font from a URL or registers it from local path in node-canvas.
  */
@@ -435,8 +444,9 @@ export async function renderCardSide(
 
   // We need a temporary canvas ctx to measure text widths per field
   const tempCtx = createCanvas(1, 1).getContext('2d');
+
   const getCanvasValueStr = (f: FieldCoordinate) => {
-    if (f.staticValue !== undefined && f.staticValue !== null) {
+    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
@@ -987,7 +997,7 @@ export async function renderCardSideToPdfBytes(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
-    if (f.staticValue !== undefined && f.staticValue !== null) {
+    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);

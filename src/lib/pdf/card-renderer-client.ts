@@ -30,6 +30,15 @@ export interface FieldCoordinate {
 // Map to keep track of loaded font families in the browser
 const loadedFonts = new Set<string>();
 
+export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: string): boolean {
+  if (!staticVal) return true;
+  const s = staticVal.trim().toLowerCase();
+  if (!s) return true;
+  if (fieldKey && s === fieldKey.trim().toLowerCase()) return true;
+  const placeholders = ['name', 'fullname', 'studentname', 'employeename', 'photo', 'designation', 'uniquekey', 'id', 'empid', 'studentid', 'rollno', 'class', 'grade', 'static text', 'field_1'];
+  return placeholders.includes(s);
+}
+
 // Global caches for background templates and font files to prevent redundant HTTP downloads during compilation
 const globalBgBytesCache = new Map<string, Uint8Array>();
 const globalFontBytesCache = new Map<string, ArrayBuffer>();
@@ -338,6 +347,8 @@ export async function renderCardSideClient(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
+    uniqueKey: cardholder.uniqueKey || '',
+    id: cardholder.uniqueKey || cardholder.id || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -345,8 +356,11 @@ export async function renderCardSideClient(
   // 4. Pre-compute Y offsets
   const tempCanvas = document.createElement('canvas');
   const tempCtx = tempCanvas.getContext('2d');
-  
+
   const getClientValueStr = (f: FieldCoordinate) => {
+    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
+      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+    }
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
@@ -830,6 +844,8 @@ export async function renderCardSideToPdfBytesClient(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
+    uniqueKey: cardholder.uniqueKey || '',
+    id: cardholder.uniqueKey || cardholder.id || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -960,7 +976,7 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
-    if (f.staticValue !== undefined && f.staticValue !== null) {
+    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
     let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
@@ -1247,7 +1263,7 @@ export async function renderCardSideToPdfBytesClient(
           let currentYPt = startYPt;
 
           for (const lineText of lines) {
-            if (currentYPt < yPt) break;
+            if (currentYPt < yPt - lineHeightPt * 1.5 && lines.length > 1) break;
             const textWidth = measureFn(lineText);
             let lineDrawX = xPt;
             if (f.align === 'center') lineDrawX = xPt + (wPt - textWidth) / 2;

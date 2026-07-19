@@ -17,14 +17,59 @@ export function getResolvedFieldValue(
 ): any {
   if (!fieldKey) return undefined;
 
-  // 1. Try exact match in data object first
-  if (data[fieldKey] !== undefined && data[fieldKey] !== null && String(data[fieldKey]).trim() !== '') {
-    return data[fieldKey];
-  }
-
   // Helper to normalize strings for comparison (lowercase, strip non-alphanumeric)
   const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const targetClean = clean(fieldKey);
+
+  // Checks if a value is just a placeholder name rather than actual data
+  const isPlaceholderValue = (val: any) => {
+    if (val === undefined || val === null) return true;
+    const str = String(val).trim();
+    if (!str) return true;
+    const lower = str.toLowerCase();
+    return lower === targetClean || lower === 'name' || lower === 'static text' || lower === 'field_1' || lower === 'uniquekey' || lower === 'id';
+  };
+
+  // Check for standard NAME field key
+  const isNameField =
+    targetClean === 'name' ||
+    targetClean === 'studentname' ||
+    targetClean === 'employeename' ||
+    targetClean === 'cardholdername' ||
+    targetClean === 'fullname' ||
+    targetClean === 'candidatename' ||
+    targetClean === 'stname' ||
+    targetClean === 'firstlastname' ||
+    targetClean.includes('name');
+
+  if (isNameField && cardholder.name && String(cardholder.name).trim() !== '' && !isPlaceholderValue(cardholder.name)) {
+    return cardholder.name;
+  }
+
+  // Check for standard ID / Unique Key field key
+  const isIdField =
+    targetClean === 'id' ||
+    targetClean === 'uniqueekey' ||
+    targetClean === 'uniquekey' ||
+    targetClean === 'admissionnumber' ||
+    targetClean === 'rollnumber' ||
+    targetClean === 'admissionno' ||
+    targetClean === 'studentid' ||
+    targetClean === 'employeeid' ||
+    targetClean.includes('unique') ||
+    targetClean.includes('studentid') ||
+    targetClean.includes('rollno') ||
+    targetClean.includes('admno') ||
+    targetClean.includes('empid');
+
+  if (isIdField && cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
+    return cardholder.uniqueKey;
+  }
+
+  // 1. Try exact match in data object first (if not a placeholder)
+  if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
+    return data[fieldKey];
+  }
 
   // 2. Try normalized search across data keys
   if (targetClean) {
@@ -67,17 +112,6 @@ export function getResolvedFieldValue(
 
   // 5. Fallbacks for standard fields:
   // NAME resolution
-  const isNameField =
-    targetClean === 'name' ||
-    targetClean === 'studentname' ||
-    targetClean === 'employeename' ||
-    targetClean === 'cardholdername' ||
-    targetClean === 'fullname' ||
-    targetClean === 'candidatename' ||
-    targetClean === 'stname' ||
-    targetClean === 'firstlastname' ||
-    targetClean.includes('name');
-
   if (isNameField) {
     if (cardholder.name && String(cardholder.name).trim() !== '') {
       return cardholder.name;
@@ -108,21 +142,6 @@ export function getResolvedFieldValue(
   }
 
   // UNIQUE ID resolution
-  const isIdField =
-    targetClean === 'id' ||
-    targetClean === 'uniqueekey' ||
-    targetClean === 'uniquekey' ||
-    targetClean === 'admissionnumber' ||
-    targetClean === 'rollnumber' ||
-    targetClean === 'admissionno' ||
-    targetClean === 'studentid' ||
-    targetClean === 'employeeid' ||
-    targetClean.includes('unique') ||
-    targetClean.includes('studentid') ||
-    targetClean.includes('rollno') ||
-    targetClean.includes('admno') ||
-    targetClean.includes('empid');
-
   if (isIdField) {
     if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') return cardholder.uniqueKey;
     if (cardholder.id) return String(cardholder.id);
