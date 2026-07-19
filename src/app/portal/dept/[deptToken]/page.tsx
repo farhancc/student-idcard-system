@@ -419,6 +419,26 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     return undefined;
   };
 
+  function getEffectivePhotoUrl(ch: any): string | null {
+    if (!ch) return null;
+    if (ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined') {
+      return ch.photoUrl;
+    }
+    if (ch.customFields) {
+      try {
+        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+        if (parsed && typeof parsed === 'object') {
+          for (const [key, val] of Object.entries(parsed)) {
+            if (val && typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/'))) {
+              return val;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  }
+
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
     if (hasName && (!ch.name || ch.name.trim() === '')) {
@@ -718,11 +738,14 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                           return (
                             <td key={tf.field}>
                               <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                {ch.photoUrl ? (
-                                  <img src={ch.photoUrl} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                ) : (
-                                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
-                                )}
+                                {(() => {
+                                  const effectivePhoto = getEffectivePhotoUrl(ch);
+                                  return effectivePhoto ? (
+                                    <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                                  );
+                                })()}
                               </div>
                             </td>
                           );
@@ -942,11 +965,14 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
             <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>Previewing card for <strong>{previewCardholder.name}</strong></p>
             <div style={{ borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'rgba(59,130,246,0.04)', padding: '24px', marginBottom: '20px', textAlign: 'left' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cardholder Details</div>
-              {previewCardholder.photoUrl && (
-                <div style={{ marginBottom: '12px' }}>
-                  <img src={previewCardholder.photoUrl} alt={previewCardholder.name} style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
-                </div>
-              )}
+              {(() => {
+                const photo = getEffectivePhotoUrl(previewCardholder);
+                return photo ? (
+                  <div style={{ marginBottom: '12px' }}>
+                    <img src={photo} alt={previewCardholder.name} style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
+                  </div>
+                ) : null;
+              })()}
               <div style={{ fontWeight: '700', fontSize: '1.1rem', marginBottom: '4px' }}>{previewCardholder.name}</div>
               {previewCardholder.designation && <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '4px' }}>{previewCardholder.designation}</div>}
               {previewCardholder.uniqueKey && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {previewCardholder.uniqueKey}</div>}

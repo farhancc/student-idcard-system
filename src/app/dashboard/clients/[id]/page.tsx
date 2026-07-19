@@ -1113,6 +1113,71 @@ export default function ClientDetailsPage() {
     }
   };
 
+  function getEffectivePhotoUrl(ch: any): string | null {
+    if (!ch) return null;
+    if (ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined') {
+      return ch.photoUrl;
+    }
+    if (ch.customFields) {
+      try {
+        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+        if (parsed && typeof parsed === 'object') {
+          for (const [key, val] of Object.entries(parsed)) {
+            if (val && typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/'))) {
+              return val;
+            }
+          }
+        }
+      } catch (e) {}
+    }
+    return null;
+  }
+
+  function getTemplateColumns(tmpl: any) {
+    if (!tmpl) return [];
+    try {
+      const front = JSON.parse(tmpl.frontFields || '[]');
+      const back = JSON.parse(tmpl.backFields || '[]');
+      const all = [...front, ...back];
+      
+      const seen = new Set<string>();
+      const cols: { key: string; label: string; type: string }[] = [];
+
+      all.forEach((f: any) => {
+        if (!f.field || seen.has(f.field) || f.type === 'qr' || f.type === 'barcode') return;
+        seen.add(f.field);
+
+        const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+        cols.push({
+          key: f.field,
+          label,
+          type: f.type || 'text',
+        });
+      });
+
+      return cols;
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function getFieldValue(ch: any, colKey: string): string {
+    if (!ch) return '';
+    if (colKey === 'name' || colKey === 'fullName') return ch.name || '';
+    if (colKey === 'designation' || colKey === 'role') return ch.designation || '';
+    if (colKey === 'uniqueKey') return ch.uniqueKey || '';
+    if (colKey === 'photoUrl' || colKey === 'photo' || colKey === 'avatar') return getEffectivePhotoUrl(ch) || '';
+
+    if (ch.customFields) {
+      try {
+        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+        const val = getCustomFieldValueCaseInsensitive(parsed, colKey);
+        if (val !== undefined && val !== null) return String(val);
+      } catch (e) {}
+    }
+    return '';
+  }
+
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
     
@@ -1651,142 +1716,347 @@ export default function ClientDetailsPage() {
               No cardholders match the criteria. Import or add some above!
             </div>
           ) : (
-            <div className="table-container">
-              <table className="custom-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '40px', padding: '14px 12px' }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === filteredCardholders.length && filteredCardholders.length > 0}
-                        onChange={() => {
-                          if (selectedIds.length === filteredCardholders.length) {
-                            setSelectedIds([]);
-                          } else {
-                            setSelectedIds(filteredCardholders.map((c: any) => c.id));
-                          }
-                        }}
-                        style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                      />
-                    </th>
-                    <th>Photo</th>
-                    <th>Name</th>
-                    <th>Template Name</th>
-                    <th>Date of Adding</th>
-                    <th>ID from Template</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCardholders.map((ch: any) => (
-                    <tr
-                      key={ch.id}
-                      style={{ background: selectedIds.includes(ch.id) ? 'rgba(79,70,229,0.07)' : undefined }}
-                    >
-                      <td style={{ padding: '16px 12px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(ch.id)}
-                          onChange={() => setSelectedIds(prev =>
-                            prev.includes(ch.id) ? prev.filter(x => x !== ch.id) : [...prev, ch.id]
-                          )}
-                          style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
-                        />
-                      </td>
-                      <td>
-                        {ch.photoUrl ? (
-                          <img 
-                            src={ch.photoUrl} 
-                            alt={ch.name} 
-                            style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                          />
-                        ) : (
-                          <div style={{
-                            width: '40px',
-                            height: '40px',
-                            borderRadius: '6px',
-                            background: 'rgba(255,255,255,0.05)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--muted)',
-                            fontSize: '0.8rem'
-                          }}>
-                            None
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: '500' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {ch.name}
-                          {(() => {
-                            const warnings = getCardholderWarnings(ch);
-                            if (warnings.length > 0) {
-                              return (
-                                <span 
-                                  title={warnings.join('\n')}
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    background: 'rgba(245,158,11,0.15)',
-                                    color: '#fbbf24',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
-                                    fontSize: '0.7rem',
-                                    fontWeight: 'normal',
-                                    border: '1px solid rgba(245,158,11,0.3)',
-                                    cursor: 'help'
-                                  }}
-                                >
-                                  <AlertTriangle size={12} />
-                                  {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
-                                </span>
-                              );
-                            }
-                            return null;
-                          })()}
+            <div>
+              {(() => {
+                const templatesToRender = clientTemplates.length > 0 ? clientTemplates : [{ id: 0, name: 'Default Template', frontFields: '[]', backFields: '[]' }];
+                
+                // Track cardholders processed by templates
+                const processedCardholderIds = new Set<number>();
+
+                const templateTables = templatesToRender.map(tmpl => {
+                  const tmplCardholders = filteredCardholders.filter(c => {
+                    const match = c.resolvedTemplateId === tmpl.id || 
+                                  c.templateName === tmpl.name || 
+                                  (!c.resolvedTemplateId && !c.templateName && templatesToRender.length === 1);
+                    if (match) processedCardholderIds.add(c.id);
+                    return match;
+                  });
+
+                  if (tmplCardholders.length === 0 && filterTemplate && String(tmpl.id) !== filterTemplate && tmpl.name.toLowerCase() !== filterTemplate.toLowerCase()) {
+                    return null;
+                  }
+                  if (tmplCardholders.length === 0 && filteredCardholders.length > 0 && templatesToRender.length > 1) {
+                    return null;
+                  }
+
+                  const cols = getTemplateColumns(tmpl);
+
+                  return (
+                    <div key={tmpl.id || tmpl.name} style={{ marginBottom: '32px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px' }}>
+                        <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <CreditCard size={18} />
+                          {tmpl.name} <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({tmplCardholders.length} cardholders)</span>
+                        </h3>
+                      </div>
+
+                      {tmplCardholders.length === 0 ? (
+                        <div className="glass-panel" style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                          No cardholders registered under {tmpl.name}.
                         </div>
-                      </td>
-                      <td>{ch.templateName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
-                      <td>{ch.uniqueKey || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.2)' }}
-                            onClick={() => handleCompileIndividual(ch)}
-                          >
-                            Compile PDF
-                          </button>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => handleViewDetails(ch)}
-                          >
-                            View
-                          </button>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.3)' }}
-                            onClick={() => handleEditDetails(ch)}
-                          >
-                            Edit
-                          </button>
-                          <button 
-                            className="btn btn-danger" 
-                            style={{ padding: '6px 10px', fontSize: '0.75rem' }}
-                            onClick={() => handleDeleteCardholder(ch.id)}
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                      ) : (
+                        <div className="table-container">
+                          <table className="custom-table">
+                            <thead>
+                              <tr>
+                                <th style={{ width: '40px', padding: '14px 12px' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={tmplCardholders.length > 0 && tmplCardholders.every(c => selectedIds.includes(c.id))}
+                                    onChange={() => {
+                                      const tmplIds = tmplCardholders.map(c => c.id);
+                                      const allSelected = tmplIds.every(id => selectedIds.includes(id));
+                                      if (allSelected) {
+                                        setSelectedIds(prev => prev.filter(id => !tmplIds.includes(id)));
+                                      } else {
+                                        setSelectedIds(prev => Array.from(new Set([...prev, ...tmplIds])));
+                                      }
+                                    }}
+                                    style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                  />
+                                </th>
+                                <th>Photo</th>
+                                {cols.map(col => {
+                                  if (col.type === 'image' || col.key === 'photo' || col.key === 'avatar' || col.key === 'photoUrl') return null;
+                                  return <th key={col.key}>{col.label}</th>;
+                                })}
+                                {!cols.some(c => c.key === 'name' || c.key === 'fullName') && <th>Name</th>}
+                                {!cols.some(c => c.key === 'uniqueKey') && <th>ID from Template</th>}
+                                <th>Date Added</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {tmplCardholders.map(ch => {
+                                const effectivePhoto = getEffectivePhotoUrl(ch);
+
+                                return (
+                                  <tr
+                                    key={ch.id}
+                                    style={{ background: selectedIds.includes(ch.id) ? 'rgba(79,70,229,0.07)' : undefined }}
+                                  >
+                                    <td style={{ padding: '16px 12px' }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedIds.includes(ch.id)}
+                                        onChange={() => setSelectedIds(prev =>
+                                          prev.includes(ch.id) ? prev.filter(x => x !== ch.id) : [...prev, ch.id]
+                                        )}
+                                        style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                      />
+                                    </td>
+                                    <td>
+                                      {effectivePhoto ? (
+                                        <img 
+                                          src={effectivePhoto} 
+                                          alt={ch.name} 
+                                          style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                                        />
+                                      ) : (
+                                        <div style={{
+                                          width: '40px',
+                                          height: '40px',
+                                          borderRadius: '6px',
+                                          background: 'rgba(255,255,255,0.05)',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center',
+                                          color: 'var(--muted)',
+                                          fontSize: '0.75rem'
+                                        }}>
+                                          None
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    {cols.map(col => {
+                                      if (col.type === 'image' || col.key === 'photo' || col.key === 'avatar' || col.key === 'photoUrl') return null;
+                                      const val = getFieldValue(ch, col.key);
+                                      const isNameCol = col.key === 'name' || col.key === 'fullName';
+
+                                      return (
+                                        <td key={col.key} style={{ fontWeight: isNameCol ? '500' : 'normal' }}>
+                                          {isNameCol ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                              {val || ch.name}
+                                              {(() => {
+                                                const warnings = getCardholderWarnings(ch);
+                                                if (warnings.length > 0) {
+                                                  return (
+                                                    <span 
+                                                      title={warnings.join('\n')}
+                                                      style={{
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        background: 'rgba(245,158,11,0.15)',
+                                                        color: '#fbbf24',
+                                                        padding: '2px 6px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '0.7rem',
+                                                        fontWeight: 'normal',
+                                                        border: '1px solid rgba(245,158,11,0.3)',
+                                                        cursor: 'help'
+                                                      }}
+                                                    >
+                                                      <AlertTriangle size={12} />
+                                                      {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                                    </span>
+                                                  );
+                                                }
+                                                return null;
+                                              })()}
+                                            </div>
+                                          ) : (
+                                            val || <span style={{ color: 'var(--muted)' }}>—</span>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+
+                                    {!cols.some(c => c.key === 'name' || c.key === 'fullName') && (
+                                      <td style={{ fontWeight: '500' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          {ch.name}
+                                          {(() => {
+                                            const warnings = getCardholderWarnings(ch);
+                                            if (warnings.length > 0) {
+                                              return (
+                                                <span 
+                                                  title={warnings.join('\n')}
+                                                  style={{
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px',
+                                                    background: 'rgba(245,158,11,0.15)',
+                                                    color: '#fbbf24',
+                                                    padding: '2px 6px',
+                                                    borderRadius: '4px',
+                                                    fontSize: '0.7rem',
+                                                    fontWeight: 'normal',
+                                                    border: '1px solid rgba(245,158,11,0.3)',
+                                                    cursor: 'help'
+                                                  }}
+                                                >
+                                                  <AlertTriangle size={12} />
+                                                  {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                                </span>
+                                              );
+                                            }
+                                            return null;
+                                          })()}
+                                        </div>
+                                      </td>
+                                    )}
+
+                                    {!cols.some(c => c.key === 'uniqueKey') && (
+                                      <td>{ch.uniqueKey || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                                    )}
+
+                                    <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
+
+                                    <td>
+                                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <button 
+                                          className="btn btn-secondary" 
+                                          style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.2)' }}
+                                          onClick={() => handleCompileIndividual(ch)}
+                                        >
+                                          Compile PDF
+                                        </button>
+                                        <button 
+                                          className="btn btn-secondary" 
+                                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                                          onClick={() => handleViewDetails(ch)}
+                                        >
+                                          View
+                                        </button>
+                                        <button 
+                                          className="btn btn-secondary" 
+                                          style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.3)' }}
+                                          onClick={() => handleEditDetails(ch)}
+                                        >
+                                          Edit
+                                        </button>
+                                        <button 
+                                          className="btn btn-danger" 
+                                          style={{ padding: '6px 10px', fontSize: '0.75rem' }}
+                                          onClick={() => handleDeleteCardholder(ch.id)}
+                                        >
+                                          <Trash2 size={12} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      )}
+                    </div>
+                  );
+                });
+
+                // Unassigned cardholders check
+                const unassigned = filteredCardholders.filter(c => !processedCardholderIds.has(c.id));
+                const unassignedTable = unassigned.length > 0 ? (
+                  <div key="unassigned" style={{ marginBottom: '32px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px' }}>
+                      <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CreditCard size={18} />
+                        Unassigned Cardholders <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({unassigned.length} cardholders)</span>
+                      </h3>
+                    </div>
+                    <div className="table-container">
+                      <table className="custom-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px', padding: '14px 12px' }}>
+                              <input
+                                type="checkbox"
+                                checked={unassigned.every(c => selectedIds.includes(c.id))}
+                                onChange={() => {
+                                  const ids = unassigned.map(c => c.id);
+                                  const allSelected = ids.every(id => selectedIds.includes(id));
+                                  if (allSelected) {
+                                    setSelectedIds(prev => prev.filter(id => !ids.includes(id)));
+                                  } else {
+                                    setSelectedIds(prev => Array.from(new Set([...prev, ...ids])));
+                                  }
+                                }}
+                                style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                              />
+                            </th>
+                            <th>Photo</th>
+                            <th>Name</th>
+                            <th>Designation</th>
+                            <th>ID from Template</th>
+                            <th>Date Added</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unassigned.map(ch => {
+                            const effectivePhoto = getEffectivePhotoUrl(ch);
+
+                            return (
+                              <tr key={ch.id} style={{ background: selectedIds.includes(ch.id) ? 'rgba(79,70,229,0.07)' : undefined }}>
+                                <td style={{ padding: '16px 12px' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(ch.id)}
+                                    onChange={() => setSelectedIds(prev =>
+                                      prev.includes(ch.id) ? prev.filter(x => x !== ch.id) : [...prev, ch.id]
+                                    )}
+                                    style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
+                                  />
+                                </td>
+                                <td>
+                                  {effectivePhoto ? (
+                                    <img 
+                                      src={effectivePhoto} 
+                                      alt={ch.name} 
+                                      style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                                    />
+                                  ) : (
+                                    <div style={{
+                                      width: '40px', height: '40px', borderRadius: '6px',
+                                      background: 'rgba(255,255,255,0.05)', display: 'flex',
+                                      alignItems: 'center', justifyContent: 'center',
+                                      color: 'var(--muted)', fontSize: '0.75rem'
+                                    }}>
+                                      None
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ fontWeight: '500' }}>{ch.name}</td>
+                                <td>{ch.designation || '—'}</td>
+                                <td>{ch.uniqueKey || '—'}</td>
+                                <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
+                                <td>
+                                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                    <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => handleViewDetails(ch)}>View</button>
+                                    <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => handleEditDetails(ch)}>Edit</button>
+                                    <button className="btn btn-danger" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => handleDeleteCardholder(ch.id)}><Trash2 size={12} /></button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null;
+
+                return (
+                  <>
+                    {templateTables}
+                    {unassignedTable}
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -2273,27 +2543,30 @@ export default function ClientDetailsPage() {
             </div>
 
             <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-              {viewingCardholder.photoUrl ? (
-                <img 
-                  src={viewingCardholder.photoUrl} 
-                  alt={viewingCardholder.name} 
-                  style={{ width: '100px', height: '100px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                />
-              ) : (
-                <div style={{
-                  width: '100px',
-                  height: '100px',
-                  borderRadius: '12px',
-                  background: 'rgba(255,255,255,0.05)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--muted)',
-                  fontSize: '0.9rem'
-                }}>
-                  No Photo
-                </div>
-              )}
+              {(() => {
+                const photo = getEffectivePhotoUrl(viewingCardholder);
+                return photo ? (
+                  <img 
+                    src={photo} 
+                    alt={viewingCardholder.name} 
+                    style={{ width: '100px', height: '100px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                  />
+                ) : (
+                  <div style={{
+                    width: '100px',
+                    height: '100px',
+                    borderRadius: '12px',
+                    background: 'rgba(255,255,255,0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--muted)',
+                    fontSize: '0.9rem'
+                  }}>
+                    No Photo
+                  </div>
+                );
+              })()}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{viewingCardholder.name}</h4>
                 <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
