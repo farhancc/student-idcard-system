@@ -459,7 +459,7 @@ export async function renderCardSide(
     }
     let rv = getResolvedFieldValue(f.field, data, cardholder);
     if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-      rv = cardholder.uniqueKey || cardholder.id || '';
+      rv = cardholder.uniqueKey || '';
     }
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
@@ -508,7 +508,7 @@ export async function renderCardSide(
     } else {
       rawValue = getResolvedFieldValue(f.field, data, cardholder);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
-        rawValue = cardholder.uniqueKey || cardholder.id;
+        rawValue = cardholder.uniqueKey || '';
       }
     }
     if (f.type === 'image' && !rawValue) {

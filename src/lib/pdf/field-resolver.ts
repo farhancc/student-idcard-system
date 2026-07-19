@@ -158,9 +158,6 @@ export function getResolvedFieldValue(
         return cv;
       }
     }
-    if (cardholder.id && !isPlaceholderValue(cardholder.id)) {
-      return String(cardholder.id);
-    }
   }
 
   // DESIGNATION resolution fallback
