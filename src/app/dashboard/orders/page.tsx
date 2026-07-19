@@ -1420,7 +1420,8 @@ export default function OrdersPage() {
                       name: selectedCardholderForDetails.name,
                       designation: selectedCardholderForDetails.designation,
                       photoUrl: selectedCardholderForDetails.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
-                      cardSerial: selectedCardholderForDetails.uniqueKey || selectedCardholderForDetails.cardSerial || null,
+                      uniqueKey: selectedCardholderForDetails.uniqueKey || null,
+                      cardSerial: selectedCardholderForDetails.cardSerial || null,
                       customFields: JSON.stringify(selectedCardholderForDetails.customFields || {})
                     };
 

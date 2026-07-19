@@ -50,7 +50,7 @@ export async function PUT(
         photoUrl,
         customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
         uniqueKey,
-        cardSerial: uniqueKey || cardholder.cardSerial,
+        cardSerial: cardholder.cardSerial,
       },
     });
 

@@ -82,7 +82,7 @@ export async function POST(
       }
     }
 
-    const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const cardholder = await prisma.cardholder.create({
       data: {

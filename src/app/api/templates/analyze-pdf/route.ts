@@ -71,7 +71,8 @@ function labelToFieldKey(label: string): string {
   if (/^phone|^mobile|^contact\s*(no|num|number)/.test(t)) return 'phone';
   if (/^email|^e-mail/.test(t)) return 'email';
   if (/^address|^addr$/.test(t)) return 'address';
-  if (/^card\s*(no|num|serial)|^serial|^id\s*(no|num)|^card\s*id/.test(t)) return 'cardSerial';
+  if (/^id\s*(no|num|number)?$|^student\s*id|^emp(loyee)?\s*id|^admission\s*(no|num|number)|^card\s*(id|no|num)/.test(t)) return 'id';
+  if (/^card\s*serial|^serial\s*(no|num|number)?/.test(t)) return 'cardSerial';
   if (/^father|^parent/.test(t)) return 'fatherName';
   if (/^mother/.test(t)) return 'motherName';
 

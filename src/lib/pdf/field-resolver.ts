@@ -64,6 +64,10 @@ export function getResolvedFieldValue(
 
   const isIdField =
     targetClean === 'id' ||
+    targetClean === 'idnumber' ||
+    targetClean === 'idno' ||
+    targetClean === 'cardid' ||
+    targetClean === 'cardno' ||
     targetClean === 'uniqueekey' ||
     targetClean === 'uniquekey' ||
     targetClean === 'admissionnumber' ||
@@ -71,18 +75,25 @@ export function getResolvedFieldValue(
     targetClean === 'admissionno' ||
     targetClean === 'studentid' ||
     targetClean === 'employeeid' ||
-    targetClean === 'idno' ||
     targetClean === 'regno' ||
     targetClean === 'registrationno' ||
-    targetClean === 'cardno' ||
     targetClean === 'memberid' ||
     targetClean.includes('unique') ||
     targetClean.includes('studentid') ||
-    targetClean.includes('rollno') ||
+    targetClean.includes('roll') ||
     targetClean.includes('admno') ||
     targetClean.includes('empid') ||
     targetClean.includes('idno') ||
+    targetClean.includes('idnumber') ||
+    targetClean.includes('cardid') ||
     targetClean.includes('regno');
+
+  const isSerialField =
+    targetClean === 'serial' ||
+    targetClean === 'cardserial' ||
+    targetClean === 'serialno' ||
+    targetClean === 'serialnumber' ||
+    targetClean.includes('serial');
 
   // Parse customFields if present
   let customObj: Record<string, any> = {};
@@ -96,9 +107,11 @@ export function getResolvedFieldValue(
     }
   }
 
-  // 1. Try exact match in data object first (if not a placeholder)
+  // 1. Try exact match in data object first (if not a placeholder and not cardSerial for ID fields)
   if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
-    return data[fieldKey];
+    if (!isIdField || fieldKey !== 'cardSerial') {
+      return data[fieldKey];
+    }
   }
 
   // 2. Try normalized search across data keys
@@ -106,7 +119,9 @@ export function getResolvedFieldValue(
     for (const k of Object.keys(data)) {
       if (clean(k) === targetClean) {
         if (data[k] !== undefined && data[k] !== null && !isPlaceholderValue(data[k])) {
-          return data[k];
+          if (!isIdField || k !== 'cardSerial') {
+            return data[k];
+          }
         }
       }
     }
@@ -141,21 +156,25 @@ export function getResolvedFieldValue(
     }
   }
 
-  // 6. UNIQUE ID resolution fallback
+  // 6. UNIQUE ID resolution fallback (Always prioritize uniqueKey and custom ID fields over cardSerial!)
   if (isIdField) {
     if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '' && !isPlaceholderValue(cardholder.uniqueKey)) {
       return cardholder.uniqueKey;
     }
-    // Search customObj for any key that looks like an ID
+    // Search customObj for any key that looks like an ID / Roll / Admission / Reg Number
     for (const [ck, cv] of Object.entries(customObj)) {
       const ckClean = clean(ck);
       if (
-        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg')) &&
+        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg') || ckClean.includes('cardno')) &&
         cv &&
         !isPlaceholderValue(cv)
       ) {
         return cv;
       }
+    }
+    // Ultimate fallback for ID field if cardSerial is set and not an auto-generated random format
+    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '' && !cardholder.cardSerial.startsWith('C-')) {
+      return cardholder.cardSerial;
     }
   }
 
@@ -196,14 +215,24 @@ export function getResolvedFieldValue(
   }
 
   // SERIAL resolution fallback
-  const isSerialField =
-    targetClean === 'serial' ||
-    targetClean === 'cardserial' ||
-    targetClean === 'serialno' ||
-    targetClean.includes('serial');
-
   if (isSerialField) {
-    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') return cardholder.cardSerial;
+    // If customObj has explicit serial field, use it
+    for (const [ck, cv] of Object.entries(customObj)) {
+      const ckClean = clean(ck);
+      if ((ckClean === 'cardserial' || ckClean === 'serial' || ckClean === 'serialno') && cv && !isPlaceholderValue(cv)) {
+        return cv;
+      }
+    }
+    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '' && !cardholder.cardSerial.startsWith('C-')) {
+      return cardholder.cardSerial;
+    }
+    // If cardSerial is not set, fall back to uniqueKey for serial field
+    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
+      return cardholder.uniqueKey;
+    }
+    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') {
+      return cardholder.cardSerial;
+    }
   }
 
   // Ultimate fallback for name

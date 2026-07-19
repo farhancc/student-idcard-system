@@ -116,8 +116,8 @@ export async function POST(
       }
     }
 
-    // Generate unique card serial number if needed
-    const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    // Generate unique card serial number
+    const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const cardholder = await prisma.cardholder.create({
       data: {
