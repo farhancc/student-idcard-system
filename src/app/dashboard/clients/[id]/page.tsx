@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
 import {
   Building2,
   ArrowLeft,
@@ -1197,55 +1198,81 @@ export default function ClientDetailsPage() {
     try {
       const front = JSON.parse(tmpl.frontFields || '[]');
       const back = JSON.parse(tmpl.backFields || '[]');
-      const allFields = [...front, ...back];
-      
-      const hasName = allFields.some(f => f.field === 'name' || f.field === 'fullName');
-      const hasDesignation = allFields.some(f => f.field === 'designation' || f.field === 'role');
-      const hasUniqueKey = allFields.some(f => f.field === 'uniqueKey');
-      
-      if (hasName && (!ch.name || ch.name.trim() === '')) {
-        warnings.push('Name is required');
-      }
-      if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
-        warnings.push('Designation is missing');
-      }
-      if (hasUniqueKey && (!ch.uniqueKey || ch.uniqueKey.trim() === '')) {
-        warnings.push('Unique ID/Key is missing');
-      }
-      
+      const allFields: any[] = [...front, ...back];
+
       // Parse custom fields
       let parsedCustom: Record<string, any> = {};
       if (ch.customFields) {
         parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
       }
-      
-      // Get custom text fields (qr, barcode, id are auto-generated from metadata, so they should not trigger missing field warnings)
-      const textFields = allFields.filter(f => f.type === 'text');
-      const customTextKeys = Array.from(new Set(textFields.map(f => f.field))).filter(k => 
-        k !== 'name' && k !== 'fullName' && k !== 'designation' && k !== 'role' && k !== 'uniqueKey' && k !== 'cardSerial' && k !== 'validTill' && k !== 'validTillDate'
-      );
-      
-      customTextKeys.forEach(k => {
-        const val = getCustomFieldValueCaseInsensitive(parsedCustom, k);
-        if (!val || String(val).trim() === '') {
-          const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-          warnings.push(`${label} is missing`);
+
+      const cardholderData = {
+        name: ch.name,
+        designation: ch.designation,
+        uniqueKey: ch.uniqueKey,
+        photoUrl: ch.photoUrl,
+        cardSerial: ch.cardSerial,
+        customFields: parsedCustom
+      };
+
+      const checkedFields = new Set<string>();
+
+      allFields.forEach((f: any) => {
+        if (!f || !f.field) return;
+
+        // Skip static text/image overrides explicitly hardcoded on template background canvas
+        if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
+          return;
         }
-      });
-      
-      // Validate all image fields in template against both customFields and photoUrl
-      const imageFields = allFields.filter(f => f.type === 'image');
-      const checkedImageFields = new Set<string>();
 
-      imageFields.forEach(f => {
-        if (checkedImageFields.has(f.field)) return;
-        checkedImageFields.add(f.field);
+        // Skip auto-generated system metadata fields
+        const fieldClean = f.field.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (fieldClean === 'validtill' || fieldClean === 'validtilldate' || fieldClean === 'cardserial') {
+          return;
+        }
 
-        const customVal = getCustomFieldValueCaseInsensitive(parsedCustom, f.field);
-        const hasCustomVal = customVal && String(customVal).trim() !== '' && String(customVal) !== 'null' && String(customVal) !== 'undefined';
-        const hasPhotoUrl = ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined';
+        // Avoid duplicate warnings for fields placed multiple times on canvas
+        if (checkedFields.has(f.field)) return;
+        checkedFields.add(f.field);
 
-        if (!hasCustomVal && !hasPhotoUrl) {
+        // Standard name field check
+        if (fieldClean === 'name' || fieldClean === 'fullname' || fieldClean === 'studentname') {
+          if (!ch.name || ch.name.trim() === '') {
+            warnings.push('Name is required');
+          }
+          return;
+        }
+
+        // Standard designation field check
+        if (fieldClean === 'designation' || fieldClean === 'role') {
+          if (!ch.designation || ch.designation.trim() === '') {
+            warnings.push('Designation is missing');
+          }
+          return;
+        }
+
+        // Unique ID / Key / ID field check
+        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey;
+          if (!idVal || String(idVal).trim() === '') {
+            warnings.push('Unique ID/Key is missing');
+          }
+          return;
+        }
+
+        // Image field check (profile photo or custom image like signature)
+        if (f.type === 'image') {
+          const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
+          if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
+            const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            warnings.push(`${label} is missing`);
+          }
+          return;
+        }
+
+        // All other text/barcode/qrcode fields (class, rollNo, bloodGroup, fatherName, address, phone, etc.)
+        const val = getResolvedFieldValue(f.field, cardholderData, ch);
+        if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
           const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
           warnings.push(`${label} is missing`);
         }

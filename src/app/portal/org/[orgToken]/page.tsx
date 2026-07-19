@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import { ToastProvider, useToast } from '@/components/ui/toast';
+import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
 
 import { 
   Users, 
@@ -510,45 +511,84 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
-    if (hasName && (!ch.name || ch.name.trim() === '')) {
-      warnings.push('Name is required');
-    }
-    if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
-      warnings.push('Designation is missing');
-    }
-    if (hasUniqueKey && (!ch.uniqueKey || ch.uniqueKey.trim() === '')) {
-      warnings.push('Unique ID/Key is missing');
-    }
-    
-    // Parse custom fields
-    let parsedCustom: Record<string, any> = {};
-    if (ch.customFields) {
-      parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-    }
-    
-    formFields.forEach(k => {
-      const val = getCustomFieldValueCaseInsensitive(parsedCustom, k);
-      if (!val || String(val).trim() === '') {
-        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-        warnings.push(`${label} is missing`);
-      }
-    });
-    
-    // Validate image fields against both customFields and photoUrl
-    const allImageKeys = new Set<string>();
-    if (hasPhoto) allImageKeys.add('photo');
-    customImgFields.forEach(f => allImageKeys.add(f.field));
+    if (!template) return warnings;
 
-    allImageKeys.forEach(k => {
-      const customVal = getCustomFieldValueCaseInsensitive(parsedCustom, k);
-      const hasCustomVal = customVal && String(customVal).trim() !== '' && String(customVal) !== 'null' && String(customVal) !== 'undefined';
-      const hasPhotoUrl = ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined';
+    try {
+      const front = JSON.parse(template.frontFields || '[]');
+      const back = JSON.parse(template.backFields || '[]');
+      const allFields: any[] = [...front, ...back];
 
-      if (!hasCustomVal && !hasPhotoUrl) {
-        const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-        warnings.push(`${label} is missing`);
+      let parsedCustom: Record<string, any> = {};
+      if (ch.customFields) {
+        parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
       }
-    });
+
+      const cardholderData = {
+        name: ch.name,
+        designation: ch.designation,
+        uniqueKey: ch.uniqueKey,
+        photoUrl: ch.photoUrl,
+        cardSerial: ch.cardSerial,
+        customFields: parsedCustom
+      };
+
+      const checkedFields = new Set<string>();
+
+      allFields.forEach((f: any) => {
+        if (!f || !f.field) return;
+
+        if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
+          return;
+        }
+
+        const fieldClean = f.field.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (fieldClean === 'validtill' || fieldClean === 'validtilldate' || fieldClean === 'cardserial') {
+          return;
+        }
+
+        if (checkedFields.has(f.field)) return;
+        checkedFields.add(f.field);
+
+        if (fieldClean === 'name' || fieldClean === 'fullname' || fieldClean === 'studentname') {
+          if (!ch.name || ch.name.trim() === '') {
+            warnings.push('Name is required');
+          }
+          return;
+        }
+
+        if (fieldClean === 'designation' || fieldClean === 'role') {
+          if (!ch.designation || ch.designation.trim() === '') {
+            warnings.push('Designation is missing');
+          }
+          return;
+        }
+
+        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey;
+          if (!idVal || String(idVal).trim() === '') {
+            warnings.push('Unique ID/Key is missing');
+          }
+          return;
+        }
+
+        if (f.type === 'image') {
+          const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
+          if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
+            const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            warnings.push(`${label} is missing`);
+          }
+          return;
+        }
+
+        const val = getResolvedFieldValue(f.field, cardholderData, ch);
+        if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
+          const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          warnings.push(`${label} is missing`);
+        }
+      });
+    } catch (e) {
+      console.error('Error validating cardholder in org portal', e);
+    }
     
     return warnings;
   };
