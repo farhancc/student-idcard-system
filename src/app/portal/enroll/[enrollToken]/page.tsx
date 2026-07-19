@@ -394,6 +394,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         <div className={showPreview ? "portal-layout" : ""}>
           <div className={showPreview ? "portal-form-col" : ""}>
             <form onSubmit={handleSubmit} className="card" style={{ padding: '32px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
           
           {/* Photo upload + Cropper trigger */}
           {hasPhoto && (
@@ -422,7 +423,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   </div>
                 )}
               </div>
-              <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
               <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Crop tool will match target dimensions and shape.</span>
             </div>
           )}
