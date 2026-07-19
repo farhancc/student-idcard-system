@@ -34,16 +34,13 @@ export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: s
   if (!staticVal) return true;
   const s = staticVal.trim().toLowerCase();
   if (!s) return true;
-  if (fieldKey && s === fieldKey.trim().toLowerCase()) return true;
-  const placeholders = [
-    'name', 'fullname', 'studentname', 'employeename', 'photo', 'designation', 
-    'uniquekey', 'id', 'empid', 'studentid', 'rollno', 'class', 'grade', 
-    'static text', 'field_1', 'field_2', 'field_3', 'field_4', 'field_5',
-    'text_1', 'text_2', 'text_3', '000', '123', '12345', 'id no', 'id number',
-    'unique key', 'unique_key', 'adm no', 'adm_no'
+  const canvasPlaceholders = [
+    'static text', 'sample text',
+    'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6',
+    'text_1', 'text_2', 'text_3', 'text_4', 'text_5'
   ];
-  if (placeholders.includes(s)) return true;
-  if (s.startsWith('field_') || s.startsWith('field ') || s.startsWith('text_') || s.startsWith('static')) return true;
+  if (canvasPlaceholders.includes(s)) return true;
+  if (s.startsWith('field_') || s.startsWith('field ') || s.startsWith('text_')) return true;
   return false;
 }
 

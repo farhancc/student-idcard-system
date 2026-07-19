@@ -21,34 +21,33 @@ export function getResolvedFieldValue(
   const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
   const targetClean = clean(fieldKey);
 
-  // Checks if a value is just a placeholder name rather than actual data
+  // Checks if a value is just a generic builder placeholder string (e.g., "Field_1", "Static Text")
   const isPlaceholderValue = (val: any) => {
     if (val === undefined || val === null) return true;
     const str = String(val).trim();
     if (!str) return true;
     const lower = str.toLowerCase();
-    return (
-      lower === targetClean ||
-      lower === 'name' ||
-      lower === 'fullname' ||
-      lower === 'studentname' ||
-      lower === 'employeename' ||
-      lower === 'static text' ||
-      lower === 'field_1' ||
-      lower === 'field_2' ||
-      lower === 'field_3' ||
-      lower === 'field_4' ||
-      lower === 'field_5' ||
-      lower === 'text_1' ||
-      lower === 'text_2' ||
-      lower === 'uniquekey' ||
-      lower === 'id' ||
-      lower === '123' ||
-      lower === '12345' ||
-      lower === '000' ||
-      lower.startsWith('field_') ||
-      lower.startsWith('text_')
-    );
+    
+    // Only filter generic drag-and-drop template builder text placeholders
+    const canvasPlaceholders = [
+      'static text',
+      'sample text',
+      'field_1',
+      'field_2',
+      'field_3',
+      'field_4',
+      'field_5',
+      'field_6',
+      'text_1',
+      'text_2',
+      'text_3',
+      'text_4',
+      'text_5'
+    ];
+    if (canvasPlaceholders.includes(lower)) return true;
+    if (lower.startsWith('field_') || lower.startsWith('text_')) return true;
+
+    return false;
   };
 
   // Check for standard field types
