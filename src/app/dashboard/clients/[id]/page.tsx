@@ -1130,24 +1130,10 @@ export default function ClientDetailsPage() {
       
       const hasName = allFields.some(f => f.field === 'name' || f.field === 'fullName');
       const hasDesignation = allFields.some(f => f.field === 'designation' || f.field === 'role');
-      const mainPhotoField = allFields.find(f => 
-        f.type === 'image' && (
-          f.field === 'photo' || 
-          f.field === 'avatar' || 
-          f.field === 'photoUrl' ||
-          f.field.toLowerCase().includes('photo') || 
-          f.field.toLowerCase().includes('avatar') || 
-          f.field.toLowerCase().includes('profile')
-        )
-      ) || null;
-      const hasPhoto = !!mainPhotoField;
       const hasUniqueKey = allFields.some(f => f.field === 'uniqueKey');
       
       if (hasName && (!ch.name || ch.name.trim() === '')) {
         warnings.push('Name is required');
-      }
-      if (hasPhoto && (!ch.photoUrl || ch.photoUrl.trim() === '')) {
-        warnings.push('Photo is missing');
       }
       if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
         warnings.push('Designation is missing');
@@ -1162,8 +1148,8 @@ export default function ClientDetailsPage() {
         parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
       }
       
-      // Get custom text fields
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'qr' || f.type === 'barcode' || f.type === 'id');
+      // Get custom text fields (qr, barcode, id are auto-generated from metadata, so they should not trigger missing field warnings)
+      const textFields = allFields.filter(f => f.type === 'text');
       const customTextKeys = Array.from(new Set(textFields.map(f => f.field))).filter(k => 
         k !== 'name' && k !== 'fullName' && k !== 'designation' && k !== 'role' && k !== 'uniqueKey' && k !== 'cardSerial' && k !== 'validTill' && k !== 'validTillDate'
       );
@@ -1176,16 +1162,21 @@ export default function ClientDetailsPage() {
         }
       });
       
-      // Get custom image fields
+      // Validate all image fields in template against both customFields and photoUrl
       const imageFields = allFields.filter(f => f.type === 'image');
-      const customImageKeys = imageFields.filter(f => f !== mainPhotoField).map(f => f.field);
-      
-      customImageKeys.forEach(k => {
-        const v = getCustomFieldValueCaseInsensitive(parsedCustom, k);
-        const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
-        if (isEmpty) {
-          const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-          warnings.push(`${label} image is missing`);
+      const checkedImageFields = new Set<string>();
+
+      imageFields.forEach(f => {
+        if (checkedImageFields.has(f.field)) return;
+        checkedImageFields.add(f.field);
+
+        const customVal = getCustomFieldValueCaseInsensitive(parsedCustom, f.field);
+        const hasCustomVal = customVal && String(customVal).trim() !== '' && String(customVal) !== 'null' && String(customVal) !== 'undefined';
+        const hasPhotoUrl = ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined';
+
+        if (!hasCustomVal && !hasPhotoUrl) {
+          const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          warnings.push(`${label} is missing`);
         }
       });
     } catch (e) {

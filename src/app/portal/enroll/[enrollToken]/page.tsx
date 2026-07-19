@@ -246,11 +246,20 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     setError('');
 
     try {
+      const updatedCustomFields = { ...customFields };
+      if (photoUrl) {
+        customImgFields.forEach(f => {
+          if (!updatedCustomFields[f.field]) {
+            updatedCustomFields[f.field] = photoUrl;
+          }
+        });
+      }
+
       const payload = {
         name: finalName,
         designation: hasDesignation ? (designation || null) : null,
         photoUrl: hasPhoto ? (photoUrl || null) : null,
-        customFields,
+        customFields: updatedCustomFields,
         uniqueKey: hasUniqueKey ? (uniqueKey || null) : null,
       };
 

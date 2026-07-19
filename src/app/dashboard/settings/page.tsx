@@ -589,10 +589,10 @@ export default function SettingsPage() {
           {/* Press Profile settings */}
           <div className="glass-panel">
             <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Printer size={18} color="var(--primary)" /> Press Profile Settings
+              <Printer size={18} color="var(--primary)" /> Organisation Profile Settings
             </h3>
             <p style={{ fontSize: '0.8rem', marginBottom: '20px' }}>
-              Manage your printing press name, owner profile, phone number, and city location.
+              Manage your Organisation name, owner profile, phone number, and city location.
             </p>
 
             {profileMessage && (
@@ -609,7 +609,7 @@ export default function SettingsPage() {
 
             <form onSubmit={handleSaveProfile} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div className="form-group">
-                <label className="form-label">Printing Press Name</label>
+                <label className="form-label">Organisation Name</label>
                 <input 
                   type="text" 
                   required 

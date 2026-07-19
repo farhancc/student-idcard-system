@@ -237,7 +237,8 @@ export default function TemplatesPage() {
   }, [pressFonts]);
 
   const handleAddField = (side: 'front' | 'back') => {
-    const defaultField = 'rollNo';
+    const currentFields = side === 'front' ? frontFields : backFields;
+    const defaultField = `field_${currentFields.length + 1}`;
     const newField: FieldCoordinate = {
       field: defaultField,
       type: 'text',
@@ -2057,28 +2058,7 @@ export default function TemplatesPage() {
   };
 
   const getFieldDefaultValue = (fieldName: string, fieldType: string) => {
-    const nameLower = fieldName.toLowerCase();
-    if (fieldType === 'id') {
-      return '0042';
-    } else if (nameLower.includes('name') || nameLower.includes('fullname')) {
-      return 'John Doe';
-    } else if (nameLower.includes('designation') || nameLower.includes('role') || nameLower.includes('title')) {
-      return 'Software Engineer';
-    } else if (nameLower.includes('serial') || nameLower.includes('cardserial')) {
-      return 'EMP-0042';
-    } else if (nameLower.includes('blood') || nameLower.includes('group')) {
-      return 'O+';
-    } else if (nameLower.includes('roll') || nameLower.includes('rollno') || nameLower.includes('rollnumber')) {
-      return '2026-0042';
-    } else if (nameLower.includes('phone') || nameLower.includes('mobile') || nameLower.includes('contact')) {
-      return '+1 234 567 8900';
-    } else if (nameLower.includes('email') || nameLower.includes('mail')) {
-      return 'johndoe@example.com';
-    } else if (nameLower.includes('dob') || nameLower.includes('birth') || nameLower.includes('dateofbirth')) {
-      return '12/05/2000';
-    } else {
-      return fieldName;
-    }
+    return fieldName;
   };
 
   const getTestDataValue = (f: FieldCoordinate) => {

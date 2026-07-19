@@ -153,7 +153,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
       const allFields: FieldCoordinate[] = [...front, ...back];
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'qr' || f.type === 'barcode' || f.type === 'id');
+      // Only include user-fillable text fields — qr/barcode/id are auto-generated from cardSerial/uniqueKey
+      const textFields = allFields.filter(f => f.type === 'text');
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       const filteredKeys = keys.filter(k => 
         k !== 'name' && 
@@ -492,9 +493,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     if (hasName && (!ch.name || ch.name.trim() === '')) {
       warnings.push('Name is required');
     }
-    if (hasPhoto && (!ch.photoUrl || ch.photoUrl.trim() === '')) {
-      warnings.push('Photo is missing');
-    }
     if (hasDesignation && (!ch.designation || ch.designation.trim() === '')) {
       warnings.push('Designation is missing');
     }
@@ -516,13 +514,19 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       }
     });
     
-    customImgFields.forEach(field => {
-      const k = field.field;
-      const v = getCustomFieldValueCaseInsensitive(parsedCustom, k);
-      const isEmpty = !v || String(v).trim() === '' || String(v) === 'null' || String(v) === 'undefined';
-      if (isEmpty) {
+    // Validate image fields against both customFields and photoUrl
+    const allImageKeys = new Set<string>();
+    if (hasPhoto) allImageKeys.add('photo');
+    customImgFields.forEach(f => allImageKeys.add(f.field));
+
+    allImageKeys.forEach(k => {
+      const customVal = getCustomFieldValueCaseInsensitive(parsedCustom, k);
+      const hasCustomVal = customVal && String(customVal).trim() !== '' && String(customVal) !== 'null' && String(customVal) !== 'undefined';
+      const hasPhotoUrl = ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined';
+
+      if (!hasCustomVal && !hasPhotoUrl) {
         const label = k.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-        warnings.push(`${label} image is missing`);
+        warnings.push(`${label} is missing`);
       }
     });
     
