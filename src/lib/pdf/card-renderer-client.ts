@@ -243,7 +243,7 @@ export async function renderCardSideClient(
   },
   cardholder: {
     id?: number;
-    name: string;
+    name?: string | null;
     designation?: string | null;
     photoUrl?: string | null;
     cardSerial?: string | null;
@@ -348,7 +348,7 @@ export async function renderCardSideClient(
   }
 
   const data: Record<string, any> = {
-    name: cardholder.name,
+    name: cardholder.name || '',
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
@@ -693,7 +693,7 @@ export async function renderCardSideToPdfBytesClient(
   },
   cardholder: {
     id?: number;
-    name: string;
+    name?: string | null;
     designation?: string | null;
     photoUrl?: string | null;
     cardSerial?: string | null;
@@ -856,7 +856,7 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   const data: Record<string, any> = {
-    name: cardholder.name,
+    name: cardholder.name || '',
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',

@@ -348,12 +348,12 @@ export async function renderCardSide(
   },
   cardholder: {
     id?: number;
-    name: string;
-    designation: string | null;
-    photoUrl: string | null;
-    cardSerial: string | null;
+    name?: string | null;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
     uniqueKey?: string | null;
-    customFields: string | null;
+    customFields?: string | null;
   },
   side: 'front' | 'back',
   validTillDate: Date | null,
@@ -421,7 +421,7 @@ export async function renderCardSide(
 
   // Combine core properties and custom properties
   const data: Record<string, any> = {
-    name: cardholder.name,
+    name: cardholder.name || '',
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
@@ -746,12 +746,12 @@ export async function renderCardSideToPdfBytes(
   },
   cardholder: {
     id?: number;
-    name: string;
-    designation: string | null;
-    photoUrl: string | null;
-    cardSerial: string | null;
+    name?: string | null;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
     uniqueKey?: string | null;
-    customFields: string | null;
+    customFields?: string | null;
   },
   side: 'front' | 'back',
   validTillDate: Date | null,
@@ -872,7 +872,7 @@ export async function renderCardSideToPdfBytes(
   }
 
   const data: Record<string, any> = {
-    name: cardholder.name,
+    name: cardholder.name || '',
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',

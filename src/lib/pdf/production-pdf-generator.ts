@@ -33,10 +33,10 @@ export async function generateProductionPdfClient(
   },
   cardholders: Array<{
     id?: number;
-    name: string;
-    designation: string | null;
-    photoUrl: string | null;
-    cardSerial: string | null;
+    name?: string | null;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
     uniqueKey?: string | null;
     customFields?: any;
   }>,
