@@ -64,14 +64,24 @@ export async function GET(
     const cardholdersWithTemplate = cardholders.map(ch => {
       let templateName = '—';
       let resolvedTemplateId: number | null = null;
-      if (ch.enrollToken && tokenToTemplateIdMap.has(ch.enrollToken)) {
+
+      // Priority 1: Direct templateId on the cardholder row (manual add / CSV import)
+      if ((ch as any).templateId) {
+        resolvedTemplateId = (ch as any).templateId;
+        templateName = templateMap.get(resolvedTemplateId!) || '—';
+      }
+      // Priority 2: enrollToken → portal share
+      else if (ch.enrollToken && tokenToTemplateIdMap.has(ch.enrollToken)) {
         const tId = tokenToTemplateIdMap.get(ch.enrollToken)!;
         resolvedTemplateId = tId;
         templateName = templateMap.get(tId) || '—';
-      } else if (ch.cardAsset?.templateId) {
+      }
+      // Priority 3: compiled cardAsset
+      else if (ch.cardAsset?.templateId) {
         resolvedTemplateId = ch.cardAsset.templateId;
         templateName = templateMap.get(ch.cardAsset.templateId) || '—';
       }
+
       return {
         ...ch,
         templateName,
@@ -99,7 +109,7 @@ export async function POST(
     const { id } = await params;
     const clientId = Number(id);
 
-    const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = await request.json();
+    const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate, templateId } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -146,6 +156,7 @@ export async function POST(
         customFields: customFields ? JSON.stringify(customFields) : null,
         uniqueKey,
         active: true,
+        ...(templateId ? { templateId: Number(templateId) } : {}),
       },
     });
 

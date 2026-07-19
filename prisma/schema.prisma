@@ -82,6 +82,8 @@ model Cardholder {
   pressId      Int      @map("press_id")
   clientId     Int      @map("client_id")
   client       Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  templateId   Int?     @map("template_id") // Direct template assignment (set on manual add / CSV import)
+  template     CardTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   name         String
   designation  String?
   photoUrl     String?  @map("photo_url")
@@ -99,6 +101,7 @@ model Cardholder {
   @@unique([clientId, uniqueKey])
   @@index([pressId])
   @@index([enrollToken])
+  @@index([templateId])
   @@map("cardholders")
 }
 
@@ -124,6 +127,7 @@ model CardTemplate {
   createdAt       DateTime @default(now()) @map("created_at")
 
   orders        CardOrder[]
+  cardholders   Cardholder[]
 
   @@map("card_templates")
 }

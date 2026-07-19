@@ -134,11 +134,13 @@ export default function ClientDetailsPage() {
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [addTemplateId, setAddTemplateId] = useState('');
 
   // CSV Import State
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [googleSheetsUrl, setGoogleSheetsUrl] = useState('');
   const [importMode, setImportMode] = useState('check'); // check | skip | update | overwrite
+  const [importTemplateId, setImportTemplateId] = useState('');
   const [importResult, setImportResult] = useState<CSVImportResult | null>(null);
   const [importError, setImportError] = useState('');
   const [importLoading, setImportLoading] = useState(false);
@@ -619,6 +621,7 @@ export default function ClientDetailsPage() {
           photoUrl,
           uniqueKey,
           customFields: customJson,
+          ...(addTemplateId ? { templateId: Number(addTemplateId) } : {}),
         }),
       });
 
@@ -631,6 +634,7 @@ export default function ClientDetailsPage() {
       setPhotoUrl('');
       setUniqueKey('');
       setCustomFields('');
+      setAddTemplateId('');
       setActiveTab('list');
       fetchData();
     } catch (err: any) {
@@ -651,6 +655,7 @@ export default function ClientDetailsPage() {
       const formData = new FormData();
       formData.append('clientId', String(clientId));
       formData.append('mode', importMode);
+      if (importTemplateId) formData.append('templateId', importTemplateId);
       if (csvFile) {
         formData.append('file', csvFile);
       } else if (googleSheetsUrl.trim()) {
@@ -2247,6 +2252,23 @@ export default function ClientDetailsPage() {
           )}
           <form onSubmit={handleAddCardholder} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label" style={{ fontWeight: '600', color: 'var(--primary)' }}>
+                Assign to Template <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(required for correct table grouping)</span>
+              </label>
+              <select
+                className="form-input"
+                value={addTemplateId}
+                onChange={e => setAddTemplateId(e.target.value)}
+                required
+              >
+                <option value="">— Select a Template —</option>
+                {clientTemplates.map((t: any) => (
+                  <option key={t.id} value={String(t.id)}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Full Name</label>
               <input type="text" required className="form-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} />
             </div>
@@ -2361,6 +2383,23 @@ export default function ClientDetailsPage() {
             <div className="form-group">
               <label className="form-label">Public Google Sheets URL</label>
               <input type="text" className="form-input" placeholder="https://docs.google.com/spreadsheets/d/..." value={googleSheetsUrl} onChange={e => setGoogleSheetsUrl(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: '600', color: 'var(--primary)' }}>
+                Assign to Template <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(required to group these cardholders in the correct table)</span>
+              </label>
+              <select
+                className="form-select"
+                value={importTemplateId}
+                onChange={e => setImportTemplateId(e.target.value)}
+                required
+              >
+                <option value="">— Select a Template —</option>
+                {clientTemplates.map((t: any) => (
+                  <option key={t.id} value={String(t.id)}>{t.name}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">

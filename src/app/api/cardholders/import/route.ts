@@ -15,6 +15,8 @@ export async function POST(request: Request) {
     const clientIdStr = formData.get('clientId');
     const importMode = formData.get('mode') || 'check'; // check | skip | update | overwrite
     const columnMappingJson = formData.get('columnMapping'); // JSON string mapping source cols to {name, designation, uniqueKey, ...}
+    const templateIdStr = formData.get('templateId') as string | null;
+    const templateId = templateIdStr ? Number(templateIdStr) : null;
     const file = formData.get('file') as File | null;
     const googleSheetsUrl = formData.get('googleSheetsUrl') as string | null;
 
@@ -151,7 +153,7 @@ export async function POST(request: Request) {
         });
       }
 
-      const cardholderPayload = {
+      const cardholderPayload: any = {
         pressId,
         clientId,
         name,
@@ -159,6 +161,7 @@ export async function POST(request: Request) {
         photoUrl,
         customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
         uniqueKey,
+        ...(templateId ? { templateId } : {}),
       };
 
       if (duplicate) {
