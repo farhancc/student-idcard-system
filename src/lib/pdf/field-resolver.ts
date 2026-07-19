@@ -27,10 +27,31 @@ export function getResolvedFieldValue(
     const str = String(val).trim();
     if (!str) return true;
     const lower = str.toLowerCase();
-    return lower === targetClean || lower === 'name' || lower === 'static text' || lower === 'field_1' || lower === 'uniquekey' || lower === 'id';
+    return (
+      lower === targetClean ||
+      lower === 'name' ||
+      lower === 'fullname' ||
+      lower === 'studentname' ||
+      lower === 'employeename' ||
+      lower === 'static text' ||
+      lower === 'field_1' ||
+      lower === 'field_2' ||
+      lower === 'field_3' ||
+      lower === 'field_4' ||
+      lower === 'field_5' ||
+      lower === 'text_1' ||
+      lower === 'text_2' ||
+      lower === 'uniquekey' ||
+      lower === 'id' ||
+      lower === '123' ||
+      lower === '12345' ||
+      lower === '000' ||
+      lower.startsWith('field_') ||
+      lower.startsWith('text_')
+    );
   };
 
-  // Check for standard NAME field key
+  // Check for standard field types
   const isNameField =
     targetClean === 'name' ||
     targetClean === 'studentname' ||
@@ -42,11 +63,6 @@ export function getResolvedFieldValue(
     targetClean === 'firstlastname' ||
     targetClean.includes('name');
 
-  if (isNameField && cardholder.name && String(cardholder.name).trim() !== '' && !isPlaceholderValue(cardholder.name)) {
-    return cardholder.name;
-  }
-
-  // Check for standard ID / Unique Key field key
   const isIdField =
     targetClean === 'id' ||
     targetClean === 'uniqueekey' ||
@@ -56,33 +72,20 @@ export function getResolvedFieldValue(
     targetClean === 'admissionno' ||
     targetClean === 'studentid' ||
     targetClean === 'employeeid' ||
+    targetClean === 'idno' ||
+    targetClean === 'regno' ||
+    targetClean === 'registrationno' ||
+    targetClean === 'cardno' ||
+    targetClean === 'memberid' ||
     targetClean.includes('unique') ||
     targetClean.includes('studentid') ||
     targetClean.includes('rollno') ||
     targetClean.includes('admno') ||
-    targetClean.includes('empid');
+    targetClean.includes('empid') ||
+    targetClean.includes('idno') ||
+    targetClean.includes('regno');
 
-  if (isIdField && cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
-    return cardholder.uniqueKey;
-  }
-
-  // 1. Try exact match in data object first (if not a placeholder)
-  if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
-    return data[fieldKey];
-  }
-
-  // 2. Try normalized search across data keys
-  if (targetClean) {
-    for (const k of Object.keys(data)) {
-      if (clean(k) === targetClean) {
-        if (data[k] !== undefined && data[k] !== null && String(data[k]).trim() !== '') {
-          return data[k];
-        }
-      }
-    }
-  }
-
-  // Parse customFields if it's a JSON string or object
+  // Parse customFields if present
   let customObj: Record<string, any> = {};
   if (cardholder.customFields) {
     if (typeof cardholder.customFields === 'string') {
@@ -94,8 +97,24 @@ export function getResolvedFieldValue(
     }
   }
 
+  // 1. Try exact match in data object first (if not a placeholder)
+  if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
+    return data[fieldKey];
+  }
+
+  // 2. Try normalized search across data keys
+  if (targetClean) {
+    for (const k of Object.keys(data)) {
+      if (clean(k) === targetClean) {
+        if (data[k] !== undefined && data[k] !== null && !isPlaceholderValue(data[k])) {
+          return data[k];
+        }
+      }
+    }
+  }
+
   // 3. Try exact match in customObj
-  if (customObj[fieldKey] !== undefined && customObj[fieldKey] !== null && String(customObj[fieldKey]).trim() !== '') {
+  if (customObj[fieldKey] !== undefined && customObj[fieldKey] !== null && !isPlaceholderValue(customObj[fieldKey])) {
     return customObj[fieldKey];
   }
 
@@ -103,29 +122,48 @@ export function getResolvedFieldValue(
   if (targetClean && customObj) {
     for (const [ck, cv] of Object.entries(customObj)) {
       if (clean(ck) === targetClean) {
-        if (cv !== undefined && cv !== null && String(cv).trim() !== '') {
+        if (cv !== undefined && cv !== null && !isPlaceholderValue(cv)) {
           return cv;
         }
       }
     }
   }
 
-  // 5. Fallbacks for standard fields:
-  // NAME resolution
+  // 5. NAME resolution fallback
   if (isNameField) {
-    if (cardholder.name && String(cardholder.name).trim() !== '') {
+    if (cardholder.name && String(cardholder.name).trim() !== '' && !isPlaceholderValue(cardholder.name)) {
       return cardholder.name;
     }
-    // Check if customFields has any key matching name
     for (const [ck, cv] of Object.entries(customObj)) {
       const ckClean = clean(ck);
-      if ((ckClean.includes('name') || ckClean === 'stname') && cv && String(cv).trim() !== '') {
+      if ((ckClean.includes('name') || ckClean === 'stname') && cv && !isPlaceholderValue(cv)) {
         return cv;
       }
     }
   }
 
-  // DESIGNATION resolution
+  // 6. UNIQUE ID resolution fallback
+  if (isIdField) {
+    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '' && !isPlaceholderValue(cardholder.uniqueKey)) {
+      return cardholder.uniqueKey;
+    }
+    // Search customObj for any key that looks like an ID
+    for (const [ck, cv] of Object.entries(customObj)) {
+      const ckClean = clean(ck);
+      if (
+        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg')) &&
+        cv &&
+        !isPlaceholderValue(cv)
+      ) {
+        return cv;
+      }
+    }
+    if (cardholder.id && !isPlaceholderValue(cardholder.id)) {
+      return String(cardholder.id);
+    }
+  }
+
+  // DESIGNATION resolution fallback
   const isDesignationField =
     targetClean === 'designation' ||
     targetClean === 'class' ||
@@ -136,18 +174,12 @@ export function getResolvedFieldValue(
     targetClean.includes('class');
 
   if (isDesignationField) {
-    if (cardholder.designation && String(cardholder.designation).trim() !== '') {
+    if (cardholder.designation && String(cardholder.designation).trim() !== '' && !isPlaceholderValue(cardholder.designation)) {
       return cardholder.designation;
     }
   }
 
-  // UNIQUE ID resolution
-  if (isIdField) {
-    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') return cardholder.uniqueKey;
-    if (cardholder.id) return String(cardholder.id);
-  }
-
-  // PHOTO URL resolution
+  // PHOTO URL resolution fallback
   const isPhotoField =
     targetClean === 'photo' ||
     targetClean === 'photourl' ||
@@ -167,7 +199,7 @@ export function getResolvedFieldValue(
     }
   }
 
-  // SERIAL resolution
+  // SERIAL resolution fallback
   const isSerialField =
     targetClean === 'serial' ||
     targetClean === 'cardserial' ||
@@ -178,11 +210,9 @@ export function getResolvedFieldValue(
     if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') return cardholder.cardSerial;
   }
 
-  // 6. Ultimate fallback for name if field is name-related
-  if (cardholder.name && String(cardholder.name).trim() !== '') {
-    if (targetClean === 'name' || targetClean === 'studentname' || targetClean === 'employeename' || targetClean.includes('name')) {
-      return cardholder.name;
-    }
+  // Ultimate fallback for name
+  if (isNameField && cardholder.name && String(cardholder.name).trim() !== '') {
+    return cardholder.name;
   }
 
   return undefined;
