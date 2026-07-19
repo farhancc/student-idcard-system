@@ -2501,16 +2501,39 @@ export default function ClientDetailsPage() {
                 {/* Inline warning summary based on current form state */}
                 {(() => {
                   const inlineWarnings: string[] = [];
-                  if (editHasPhoto && !editPhotoUrl) inlineWarnings.push('Profile photo is missing');
+                  if (editHasName && (!editName || editName.trim() === '')) inlineWarnings.push('Name is required');
+                  if (editHasDesignation && (!editDesignation || editDesignation.trim() === '')) inlineWarnings.push('Designation is missing');
+                  if (editHasUniqueKey && (!editUniqueKey || editUniqueKey.trim() === '')) inlineWarnings.push('Unique ID/Key is missing');
+
+                  // Validate text fields in editCustomFieldsMap
                   Object.entries(editCustomFieldsMap).forEach(([k, v]) => {
                     const meta = editTemplateFields.find(f => f.field === k);
-                    const isImg = meta?.type === 'image';
-                    const isEmpty = !v || v.trim() === '';
-                    if (isImg && isEmpty) {
-                      const lbl = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
-                      inlineWarnings.push(`${lbl} image is missing`);
+                    if (meta && meta.type === 'text') {
+                      const isSystemKey = ['name', 'fullName', 'designation', 'role', 'uniqueKey', 'cardSerial', 'validTill', 'validTillDate'].includes(k);
+                      if (!isSystemKey && (!v || String(v).trim() === '')) {
+                        const lbl = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                        inlineWarnings.push(`${lbl} is missing`);
+                      }
                     }
                   });
+
+                  // Validate image fields in editTemplateFields against both editCustomFieldsMap and editPhotoUrl
+                  const imageFields = editTemplateFields.filter(f => f.type === 'image');
+                  const checkedImg = new Set<string>();
+                  imageFields.forEach(f => {
+                    if (checkedImg.has(f.field)) return;
+                    checkedImg.add(f.field);
+
+                    const customVal = getCustomFieldValueCaseInsensitive(editCustomFieldsMap, f.field);
+                    const hasCustomVal = customVal && String(customVal).trim() !== '' && String(customVal) !== 'null' && String(customVal) !== 'undefined';
+                    const hasPhotoUrl = editPhotoUrl && editPhotoUrl.trim() !== '' && editPhotoUrl !== 'null' && editPhotoUrl !== 'undefined';
+
+                    if (!hasCustomVal && !hasPhotoUrl) {
+                      const lbl = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                      inlineWarnings.push(`${lbl} is missing`);
+                    }
+                  });
+
                   return inlineWarnings.length > 0 ? (
                     <div style={{ flex: 1, padding: '8px 12px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px', fontSize: '0.78rem', color: '#fbbf24' }}>
                       <strong>⚠ Still missing:</strong> {inlineWarnings.join(' · ')}
