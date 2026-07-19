@@ -1733,10 +1733,7 @@ export default function ClientDetailsPage() {
                     return match;
                   });
 
-                  if (tmplCardholders.length === 0 && filterTemplate && String(tmpl.id) !== filterTemplate && tmpl.name.toLowerCase() !== filterTemplate.toLowerCase()) {
-                    return null;
-                  }
-                  if (tmplCardholders.length === 0 && filteredCardholders.length > 0 && templatesToRender.length > 1) {
+                  if (filterTemplate && String(tmpl.id) !== filterTemplate && tmpl.name.toLowerCase() !== filterTemplate.toLowerCase()) {
                     return null;
                   }
 
