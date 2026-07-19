@@ -353,7 +353,7 @@ export async function renderCardSideClient(
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
     uniqueKey: cardholder.uniqueKey || '',
-    id: cardholder.uniqueKey || cardholder.id || '',
+    id: cardholder.uniqueKey || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -861,7 +861,7 @@ export async function renderCardSideToPdfBytesClient(
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
     uniqueKey: cardholder.uniqueKey || '',
-    id: cardholder.uniqueKey || cardholder.id || '',
+    id: cardholder.uniqueKey || '',
     validTill: formattedValidTill,
     ...customData,
   };
