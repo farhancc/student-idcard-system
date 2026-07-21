@@ -1753,6 +1753,16 @@ export default function ClientDetailsPage() {
               {(() => {
                 const rawTemplates = clientTemplates.length > 0 ? clientTemplates : [{ id: 0, name: 'Default Template', frontFields: '[]', backFields: '[]' }];
                 
+                const normalizeTemplateName = (name: string) => {
+                  if (!name) return 'default template';
+                  return name
+                    .trim()
+                    .toLowerCase()
+                    .replace(/\s+/g, ' ')
+                    .replace(/\s*\(v\d+(\.\d+)?\)$/i, '')
+                    .replace(/\s*v\d+(\.\d+)?$/i, '');
+                };
+
                 // Group templates by normalized name to consolidate template updates/versions into a single table
                 const templateGroupsMap = new Map<string, {
                   latestTemplate: any;
@@ -1760,7 +1770,7 @@ export default function ClientDetailsPage() {
                 }>();
 
                 rawTemplates.forEach(tmpl => {
-                  const normName = (tmpl.name || 'Default Template').trim().toLowerCase();
+                  const normName = normalizeTemplateName(tmpl.name);
                   if (!templateGroupsMap.has(normName)) {
                     templateGroupsMap.set(normName, {
                       latestTemplate: tmpl,
@@ -1798,23 +1808,32 @@ export default function ClientDetailsPage() {
                 const templateTables = templateGroups.map(group => {
                   const tmpl = group.latestTemplate;
                   const tmplCardholders = filteredCardholders.filter(c => {
+                    // Prevent any cardholder from being processed into multiple tables
+                    if (processedCardholderIds.has(c.id)) {
+                      return false;
+                    }
+
                     const isIdMatch = c.resolvedTemplateId != null && (
                       group.allTemplateIds.has(c.resolvedTemplateId) || 
                       group.allTemplateIds.has(Number(c.resolvedTemplateId)) || 
                       group.allTemplateIds.has(String(c.resolvedTemplateId))
                     );
-                    const isNameMatch = c.templateName && tmpl.name && c.templateName.trim().toLowerCase() === tmpl.name.trim().toLowerCase();
-                    const isFallbackMatch = (!c.resolvedTemplateId || c.resolvedTemplateId === 0) && !c.templateName && templateGroups.length === 1;
+                    const isNameMatch = c.templateName && tmpl.name && (
+                      normalizeTemplateName(c.templateName) === normalizeTemplateName(tmpl.name)
+                    );
+                    const isFallbackMatch = (!c.resolvedTemplateId || c.resolvedTemplateId === 0) && (!c.templateName || c.templateName === '—') && templateGroups.length === 1;
 
                     const match = Boolean(isIdMatch || isNameMatch || isFallbackMatch);
-                    if (match) processedCardholderIds.add(c.id);
+                    if (match) {
+                      processedCardholderIds.add(c.id);
+                    }
                     return match;
                   });
 
                   if (filterTemplate) {
                     const filterLower = filterTemplate.trim().toLowerCase();
                     const matchId = Array.from(group.allTemplateIds).some(id => String(id).toLowerCase() === filterLower);
-                    const matchName = tmpl.name.trim().toLowerCase() === filterLower;
+                    const matchName = normalizeTemplateName(tmpl.name) === normalizeTemplateName(filterTemplate);
                     if (!matchId && !matchName) {
                       return null;
                     }
