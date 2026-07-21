@@ -3272,6 +3272,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [creating, setCreating] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [hasClientAssignments, setHasClientAssignments] = useState(false);
 
   // Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -3313,6 +3314,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
       const data = await res.json();
       if (data.success) {
         setShares(data.shares);
+        setHasClientAssignments(data.hasClientAssignments || false);
         const sorted = [...data.templates].sort((a, b) => {
           const aIsPdf = a.frontImageUrl?.toLowerCase().endsWith('.pdf') ? 1 : 0;
           const bIsPdf = b.frontImageUrl?.toLowerCase().endsWith('.pdf') ? 1 : 0;
@@ -3590,32 +3592,48 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
         </p>
 
         {templates.length === 0 ? (
-          <div style={{ color: 'var(--warning)', fontSize: '0.9rem' }}>
-            No card templates found. Please design or upload a template first.
+          <div style={{ padding: '16px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <AlertTriangle size={16} color="#f59e0b" />
+            <div style={{ fontSize: '0.875rem' }}>
+              <strong style={{ color: '#f59e0b' }}>No templates available for this client.</strong>
+              <span style={{ color: 'var(--muted)', marginLeft: '6px' }}>
+                {hasClientAssignments
+                  ? 'The assigned templates may have been removed. Please check template assignments in the Templates tab.'
+                  : 'Design or upload a template, then assign it to this client from the Templates dashboard.'}
+              </span>
+            </div>
           </div>
         ) : (
-          <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
-            <div className="form-group" style={{ flex: 1, margin: 0 }}>
-              <label className="form-label">Select Template</label>
-              <select 
-                className="form-select" 
-                value={selectedTemplateId} 
-                onChange={e => setSelectedTemplateId(e.target.value)}
-              >
-                {templates.map(t => {
-                  const isPdf = t.frontImageUrl?.toLowerCase().endsWith('.pdf');
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {t.name} {isPdf ? '📄 [PDF Format]' : '🖼️ [Image Format]'}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
-              {creating ? 'Generating...' : 'Generate Links'}
-            </button>
-          </form>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {hasClientAssignments && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <CheckCircle size={12} color="var(--success)" />
+                Showing {templates.length} template{templates.length !== 1 ? 's' : ''} assigned to this client
+              </div>
+            )}
+            <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+              <div className="form-group" style={{ flex: 1, margin: 0 }}>
+                <label className="form-label">Select Template</label>
+                <select 
+                  className="form-select" 
+                  value={selectedTemplateId} 
+                  onChange={e => setSelectedTemplateId(e.target.value)}
+                >
+                  {templates.map(t => {
+                    const isPdf = t.frontImageUrl?.toLowerCase().endsWith('.pdf');
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {t.name} {isPdf ? '📄 [PDF Format]' : '🖼️ [Image Format]'}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
+                {creating ? 'Generating...' : 'Generate Links'}
+              </button>
+            </form>
+          </div>
         )}
       </div>
 

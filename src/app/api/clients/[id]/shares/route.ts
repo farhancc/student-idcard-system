@@ -66,19 +66,42 @@ export async function GET(
       })
     );
 
-    // Also get list of templates for selection in UI
-    const templates = await prisma.cardTemplate.findMany({
-      where: {
-        isLatest: true,
-        OR: [
-          { pressId: null },
-          { pressId }
-        ]
-      },
-      select: { id: true, name: true, frontImageUrl: true },
+    // Templates for UI: prefer client-assigned templates, fall back to all press templates
+    // First check if any templates are assigned to this specific client
+    const clientAssignments = await prisma.templateClientAssignment.findMany({
+      where: { clientId },
+      select: { templateId: true },
     });
 
-    return NextResponse.json({ success: true, shares: sharesWithCount, templates });
+    let templates: any[];
+    if (clientAssignments.length > 0) {
+      // Only show templates assigned to this client
+      const assignedIds = clientAssignments.map(a => a.templateId);
+      templates = await prisma.cardTemplate.findMany({
+        where: {
+          id: { in: assignedIds },
+          isLatest: true,
+          OR: [{ pressId: null }, { pressId }],
+        },
+        select: { id: true, name: true, frontImageUrl: true },
+      });
+    } else {
+      // No assignments — fall back to all press templates (backward compat)
+      templates = await prisma.cardTemplate.findMany({
+        where: {
+          isLatest: true,
+          OR: [{ pressId: null }, { pressId }],
+        },
+        select: { id: true, name: true, frontImageUrl: true },
+      });
+    }
+
+    return NextResponse.json({
+      success: true,
+      shares: sharesWithCount,
+      templates,
+      hasClientAssignments: clientAssignments.length > 0,
+    });
   } catch (error) {
     console.error('Get client shares error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
