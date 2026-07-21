@@ -3459,6 +3459,8 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                               <tbody>
                                 {batchCardholders.map(ch => {
                                   const isChSelected = selectedCardholderIds.includes(ch.id);
+                                  const effectivePhoto = getEffectivePhotoUrl(ch);
+
                                   return (
                                     <tr key={ch.id} style={{ opacity: isChSelected ? 1 : 0.5 }}>
                                       <td style={{ padding: '10px' }}>
@@ -3469,10 +3471,10 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                                         />
                                       </td>
                                       <td style={{ padding: '6px 10px' }}>
-                                        {ch.photoUrl ? (
-                                          <img src={ch.photoUrl} alt="" style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
+                                        {effectivePhoto ? (
+                                          <img src={effectivePhoto} alt="" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} />
                                         ) : (
-                                          <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+                                          <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '0.65rem' }}>None</div>
                                         )}
                                       </td>
                                       <td style={{ padding: '10px', fontWeight: '500' }}>{ch.name}</td>
