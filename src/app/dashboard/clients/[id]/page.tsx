@@ -1769,6 +1769,10 @@ export default function ClientDetailsPage() {
                     return null;
                   }
 
+                  if (tmplCardholders.length === 0) {
+                    return null;
+                  }
+
                   const cols = getTemplateColumns(tmpl);
 
                   return (
@@ -1780,12 +1784,7 @@ export default function ClientDetailsPage() {
                         </h3>
                       </div>
 
-                      {tmplCardholders.length === 0 ? (
-                        <div className="glass-panel" style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                          No cardholders registered under {tmpl.name}.
-                        </div>
-                      ) : (
-                        <div className="table-container">
+                      <div className="table-container">
                           <table className="custom-table">
                             <thead>
                               <tr>
@@ -1983,7 +1982,6 @@ export default function ClientDetailsPage() {
                             </tbody>
                           </table>
                         </div>
-                      )}
                     </div>
                   );
                 });
@@ -2080,10 +2078,20 @@ export default function ClientDetailsPage() {
                   </div>
                 ) : null;
 
+                const hasAnyTables = templateTables.some(t => t !== null) || unassignedTable !== null;
+
                 return (
                   <>
-                    {templateTables}
-                    {unassignedTable}
+                    {hasAnyTables ? (
+                      <>
+                        {templateTables}
+                        {unassignedTable}
+                      </>
+                    ) : (
+                      <div className="glass-panel" style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--muted)' }}>
+                        No cardholders match the selected criteria.
+                      </div>
+                    )}
                   </>
                 );
               })()}
