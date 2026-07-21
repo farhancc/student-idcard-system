@@ -832,7 +832,7 @@ export default function ClientDetailsPage() {
         ) || null;
         hasPhoto = mainPhoto !== null;
         
-        hasUniqueKey = mappedFields.includes('uniqueKey');
+        hasUniqueKey = mappedFields.includes('uniqueKey') || allFields.some((f: any) => f.type === 'id');
 
         // Extract customFields map from record but ONLY keep those in the template
         let existingCustom: Record<string, any> = {};

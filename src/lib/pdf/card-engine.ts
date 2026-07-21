@@ -150,10 +150,12 @@ export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: s
   const canvasPlaceholders = [
     'static text', 'sample text',
     'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6',
-    'text_1', 'text_2', 'text_3', 'text_4', 'text_5'
+    'text_1', 'text_2', 'text_3', 'text_4', 'text_5',
+    'id number', 'id no', 'student id', 'employee id', 'roll no', 'admission no', 'reg no', 'card id', 'unique id', '12345', '00000', '0000'
   ];
   if (canvasPlaceholders.includes(s)) return true;
   if (s.startsWith('field_') || s.startsWith('field ') || s.startsWith('text_')) return true;
+  if (fieldKey && (fieldKey.toLowerCase() === 'id' || fieldKey.toLowerCase() === 'uniquekey') && (s === 'id' || s === 'id number' || s === 'id no')) return true;
   return false;
 }
 
@@ -454,7 +456,7 @@ export async function renderCardSide(
     if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
       return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
     }
-    let rv = getResolvedFieldValue(f.field, data, cardholder);
+    let rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
     if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
       rv = cardholder.uniqueKey || '';
     }
@@ -503,7 +505,7 @@ export async function renderCardSide(
     if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
       rawValue = f.staticValue;
     } else {
-      rawValue = getResolvedFieldValue(f.field, data, cardholder);
+      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
@@ -1013,10 +1015,15 @@ export async function renderCardSideToPdfBytes(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
+    let rv: any;
     if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
+      rv = f.staticValue;
+    } else {
+      rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
+      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
+        rv = cardholder.uniqueKey || '';
+      }
     }
-    let rv = f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder);
     if (f.type === 'image' && !rv) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {
@@ -1132,7 +1139,15 @@ export async function renderCardSideToPdfBytes(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue = f.staticValue !== undefined ? f.staticValue : (f.type === 'id' ? (cardholder.uniqueKey || cardholder.id) : getResolvedFieldValue(f.field, data, cardholder));
+    let rawValue: any;
+    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
+      rawValue = f.staticValue;
+    } else {
+      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
+        rawValue = cardholder.uniqueKey || '';
+      }
+    }
     if (f.type === 'image' && !rawValue) {
       const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
       if (isProfileField) {

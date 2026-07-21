@@ -274,7 +274,7 @@ export async function generateApprovalPdfClient(
         let currentY = yOffset - 53;
         const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
           ? cardholder.uniqueKey
-          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder));
+          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder, 'id'));
 
         if (displayId) {
           await safeDrawText(page, pdfDoc, `ID: ${displayId}`, {
@@ -375,7 +375,7 @@ export async function generateApprovalPdfClient(
         const detailsList: string[] = [];
         const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
           ? cardholder.uniqueKey
-          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder));
+          : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder, 'id'));
 
         if (displayId) {
           detailsList.push(`ID: ${displayId}`);

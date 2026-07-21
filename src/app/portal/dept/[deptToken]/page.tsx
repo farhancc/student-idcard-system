@@ -184,8 +184,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
       const allFields: FieldCoordinate[] = [...front, ...back];
-      // Only include user-fillable text fields — qr/barcode/id are auto-generated from cardSerial/uniqueKey
-      const textFields = allFields.filter(f => f.type === 'text');
+      // Include user-fillable text and ID fields
+      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id');
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       const filteredKeys = keys.filter(k =>
         k !== 'name' &&
@@ -246,7 +246,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       setHasName(mappedFields.includes('name') || mappedFields.includes('fullName'));
       setHasDesignation(mappedFields.includes('designation') || mappedFields.includes('role'));
       setHasPhoto(mainPhoto !== null);
-      setHasUniqueKey(mappedFields.includes('uniqueKey'));
+      setHasUniqueKey(mappedFields.includes('uniqueKey') || allFields.some(f => f.type === 'id'));
 
       const chRes = await fetch(`/api/portal/dept/${deptToken}/cardholders`);
       if (!chRes.ok) throw new Error('Failed to load cardholders');

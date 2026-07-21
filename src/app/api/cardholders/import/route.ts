@@ -113,7 +113,7 @@ export async function POST(request: Request) {
     const firstRowHeaders = Object.keys(rawData[0]);
     const nameCol = mapping.name || getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name']) || 'name';
     const designationCol = mapping.designation || getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title']) || 'designation';
-    const uniqueKeyCol = mapping.uniqueKey || getHeaderKey(firstRowHeaders, ['id', 'empid', 'rollnumber', 'roll no', 'employee id', 'unique key']) || 'uniqueKey';
+    const uniqueKeyCol = mapping.uniqueKey || getHeaderKey(firstRowHeaders, ['id', 'idnumber', 'id no', 'id number', 'empid', 'rollnumber', 'roll no', 'roll', 'employee id', 'unique key', 'uniquekey', 'serial no', 'serial number', 'serial', 'card id', 'card id no', 'reg no', 'registration no', 'adm no', 'admission no']) || 'uniqueKey';
     const photoUrlCol = mapping.photoUrl || getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
 
     // 3. Process and analyze import

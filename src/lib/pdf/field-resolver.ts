@@ -13,7 +13,8 @@ export function getResolvedFieldValue(
     cardSerial?: string | null;
     uniqueKey?: string | null;
     customFields?: string | null | Record<string, any>;
-  }
+  },
+  fieldType?: string
 ): any {
   if (!fieldKey) return undefined;
 
@@ -52,6 +53,7 @@ export function getResolvedFieldValue(
 
   // Check for standard field types
   const isNameField =
+    fieldType === 'name' ||
     targetClean === 'name' ||
     targetClean === 'studentname' ||
     targetClean === 'employeename' ||
@@ -63,6 +65,7 @@ export function getResolvedFieldValue(
     targetClean.includes('name');
 
   const isIdField =
+    fieldType === 'id' ||
     targetClean === 'id' ||
     targetClean === 'idnumber' ||
     targetClean === 'idno' ||
@@ -78,6 +81,9 @@ export function getResolvedFieldValue(
     targetClean === 'regno' ||
     targetClean === 'registrationno' ||
     targetClean === 'memberid' ||
+    targetClean === 'serial' ||
+    targetClean === 'serialno' ||
+    targetClean === 'serialnumber' ||
     targetClean.includes('unique') ||
     targetClean.includes('studentid') ||
     targetClean.includes('roll') ||
@@ -161,20 +167,16 @@ export function getResolvedFieldValue(
     if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '' && !isPlaceholderValue(cardholder.uniqueKey)) {
       return cardholder.uniqueKey;
     }
-    // Search customObj for any key that looks like an ID / Roll / Admission / Reg Number
+    // Search customObj for any key that looks like an ID / Roll / Admission / Reg / Serial Number
     for (const [ck, cv] of Object.entries(customObj)) {
       const ckClean = clean(ck);
       if (
-        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg') || ckClean.includes('cardno')) &&
+        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg') || ckClean.includes('cardno') || ckClean.includes('serial')) &&
         cv &&
         !isPlaceholderValue(cv)
       ) {
         return cv;
       }
-    }
-    // Ultimate fallback for ID field if cardSerial is set and not an auto-generated random format
-    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '' && !cardholder.cardSerial.startsWith('C-')) {
-      return cardholder.cardSerial;
     }
   }
 

@@ -95,15 +95,15 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         const back = JSON.parse(data.template.backFields || '[]');
         const allFields: FieldCoordinate[] = [...front, ...back];
 
-        // Identify fields that are mapped to 'qr', 'barcode', or 'id' types to restrict editing on enrollment page
+        // Identify fields that are mapped to 'qr' or 'barcode' types to restrict editing on enrollment page
         const restrictedFields = new Set(
           allFields
-            .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'id')
+            .filter(f => f.type === 'qr' || f.type === 'barcode')
             .map(f => f.field)
         );
 
-        // Unique text fields (excluding restricted fields)
-        const textFields = allFields.filter(f => f.type === 'text' && !restrictedFields.has(f.field));
+        // Unique text and ID fields (excluding restricted fields)
+        const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'id') && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textFields.map(f => f.field)));
         
         // Remove standard and system ones from customFields list to handle separately
@@ -141,7 +141,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setHasName((mappedFields.includes('name') || mappedFields.includes('fullName')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
         setHasDesignation((mappedFields.includes('designation') || mappedFields.includes('role')) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
         setHasPhoto(mainPhoto !== null);
-        setHasUniqueKey(mappedFields.includes('uniqueKey') && !restrictedFields.has('uniqueKey'));
+        setHasUniqueKey((mappedFields.includes('uniqueKey') || allFields.some(f => f.type === 'id')) && !restrictedFields.has('uniqueKey'));
 
         // Detect if back side has any fields
         const backParsed: FieldCoordinate[] = JSON.parse(data.template.backFields || '[]');
@@ -550,6 +550,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                         name: name || 'Full Name',
                         designation: designation || 'Designation',
                         photoUrl: photoUrl || null,
+                        uniqueKey: uniqueKey || null,
                         cardSerial: 'STU-0000',
                         customFields: JSON.stringify(customFields),
                       }}
@@ -574,6 +575,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                           name: name || 'Full Name',
                           designation: designation || 'Designation',
                           photoUrl: photoUrl || null,
+                          uniqueKey: uniqueKey || null,
                           cardSerial: 'STU-0000',
                           customFields: JSON.stringify(customFields),
                         }}
