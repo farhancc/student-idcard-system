@@ -110,6 +110,42 @@ const getCustomFieldValueCaseInsensitive = (parsedCustom: Record<string, any>, k
   return undefined;
 };
 
+const getEffectivePhotoUrl = (ch: any): string | null => {
+  if (!ch) return null;
+  if (ch.photoUrl && typeof ch.photoUrl === 'string' && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined') {
+    return ch.photoUrl.trim();
+  }
+  if (ch.customFields) {
+    try {
+      const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+      if (parsed && typeof parsed === 'object') {
+        for (const photoKey of ['photo', 'photoUrl', 'photo_url', 'avatar', 'image', 'picture', 'student_photo', 'employee_photo']) {
+          const val = getCustomFieldValueCaseInsensitive(parsed, photoKey);
+          if (val && typeof val === 'string' && val.trim() !== '' && val !== 'null' && val !== 'undefined') {
+            return val.trim();
+          }
+        }
+        for (const [key, val] of Object.entries(parsed)) {
+          if (val && typeof val === 'string') {
+            const cleanVal = val.trim();
+            if (
+              cleanVal.startsWith('http://') ||
+              cleanVal.startsWith('https://') ||
+              cleanVal.startsWith('data:image/') ||
+              cleanVal.startsWith('/uploads/') ||
+              cleanVal.startsWith('/api/uploads/') ||
+              cleanVal.startsWith('blob:')
+            ) {
+              return cleanVal;
+            }
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  return null;
+};
+
 export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -1119,26 +1155,6 @@ export default function ClientDetailsPage() {
       console.error(err);
     }
   };
-
-  function getEffectivePhotoUrl(ch: any): string | null {
-    if (!ch) return null;
-    if (ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined') {
-      return ch.photoUrl;
-    }
-    if (ch.customFields) {
-      try {
-        const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-        if (parsed && typeof parsed === 'object') {
-          for (const [key, val] of Object.entries(parsed)) {
-            if (val && typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/'))) {
-              return val;
-            }
-          }
-        }
-      } catch (e) {}
-    }
-    return null;
-  }
 
   function getTemplateColumns(tmpl: any) {
     if (!tmpl) return [];
