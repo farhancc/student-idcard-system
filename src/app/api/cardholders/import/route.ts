@@ -116,7 +116,52 @@ export async function POST(request: Request) {
     const uniqueKeyCol = mapping.uniqueKey || getHeaderKey(firstRowHeaders, ['id', 'idnumber', 'id no', 'id number', 'empid', 'rollnumber', 'roll no', 'roll', 'employee id', 'unique key', 'uniquekey', 'serial no', 'serial number', 'serial', 'card id', 'card id no', 'reg no', 'registration no', 'adm no', 'admission no']) || 'uniqueKey';
     const photoUrlCol = mapping.photoUrl || getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
 
-    // 3. Process and analyze import
+    // 3. Validate against template required fields (if templateId provided)
+    const validationErrors: Array<{ row: number; name: string; missingFields: string[] }> = [];
+    if (templateId) {
+      const templateFields = await prisma.templateField.findMany({
+        where: { templateId, isRequired: true },
+      });
+
+      if (templateFields.length > 0) {
+        // Build a set of field keys that are required
+        const requiredFields = templateFields.map(f => f.field);
+
+        for (let i = 0; i < rawData.length; i++) {
+          const row = rawData[i];
+          const rowName = String(row[nameCol] || `Row ${i + 2}`).trim();
+          const missing: string[] = [];
+
+          for (const reqField of requiredFields) {
+            // Check if the field is mapped to a column, or exists as-is
+            const sourceCol = mapping[reqField] || reqField;
+            const val = row[sourceCol];
+            const strVal = val !== null && val !== undefined ? String(val).trim() : '';
+
+            // Core field special-casing
+            if (reqField === 'name') {
+              const nameVal = String(row[nameCol] || '').trim();
+              if (!nameVal) missing.push('name');
+            } else if (reqField === 'designation') {
+              const dVal = String(row[designationCol] || '').trim();
+              if (!dVal) missing.push('designation');
+            } else if (reqField === 'photo') {
+              const pVal = String(row[photoUrlCol] || '').trim();
+              if (!pVal) missing.push('photo');
+            } else if (reqField === 'id') {
+              const kVal = String(row[uniqueKeyCol] || '').trim();
+              if (!kVal) missing.push('id');
+            } else if (!strVal) {
+              missing.push(reqField);
+            }
+          }
+
+          if (missing.length > 0) {
+            validationErrors.push({ row: i + 2, name: rowName, missingFields: missing });
+          }
+        }
+      }
+    }
     const duplicates: any[] = [];
     const newItems: any[] = [];
     const updatedItems: any[] = [];
@@ -214,6 +259,8 @@ export async function POST(request: Request) {
       skipped: skippedCount.val,
       duplicateCount: duplicates.length,
       duplicates: importMode === 'check' ? duplicates : [], // Only return duplicate details on check mode
+      validationErrors,          // Per-row required field violations
+      validationErrorCount: validationErrors.length,
     });
   } catch (error) {
     console.error('Import cardholders error:', error);
