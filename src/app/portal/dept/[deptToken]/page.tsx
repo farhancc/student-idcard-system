@@ -753,7 +753,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                     return <th key={tf.field}>{label}</th>;
                   })}
                   <th>Enrolled On</th>
-                  <th>Actions</th>
+                  <th className="sticky-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -851,15 +851,15 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                         );
                       })}
                       <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{new Date(ch.createdAt).toLocaleDateString()}</td>
-                      <td>
+                      <td className="sticky-actions">
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={() => { setPreviewCardholder(ch); setPreviewSide('front'); }} title="Preview ID Card">
                             <Eye size={14} style={{ color: 'var(--primary)' }} />
                           </button>
-                          <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEditModal(ch)}>
+                          <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEditModal(ch)} title="Edit Cardholder">
                             <Edit2 size={14} />
                           </button>
-                          <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => handleDeleteCardholder(ch.id)}>
+                          <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => handleDeleteCardholder(ch.id)} title="Delete Cardholder">
                             <Trash2 size={14} />
                           </button>
                         </div>

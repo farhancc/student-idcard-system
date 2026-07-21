@@ -210,6 +210,30 @@ p {
   background: rgba(255, 255, 255, 0.02);
 }
 
+/* Sticky Table Actions Column */
+.custom-table th.sticky-actions,
+.sticky-actions-head {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 3 !important;
+  background: #0c1c3c !important;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.custom-table td.sticky-actions,
+.sticky-actions-cell {
+  position: sticky !important;
+  right: 0 !important;
+  z-index: 2 !important;
+  background: #102650 !important;
+  box-shadow: -4px 0 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+.custom-table tr:hover td.sticky-actions,
+.custom-table tr:hover .sticky-actions-cell {
+  background: #152c5a !important;
+}
+
 /* Badge System */
 .badge {
   display: inline-flex;
