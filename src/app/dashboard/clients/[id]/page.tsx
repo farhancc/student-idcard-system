@@ -1751,22 +1751,73 @@ export default function ClientDetailsPage() {
           ) : (
             <div>
               {(() => {
-                const templatesToRender = clientTemplates.length > 0 ? clientTemplates : [{ id: 0, name: 'Default Template', frontFields: '[]', backFields: '[]' }];
+                const rawTemplates = clientTemplates.length > 0 ? clientTemplates : [{ id: 0, name: 'Default Template', frontFields: '[]', backFields: '[]' }];
                 
-                // Track cardholders processed by templates
+                // Group templates by normalized name to consolidate template updates/versions into a single table
+                const templateGroupsMap = new Map<string, {
+                  latestTemplate: any;
+                  allTemplateIds: Set<string | number>;
+                }>();
+
+                rawTemplates.forEach(tmpl => {
+                  const normName = (tmpl.name || 'Default Template').trim().toLowerCase();
+                  if (!templateGroupsMap.has(normName)) {
+                    templateGroupsMap.set(normName, {
+                      latestTemplate: tmpl,
+                      allTemplateIds: new Set([tmpl.id]),
+                    });
+                  } else {
+                    const existing = templateGroupsMap.get(normName)!;
+                    existing.allTemplateIds.add(tmpl.id);
+
+                    const curVer = Number(tmpl.version) || 0;
+                    const exVer = Number(existing.latestTemplate.version) || 0;
+                    const curTime = tmpl.updatedAt ? new Date(tmpl.updatedAt).getTime() : (tmpl.createdAt ? new Date(tmpl.createdAt).getTime() : 0);
+                    const exTime = existing.latestTemplate.updatedAt ? new Date(existing.latestTemplate.updatedAt).getTime() : (existing.latestTemplate.createdAt ? new Date(existing.latestTemplate.createdAt).getTime() : 0);
+                    const curId = Number(tmpl.id) || 0;
+                    const exId = Number(existing.latestTemplate.id) || 0;
+
+                    let isNewer = false;
+                    if (curVer !== exVer) {
+                      isNewer = curVer > exVer;
+                    } else if (curTime !== exTime) {
+                      isNewer = curTime > exTime;
+                    } else {
+                      isNewer = curId > exId;
+                    }
+
+                    if (isNewer) {
+                      existing.latestTemplate = tmpl;
+                    }
+                  }
+                });
+
+                const templateGroups = Array.from(templateGroupsMap.values());
                 const processedCardholderIds = new Set<number>();
 
-                const templateTables = templatesToRender.map(tmpl => {
+                const templateTables = templateGroups.map(group => {
+                  const tmpl = group.latestTemplate;
                   const tmplCardholders = filteredCardholders.filter(c => {
-                    const match = (c.resolvedTemplateId != null && tmpl.id != null && String(c.resolvedTemplateId) === String(tmpl.id)) || 
-                                  (c.templateName && tmpl.name && c.templateName.trim().toLowerCase() === tmpl.name.trim().toLowerCase()) || 
-                                  (!c.resolvedTemplateId && !c.templateName && templatesToRender.length === 1);
+                    const isIdMatch = c.resolvedTemplateId != null && (
+                      group.allTemplateIds.has(c.resolvedTemplateId) || 
+                      group.allTemplateIds.has(Number(c.resolvedTemplateId)) || 
+                      group.allTemplateIds.has(String(c.resolvedTemplateId))
+                    );
+                    const isNameMatch = c.templateName && tmpl.name && c.templateName.trim().toLowerCase() === tmpl.name.trim().toLowerCase();
+                    const isFallbackMatch = (!c.resolvedTemplateId || c.resolvedTemplateId === 0) && !c.templateName && templateGroups.length === 1;
+
+                    const match = Boolean(isIdMatch || isNameMatch || isFallbackMatch);
                     if (match) processedCardholderIds.add(c.id);
                     return match;
                   });
 
-                  if (filterTemplate && String(tmpl.id) !== filterTemplate && tmpl.name.toLowerCase() !== filterTemplate.toLowerCase()) {
-                    return null;
+                  if (filterTemplate) {
+                    const filterLower = filterTemplate.trim().toLowerCase();
+                    const matchId = Array.from(group.allTemplateIds).some(id => String(id).toLowerCase() === filterLower);
+                    const matchName = tmpl.name.trim().toLowerCase() === filterLower;
+                    if (!matchId && !matchName) {
+                      return null;
+                    }
                   }
 
                   if (tmplCardholders.length === 0) {
