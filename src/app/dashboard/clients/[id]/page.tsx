@@ -1758,8 +1758,8 @@ export default function ClientDetailsPage() {
 
                 const templateTables = templatesToRender.map(tmpl => {
                   const tmplCardholders = filteredCardholders.filter(c => {
-                    const match = c.resolvedTemplateId === tmpl.id || 
-                                  c.templateName === tmpl.name || 
+                    const match = (c.resolvedTemplateId != null && tmpl.id != null && String(c.resolvedTemplateId) === String(tmpl.id)) || 
+                                  (c.templateName && tmpl.name && c.templateName.trim().toLowerCase() === tmpl.name.trim().toLowerCase()) || 
                                   (!c.resolvedTemplateId && !c.templateName && templatesToRender.length === 1);
                     if (match) processedCardholderIds.add(c.id);
                     return match;
