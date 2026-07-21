@@ -99,6 +99,7 @@ model Cardholder {
   cardAsset    CardAsset?
   printRecords CardPrintRecord[]
   orderCards   OrderCardholder[]
+  values       CardholderValue[]
 
   @@unique([clientId, uniqueKey])
   @@index([pressId])
@@ -142,6 +143,7 @@ model CardTemplate {
   orders        CardOrder[]
   cardholders   Cardholder[]
   clientAssignments TemplateClientAssignment[]
+  fields        TemplateField[]
 
   @@map("card_templates")
 }
@@ -157,6 +159,55 @@ model TemplateClientAssignment {
 
   @@unique([templateId, clientId])
   @@map("template_client_assignments")
+}
+
+// ── TEMPLATE FIELDS (Normalized) ─────────────────────────────────────────────
+// Normalized replacement for frontFields/backFields JSON columns.
+// During double-write phase, both JSON and these rows are kept in sync.
+
+model TemplateField {
+  id            Int          @id @default(autoincrement())
+  templateId    Int          @map("template_id")
+  template      CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  field         String       // e.g. "name", "roll_number", "photo", "qr"
+  type          String       // "text" | "image" | "qr" | "barcode" | "id"
+  side          String       @default("front") // "front" | "back"
+  x             Float
+  y             Float
+  width         Float
+  height        Float
+  fontSize      Int?         @map("font_size")
+  fontWeight    String?      @default("normal") @map("font_weight")
+  fontFamily    String?      @map("font_family")
+  color         String?      @default("#000000")
+  align         String?      @default("left")   // "left" | "center" | "right"
+  verticalAlign String?      @default("top") @map("vertical_align") // "top" | "middle" | "bottom"
+  isRequired    Boolean      @default(false) @map("is_required")
+  prefix        String?      // label prefix shown on approval PDF
+  lineHeight    Float?       @default(1.2) @map("line_height")
+  sortOrder     Int          @default(0) @map("sort_order")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@unique([templateId, field, side])
+  @@index([templateId])
+  @@map("template_fields")
+}
+
+// ── CARDHOLDER VALUES (Normalized) ────────────────────────────────────────────
+// Normalized replacement for customFields JSON column on Cardholder.
+// During double-write phase, both JSON and these rows are kept in sync.
+
+model CardholderValue {
+  id           Int        @id @default(autoincrement())
+  cardholderId Int        @map("cardholder_id")
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  field        String     // maps to TemplateField.field
+  value        String     // text, URL, or encoded value
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([cardholderId, field])
+  @@index([cardholderId])
+  @@map("cardholder_values")
 }
 
 

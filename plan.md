@@ -7,11 +7,63 @@ Following the successful migration of the database schema and database-level syn
 ## 1. Upgrade the Canvas Template Editor
 **Objective:** Transition the visual editor at `/dashboard/templates` to perform direct CRUD on `TemplateField` records rather than manipulating a serialized JSON string.
 
-*   **Action Items:**
-    *   [ ] Refactor the frontend state in the canvas template editor to use a normalized structure corresponding to the `TemplateField` model.
-    *   [ ] Create endpoint wrappers/hooks to handle individual field coordinates updates on drag-end.
-    *   [ ] Add batch-save transactions to update multiple coordinate rows on the database when the user clicks "Save Layout".
-    *   [ ] Ensure backward-compatibility fallback handles local edits smoothly in offline/desktop mode.
+> **⚠️ Prerequisite — Schema Gap:** `TemplateField` and `CardholderValue` models do **not yet exist** in `prisma/schema.prisma`. Both must be created before any frontend refactor begins.
+
+### 1a. Database Schema — Add `TemplateField` & `CardholderValue`
+
+```prisma
+model TemplateField {
+  id          Int          @id @default(autoincrement())
+  templateId  Int          @map("template_id")
+  template    CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  field       String       // "name" | "roll_number" | "photo" | "qr" | etc.
+  type        String       // "text" | "image" | "qr" | "barcode" | "id"
+  side        String       @default("front") // "front" | "back"
+  x           Float
+  y           Float
+  width       Float
+  height      Float
+  fontSize    Int?         @map("font_size")
+  fontWeight  String?      @default("normal") @map("font_weight")
+  fontFamily  String?      @map("font_family")
+  color       String?      @default("#000000")
+  align       String?      @default("left")   // "left" | "center" | "right"
+  verticalAlign String?    @default("top") @map("vertical_align") // "top" | "middle" | "bottom"
+  isRequired  Boolean      @default(false) @map("is_required")
+  prefix      String?      // label prefix shown on approval PDF
+  lineHeight  Float?       @default(1.2) @map("line_height")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  @@unique([templateId, field, side])
+  @@index([templateId])
+  @@map("template_fields")
+}
+
+model CardholderValue {
+  id           Int        @id @default(autoincrement())
+  cardholderId Int        @map("cardholder_id")
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  field        String     // maps to TemplateField.field
+  value        String     // holds text, photo URLs, barcode values, etc.
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([cardholderId, field])
+  @@index([cardholderId])
+  @@map("cardholder_values")
+}
+```
+
+### 1b. Data Migration Script (Back-populate from JSON)
+- Parse each template's `frontFields` / `backFields` JSON strings → insert `TemplateField` rows.
+- Parse each cardholder's `customFields` JSON → insert `CardholderValue` rows.
+- Set `sides: 2` for any template with a non-null `backImageUrl`; otherwise `sides: 1`.
+- Auto-assign `category` based on template name keywords (e.g. name contains "certificate" → `CERTIFICATE`; "badge" → `BADGE`; else → `ID_CARD`).
+
+### 1c. API & Frontend Refactor (Action Items)
+- [ ] Refactor the frontend state in the canvas template editor to use a normalized structure corresponding to the `TemplateField` model.
+- [ ] Create endpoint wrappers/hooks to handle individual field coordinate updates on drag-end.
+- [ ] Add batch-save transactions to upsert multiple `TemplateField` rows on "Save Layout".
+- [ ] Ensure backward-compatibility fallback handles local edits smoothly in offline/desktop mode (keep JSON strings as secondary source of truth during transition).
 
 ---
 
@@ -20,204 +72,224 @@ Following the successful migration of the database schema and database-level syn
 
 *   **Action Items:**
     *   [ ] Build a column-mapping UI helper that lets users select how imported Excel headers map to template field definitions (e.g., matching "Name" or "Student Name" to the core `name` field).
-    *   [ ] Implement dynamic Zod validation generators that build validator schemas at runtime using database-defined `TemplateField` validations (e.g., checks for `isRequired`, maximum field length, and matching data types).
+    *   [ ] Implement dynamic Zod validation generators that build validator schemas at runtime using `TemplateField` records (e.g., checks for `isRequired`, maximum field length, and matching data types).
     *   [ ] Provide a clean user interface reporting validation errors per-row (e.g., "Row 15: Missing required field 'Blood Group'").
+    *   [ ] Support optional regex/pattern validation per-field (e.g., mobile number must be 10 digits, roll number must start with a letter).
 
 ---
 
 ## 3. Print Processing Queue & Batch Optimization
 **Objective:** Harden the rendering queue in the print engine for high-volume jobs to prevent server-side CPU spikes and query latency.
 
-*   **Action Items:**
-    *   [ ] Optimize the batch query layer using SQL joins in Prisma to fetch all `CardholderValue` and `TemplateField` records in a single round-trip before rendering.
-    *   [ ] **Print/Approval Sheet Size Configuration & Dropdown:**
-        *   When starting a print job (Production or Approval), add a **Sheet Size dropdown selector** with options:
-            *   `A4` (210.0mm × 297.0mm)
-            *   `A3` (297.0mm × 420.0mm)
-            *   `SRA3` (320.0mm × 450.0mm)
-            *   `13 × 19 inch` (330.2mm × 482.6mm)
-            *   `Custom Sheet Size` (enables inputs for width and height in mm).
-        *   **Default Sheet Size by Category:** Set the default sheet selection based on the template category:
-            *   *ID Card, Badge, Label, Tag, Sticker, Visitor Pass:* Defaults to `SRA3` or `13 × 19 inch` (sheet printing).
-            *   *Certificate, Letter:* Defaults to `A4` (usually printed 1-up on A4 sheets).
-            *   *Ticket, Card:* Defaults to `A3` (for multiple-up card printing).
-            *   *Other:* Defaults to `A4`.
-        *   **Proportionate Grid Compilation:**
-            *   Modify the PDF compile engine (e.g. PDFKit / Puppeteer PDF generator) to read the selected Sheet Size dimensions.
-            *   Perform automatic grid calculations to fit cards/templates:
-                *   `columns = Math.floor((sheetWidth - margins) / (cardWidth + horizontalGap))`
-                *   `rows = Math.floor((sheetHeight - margins) / (cardHeight + verticalGap))`
-            *   Tile cards proportionally onto the PDF page grid layout based on the calculated columns and rows, inserting page breaks automatically.
-        *   **Pre-Print Validation Flow (runs in order before generation starts):**
-            *   **Step 1 — Missing Field Check:**
-                *   Before anything else, scan **every cardholder record** in the batch and cross-reference their filled values against all `TemplateField` records marked as required.
-                *   Collect a list of all records with missing or empty required field values.
-                *   If **any records have missing fields**, block print and show a validation report modal:
-                    > ⚠️ **Missing Data Detected**
-                    > **{n} record(s)** have incomplete required fields. Fix them before printing.
+### 3a. Serverless Execution Timeout — Critical Constraint
+> **⚠️ Serverless Timeout Issue:** Next.js API routes on Vercel have strict execution limits (10–60s depending on plan). Rendering 100+ cards easily exceeds this.
+- **Web Portal Strategy:** PDF generation must be async — API enqueues the job (`PdfJob.status = "PENDING"`), returns job ID immediately, then a background worker processes it. Client polls `/api/jobs/[id]` for status and download URL.
+- **Electron Desktop App Strategy:** Provide a "Run Locally" option that bypasses server entirely — Electron generates PDFs directly from its own `card-renderer-client.ts` and saves to local disk. No timeout, no credit server roundtrip during rendering. Credits are still deducted via a server call before generation starts.
 
-                    | # | Cardholder Name | Missing Fields |
-                    |---|---|---|
-                    | 3 | John Doe | Photo, ID Number |
-                    | 7 | Jane Smith | Department |
+### 3b. Sheet Size Selector
+*   When starting a print job (Production or Approval), add a **Sheet Size dropdown** with:
+    *   `A4` (595.27 pt × 841.89 pt)
+    *   `A3` (841.89 pt × 1190.55 pt) ← current default
+    *   `SRA3` (907.09 pt × 1275.59 pt)
+    *   `13 × 19 inch` (936 pt × 1368 pt)
+    *   `Custom Sheet Size` (enables width + height inputs in mm, auto-converted to pt: `pt = mm * 2.8346`)
+*   **Default Sheet by Category:**
+    *   ID Card, Badge, Label, Tag, Sticker, Visitor Pass → `SRA3`
+    *   Certificate, Letter → `A4`
+    *   Ticket, Card → `A3`
+    *   Other → `A4`
+*   **Layout Spacing Defaults (standardize):**
+    *   Margins: `10mm` (28.35 pt) on all sides
+    *   Gap between cards: `2mm` (5.67 pt) horizontal and vertical
+    *   Bleed (optional): `0mm` default, configurable up to `3mm` (8.5 pt)
 
-                *   The modal provides two action options:
-                    *   **"Fix Records"** — Closes modal and takes the user to the cardholder data list, highlighting the flagged records in red.
-                    *   **"Skip & Print Anyway"** — Allows proceeding with missing fields left blank in the PDF (shows a warning label on those cards in the final PDF output).
-            *   **Step 2 — Empty Slot Check:**
-                *   After passing field validation (or the user has chosen to skip), pre-calculate `totalSlots` vs `totalCards`.
-                *   If `totalSlots > totalCards`, show the empty slot strategy modal (see above options).
-                *   If `totalSlots === totalCards`, skip the modal entirely.
-            *   **Step 3 — Generation Proceeds** once both checks are resolved.
+### 3c. Proportionate Grid Compilation
+*   Modify `ProductionPdfGenerator` to read the selected Sheet Size dimensions.
+*   Auto-calculate grid from:
+    ```
+    columns = Math.floor((sheetWidth - marginLeft - marginRight + colGap) / (cardWidth + colGap))
+    rows    = Math.floor((sheetHeight - marginTop - marginBottom + rowGap) / (cardHeight + rowGap))
+    cardsPerPage = columns * rows
+    ```
+*   For duplex (2-sided) templates: split the page into two halves (fronts top, backs bottom), add fold line, adjust row calculation per half.
+*   Tile cards proportionally; auto-insert page breaks.
 
+### 3d. Pre-Print Validation Flow (runs before PDF generation)
 
+**Step 1 — Missing Field Check:**
+- Scan every cardholder in the batch; cross-reference their `CardholderValue` rows (or `customFields` JSON) against all `TemplateField` records marked `isRequired: true`.
+- Collect all records with missing/empty required fields.
+- If any records have missing fields, **block print** and show a validation report modal:
 
+  > ⚠️ **Missing Data Detected**
+  > **{n} record(s)** have incomplete required fields. Fix them before printing.
 
+  | # | Cardholder Name | Missing Fields |
+  |---|---|---|
+  | 3 | John Doe | Photo, ID Number |
+  | 7 | Jane Smith | Department |
 
-    *   [ ] Implement a lightweight job status queue (using database polling or Upstash Redis) that updates progress bar values in the UI (e.g., "Generating PDF: 45% complete").
-    *   [ ] Integrate localized print queue scheduling for the Electron Desktop Client to stream buffers directly to local drives without memory leaks.
+- Modal options:
+    - **"Fix Records"** — Closes modal, takes user to cardholder list with flagged records highlighted in red.
+    - **"Skip & Print Anyway"** — Proceeds with missing fields left blank; shows a warning label on those cards in the final PDF output.
 
+**Step 2 — Empty Slot Check:**
+- Pre-calculate `totalSlots = cols × rows × totalPages` vs `totalCards`.
+- If `totalSlots > totalCards`, show empty slot strategy modal:
+    - **"Leave Blank"** — Empty slots print as white space (safe for cut-and-stack printing).
+    - **"Repeat Last Card"** — Fill remaining slots by repeating the last cardholder record.
+    - **"Repeat First Card"** — Fill remaining slots with first cardholder (useful for calibration cards).
+- If `totalSlots === totalCards`, skip modal entirely.
+
+**Step 3 — Generation Proceeds** once both checks are resolved.
+
+### 3e. Job Queue & Progress Tracking
+- [ ] Implement lightweight job status polling (Upstash Redis or database polling every 2s) that updates progress bar in UI (e.g., "Generating PDF: 45% complete").
+- [ ] Integrate localized print queue scheduling for Electron Desktop Client to stream PDF buffers directly to local drives without memory leaks.
+- [ ] Add `PdfJob.metadata` fields: `{ sheetSize, bleed, cropMarks, foldLine, colGap, rowGap, emptySlotStrategy }` so jobs are reproducible.
 
 ---
 
 ## 4. Database Cleanup & Column Deprecation
 **Objective:** Safely decommission legacy JSON fields to ensure schema cleanliness.
 
-*   **Action Items:**
-    *   [ ] Add migration scripts to drop `frontFields`, `backFields` in the `CardTemplate` table, and `customFields` in the `Cardholder` table after verifying Phase 2 UI and validation runs correctly.
-    *   [ ] Remove unused legacy JSON parsing helpers from utility functions.
+> **⚠️ Do NOT do this until Sections 1 & 2 are verified stable in production.**
+
+### Migration Strategy (3 Phases):
+1. **Back-Populate (Section 1b):** Run the migration script to hydrate `TemplateField` and `CardholderValue` from existing JSON.
+2. **Double-Write Phase:** All API endpoints write to BOTH the JSON strings (legacy fallback) and the new relational rows simultaneously. Read from new rows. Verify for 2–4 weeks.
+3. **Deprecation Phase:** Once confirmed stable, run migration to drop `frontFields`, `backFields` from `CardTemplate` and `customFields` from `Cardholder`. Remove JSON parsing helpers from utility functions.
 
 ---
 
-## 5. Template Categories & Smart Fields
-**Objective:** Introduce a `category` field for templates (defaulting to `OTHER` if omitted or unset) to classify templates by document type, and suggest smart/typical variable fields dynamically in the Template Editor.
+## 5. Template Categories & Smart Fields ✅ COMPLETE
+**Objective:** Introduce a `category` field for templates and suggest smart/typical variable fields dynamically in the Template Editor.
 
-*   **Action Items:**
-    *   [ ] **Database Schema Update:** 
-        *   Add `category` (string, default `"OTHER"`) to the `CardTemplate` model in `prisma/schema.prisma`.
-        *   Add `sides` (Int, default 1) to the `CardTemplate` model to track single-sided (1) vs double-sided (2) templates.
-        *   **Multi-Client Assignment Schema:** Create a join model `TemplateClientAssignment` to allow assigning a template to multiple clients:
-            ```prisma
-            model TemplateClientAssignment {
-              id         Int          @id @default(autoincrement())
-              templateId Int          @map("template_id")
-              template   CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-              clientId   Int          @map("client_id")
-              client     Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+**Status: Fully implemented and pushed.**
+- ✅ DB migration: `category`, `sides`, marketplace fields, `TemplateClientAssignment` join table, `promoCredits` on `Press`
+- ✅ `templateSchema` updated with `category`, `sides`, `clientIds` validation
+- ✅ `/api/templates` GET/POST/PUT handles client assignment sync and version inheritance
+- ✅ Frontend: Category dropdown (auto-fills preset dimensions), Sides toggle (hides back-image upload for 1-sided), Smart Suggestions panel, Multi-client pill picker, Category filter chips, Color-coded category + sides badges on template cards
 
-              @@unique([templateId, clientId])
-              @@map("template_client_assignments")
-            }
-            ```
-    *   [ ] **Request Validation Update:** Update `templateSchema` in `src/lib/schemas.ts` to include:
-        *   The `category` field with allowed enums: `ID_CARD`, `CERTIFICATE`, `BADGE`, `LABEL`, `TICKET`, `VISITOR_PASS`, `LETTER`, `CARD`, `TAG`, `STICKER`, `OTHER`.
-        *   The `sides` field (integer, allowed values `1` or `2`, default `1`).
-        *   The `clientIds` field (array of integers) to save assignments in bulk.
-    *   [ ] **API Route Implementation:**
-        *   Update POST and PUT handlers in `/api/templates` to process and synchronize client assignments in the `TemplateClientAssignment` table.
-        *   Update GET handlers in `/api/templates` to return the assigned client IDs for each template.
-    *   [ ] **Frontend Category Selector, Default Dimensions & Badges:**
-        *   Add a category selection dropdown in the template creation modal/settings, defaulting to "Other".
-        *   **Multi-Client Assignment UI:** Replace the single client dropdown with a multi-select client picker labeled **"Assign to Clients"** (listing all clients of the press, letting the user check/uncheck multiple clients).
-        *   **Sides Selection Toggle:** Add a radio toggle in the template creation form asking: **"Sides: Single-Sided (1 Side)"** or **"Double-Sided (2 Sides)"**.
-            *   If **Single-Sided (1 Side)** is selected: Hide the file upload input for the back background template.
-            *   If **Double-Sided (2 Sides)** is selected: Require background template uploads for both Front and Back sides.
-        *   **Default Dimensions mapping (at 300 DPI / mm equivalent):** When a user selects a category, automatically populate the default width and height inputs with both pixel and millimeter presets.
-        *   **Millimeter (mm) Two-Way Input Binding:**
-            *   Add dual input fields in the template creation form: Width (px/mm) and Height (px/mm).
-            *   Implement live two-way synchronization:
-                *   Changing pixels calculates mm: `mm = (px * 25.4) / 300` (rounded to 1 decimal place).
-                *   Changing mm calculates pixels: `px = Math.round((mm * 300) / 25.4)`.
-        *   Display color-coded badges on templates in the dashboard based on their category.
-        *   Add tabs or filter dropdowns on `/dashboard/templates` to view templates by category and assigned client.
-    *   [ ] **Client Portal Link Template Filter:**
-        *   On the Client Page (`/dashboard/clients`), update the **"Create Portal Link"** (Client Portal Share) dialog.
-        *   In the Template dropdown list, filter options dynamically to **only display templates assigned to that specific client** (via `TemplateClientAssignment`).
-
-
-    *   [ ] **Smart Suggestion Helper:** In the Template Editor coordinate config side panel, show standard recommended fields based on the selected category:
-        *   *ID Card:* Photo, Name, ID Number, Department, QR Code
-        *   *Certificate:* Name, Course, Grade, Date, Signature
-        *   *Badge:* Name, Role, Company, QR Code
-        *   *Label:* Product Name, Barcode, Batch, Price
-        *   *Ticket:* Name, Seat, Date, QR Code
-        *   *Visitor Pass:* Name, Company, Validity, QR Code
-        *   *Letter:* Name, Address, Account Number
-        *   *Card:* Name, Membership ID, Expiry
-        *   *Tag:* Serial Number, Barcode, QR Code
-        *   *Sticker:* Product Code, Batch, QR Code
-        *   *Other:* (No automatic suggests; custom fields only)
-    *   [ ] **Migration Script:** Create a simple script to default any existing templates to `OTHER` or check their name keywords to guess their initial category (e.g., if name contains "certificate", set to `CERTIFICATE`; if name contains "badge", set to `BADGE`, else default to `ID_CARD`/`OTHER`).
-        *   Set `sides: 2` if an existing template has a non-null `backImageUrl`, otherwise set `sides: 1`.
-
+### 5a. Remaining Items
+- [ ] **Client Portal Link Template Filter:** On the Client Page (`/dashboard/clients`), update the "Create Portal Link" dialog so the Template dropdown **only shows templates assigned to that specific client** (via `TemplateClientAssignment`). Currently shows all press templates.
+- [ ] **Migration Script:** Script to back-populate `category` and `sides` for all existing templates from name keywords and `backImageUrl` presence.
 
 ---
 
 ## 6. Template Marketplace & Starter Templates
-**Objective:** Allow presses to publish their templates with mapped layouts to a public marketplace for others to purchase using credits, featuring social options like likes and content reports.
+**Objective:** Allow presses to publish their templates to a public marketplace for others to purchase using credits.
+
+> **Schema Status:** `isPublic`, `price`, `likes`, `reports`, `isModerated`, `cdrFileUrl`, `aiFileUrl`, `psdFileUrl`, `pdfFileUrl` fields are already added to `CardTemplate`. `promoCredits` is on `Press`. Migration is applied. UI and API logic remain to be built.
+
+### 6a. Credit System
+*   On press signup → `promoCredits = 1000`, `credits = 0`.
+*   **Print Generation Credit Costs:**
+    *   *Production PDF:* Cost per card per category, configured by Super Admin in `SystemSetting` (e.g. key `cost_production_ID_CARD = 1`).
+    *   *Approval PDF:* Universal flat cost in `SystemSetting` key `cost_approval_universal` (default `0`).
+*   Credit deduction order: consume `promoCredits` first, then `credits`.
+*   **Template marketplace purchases:** Only paid `credits` accepted (not `promoCredits`).
+
+### 6b. Seller Publish Action & Listing Fee
+- [ ] Super Admin sets listing fee in `SystemSetting` key `marketplace_listing_fee` (default `50` credits).
+- [ ] Add "Sell Template" button on template cards.
+- [ ] Flow: Set price → attach source files (`.cdr`, `.ai`, `.pdf`, `.psd`) → verify press has enough credits → deduct listing fee → mark `isPublic: true`.
+
+### 6c. Marketplace UI & Filters
+- [ ] "Starter Templates" tab in dashboard (currently shows global `pressId: null` templates).
+- [ ] Display: credit price, background preview, category, total likes, file format indicators (`CDR`, `AI`, `PDF`, `PSD`).
+- [ ] Like and Report buttons on each template card.
+- [ ] **Filters:** Category, File Format, Fields Included (QR, barcode, photo), Cost (Free / Paid, Low→High).
+
+### 6d. Purchase API `/api/templates/purchase`
+- [ ] POST endpoint that:
+    1. Verifies buyer press has enough paid `credits >= template.price`.
+    2. Deducts credits from buyer, credits seller.
+    3. Clones template layout (background images, dimensions, source file URLs).
+    4. Copies all `TemplateField` rows to the new buyer-press template.
+
+### 6e. Secure Download Gateway `/api/templates/download`
+- [ ] Never expose raw cloud storage URLs in UI (show only format indicators e.g. "CorelDRAW Attached").
+- [ ] GET `/api/templates/download?templateId={id}&format={cdr|ai|pdf|psd}`:
+    *   Verify calling press owns or has purchased the template.
+    *   Retrieve file URL from DB internally and stream/redirect with signed headers.
+- [ ] On purchase completion:
+    *   Web: trigger browser download prompts for all available source files.
+    *   Electron: auto-download files to `~/Downloads/IDexo/` and show toast notification.
+
+### 6f. Super Admin Moderation
+- [ ] Template Moderation tab in `/superadmin` — list all public templates sorted by high report count first.
+- [ ] Hide/Unhide toggle (sets `isModerated`) and Delete button.
+- [ ] Filter out `isModerated: true` templates from public marketplace feed.
+
+---
+
+## 7. Client Portal — Template Filter by Assignment (NEW)
+**Objective:** When creating a portal link for a client, only show that client's assigned templates.
 
 *   **Action Items:**
-    *   [ ] **Database Schema Expansion:**
-        *   Extend `Press` in `prisma/schema.prisma` with:
-            *   `promoCredits` (Int, default 0) @map("promo_credits") - Track free promotional/trial credits.
-        *   Extend `CardTemplate` in `prisma/schema.prisma` with:
-            *   `isPublic` (Boolean, default false) - Whether listed on the marketplace.
-            *   `price` (Int, default 0) - Credit price set by the seller.
-            *   `likes` (Int, default 0) - Likes counter.
-            *   `reports` (Int, default 0) - Reports counter.
-            *   `cdrFileUrl` (String, optional) @map("cdr_file_url") - Link to attached CorelDRAW file.
-            *   `aiFileUrl` (String, optional) @map("ai_file_url") - Link to attached Adobe Illustrator file.
-            *   `psdFileUrl` (String, optional) @map("psd_file_url") - Link to attached Photoshop file.
-            *   `pdfFileUrl` (String, optional) @map("pdf_file_url") - Link to attached print-ready PDF template source file.
-    *   [ ] **Promo vs. Paid Credit Handling & Job Costs:**
-        *   When a press signs up, set `promoCredits` to 1000 and `credits` (paid) to 0.
-        *   **Print Generation Credit Costs:**
-            *   *Production PDF Cost (Per Category):* Super Admin configures the credit cost for generating a production PDF **per category** (stored in `SystemSetting` keys, e.g., `cost_production_ID_CARD = 1`, `cost_production_CERTIFICATE = 5`, etc.).
-            *   *Approval PDF Cost (Universal):* Super Admin configures **a single universal flat credit cost** for generating approval/draft PDFs across all categories (stored in `SystemSetting` under key `cost_approval_universal`, e.g., default `0` or `1` credit).
-        *   For print processing PDF generation, consumption logic calculates total cost (cost per card * card count), checks, and deducts from `promoCredits` first, then remaining from `credits`.
-        *   For template purchases in the marketplace, **only paid `credits` can be spent** (i.e. validation rejects purchase if `Press.credits < template.price`, ignoring `promoCredits`).
+    *   [ ] On the Create Portal Link dialog at `/dashboard/clients/[id]`, query `TemplateClientAssignment` to filter the template dropdown to only templates assigned to that client.
+    *   [ ] If no templates are assigned to the client, show a prompt: "No templates assigned to this client. Assign templates first in Template Manager."
+    *   [ ] On the portal share detail view, display which template is linked and allow re-assignment to any template assigned to that client.
 
-    *   [ ] **Seller Publish Action & Listing Fee:**
-        *   Super Admin sets the public template listing fee (stored in `SystemSetting` table under key `marketplace_listing_fee`, e.g., default `50` credits).
-        *   Add a "Sell Template" option on templates.
-        *   Prompt user to configure a pricing model (credits required to duplicate) and attach raw design source files (`.cdr`, `.ai`, `.pdf`, `.psd`).
-        *   Before publishing, verify user has enough total/available credits to pay the `marketplace_listing_fee`.
-        *   Deduct the listing fee credits from the seller press, mark template as public, and save the source file URLs.
-    *   [ ] **Marketplace/Starter Templates Library UI & Advanced Filters:**
-        *   Build a "Starter Templates" view in the dashboard where presses can browse publicly shared templates.
-        *   Display credit prices, name, background preview, category, total likes, and indicators showing which source files (`CDR`, `AI`, `PDF`, `PSD`) are included.
-        *   Implement **Like** and **Report** buttons on each template card.
-        *   **Advanced Filtering Controls:**
-            *   *Category Filter:* Filter by template category/document type (e.g., ID Card, Certificate, Label).
-            *   *File Format Filter:* Filter by available raw design source attachments (e.g., show only templates containing `CorelDRAW (.cdr)` or `Illustrator (.ai)` source files).
-            *   *Fields Included Filter:* Filter templates by whether they map specific field types (e.g., show only templates with `Barcode`, `QR Code`, or `Photo` fields).
-            *   *Cost Filter:* Toggle between "Free" (0 credits) and "Paid", or sort templates by price (Low to High / High to Low).
+---
 
-    *   [ ] **API Transaction for Purchases:**
-        *   Implement a POST endpoint `/api/templates/purchase` that:
-            1. Verifies the buyer press has enough paid credits (`Press.credits >= template.price`).
-            2. Deducts the credits from the buyer press.
-            3. Adds the credits to the seller press.
-            4. Clones the template layout (background images, dimensions, source file URLs) and maps all associated `TemplateField` records to the new buyer press.
-    *   [ ] **Purchased Template Downloads & Security Gateway:**
-        *   **Raw Link Masking:** In the Template creation, editing, and listing UIs, never expose or display the direct cloud/S3/local storage links where files are saved. Show only friendly indicators (e.g. "CorelDRAW File Attached" status indicators or file-type icons) instead of the actual storage URLs.
-        *   **Secure Download Gateway:** Implement a GET endpoint `/api/templates/download?templateId={id}&format={cdr|ai|pdf|psd}`.
-            *   This gateway verifies the calling press actually owns or has purchased the template.
-            *   It dynamically retrieves the file URL internally from the database and streams or redirects to the file with signed headers, ensuring the raw URL is never exposed to public view or browser inspect tools.
-        *   Once purchased, enable download buttons pointing to this gateway for the attached raw design source files (`.cdr`, `.ai`, `.pdf`, `.psd`) inside the buyer's template view.
-        *   **Automatic Purchase-triggered Downloads:** When the purchase API completes successfully, the client application will automatically trigger downloads from the secure gateway for all attached source files:
-            *   *Web Portal:* Triggers native browser download prompts/links for each available file format using the secure gateway endpoint.
-            *   *Electron Desktop Client:* Automatically downloads the files via the secure gateway in the background and saves them directly to the user's local `Downloads/IDexo` directory, showing a toast notification when finished.
+## 8. Analytics & Reporting Dashboard (NEW)
+**Objective:** Give press operators clear visibility into print volumes, credit usage, and client activity.
 
+*   **Action Items:**
+    *   [ ] **Press Dashboard Widgets:**
+        *   Cards printed this month (from `CardPrintRecord`)
+        *   Credits remaining (paid + promo, with split)
+        *   Orders by status breakdown (DRAFT / APPROVAL / PRINTING / DELIVERED pie chart)
+        *   Top clients by card volume
+    *   [ ] **Per-Order Analytics:**
+        *   Cardholder completion rate (how many have all required fields filled)
+        *   Cards printed vs. not printed within an order
+    *   [ ] **Credit Usage Log:** Timeline of credit deductions with job references (`PdfJob.id`) and amounts.
+    *   [ ] **Super Admin Analytics:**
+        *   Revenue generated across all presses
+        *   Marketplace transaction volume
+        *   Most active presses and most downloaded templates
 
-    *   [ ] **Super Admin Moderation Control:**
-        *   Add `isModerated` (Boolean, default false) to the `CardTemplate` model in `prisma/schema.prisma` to allow administrative hide/suspension.
-        *   Build a **Template Moderation** tab inside the Super Admin panel (`/super-admin`).
-        *   Display all template listings in a list, sorted by high report counts first.
-        *   Implement **Hide/Unhide** toggles (setting `isModerated` to true/false) and **Delete** buttons on the admin dashboard.
-        *   Filter out any templates where `isModerated: true` from the public "Starter Templates" marketplace feed for regular presses.
+---
 
+## 9. Cardholder Bulk Operations (NEW)
+**Objective:** Improve data management efficiency for large client rosters.
 
+*   **Action Items:**
+    *   [ ] **Bulk Delete:** Select multiple cardholders and delete them in a single confirmed action.
+    *   [ ] **Bulk Template Reassignment:** Select multiple cardholders and change their assigned template (e.g., when a department switches from one card design to another).
+    *   [ ] **Bulk Status Toggle:** Activate / Deactivate multiple cardholders at once (e.g., graduated students, resigned employees).
+    *   [ ] **Export to Excel:** Export all cardholders in a client (including all `customFields` values) to a structured `.xlsx` file. Columns should map to template field names.
+    *   [ ] **Duplicate Detection on Import:** Before committing CSV/Excel imports, compare `uniqueKey` against existing records and display a merge/skip/overwrite prompt for duplicates.
 
+---
 
+## 10. Enrollment Portal Improvements (NEW)
+**Objective:** Harden the cardholder self-enrollment portal for production use.
 
+*   **Action Items:**
+    *   [ ] **Photo Capture via Webcam:** Add a live camera capture option inside the enrollment form so cardholders can take a photo directly in the browser (using `MediaDevices.getUserMedia`), without needing to upload a file.
+    *   [ ] **Form Validation UX:** Show inline real-time validation on required fields (not just on submit). Highlight empty required fields in red before submission.
+    *   [ ] **Enrollment Confirmation Email:** After successful submission, send the cardholder a confirmation email with their submitted details.
+    *   [ ] **Multi-Language Support:** Allow portal links to display in a configurable language (English, Hindi, Arabic, Tamil, etc.), with labels and prompts translating accordingly.
+    *   [ ] **Enrollment Rate Limiting:** Rate-limit enrollment submissions per IP to prevent spam submissions.
+
+---
+
+## Implementation Priority Order
+
+| Priority | Section | Estimated Effort |
+|---|---|---|
+| 🔴 Critical | **1a+1b** — TemplateField/CardholderValue schema + migration | High |
+| 🔴 Critical | **3a** — Fix serverless timeout via async job pattern | Medium |
+| 🟠 High | **3b+3c+3d** — Sheet Size selector + Pre-print validation modal | High |
+| 🟠 High | **2** — Dynamic Roster Validation Engine | High |
+| 🟡 Medium | **5a** — Client portal template filter by assignment | Low |
+| 🟡 Medium | **7** — Client Portal template filter in portal link dialog | Low |
+| 🟡 Medium | **6a–6f** — Marketplace full implementation | Very High |
+| 🟢 Low | **8** — Analytics Dashboard | Medium |
+| 🟢 Low | **9** — Bulk Cardholder Operations | Medium |
+| 🟢 Low | **10** — Enrollment Portal improvements | Medium |
+| ⚪ Last | **4** — JSON Column Deprecation | Low (after 1+2 stable) |
