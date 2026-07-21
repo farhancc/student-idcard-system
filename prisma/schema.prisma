@@ -18,6 +18,7 @@ model Press {
   plan      String   @default("BASIC") // BASIC | PRO | ENTERPRISE
   isActive         Boolean   @default(true)
   credits          Int       @default(0)
+  promoCredits     Int       @default(0) @map("promo_credits")
   trialEndsAt      DateTime? @map("trial_ends_at")
   stripeCustomerId String?   @map("stripe_customer_id")
   stripeSubId      String?   @map("stripe_sub_id")
@@ -71,6 +72,7 @@ model Client {
   cardholders  Cardholder[]
   orders       CardOrder[]
   serialCtrs   CardSerialCounter[]
+  templateAssignments TemplateClientAssignment[]
 
   @@map("clients")
 }
@@ -121,6 +123,17 @@ model CardTemplate {
   backOriginalUrl  String? @map("back_original_url")         // Original PDF/SVG on Cloudinary (for Electron renderer fallback)
   frontFields     String   @map("front_fields") // JSON coordinate map
   backFields      String   @default("[]") @map("back_fields") // JSON coordinate map
+  category        String   @default("OTHER") // ID_CARD | CERTIFICATE | BADGE | LABEL | TICKET | VISITOR_PASS | LETTER | CARD | TAG | STICKER | OTHER
+  sides           Int      @default(1) // 1 = single-sided, 2 = double-sided
+  isPublic        Boolean  @default(false) @map("is_public")
+  price           Int      @default(0) // marketplace credit price
+  likes           Int      @default(0)
+  reports         Int      @default(0)
+  isModerated     Boolean  @default(false) @map("is_moderated")
+  cdrFileUrl      String?  @map("cdr_file_url")
+  aiFileUrl       String?  @map("ai_file_url")
+  psdFileUrl      String?  @map("psd_file_url")
+  pdfFileUrl      String?  @map("pdf_file_url")
   version         Int      @default(1)
   parentId        Int?     @map("parent_id") // Reference to parent template version
   isLatest        Boolean  @default(true) @map("is_latest")
@@ -128,8 +141,22 @@ model CardTemplate {
 
   orders        CardOrder[]
   cardholders   Cardholder[]
+  clientAssignments TemplateClientAssignment[]
 
   @@map("card_templates")
+}
+
+// ── TEMPLATE ↔ CLIENT ASSIGNMENTS ────────────────────────────────────────────
+
+model TemplateClientAssignment {
+  id         Int          @id @default(autoincrement())
+  templateId Int          @map("template_id")
+  template   CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  clientId   Int          @map("client_id")
+  client     Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, clientId])
+  @@map("template_client_assignments")
 }
 
 

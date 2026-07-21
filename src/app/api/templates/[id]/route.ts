@@ -63,7 +63,7 @@ export async function PUT(
       return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = result.data;
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId, category, sides, clientIds } = result.data;
 
     // 1. Transaction to handle versioning
     const newTemplate = await prisma.$transaction(async (tx) => {
@@ -72,7 +72,7 @@ export async function PUT(
         data: { isLatest: false },
       });
 
-      return tx.cardTemplate.create({
+      const created = await tx.cardTemplate.create({
         data: {
           pressId,
           clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
@@ -85,11 +85,38 @@ export async function PUT(
           backOriginalUrl: backOriginalUrl !== undefined ? backOriginalUrl : oldTemplate.backOriginalUrl,
           frontFields: frontFields || oldTemplate.frontFields,
           backFields: backFields || oldTemplate.backFields,
+          category: category || (oldTemplate as any).category || 'OTHER',
+          sides: sides || (oldTemplate as any).sides || 1,
           version: oldTemplate.version + 1,
           parentId: oldTemplate.id,
           isLatest: true,
         },
       });
+
+      // Sync client assignments if provided
+      if (clientIds !== undefined) {
+        // Delete old assignments for the new template (inherited from parent won't exist)
+        await tx.templateClientAssignment.deleteMany({ where: { templateId: created.id } });
+        if (clientIds.length > 0) {
+          await tx.templateClientAssignment.createMany({
+            data: clientIds.map((cid) => ({ templateId: created.id, clientId: cid })),
+            skipDuplicates: true,
+          });
+        }
+      } else {
+        // Copy parent's client assignments to the new version
+        const parentAssignments = await tx.templateClientAssignment.findMany({
+          where: { templateId: oldTemplate.id },
+        });
+        if (parentAssignments.length > 0) {
+          await tx.templateClientAssignment.createMany({
+            data: parentAssignments.map((a) => ({ templateId: created.id, clientId: a.clientId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      return created;
     });
 
     // 2. Mark any cached CardAssets as stale

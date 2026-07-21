@@ -104,6 +104,13 @@ export type UpdateClientInput = z.infer<typeof updateClientSchema>;
 
 // ── Templates ─────────────────────────────────────────────────────────────────
 
+export const TEMPLATE_CATEGORIES = [
+  'ID_CARD', 'CERTIFICATE', 'BADGE', 'LABEL', 'TICKET',
+  'VISITOR_PASS', 'LETTER', 'CARD', 'TAG', 'STICKER', 'OTHER',
+] as const;
+
+export type TemplateCategory = typeof TEMPLATE_CATEGORIES[number];
+
 export const templateSchema = z.object({
   name: z.string({ message: 'Template name is required' }).min(1, 'Template name is required').max(150),
   cardWidth: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
@@ -115,6 +122,9 @@ export const templateSchema = z.object({
   frontFields: z.string().max(10 * 1024 * 1024).optional().or(z.array(z.any())).transform(val => typeof val === 'string' ? val : JSON.stringify(val)),
   backFields: z.string().max(10 * 1024 * 1024).optional().or(z.array(z.any())).transform(val => typeof val === 'string' ? val : JSON.stringify(val)),
   clientId: z.union([z.number(), z.string()]).transform(val => val ? Number(val) : null).nullable().optional(),
+  category: z.enum(TEMPLATE_CATEGORIES).optional().default('OTHER'),
+  sides: z.union([z.literal(1), z.literal(2)]).optional().default(1),
+  clientIds: z.array(z.union([z.number(), z.string()]).transform(val => Number(val))).optional(),
 });
 
 export type TemplateInput = z.infer<typeof templateSchema>;

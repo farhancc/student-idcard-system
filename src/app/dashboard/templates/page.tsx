@@ -1,11 +1,75 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
 import { computeYOffsets, wrapWords } from '@/lib/pdf/card-renderer-client';
+
+const TEMPLATE_CATEGORIES = [
+  'ID_CARD', 'CERTIFICATE', 'BADGE', 'LABEL', 'TICKET',
+  'VISITOR_PASS', 'LETTER', 'CARD', 'TAG', 'STICKER', 'OTHER',
+] as const;
+
+type TemplateCategory = typeof TEMPLATE_CATEGORIES[number];
+
+const CATEGORY_LABELS: Record<TemplateCategory, string> = {
+  ID_CARD: 'ID Card',
+  CERTIFICATE: 'Certificate',
+  BADGE: 'Badge',
+  LABEL: 'Label',
+  TICKET: 'Ticket',
+  VISITOR_PASS: 'Visitor Pass',
+  LETTER: 'Letter',
+  CARD: 'Card',
+  TAG: 'Tag',
+  STICKER: 'Sticker',
+  OTHER: 'Other',
+};
+
+const CATEGORY_COLORS: Record<TemplateCategory, { bg: string; color: string; border: string }> = {
+  ID_CARD:      { bg: 'rgba(79,70,229,0.18)',  color: '#818cf8', border: 'rgba(79,70,229,0.4)' },
+  CERTIFICATE:  { bg: 'rgba(245,158,11,0.18)', color: '#fbbf24', border: 'rgba(245,158,11,0.4)' },
+  BADGE:        { bg: 'rgba(16,185,129,0.18)', color: '#34d399', border: 'rgba(16,185,129,0.4)' },
+  LABEL:        { bg: 'rgba(59,130,246,0.18)', color: '#60a5fa', border: 'rgba(59,130,246,0.4)' },
+  TICKET:       { bg: 'rgba(236,72,153,0.18)', color: '#f472b6', border: 'rgba(236,72,153,0.4)' },
+  VISITOR_PASS: { bg: 'rgba(20,184,166,0.18)', color: '#2dd4bf', border: 'rgba(20,184,166,0.4)' },
+  LETTER:       { bg: 'rgba(107,114,128,0.2)', color: '#9ca3af', border: 'rgba(107,114,128,0.4)' },
+  CARD:         { bg: 'rgba(239,68,68,0.18)',  color: '#f87171', border: 'rgba(239,68,68,0.4)' },
+  TAG:          { bg: 'rgba(251,191,36,0.18)', color: '#fde68a', border: 'rgba(251,191,36,0.4)' },
+  STICKER:      { bg: 'rgba(167,139,250,0.2)', color: '#c4b5fd', border: 'rgba(167,139,250,0.4)' },
+  OTHER:        { bg: 'rgba(255,255,255,0.06)', color: '#94a3b8', border: 'rgba(255,255,255,0.15)' },
+};
+
+// Default dimensions at 300 DPI for each category (width x height in pixels)
+const CATEGORY_DIMENSIONS: Record<TemplateCategory, { w: number; h: number; label: string }> = {
+  ID_CARD:      { w: 1013, h: 638,  label: '85.6 × 54 mm (CR80)' },
+  CERTIFICATE:  { w: 3508, h: 2480, label: '297 × 210 mm (A4 Landscape)' },
+  BADGE:        { w: 756,  h: 1134, label: '64 × 96 mm' },
+  LABEL:        { w: 945,  h: 472,  label: '80 × 40 mm' },
+  TICKET:       { w: 2244, h: 945,  label: '190 × 80 mm' },
+  VISITOR_PASS: { w: 1013, h: 638,  label: '85.6 × 54 mm (CR80)' },
+  LETTER:       { w: 2480, h: 3508, label: '210 × 297 mm (A4 Portrait)' },
+  CARD:         { w: 1063, h: 688,  label: '90 × 58 mm' },
+  TAG:          { w: 591,  h: 945,  label: '50 × 80 mm' },
+  STICKER:      { w: 945,  h: 945,  label: '80 × 80 mm' },
+  OTHER:        { w: 673,  h: 1039, label: '57 × 88 mm' },
+};
+
+const SMART_SUGGESTIONS: Record<TemplateCategory, string[]> = {
+  ID_CARD:      ['photo', 'name', 'id', 'department', 'qr'],
+  CERTIFICATE:  ['name', 'course', 'grade', 'date', 'signature'],
+  BADGE:        ['name', 'role', 'company', 'qr'],
+  LABEL:        ['productName', 'barcode', 'batch', 'price'],
+  TICKET:       ['name', 'seat', 'date', 'qr'],
+  VISITOR_PASS: ['name', 'company', 'validity', 'qr'],
+  LETTER:       ['name', 'address', 'accountNumber'],
+  CARD:         ['name', 'membershipId', 'expiry'],
+  TAG:          ['serialNumber', 'barcode', 'qr'],
+  STICKER:      ['productCode', 'batch', 'qr'],
+  OTHER:        [],
+};
 
 const getOptimizedImageUrl = (url: string) => {
   if (!url) return '';
@@ -117,6 +181,13 @@ export default function TemplatesPage() {
   const [error, setError] = useState('');
   const [uploadingFront, setUploadingFront] = useState(false);
   const [uploadingBack, setUploadingBack] = useState(false);
+  // Category, sides, multi-client
+  const [category, setCategory] = useState<TemplateCategory>('OTHER');
+  const [sides, setSides] = useState<1 | 2>(1);
+  const [selectedClientIds, setSelectedClientIds] = useState<number[]>([]);
+  const [clients, setClients] = useState<any[]>([]);
+  // Category filter for the list view
+  const [filterCategory, setFilterCategory] = useState<TemplateCategory | 'ALL'>('ALL');
 
   // Grid overlay state
   const [showGrid, setShowGrid] = useState(false);
@@ -211,9 +282,20 @@ export default function TemplatesPage() {
     }
   };
 
+  const fetchClients = async () => {
+    try {
+      const res = await fetch('/api/clients');
+      if (res.ok) {
+        const json = await res.json();
+        setClients(json.clients || []);
+      }
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     fetchTemplates();
     fetchFonts();
+    fetchClients();
   }, []);
 
   // Load custom fonts in browser for real-time designer preview
@@ -2171,6 +2253,9 @@ export default function TemplatesPage() {
           backOriginalUrl: backOriginalUrl || null,
           frontFields: JSON.stringify(frontFields),
           backFields: JSON.stringify(backFields),
+          category,
+          sides,
+          clientIds: selectedClientIds,
         }),
       });
 
@@ -2200,6 +2285,9 @@ export default function TemplatesPage() {
       setBackWebUrl('');
       setFrontFields([]);
       setBackFields([]);
+      setCategory('OTHER');
+      setSides(1);
+      setSelectedClientIds([]);
       setShowForm(false);
       setEditingTemplateId(null);
       setTestData({});
@@ -2228,6 +2316,9 @@ export default function TemplatesPage() {
     setBackLocalPath('');
     setFrontFields(JSON.parse(tmpl.frontFields || '[]'));
     setBackFields(JSON.parse(tmpl.backFields || '[]'));
+    setCategory((tmpl.category as TemplateCategory) || 'OTHER');
+    setSides((tmpl.sides as 1 | 2) || 1);
+    setSelectedClientIds(tmpl.clientIds || []);
     setShowForm(true);
   };
 
@@ -2248,7 +2339,10 @@ export default function TemplatesPage() {
     });
   };
 
-  const currentTemplates = viewTab === 'my' ? templates : globalTemplates;
+  const baseTemplates = viewTab === 'my' ? templates : globalTemplates;
+  const currentTemplates = filterCategory === 'ALL'
+    ? baseTemplates
+    : baseTemplates.filter((t: any) => (t.category || 'OTHER') === filterCategory);
 
   // Pre-calculate designer Y offsets for front and back sides
   const getDesignerYOffsets = (fields: FieldCoordinate[]) => {
@@ -2373,6 +2467,9 @@ export default function TemplatesPage() {
               setTestData({});
               setActiveTooltipIndex(null);
               setActiveTooltipSide(null);
+              setCategory('OTHER');
+              setSides(1);
+              setSelectedClientIds([]);
             }
             setShowForm(!showForm);
           }}>
@@ -2394,11 +2491,184 @@ export default function TemplatesPage() {
             </div>
           )}
           <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+
+            {/* Row 1: Template Name + Category + Sides */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr', gap: '20px' }}>
               <div className="form-group">
                 <label className="form-label">Template Name</label>
                 <input type="text" required className="form-input" placeholder="Classic Devanagari School ID" value={name} onChange={e => setName(e.target.value)} />
               </div>
+
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select
+                  className="form-input"
+                  value={category}
+                  onChange={e => {
+                    const cat = e.target.value as TemplateCategory;
+                    setCategory(cat);
+                    // Auto-fill default dimensions
+                    const dims = CATEGORY_DIMENSIONS[cat];
+                    setCardWidth(dims.w);
+                    setCardHeight(dims.h);
+                  }}
+                >
+                  {TEMPLATE_CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{CATEGORY_LABELS[cat]}</option>
+                  ))}
+                </select>
+                {/* Category badge preview */}
+                <div style={{ marginTop: '6px' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '4px',
+                    padding: '3px 10px', borderRadius: '99px', fontSize: '0.72rem', fontWeight: 600,
+                    background: CATEGORY_COLORS[category].bg,
+                    color: CATEGORY_COLORS[category].color,
+                    border: `1px solid ${CATEGORY_COLORS[category].border}`,
+                  }}>
+                    {CATEGORY_LABELS[category]}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--muted)', marginLeft: '8px' }}>
+                    Default: {CATEGORY_DIMENSIONS[category].label}
+                  </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Sides</label>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                  {([1, 2] as const).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        setSides(s);
+                        if (s === 1) {
+                          setBackImageUrl('');
+                          setBackWebUrl('');
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '10px 6px',
+                        borderRadius: '8px',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        border: sides === s ? '1.5px solid var(--primary)' : '1px solid var(--glass-border)',
+                        background: sides === s ? 'rgba(79,70,229,0.2)' : 'rgba(255,255,255,0.04)',
+                        color: sides === s ? '#818cf8' : 'var(--muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {s === 1 ? '1 Side' : '2 Sides'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Smart Suggestions Panel */}
+            {SMART_SUGGESTIONS[category].length > 0 && (
+              <div style={{
+                padding: '12px 16px',
+                background: 'rgba(250,204,21,0.06)',
+                border: '1px solid rgba(250,204,21,0.2)',
+                borderRadius: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                flexWrap: 'wrap',
+              }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <Lightbulb size={14} /> Suggested Fields
+                </span>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                  {SMART_SUGGESTIONS[category].map(suggestion => {
+                    const alreadyAdded = [...frontFields, ...backFields].some(f => f.field === suggestion);
+                    return (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        disabled={alreadyAdded}
+                        onClick={() => {
+                          const typeMap: Record<string, FieldCoordinate['type']> = {
+                            photo: 'image', qr: 'qr', barcode: 'barcode', id: 'id',
+                          };
+                          const fieldType = typeMap[suggestion] || 'text';
+                          const newField: FieldCoordinate = {
+                            field: suggestion,
+                            type: fieldType,
+                            x: 100, y: 100, width: fieldType === 'image' ? 150 : 300, height: fieldType === 'image' ? 180 : 30,
+                            fontSize: 18, fontWeight: 'normal', color: '#000000', align: 'left', verticalAlign: 'top',
+                          };
+                          setFrontFields(prev => [...prev, newField]);
+                        }}
+                        style={{
+                          padding: '3px 10px',
+                          borderRadius: '99px',
+                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          border: alreadyAdded ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(250,204,21,0.3)',
+                          background: alreadyAdded ? 'rgba(255,255,255,0.04)' : 'rgba(250,204,21,0.1)',
+                          color: alreadyAdded ? 'var(--muted)' : '#fbbf24',
+                          cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                          textDecoration: alreadyAdded ? 'line-through' : 'none',
+                          transition: 'all 0.2s',
+                        }}
+                        title={alreadyAdded ? 'Already added' : `Add "${suggestion}" to front fields`}
+                      >
+                        {alreadyAdded ? '✓ ' : '+ '}{suggestion}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Assign to Clients */}
+            {clients.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">Assign to Clients <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(multi-select)</span></label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+                  {clients.map((cl: any) => {
+                    const selected = selectedClientIds.includes(cl.id);
+                    return (
+                      <button
+                        key={cl.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedClientIds(prev =>
+                            selected ? prev.filter(id => id !== cl.id) : [...prev, cl.id]
+                          );
+                        }}
+                        style={{
+                          padding: '5px 14px',
+                          borderRadius: '99px',
+                          fontSize: '0.78rem',
+                          fontWeight: selected ? 600 : 400,
+                          border: selected ? '1.5px solid rgba(79,70,229,0.7)' : '1px solid var(--glass-border)',
+                          background: selected ? 'rgba(79,70,229,0.2)' : 'rgba(255,255,255,0.04)',
+                          color: selected ? '#818cf8' : 'var(--muted)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {selected ? '✓ ' : ''}{cl.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedClientIds.length > 0 && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px' }}>
+                    {selectedClientIds.length} client{selectedClientIds.length > 1 ? 's' : ''} assigned
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dimensions Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
               <div className="form-group">
                 <label className="form-label">Dimensions</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -2509,28 +2779,34 @@ export default function TemplatesPage() {
                 </div>
               </div>
               
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: '500' }}>Back Background Design Image (Optional)</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <input 
-                    type="file" 
-                    accept=".svg,.pdf,.png" 
-                    className="form-input" 
-                    style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
-                    onChange={e => handleFileUpload(e, 'back')} 
-                    disabled={uploadingBack || !isElectron}
-                  />
-                  {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
-                  {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
-                  <input 
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Or paste background image URL: https://example.com/..." 
-                    value={backImageUrl} 
-                    onChange={e => setBackImageUrl(e.target.value)} 
-                  />
+              {sides === 2 ? (
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: '500' }}>Back Background Design Image <span style={{ color: '#f472b6', fontSize: '0.75rem' }}>Required for 2-sided</span></label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <input 
+                      type="file" 
+                      accept=".svg,.pdf,.png" 
+                      className="form-input" 
+                      style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
+                      onChange={e => handleFileUpload(e, 'back')} 
+                      disabled={uploadingBack || !isElectron}
+                    />
+                    {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
+                    {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Or paste background image URL: https://example.com/..." 
+                      value={backImageUrl} 
+                      onChange={e => setBackImageUrl(e.target.value)} 
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80px', border: '1px dashed var(--glass-border)', borderRadius: '10px', color: 'var(--muted)', fontSize: '0.85rem' }}>
+                  Single-sided — no back design needed
+                </div>
+              )}
             </div>
 
             <div style={{
@@ -4019,6 +4295,9 @@ export default function TemplatesPage() {
                 setFrontFields([]);
                 setBackFields([]);
                 setTestData({});
+                setCategory('OTHER');
+                setSides(1);
+                setSelectedClientIds([]);
               }}>Cancel</button>
               <button type="submit" className="btn btn-primary" disabled={submitting}>
                 <Save size={16} /> {submitting ? 'Saving Layout...' : (editingTemplateId ? 'Update Template' : 'Save Template')}
@@ -4029,36 +4308,52 @@ export default function TemplatesPage() {
       )}
 
       {/* Tabs for Template view */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        marginBottom: '24px',
-        borderBottom: '1px solid var(--glass-border)'
-      }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--glass-border)' }}>
         <button 
           className={`btn ${viewTab === 'my' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ 
-            padding: '10px 20px', 
-            borderRadius: '8px 8px 0 0', 
-            borderBottom: 'none',
-            background: viewTab === 'my' ? undefined : 'transparent' 
-          }}
+          style={{ padding: '10px 20px', borderRadius: '8px 8px 0 0', borderBottom: 'none', background: viewTab === 'my' ? undefined : 'transparent' }}
           onClick={() => setViewTab('my')}
         >
           My Templates ({templates.length})
         </button>
         <button 
           className={`btn ${viewTab === 'starter' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ 
-            padding: '10px 20px', 
-            borderRadius: '8px 8px 0 0', 
-            borderBottom: 'none',
-            background: viewTab === 'starter' ? undefined : 'transparent' 
-          }}
+          style={{ padding: '10px 20px', borderRadius: '8px 8px 0 0', borderBottom: 'none', background: viewTab === 'starter' ? undefined : 'transparent' }}
           onClick={() => setViewTab('starter')}
         >
           Starter Templates ({globalTemplates.length})
         </button>
+      </div>
+
+      {/* Category Filter Chips */}
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '24px' }}>
+        <button
+          onClick={() => setFilterCategory('ALL')}
+          style={{
+            padding: '4px 14px', borderRadius: '99px', fontSize: '0.78rem', fontWeight: filterCategory === 'ALL' ? 700 : 400,
+            border: filterCategory === 'ALL' ? '1.5px solid rgba(255,255,255,0.4)' : '1px solid var(--glass-border)',
+            background: filterCategory === 'ALL' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
+            color: filterCategory === 'ALL' ? '#fff' : 'var(--muted)',
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}
+        >
+          All ({baseTemplates.length})
+        </button>
+        {TEMPLATE_CATEGORIES.filter(cat => baseTemplates.some((t: any) => (t.category || 'OTHER') === cat)).map(cat => (
+          <button
+            key={cat}
+            onClick={() => setFilterCategory(cat)}
+            style={{
+              padding: '4px 14px', borderRadius: '99px', fontSize: '0.78rem', fontWeight: filterCategory === cat ? 700 : 400,
+              border: filterCategory === cat ? `1.5px solid ${CATEGORY_COLORS[cat].border}` : '1px solid var(--glass-border)',
+              background: filterCategory === cat ? CATEGORY_COLORS[cat].bg : 'rgba(255,255,255,0.04)',
+              color: filterCategory === cat ? CATEGORY_COLORS[cat].color : 'var(--muted)',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+          >
+            {CATEGORY_LABELS[cat]} ({baseTemplates.filter((t: any) => (t.category || 'OTHER') === cat).length})
+          </button>
+        ))}
       </div>
 
       {/* Templates List */}
@@ -4072,23 +4367,45 @@ export default function TemplatesPage() {
           <h3>{viewTab === 'my' ? 'No Templates Created' : 'No Starter Templates Available'}</h3>
           <p style={{ marginTop: '8px' }}>
             {viewTab === 'my' 
-              ? 'Create a template and map card details coordinates to begin layouts previews.'
+              ? filterCategory !== 'ALL' ? `No ${CATEGORY_LABELS[filterCategory as TemplateCategory]} templates yet.` : 'Create a template and map card details coordinates to begin layouts previews.'
               : 'Starter templates uploaded by the Super Admin will appear here.'}
           </p>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
-          gap: '24px'
-        }}>
-          {currentTemplates.map((tmpl) => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '24px' }}>
+          {currentTemplates.map((tmpl: any) => {
+            const cat = (tmpl.category || 'OTHER') as TemplateCategory;
+            const catColors = CATEGORY_COLORS[cat];
+            return (
             <div key={tmpl.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ fontSize: '1.1rem', margin: 0 }}>{tmpl.name}</h3>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span className="badge badge-primary">v{tmpl.version}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <h3 style={{ fontSize: '1.05rem', margin: 0, marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tmpl.name}</h3>
+                    <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                      {/* Category Badge */}
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '2px 9px',
+                        borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700,
+                        background: catColors.bg, color: catColors.color, border: `1px solid ${catColors.border}`,
+                      }}>
+                        {CATEGORY_LABELS[cat]}
+                      </span>
+                      {/* Sides Badge */}
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '2px 9px',
+                        borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700,
+                        background: tmpl.sides === 2 ? 'rgba(236,72,153,0.12)' : 'rgba(255,255,255,0.06)',
+                        color: tmpl.sides === 2 ? '#f472b6' : '#94a3b8',
+                        border: tmpl.sides === 2 ? '1px solid rgba(236,72,153,0.3)' : '1px solid rgba(255,255,255,0.1)',
+                      }}>
+                        {tmpl.sides === 2 ? '2-Sided' : '1-Sided'}
+                      </span>
+                      {/* Version Badge */}
+                      <span className="badge badge-primary">v{tmpl.version}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0, marginLeft: '8px' }}>
                     {viewTab === 'my' && isElectron && (
                       <>
                         <button 
@@ -4117,7 +4434,7 @@ export default function TemplatesPage() {
                   backgroundImage: `url(${getOptimizedImageUrl(tmpl.frontImageUrl)})`,
                   backgroundSize: 'cover',
                   backgroundPosition: 'center',
-                  border: '1px solid var(--glass-border)',
+                  border: `1px solid ${catColors.border}`,
                   marginBottom: '16px',
                   display: 'flex',
                   alignItems: 'flex-end',
@@ -4152,7 +4469,8 @@ export default function TemplatesPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

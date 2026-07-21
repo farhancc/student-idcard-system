@@ -13,14 +13,31 @@ export async function GET(request: Request) {
     const templates = await prisma.cardTemplate.findMany({
       where: { pressId, isLatest: true },
       orderBy: { name: 'asc' },
+      include: {
+        clientAssignments: {
+          select: { clientId: true },
+        },
+      },
     });
 
     const globalTemplates = await prisma.cardTemplate.findMany({
       where: { pressId: null, isLatest: true },
       orderBy: { name: 'asc' },
+      include: {
+        clientAssignments: {
+          select: { clientId: true },
+        },
+      },
     });
 
-    return NextResponse.json({ success: true, templates, globalTemplates });
+    // Flatten clientIds for convenience
+    const mapTemplates = (list: any[]) =>
+      list.map((t) => ({
+        ...t,
+        clientIds: t.clientAssignments.map((a: any) => a.clientId),
+      }));
+
+    return NextResponse.json({ success: true, templates: mapTemplates(templates), globalTemplates: mapTemplates(globalTemplates) });
   } catch (error) {
     console.error('Get templates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -41,7 +58,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId } = result.data;
+    const {
+      name, cardWidth, cardHeight,
+      frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl,
+      frontFields, backFields, clientId,
+      category, sides, clientIds,
+    } = result.data;
 
     const template = await prisma.cardTemplate.create({
       data: {
@@ -56,12 +78,22 @@ export async function POST(request: Request) {
         backOriginalUrl: backOriginalUrl || null,
         frontFields: frontFields || '[]',
         backFields: backFields || '[]',
+        category: category || 'OTHER',
+        sides: sides || 1,
         version: 1,
         isLatest: true,
       },
     });
 
-    return NextResponse.json({ success: true, template });
+    // Sync client assignments (multi-client)
+    if (clientIds && clientIds.length > 0) {
+      await prisma.templateClientAssignment.createMany({
+        data: clientIds.map((cid) => ({ templateId: template.id, clientId: cid })),
+        skipDuplicates: true,
+      });
+    }
+
+    return NextResponse.json({ success: true, template: { ...template, clientIds: clientIds || [] } });
   } catch (error) {
     console.error('Create template error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
