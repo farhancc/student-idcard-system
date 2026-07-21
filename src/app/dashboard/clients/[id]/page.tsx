@@ -1880,7 +1880,6 @@ export default function ClientDetailsPage() {
                                   return <th key={col.key}>{col.label}</th>;
                                 })}
                                 {!cols.some(c => c.key === 'name' || c.key === 'fullName') && <th>Name</th>}
-                                {!cols.some(c => c.key === 'uniqueKey') && <th>ID from Template</th>}
                                 <th>Date Added</th>
                                 <th>Actions</th>
                               </tr>
@@ -2008,10 +2007,6 @@ export default function ClientDetailsPage() {
                                       </td>
                                     )}
 
-                                    {!cols.some(c => c.key === 'uniqueKey') && (
-                                      <td>{ch.uniqueKey || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                                    )}
-
                                     <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
 
                                     <td>
@@ -2089,7 +2084,6 @@ export default function ClientDetailsPage() {
                             <th>Photo</th>
                             <th>Name</th>
                             <th>Designation</th>
-                            <th>ID from Template</th>
                             <th>Date Added</th>
                             <th>Actions</th>
                           </tr>
@@ -2130,7 +2124,6 @@ export default function ClientDetailsPage() {
                                 </td>
                                 <td style={{ fontWeight: '500' }}>{ch.name}</td>
                                 <td>{ch.designation || '—'}</td>
-                                <td>{ch.uniqueKey || '—'}</td>
                                 <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
                                 <td>
                                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
