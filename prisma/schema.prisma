@@ -37,6 +37,7 @@ model Press {
   jobs           PdfJob[]
   activities     OrderActivityLog[]
   creditRequests CreditRequest[]
+  templatePurchases TemplatePurchase[] @relation("TemplatePurchases")
 
   @@map("press")
 }
@@ -571,4 +572,23 @@ model CreditRequest {
   @@index([pressId])
   @@index([status])
   @@map("credit_requests")
+}
+
+// ── TEMPLATE MARKETPLACE ──────────────────────────────────────────────────────
+
+model TemplatePurchase {
+  id           Int          @id @default(autoincrement())
+  buyerPressId Int          @map("buyer_press_id")
+  buyerPress   Press        @relation("TemplatePurchases", fields: [buyerPressId], references: [id], onDelete: Cascade)
+  templateId   Int          @map("template_id")
+  // template is NOT a direct FK — we store a snapshot name for safety
+  templateName String       @map("template_name")
+  sellerPressId Int?        @map("seller_press_id") // null = official/global template
+  creditsSpent Int          @map("credits_spent")
+  clonedTemplateId Int?     @map("cloned_template_id") // the buyer's copy
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([buyerPressId])
+  @@index([templateId])
+  @@map("template_purchases")
 }

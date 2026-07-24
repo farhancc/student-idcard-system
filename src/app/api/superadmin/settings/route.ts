@@ -20,7 +20,8 @@ export async function POST(request: Request) {
       costApprovalPdf,
       priceCreditBasic,
       priceCreditPro,
-      priceCreditEnterprise
+      priceCreditEnterprise,
+      marketplaceListingFee,
     } = await request.json();
 
     if (
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
       { key: 'price_credit_basic', value: String(Number(priceCreditBasic)) },
       { key: 'price_credit_pro', value: String(Number(priceCreditPro)) },
       { key: 'price_credit_enterprise', value: String(Number(priceCreditEnterprise)) },
+      { key: 'marketplace_listing_fee', value: String(Math.max(0, Number(marketplaceListingFee ?? 0))) },
     ];
 
     // Perform upserts in a transaction

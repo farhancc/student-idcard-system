@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -230,6 +230,12 @@ export default function TemplatesPage() {
 
   // Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Marketplace publish state
+  const [publishingTemplate, setPublishingTemplate] = useState<any | null>(null);
+  const [publishPrice, setPublishPrice] = useState('0');
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [publishMsg, setPublishMsg] = useState('');
   const [confirmConfig, setConfirmConfig] = useState<{
     title: string; message: string; confirmLabel: string; variant: 'danger' | 'warning'; onConfirm: () => void;
   } | null>(null);
@@ -4426,6 +4432,14 @@ export default function TemplatesPage() {
                         >
                           Delete
                         </button>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.7rem', background: tmpl.isPublic ? 'rgba(16,185,129,0.1)' : 'transparent', border: tmpl.isPublic ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--glass-border)', color: tmpl.isPublic ? '#10b981' : undefined }}
+                          onClick={() => { setPublishingTemplate(tmpl); setPublishPrice(String(tmpl.price || 0)); setPublishMsg(''); }}
+                          title={tmpl.isPublic ? 'Listed on Marketplace' : 'Sell on Marketplace'}
+                        >
+                          <Store size={10} /> {tmpl.isPublic ? 'Listed' : 'Sell'}
+                        </button>
                       </>
                     )}
                   </div>
@@ -4475,6 +4489,103 @@ export default function TemplatesPage() {
             </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Sell on Marketplace Modal */}
+      {publishingTemplate && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998, padding: '24px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '460px', padding: '28px', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Store size={18} color="var(--primary)" />
+                {publishingTemplate.isPublic ? 'Manage Listing' : 'Sell on Marketplace'}
+              </h3>
+              <button className="btn btn-secondary" style={{ padding: '6px', minWidth: 'auto' }} onClick={() => setPublishingTemplate(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {publishingTemplate.isPublic && (
+              <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.82rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Store size={14} /> This template is currently listed on the marketplace.
+              </div>
+            )}
+
+            <div style={{ marginBottom: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+              Template: <strong style={{ color: 'var(--text)' }}>{publishingTemplate.name}</strong>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label className="form-label">Price (credits) — set 0 for free</label>
+              <input
+                type="number" min="0" className="form-input"
+                value={publishPrice}
+                onChange={e => setPublishPrice(e.target.value)}
+              />
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px' }}>
+                Buyers will pay this many credits. A listing fee may be deducted from your balance.
+              </p>
+            </div>
+
+            {publishMsg && (
+              <div style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem',
+                background: publishMsg.startsWith('✅') ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                color: publishMsg.startsWith('✅') ? '#10b981' : '#ef4444',
+                border: `1px solid ${publishMsg.startsWith('✅') ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}`,
+              }}>
+                {publishMsg}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {publishingTemplate.isPublic && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, gap: '6px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}
+                  disabled={publishLoading}
+                  onClick={async () => {
+                    setPublishLoading(true); setPublishMsg('');
+                    try {
+                      const res = await fetch(`/api/marketplace/publish?templateId=${publishingTemplate.id}`, { method: 'DELETE' });
+                      const d = await res.json();
+                      if (!res.ok) throw new Error(d.error);
+                      setPublishMsg('✅ Template delisted from marketplace.');
+                      setPublishingTemplate((p: any) => ({ ...p, isPublic: false }));
+                    } catch (e: any) { setPublishMsg('❌ ' + e.message); }
+                    finally { setPublishLoading(false); }
+                  }}
+                >
+                  Delist
+                </button>
+              )}
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, gap: '6px' }}
+                disabled={publishLoading}
+                onClick={async () => {
+                  setPublishLoading(true); setPublishMsg('');
+                  try {
+                    const res = await fetch('/api/marketplace/publish', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ templateId: publishingTemplate.id, price: Number(publishPrice) }),
+                    });
+                    const d = await res.json();
+                    if (!res.ok) throw new Error(d.error);
+                    setPublishMsg('✅ Template listed on marketplace!');
+                    setPublishingTemplate((p: any) => ({ ...p, isPublic: true, price: Number(publishPrice) }));
+                  } catch (e: any) { setPublishMsg('❌ ' + e.message); }
+                  finally { setPublishLoading(false); }
+                }}
+              >
+                {publishLoading ? 'Publishing...' : publishingTemplate.isPublic ? 'Update Listing' : 'Publish to Marketplace'}
+              </button>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setPublishingTemplate(null)}>
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

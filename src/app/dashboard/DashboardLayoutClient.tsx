@@ -15,7 +15,8 @@ import {
   Crown,
   CreditCard,
   Menu,
-  X
+  X,
+  Store,
 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/toast';
 
@@ -98,8 +99,9 @@ export default function DashboardLayoutClient({
     { label: 'Clients',    path: '/dashboard/clients',   icon: <Users size={18} />,           roles: ['OWNER', 'OPERATOR'] },
     { label: 'Orders',     path: '/dashboard/orders',    icon: <FileText size={18} />,        roles: ['OWNER', 'OPERATOR'] },
     { label: 'Invoices',   path: '/dashboard/invoices',  icon: <CreditCard size={18} />,      roles: ['OWNER', 'OPERATOR'] },
-    { label: 'Templates',  path: '/dashboard/templates', icon: <Layers size={18} />,          roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
-    { label: 'PDF Jobs',   path: '/dashboard/pdf-jobs',  icon: <Clock size={18} />,           roles: ['OWNER', 'OPERATOR'] },
+    { label: 'Templates',  path: '/dashboard/templates',   icon: <Layers size={18} />,          roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
+    { label: 'Marketplace', path: '/dashboard/marketplace', icon: <Store size={18} />,           roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
+    { label: 'PDF Jobs',   path: '/dashboard/pdf-jobs',    icon: <Clock size={18} />,           roles: ['OWNER', 'OPERATOR'] },
     { label: 'Settings',   path: '/dashboard/settings',  icon: <Settings size={18} />,        roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
   ];
 

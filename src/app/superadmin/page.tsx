@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import DashboardOverview from './components/DashboardOverview';
+import SuperAdminMarketplacePage from './marketplace/page';
 import { useRouter } from 'next/navigation';
 import { 
   Building2, Users, FolderKanban, ShieldCheck, 
@@ -70,7 +71,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests' | 'marketplace'>('dashboard');
 
   // Credit Requests State
   const [creditRequests, setCreditRequests] = useState<any[]>([]);
@@ -1060,6 +1061,27 @@ export default function SuperAdminDashboard() {
         >
           <Sliders size={16} /> Credit Settings
         </button>
+        <button 
+          type="button" 
+          onClick={() => setActiveTab('marketplace')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'marketplace' ? 'rgba(16,185,129,0.15)' : 'transparent',
+            color: activeTab === 'marketplace' ? '#10b981' : 'var(--muted)',
+            borderBottom: activeTab === 'marketplace' ? '2px solid #10b981' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          🏪 Marketplace
+        </button>
       </div>
 
       {activeTab === 'dashboard' ? (
@@ -2016,6 +2038,8 @@ export default function SuperAdminDashboard() {
             </form>
           </div>
         </>
+      ) : activeTab === 'marketplace' ? (
+        <SuperAdminMarketplacePage />
       ) : activeTab === 'creditRequests' ? (
         <>
           <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
