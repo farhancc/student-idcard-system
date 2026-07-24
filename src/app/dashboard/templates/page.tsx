@@ -3513,7 +3513,8 @@ export default function TemplatesPage() {
                   </div>
 
                   {/* Back Side Designer */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                  {sides === 2 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                     <div className="badge badge-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600 }}>
                       Back Side Layout Design
                     </div>
@@ -3900,7 +3901,8 @@ export default function TemplatesPage() {
                         <p style={{ fontSize: '0.85rem' }}>Upload back background image to enable designer.</p>
                       </div>
                     )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -4097,7 +4099,8 @@ export default function TemplatesPage() {
                 </div>
 
                 {/* Coordinates table - Back */}
-                <div>
+                {sides === 2 && (
+                  <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '0.95rem' }}>Back Side Coordinates mapping</h4>
                     <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('back')}>
@@ -4279,7 +4282,8 @@ export default function TemplatesPage() {
                       </table>
                     </div>
                   )}
-              </div>
+                  </div>
+                )}
             </div>
           </div>
 

@@ -53,6 +53,8 @@ interface CSVImportResult {
   updated: number;
   skipped: number;
   duplicateCount: number;
+  success?: boolean;
+  error?: string;
 }
 
 interface ZipDetail {
@@ -2756,12 +2758,22 @@ export default function ClientDetailsPage() {
           {/* ── Step 4: Done ─────────────────────────────────────────────────── */}
           {importStep === 'done' && importResult && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '10px' }}>
-                <CheckCircle size={22} color="var(--success)" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '16px', background: importResult.success !== false ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)', border: importResult.success !== false ? '1px solid rgba(34,197,94,0.25)' : '1px solid rgba(239,68,68,0.25)', borderRadius: '10px' }}>
+                {importResult.success !== false ? (
+                  <CheckCircle size={22} color="var(--success)" />
+                ) : (
+                  <AlertTriangle size={22} color="var(--error)" />
+                )}
                 <div>
-                  <div style={{ fontWeight: 700, color: 'var(--success)' }}>Import Complete — Mode: {importResult.mode.toUpperCase()}</div>
+                  <div style={{ fontWeight: 700, color: importResult.success !== false ? 'var(--success)' : 'var(--error)' }}>
+                    {importResult.success !== false ? `Import Complete — Mode: ${importResult.mode.toUpperCase()}` : 'Import Failed — Validation Errors'}
+                  </div>
                   <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginTop: '4px' }}>
-                    {importResult.newAdded} added · {importResult.updated} updated · {importResult.skipped} skipped · {importResult.duplicateCount} duplicates
+                    {importResult.success !== false ? (
+                      `${importResult.newAdded} added · ${importResult.updated} updated · ${importResult.skipped} skipped · ${importResult.duplicateCount} duplicates`
+                    ) : (
+                      importResult.error || 'Validation failed. No records were imported.'
+                    )}
                   </div>
                 </div>
               </div>
@@ -2772,7 +2784,7 @@ export default function ClientDetailsPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', background: 'rgba(245,158,11,0.08)', borderBottom: '1px solid rgba(245,158,11,0.2)' }}>
                     <AlertTriangle size={16} color="#f59e0b" />
                     <span style={{ fontWeight: 600, color: '#f59e0b', fontSize: '0.875rem' }}>
-                      {importValidationErrors.length} rows have missing required fields
+                      {importValidationErrors.length} rows have validation errors
                     </span>
                   </div>
                   <div style={{ overflowY: 'auto', maxHeight: '260px' }}>
@@ -2781,7 +2793,7 @@ export default function ClientDetailsPage() {
                         <tr style={{ background: 'rgba(255,255,255,0.03)' }}>
                           <th style={{ padding: '7px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', color: 'var(--muted)', fontWeight: 600 }}>Row</th>
                           <th style={{ padding: '7px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', color: 'var(--muted)', fontWeight: 600 }}>Name</th>
-                          <th style={{ padding: '7px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', color: 'var(--muted)', fontWeight: 600 }}>Missing Required Fields</th>
+                          <th style={{ padding: '7px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', color: 'var(--muted)', fontWeight: 600 }}>Validation Errors / Details</th>
                         </tr>
                       </thead>
                       <tbody>

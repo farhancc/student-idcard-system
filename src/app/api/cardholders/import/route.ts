@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
+import { z } from 'zod';
 
 export async function POST(request: Request) {
   try {
@@ -120,39 +121,58 @@ export async function POST(request: Request) {
     const validationErrors: Array<{ row: number; name: string; missingFields: string[] }> = [];
     if (templateId) {
       const templateFields = await prisma.templateField.findMany({
-        where: { templateId, isRequired: true },
+        where: { templateId },
       });
 
       if (templateFields.length > 0) {
-        // Build a set of field keys that are required
-        const requiredFields = templateFields.map(f => f.field);
-
         for (let i = 0; i < rawData.length; i++) {
           const row = rawData[i];
           const rowName = String(row[nameCol] || `Row ${i + 2}`).trim();
           const missing: string[] = [];
 
-          for (const reqField of requiredFields) {
-            // Check if the field is mapped to a column, or exists as-is
-            const sourceCol = mapping[reqField] || reqField;
-            const val = row[sourceCol];
-            const strVal = val !== null && val !== undefined ? String(val).trim() : '';
+          for (const f of templateFields) {
+            let strVal = '';
+            if (f.field === 'name') {
+              strVal = String(row[nameCol] || '').trim();
+            } else if (f.field === 'designation') {
+              strVal = String(row[designationCol] || '').trim();
+            } else if (f.field === 'photo') {
+              strVal = String(row[photoUrlCol] || '').trim();
+            } else if (f.field === 'id') {
+              strVal = String(row[uniqueKeyCol] || '').trim();
+            } else {
+              const sourceCol = mapping[f.field] || f.field;
+              const val = row[sourceCol];
+              strVal = val !== null && val !== undefined ? String(val).trim() : '';
+            }
 
-            // Core field special-casing
-            if (reqField === 'name') {
-              const nameVal = String(row[nameCol] || '').trim();
-              if (!nameVal) missing.push('name');
-            } else if (reqField === 'designation') {
-              const dVal = String(row[designationCol] || '').trim();
-              if (!dVal) missing.push('designation');
-            } else if (reqField === 'photo') {
-              const pVal = String(row[photoUrlCol] || '').trim();
-              if (!pVal) missing.push('photo');
-            } else if (reqField === 'id') {
-              const kVal = String(row[uniqueKeyCol] || '').trim();
-              if (!kVal) missing.push('id');
-            } else if (!strVal) {
-              missing.push(reqField);
+            const isProvided = strVal.length > 0;
+            if (f.isRequired || isProvided) {
+              let schema = z.string();
+              
+              if (f.isRequired) {
+                schema = schema.min(1, { message: `Required field '${f.field}' is missing` });
+              }
+              
+              if (f.maxLength !== null && f.maxLength !== undefined) {
+                schema = schema.max(f.maxLength, { message: `'${f.field}' exceeds maximum length of ${f.maxLength} characters` });
+              }
+              
+              if (f.validationPattern) {
+                try {
+                  const regex = new RegExp(f.validationPattern);
+                  schema = schema.regex(regex, { message: `'${f.field}' must match format /${f.validationPattern}/` });
+                } catch (err) {
+                  console.error(`Invalid regex pattern defined on template field ${f.field}:`, f.validationPattern);
+                }
+              }
+
+              const result = schema.safeParse(strVal);
+              if (!result.success) {
+                for (const issue of result.error.issues) {
+                  missing.push(issue.message);
+                }
+              }
             }
           }
 
@@ -162,6 +182,23 @@ export async function POST(request: Request) {
         }
       }
     }
+
+    if (validationErrors.length > 0 && importMode !== 'check') {
+      return NextResponse.json({
+        success: false,
+        mode: importMode,
+        totalRows: rawData.length,
+        newAdded: 0,
+        updated: 0,
+        skipped: 0,
+        duplicateCount: 0,
+        duplicates: [],
+        validationErrors,
+        validationErrorCount: validationErrors.length,
+        error: 'Validation failed. No records were imported.',
+      });
+    }
+
     const duplicates: any[] = [];
     const newItems: any[] = [];
     const updatedItems: any[] = [];

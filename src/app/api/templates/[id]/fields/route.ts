@@ -8,8 +8,9 @@ import { prisma } from '@/lib/prisma';
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
+  const params = await context.params;
   const templateId = Number(params.id);
   if (isNaN(templateId)) {
     return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });

@@ -186,6 +186,8 @@ model TemplateField {
   prefix        String?      // label prefix shown on approval PDF
   lineHeight    Float?       @default(1.2) @map("line_height")
   sortOrder     Int          @default(0) @map("sort_order")
+  validationPattern String?    @map("validation_pattern")
+  maxLength     Int?         @map("max_length")
   createdAt     DateTime     @default(now()) @map("created_at")
 
   @@unique([templateId, field, side])
