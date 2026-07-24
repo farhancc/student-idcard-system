@@ -292,6 +292,23 @@ async function snapshot(opts: Opts): Promise<void> {
     });
 
     // ----- Navigate and wait for network idle -----
+    if (opts.url && opts.url.includes('/dashboard')) {
+      console.log('🔒 Detecting dashboard route. Authenticating first at /login...');
+      try {
+        const loginUrl = new URL('/login', opts.url).href;
+        await page.goto(loginUrl, { waitUntil: 'networkidle2' });
+        await page.type('input#email', 'test@g.com');
+        await page.type('input#password', 'password123');
+        await Promise.all([
+          page.click('button[type="submit"]'),
+          page.waitForNavigation({ waitUntil: 'networkidle2' })
+        ]);
+        console.log('✅ Login successful! Continuing to target page.');
+      } catch (authErr: any) {
+        console.error('⚠️ Auth flow failed:', authErr.message || authErr);
+      }
+    }
+
     console.log(`📄 Navigating to ${opts.url}...`);
     try {
       await page.goto(opts.url!, {

@@ -26,6 +26,9 @@ import {
   Settings2,
   RefreshCw,
   CreditCard,
+  UserCheck,
+  UserX,
+  Shuffle,
 } from 'lucide-react';
 
 interface Client {
@@ -209,6 +212,11 @@ export default function ClientDetailsPage() {
 
   // Quick-compile from cardholder tab
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // Bulk operation state
+  const [showBulkReassignModal, setShowBulkReassignModal] = useState(false);
+  const [bulkReassignTemplateId, setBulkReassignTemplateId] = useState('');
+  const [bulkOperationLoading, setBulkOperationLoading] = useState(false);
   const [searchId, setSearchId] = useState('');
   const [filterTemplate, setFilterTemplate] = useState('');
   const [filterStartDate, setFilterStartDate] = useState('');
@@ -1552,6 +1560,96 @@ export default function ClientDetailsPage() {
     }
   };
 
+  // ── Bulk Operations ───────────────────────────────────────────────────────
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    showConfirm({
+      title: 'Bulk Delete Cardholders',
+      message: `Permanently delete ${selectedIds.length} selected cardholder(s)? This cannot be undone.`,
+      confirmLabel: `Delete ${selectedIds.length} Records`,
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          setBulkOperationLoading(true);
+          const res = await fetch('/api/cardholders/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: selectedIds, action: 'delete' }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Bulk delete failed');
+          toast(`Deleted ${data.affected} cardholder(s) successfully.`, 'success');
+          setSelectedIds([]);
+          handleRefresh();
+        } catch (err: any) {
+          toast(err.message || 'Bulk delete failed', 'error');
+        } finally {
+          setBulkOperationLoading(false);
+          closeConfirm();
+        }
+      },
+    });
+  };
+
+  const handleBulkStatusToggle = (activate: boolean) => {
+    if (selectedIds.length === 0) return;
+    const action = activate ? 'activate' : 'deactivate';
+    const label = activate ? 'Activate' : 'Deactivate';
+    showConfirm({
+      title: `Bulk ${label} Cardholders`,
+      message: `${label} ${selectedIds.length} selected cardholder(s)?`,
+      confirmLabel: `${label} ${selectedIds.length} Records`,
+      variant: 'warning',
+      onConfirm: async () => {
+        try {
+          setBulkOperationLoading(true);
+          const res = await fetch('/api/cardholders/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: selectedIds, action }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || `Bulk ${action} failed`);
+          toast(`${label}d ${data.affected} cardholder(s) successfully.`, 'success');
+          setSelectedIds([]);
+          handleRefresh();
+        } catch (err: any) {
+          toast(err.message || `Bulk ${action} failed`, 'error');
+        } finally {
+          setBulkOperationLoading(false);
+          closeConfirm();
+        }
+      },
+    });
+  };
+
+  const handleBulkReassign = async () => {
+    if (!bulkReassignTemplateId || selectedIds.length === 0) return;
+    try {
+      setBulkOperationLoading(true);
+      const res = await fetch('/api/cardholders/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          action: 'reassign_template',
+          templateId: Number(bulkReassignTemplateId),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Bulk reassign failed');
+      toast(`Reassigned ${data.affected} cardholder(s) to new template.`, 'success');
+      setSelectedIds([]);
+      setShowBulkReassignModal(false);
+      setBulkReassignTemplateId('');
+      handleRefresh();
+    } catch (err: any) {
+      toast(err.message || 'Bulk reassign failed', 'error');
+    } finally {
+      setBulkOperationLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: '100px 0' }}>
@@ -1850,6 +1948,38 @@ export default function ClientDetailsPage() {
                       onClick={handleExportExcel}
                     >
                       Export Excel ({selectedIds.length})
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }}
+                      onClick={() => setShowBulkReassignModal(true)}
+                      title="Reassign selected cardholders to a different template"
+                    >
+                      <Shuffle size={14} /> Reassign Template
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#34d399' }}
+                      onClick={() => handleBulkStatusToggle(true)}
+                      title="Activate selected cardholders"
+                    >
+                      <UserCheck size={14} /> Activate
+                    </button>
+                    <button
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24' }}
+                      onClick={() => handleBulkStatusToggle(false)}
+                      title="Deactivate selected cardholders"
+                    >
+                      <UserX size={14} /> Deactivate
+                    </button>
+                    <button
+                      className="btn btn-danger"
+                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px' }}
+                      onClick={handleBulkDelete}
+                      disabled={bulkOperationLoading}
+                    >
+                      <Trash2 size={14} /> Delete ({selectedIds.length})
                     </button>
                   </>
                 ) : (
@@ -3268,6 +3398,50 @@ export default function ClientDetailsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Bulk Reassign Template Modal */}
+      {showBulkReassignModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '24px'
+        }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', borderRadius: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Shuffle size={18} color="var(--primary)" /> Reassign Template
+              </h3>
+              <button className="btn btn-secondary" style={{ padding: '6px', minWidth: 'auto' }} onClick={() => { setShowBulkReassignModal(false); setBulkReassignTemplateId(''); }}>
+                <X size={16} />
+              </button>
+            </div>
+            <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: '20px' }}>
+              Reassign <strong style={{ color: 'var(--text)' }}>{selectedIds.length} cardholder(s)</strong> to a new template. Their card assets will be marked as stale and regenerated on next use.
+            </p>
+            <div className="form-group" style={{ marginBottom: '24px' }}>
+              <label className="form-label">Select New Template</label>
+              <select className="form-input" value={bulkReassignTemplateId} onChange={e => setBulkReassignTemplateId(e.target.value)}>
+                <option value="">— Choose a template —</option>
+                {quickTemplates.map((t: any) => (
+                  <option key={t.id} value={String(t.id)}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setShowBulkReassignModal(false); setBulkReassignTemplateId(''); }}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, gap: '6px' }}
+                onClick={handleBulkReassign}
+                disabled={!bulkReassignTemplateId || bulkOperationLoading}
+              >
+                {bulkOperationLoading ? <div className="spinner" style={{ width: '16px', height: '16px' }} /> : <Shuffle size={14} />}
+                {bulkOperationLoading ? 'Reassigning...' : `Reassign ${selectedIds.length} Records`}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,11 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, use } from 'react';
+import React, { useState, useEffect, useRef, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/app/components/ImageCropper';
 import CardPreview from '@/app/components/CardPreview';
 
-import { Upload, Check, AlertCircle, Loader, CreditCard } from 'lucide-react';
+import { Upload, Check, AlertCircle, Loader, CreditCard, Camera, X } from 'lucide-react';
 
 interface FieldCoordinate {
   field: string;
@@ -70,6 +70,17 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [showCropper, setShowCropper] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [activeCropField, setActiveCropField] = useState<string | null>(null);
+
+  // Webcam states
+  const [showWebcam, setShowWebcam] = useState(false);
+  const [webcamStream, setWebcamStream] = useState<MediaStream | null>(null);
+  const [webcamError, setWebcamError] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const webcamCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Inline validation — tracks which fields user has touched
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Preview side state (kept for future use)
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
@@ -166,6 +177,19 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     fetchPortalInfo();
   }, [enrollToken]);
 
+  const markTouched = (field: string) => setTouched(prev => ({ ...prev, [field]: true }));
+
+  const validateField = useCallback((field: string, value: string): string => {
+    if (field === 'name' && !value.trim()) return 'Full name is required.';
+    if (field === 'uniqueKey' && !value.trim() && hasUniqueKey) return 'ID / Roll number is required.';
+    return '';
+  }, [hasUniqueKey]);
+
+  const handleBlur = (field: string, value: string) => {
+    markTouched(field);
+    setFieldErrors(prev => ({ ...prev, [field]: validateField(field, value) }));
+  };
+
   const triggerUpload = (fieldKey: string) => {
     setActiveCropField(fieldKey);
     document.getElementById('photo-input')?.click();
@@ -182,6 +206,47 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     };
     reader.readAsDataURL(file);
     e.target.value = ''; // Reset input
+  };
+
+  // ── Webcam helpers ────────────────────────────────────────────────────────
+  const startWebcam = async (fieldKey: string) => {
+    setWebcamError('');
+    setActiveCropField(fieldKey);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      setWebcamStream(stream);
+      setShowWebcam(true);
+      // Attach stream after the video element mounts
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    } catch (err: any) {
+      setWebcamError('Camera not accessible: ' + (err.message || 'Permission denied'));
+    }
+  };
+
+  const stopWebcam = () => {
+    webcamStream?.getTracks().forEach(t => t.stop());
+    setWebcamStream(null);
+    setShowWebcam(false);
+  };
+
+  const captureWebcam = () => {
+    const video = videoRef.current;
+    const canvas = webcamCanvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/png');
+    stopWebcam();
+    setRawImage(dataUrl);
+    setShowCropper(true);
   };
 
   const handleCropComplete = async (croppedBase64: string) => {
@@ -395,6 +460,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <div className={showPreview ? "portal-form-col" : ""}>
             <form onSubmit={handleSubmit} className="card" style={{ padding: '32px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+              {/* Hidden canvas for webcam capture */}
+              <canvas ref={webcamCanvasRef} style={{ display: 'none' }} />
           
           {/* Photo upload + Cropper trigger */}
           {hasPhoto && (
@@ -404,11 +471,12 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 height: `${mainBoxHeight}px`,
                 background: '#111',
                 borderRadius: `${mainBoxBorderRadius}px`,
-                border: '2px dashed var(--glass-border)',
+                border: `2px dashed ${photoUrl ? 'var(--primary)' : 'var(--glass-border)'}`,
                 position: 'relative',
                 overflow: 'hidden',
                 cursor: 'pointer',
                 marginBottom: '12px',
+                transition: 'border-color 0.2s',
               }} onClick={() => triggerUpload('photo')}>
                 {photoUrl ? (
                   <img src={photoUrl} alt="Cropped profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
@@ -423,6 +491,16 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   </div>
                 )}
               </div>
+              {/* Upload + Camera buttons */}
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px' }} onClick={() => triggerUpload('photo')}>
+                  <Upload size={13} /> Upload
+                </button>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }} onClick={() => startWebcam('photo')}>
+                  <Camera size={13} /> Use Camera
+                </button>
+              </div>
+              {webcamError && <p style={{ color: 'var(--danger)', fontSize: '0.72rem', margin: '0 0 4px' }}>{webcamError}</p>}
               <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Crop tool will match target dimensions and shape.</span>
             </div>
           )}
@@ -475,7 +553,17 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           {hasName && (
             <div className="form-group">
               <label className="form-label">Full Name *</label>
-              <input type="text" className="form-input" required value={name} onChange={e => setName(e.target.value)} placeholder="Enter full name" />
+              <input
+                type="text"
+                className="form-input"
+                style={{ borderColor: touched.name && fieldErrors.name ? 'var(--danger)' : undefined }}
+                required
+                value={name}
+                onChange={e => { setName(e.target.value); if (touched.name) setFieldErrors(prev => ({ ...prev, name: validateField('name', e.target.value) })); }}
+                onBlur={e => handleBlur('name', e.target.value)}
+                placeholder="Enter full name"
+              />
+              {touched.name && fieldErrors.name && <p style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '4px' }}>{fieldErrors.name}</p>}
             </div>
           )}
 
@@ -489,13 +577,21 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           {hasUniqueKey && (
             <div className="form-group">
               <label className="form-label">Roll Number / Employee ID (Unique Key)</label>
-              <input type="text" className="form-input" value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="Enter unique ID or roll number" />
+              <input
+                type="text"
+                className="form-input"
+                style={{ borderColor: touched.uniqueKey && fieldErrors.uniqueKey ? 'var(--danger)' : undefined }}
+                value={uniqueKey}
+                onChange={e => { setUniqueKey(e.target.value); if (touched.uniqueKey) setFieldErrors(prev => ({ ...prev, uniqueKey: validateField('uniqueKey', e.target.value) })); }}
+                onBlur={e => handleBlur('uniqueKey', e.target.value)}
+                placeholder="Enter unique ID or roll number"
+              />
+              {touched.uniqueKey && fieldErrors.uniqueKey && <p style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '4px' }}>{fieldErrors.uniqueKey}</p>}
             </div>
           )}
 
           {/* Custom Fields dynamically extracted from template */}
           {formFields.map(field => {
-            // Capitalize field name for label
             const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
             return (
               <div className="form-group" key={field}>
@@ -504,12 +600,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   type="text"
                   className="form-input"
                   value={customFields[field] || ''}
-                  onChange={e => {
-                    setCustomFields({
-                      ...customFields,
-                      [field]: e.target.value,
-                    });
-                  }}
+                  onChange={e => setCustomFields({ ...customFields, [field]: e.target.value })}
                   placeholder={`Enter ${label.toLowerCase()}`}
                 />
               </div>
@@ -611,6 +702,37 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           targetWidth={activeFieldCoord?.width || 120}
           targetBorderRadius={activeFieldCoord?.borderRadius || 0}
         />
+      )}
+
+      {/* Webcam Capture Modal */}
+      {showWebcam && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          zIndex: 9999, padding: '24px'
+        }}>
+          <div style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', maxWidth: '480px', width: '100%', border: '1px solid var(--glass-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--glass-border)' }}>
+              <span style={{ fontWeight: '600', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Camera size={16} color="var(--primary)" /> Take Photo
+              </span>
+              <button type="button" onClick={stopWebcam} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '4px' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div style={{ position: 'relative', background: '#000' }}>
+              <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', display: 'block', maxHeight: '360px', objectFit: 'cover' }} />
+            </div>
+            <div style={{ padding: '16px 20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={stopWebcam}>
+                Cancel
+              </button>
+              <button type="button" className="btn btn-primary" style={{ flex: 1, gap: '6px' }} onClick={captureWebcam}>
+                <Camera size={14} /> Capture
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
