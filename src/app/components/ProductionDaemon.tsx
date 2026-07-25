@@ -315,14 +315,43 @@ export default function ProductionDaemon() {
         ch.photoUrl = effectivePhoto;
       }
       const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
-      if (electronAPI && ch.photoUrl) {
-        try {
-          const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
-          if (res && res.success && res.localUrl) {
-            ch.photoUrl = res.localUrl;
+      if (electronAPI) {
+        if (ch.photoUrl) {
+          try {
+            const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
+            if (res && res.success && res.localUrl) {
+              ch.photoUrl = res.localUrl;
+            }
+          } catch (err: any) {
+            console.warn(`Failed to cache photo locally for cardholder ${ch.id}:`, err);
           }
-        } catch (err: any) {
-          console.warn(`Failed to cache photo locally for cardholder ${ch.id}:`, err);
+        }
+        if (ch.customFields) {
+          try {
+            const fieldsObj = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+            if (fieldsObj && typeof fieldsObj === 'object') {
+              let updated = false;
+              for (const key of Object.keys(fieldsObj)) {
+                const val = fieldsObj[key];
+                if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/uploads/') || val.startsWith('uploads/'))) {
+                  try {
+                    const res = await electronAPI.cachePhoto(`${ch.id}_${key}`, val);
+                    if (res && res.success && res.localUrl) {
+                      fieldsObj[key] = res.localUrl;
+                      updated = true;
+                    }
+                  } catch (cErr) {
+                    console.warn(`Failed to cache custom field photo ${key} for cardholder ${ch.id}:`, cErr);
+                  }
+                }
+              }
+              if (updated) {
+                ch.customFields = typeof ch.customFields === 'string' ? JSON.stringify(fieldsObj) : fieldsObj;
+              }
+            }
+          } catch (pErr) {
+            // Ignore parse errors
+          }
         }
       }
     }

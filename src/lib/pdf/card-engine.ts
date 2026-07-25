@@ -562,7 +562,7 @@ export async function renderCardSide(
       }
     }
     if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
-      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || effectivePhotoUrl || '';
+      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1209,7 +1209,7 @@ export async function renderCardSideToPdfBytes(
       }
     }
     if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
-      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || effectivePhotoUrl || '';
+      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1471,7 +1471,7 @@ export async function renderCardSideToPdfBytes(
             rawValue.startsWith('file://')
           );
           if (!isValidImage || !rawValue) {
-            rawValue = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
+            rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
           }
         }
         if (!rawValue) continue;
