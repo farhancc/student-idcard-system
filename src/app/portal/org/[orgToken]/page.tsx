@@ -663,7 +663,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               {client?.type} MANAGEMENT PORTAL (ORGANISATION HEAD)
             </span>
             <h1 style={{ fontSize: '2.2rem', marginTop: '8px', marginBottom: '4px' }}>{client?.name}</h1>
-            <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Active Template: <span style={{ color: 'var(--foreground)' }}>{template?.name}</span></p>
           </div>
 
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -851,7 +850,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     <tr>
                       <th>Photo</th>
                       <th>Name</th>
-                      <th>Template Name</th>
                       <th>Department</th>
                       {hasDesignation && <th>Designation</th>}
                       {hasUniqueKey && <th>Unique Key</th>}
@@ -922,7 +920,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               })()}
                             </div>
                            </td>
-                          <td>{ch.templateName || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                           <td style={{ fontSize: '0.85rem' }}>
                             <span style={{
                               padding: '3px 8px',
