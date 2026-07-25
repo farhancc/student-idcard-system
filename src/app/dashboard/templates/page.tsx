@@ -2665,63 +2665,7 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            {/* Smart Suggestions Panel */}
-            {SMART_SUGGESTIONS[category].length > 0 && (
-              <div style={{
-                padding: '12px 16px',
-                background: 'rgba(250,204,21,0.06)',
-                border: '1px solid rgba(250,204,21,0.2)',
-                borderRadius: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap',
-              }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                  <Lightbulb size={14} /> Suggested Fields
-                </span>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {SMART_SUGGESTIONS[category].map(suggestion => {
-                    const alreadyAdded = [...frontFields, ...backFields].some(f => f.field === suggestion);
-                    return (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        disabled={alreadyAdded}
-                        onClick={() => {
-                          const typeMap: Record<string, FieldCoordinate['type']> = {
-                            photo: 'image', qr: 'qr', barcode: 'barcode', id: 'id',
-                          };
-                          const fieldType = typeMap[suggestion] || 'text';
-                          const newField: FieldCoordinate = {
-                            field: suggestion,
-                            type: fieldType,
-                            x: 100, y: 100, width: fieldType === 'image' ? 150 : 300, height: fieldType === 'image' ? 180 : 30,
-                            fontSize: 18, fontWeight: 'normal', color: '#000000', align: 'left', verticalAlign: 'top',
-                          };
-                          setFrontFields(prev => [...prev, newField]);
-                        }}
-                        style={{
-                          padding: '3px 10px',
-                          borderRadius: '99px',
-                          fontSize: '0.72rem',
-                          fontWeight: 600,
-                          border: alreadyAdded ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(250,204,21,0.3)',
-                          background: alreadyAdded ? 'rgba(255,255,255,0.04)' : 'rgba(250,204,21,0.1)',
-                          color: alreadyAdded ? 'var(--muted)' : '#fbbf24',
-                          cursor: alreadyAdded ? 'not-allowed' : 'pointer',
-                          textDecoration: alreadyAdded ? 'line-through' : 'none',
-                          transition: 'all 0.2s',
-                        }}
-                        title={alreadyAdded ? 'Already added' : `Add "${suggestion}" to front fields`}
-                      >
-                        {alreadyAdded ? '✓ ' : '+ '}{suggestion}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+
 
             {/* Assign to Clients */}
             {clients.length > 0 && (
@@ -3405,6 +3349,66 @@ export default function TemplatesPage() {
                     </button>
                   </div>
                 </div>
+
+                {/* Smart Suggestions Panel */}
+                {SMART_SUGGESTIONS[category].length > 0 && (
+                  <div style={{
+                    padding: '12px 16px',
+                    background: 'rgba(250,204,21,0.06)',
+                    border: '1px solid rgba(250,204,21,0.2)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    marginBottom: '16px',
+                    width: '100%'
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#fbbf24', fontSize: '0.8rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <Lightbulb size={14} /> Suggested Fields
+                    </span>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {SMART_SUGGESTIONS[category].map(suggestion => {
+                        const alreadyAdded = [...frontFields, ...backFields].some(f => f.field === suggestion);
+                        return (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            disabled={alreadyAdded}
+                            onClick={() => {
+                              const typeMap: Record<string, FieldCoordinate['type']> = {
+                                photo: 'image', qr: 'qr', barcode: 'barcode', id: 'id',
+                              };
+                              const fieldType = typeMap[suggestion] || 'text';
+                              const newField: FieldCoordinate = {
+                                field: suggestion,
+                                type: fieldType,
+                                x: 100, y: 100, width: fieldType === 'image' ? 150 : 300, height: fieldType === 'image' ? 180 : 30,
+                                fontSize: 18, fontWeight: 'normal', color: '#000000', align: 'left', verticalAlign: 'top',
+                              };
+                              setFrontFields(prev => [...prev, newField]);
+                            }}
+                            style={{
+                              padding: '3px 10px',
+                              borderRadius: '99px',
+                              fontSize: '0.72rem',
+                              fontWeight: 600,
+                              border: alreadyAdded ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(250,204,21,0.3)',
+                              background: alreadyAdded ? 'rgba(255,255,255,0.04)' : 'rgba(250,204,21,0.1)',
+                              color: alreadyAdded ? 'var(--muted)' : '#fbbf24',
+                              cursor: alreadyAdded ? 'not-allowed' : 'pointer',
+                              textDecoration: alreadyAdded ? 'line-through' : 'none',
+                              transition: 'all 0.2s',
+                            }}
+                            title={alreadyAdded ? 'Already added' : `Add "${suggestion}" to front fields`}
+                          >
+                            {alreadyAdded ? '✓ ' : '+ '}{suggestion}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 <div style={{
                   display: 'flex',
