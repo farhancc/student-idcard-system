@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CardPreview from '@/app/components/CardPreview';
 import { ToastProvider, useToast } from '@/components/ui/toast';
 import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
 
@@ -20,7 +21,8 @@ import {
   ExternalLink,
   Eye,
   Building,
-  CheckCircle2
+  CheckCircle2,
+  X
 } from 'lucide-react';
 
 interface Cardholder {
@@ -53,14 +55,14 @@ interface Client {
 interface Template {
   id: number;
   name: string;
-  width?: number;
-  height?: number;
-  frontImageUrl?: string;
-  backImageUrl?: string;
+  cardWidth: number;
+  cardHeight: number;
+  frontImageUrl: string;
+  backImageUrl: string | null;
   frontOriginalUrl?: string | null;
   backOriginalUrl?: string | null;
-  frontFields?: string;
-  backFields?: string;
+  frontFields: string;
+  backFields: string;
   validTillDate?: string | null;
 }
 
@@ -116,6 +118,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [editingCardholderId, setEditingCardholderId] = useState<number | null>(null);
   const [previewCardholder, setPreviewCardholder] = useState<Cardholder | null>(null);
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
+  const [selectedCh, setSelectedCh] = useState<Cardholder | null>(null);
+  const [pressFonts, setPressFonts] = useState<any[]>([]);
+  const [hasInitialSelected, setHasInitialSelected] = useState(false);
 
   // Form States
   const [name, setName] = useState('');
@@ -149,6 +154,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       setTemplate(shareData.template);
       setEnrollToken(shareData.share.enrollToken);
       setShowPreview(shareData.share.showPreview ?? false);
+      setPressFonts(shareData.pressFonts || []);
 
       // Parse fields
       const front = JSON.parse(shareData.template.frontFields || '[]');
@@ -196,6 +202,16 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       if (!chRes.ok) throw new Error('Failed to load cardholders');
       const chData = await chRes.json();
       setCardholders(chData.cardholders);
+      setSelectedCh(prev => {
+        if (prev) {
+          return chData.cardholders.find((c: any) => c.id === prev.id) || null;
+        }
+        if (!hasInitialSelected) {
+          setHasInitialSelected(true);
+          return chData.cardholders[0] || null;
+        }
+        return null;
+      });
 
       // 3. Fetch departments
       const deptRes = await fetch(`/api/portal/org/${orgToken}/departments`);
@@ -464,6 +480,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         try {
           const res = await fetch(`/api/portal/org/${orgToken}/cardholders/${id}`, { method: 'DELETE' });
           if (!res.ok) throw new Error('Failed to delete cardholder');
+          setSelectedCh(prev => prev?.id === id ? null : prev);
           await loadPortalData();
           toast('Cardholder deleted successfully', 'success');
         } catch (err: any) {
@@ -814,170 +831,353 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               return null;
             })()}
 
-            {/* Toolbar & Search */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-              <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
-                <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  style={{ paddingLeft: '40px' }} 
-                  placeholder="Search name, designation, ID..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                />
-              </div>
+            <div style={{
+              display: 'flex',
+              gap: '24px',
+              alignItems: 'flex-start',
+              width: '100%',
+              position: 'relative'
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Toolbar & Search */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+                    <input 
+                      type="text" 
+                      className="form-input" 
+                      style={{ paddingLeft: '40px' }} 
+                      placeholder="Search name, designation, ID..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                    />
+                  </div>
 
-              <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={16} /> Add Cardholder
-              </button>
-            </div>
+                  <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Plus size={16} /> Add Cardholder
+                  </button>
+                </div>
 
-            {/* Cardholders Table */}
-            {filtered.length === 0 ? (
-              <div className="card" style={{ padding: '48px', textAlign: 'center', border: '1.5px dashed var(--glass-border)' }}>
-                <Users size={48} style={{ color: 'var(--muted)', margin: '0 auto 16px' }} />
-                <h3>No cardholders enrolled yet</h3>
-                <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
-                  Enrolled students or employees will appear here in real-time.
-                </p>
-                <button className="btn btn-primary" onClick={openAddModal}>Add First Cardholder</button>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="custom-table">
-                  <thead>
-                    <tr>
-                      <th>Photo</th>
-                      <th>Name</th>
-                      <th>Department</th>
-                      {hasDesignation && <th>Designation</th>}
-                      {hasUniqueKey && <th>Unique Key</th>}
-                      {/* Dynamic Custom Text Fields */}
-                      {formFields.map(field => {
-                        const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-                        return <th key={field}>{label}</th>;
-                      })}
-                      {/* Dynamic Custom Image Fields */}
-                      {customImgFields.map(field => {
-                        const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
-                        return <th key={field.field}>{label}</th>;
-                      })}
-                      <th>Enrolled On</th>
-                      <th className="sticky-actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map(ch => {
-                      let parsedCustom: Record<string, string> = {};
-                      try {
-                        parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
-                      } catch { parsedCustom = {}; }
-
-                      return (
-                        <tr key={ch.id}>
-                          <td>
-                            <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                              {(() => {
-                                const effectivePhoto = getEffectivePhotoUrl(ch);
-                                return effectivePhoto ? (
-                                  <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                ) : (
-                                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
-                                );
-                              })()}
-                            </div>
-                          </td>
-                          <td style={{ fontWeight: 'bold' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {ch.name}
-                              {(() => {
-                                const warnings = getCardholderWarnings(ch);
-                                if (warnings.length > 0) {
-                                  return (
-                                    <span 
-                                      title={warnings.join('\n')}
-                                      style={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        background: 'rgba(245,158,11,0.15)',
-                                        color: '#fbbf24',
-                                        padding: '2px 6px',
-                                        borderRadius: '4px',
-                                        fontSize: '0.7rem',
-                                        fontWeight: 'normal',
-                                        border: '1px solid rgba(245,158,11,0.3)',
-                                        cursor: 'help'
-                                      }}
-                                    >
-                                      <AlertCircle size={12} />
-                                      {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
-                                    </span>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                           </td>
-                          <td style={{ fontSize: '0.85rem' }}>
-                            <span style={{
-                              padding: '3px 8px',
-                              borderRadius: '4px',
-                              background: ch.enrollToken === enrollToken || !ch.enrollToken ? 'rgba(255,255,255,0.05)' : 'rgba(59, 130, 246, 0.1)',
-                              color: ch.enrollToken === enrollToken || !ch.enrollToken ? 'var(--muted)' : 'var(--primary)',
-                              border: '1px solid var(--glass-border)'
-                            }}>
-                              {getCardholderDeptName(ch)}
-                            </span>
-                          </td>
-                          {hasDesignation && <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>}
-                          {hasUniqueKey && <td><code>{ch.uniqueKey || '—'}</code></td>}
-
+                {/* Cardholders Table */}
+                {filtered.length === 0 ? (
+                  <div className="card" style={{ padding: '48px', textAlign: 'center', border: '1.5px dashed var(--glass-border)' }}>
+                    <Users size={48} style={{ color: 'var(--muted)', margin: '0 auto 16px' }} />
+                    <h3>No cardholders enrolled yet</h3>
+                    <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                      Enrolled students or employees will appear here in real-time.
+                    </p>
+                    <button className="btn btn-primary" onClick={openAddModal}>Add First Cardholder</button>
+                  </div>
+                ) : (
+                  <div className="table-container">
+                    <table className="custom-table">
+                      <thead>
+                        <tr>
+                          <th>Photo</th>
+                          <th>Name</th>
+                          <th>Department</th>
+                          {hasDesignation && <th>Designation</th>}
+                          {hasUniqueKey && <th>Unique Key</th>}
                           {/* Dynamic Custom Text Fields */}
-                          {formFields.map(field => (
-                            <td key={field}>{parsedCustom[field] || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                          ))}
-
+                          {formFields.map(field => {
+                            const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                            return <th key={field}>{label}</th>;
+                          })}
                           {/* Dynamic Custom Image Fields */}
                           {customImgFields.map(field => {
-                            const val = parsedCustom[field.field];
-                            return (
-                              <td key={field.field}>
-                                {val ? (
-                                  <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                    <img src={val} alt={field.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  </div>
-                                ) : (
-                                  <span style={{ color: 'var(--muted)' }}>—</span>
-                                )}
+                            const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                            return <th key={field.field}>{label}</th>;
+                          })}
+                          <th>Enrolled On</th>
+                          <th className="sticky-actions">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtered.map(ch => {
+                          let parsedCustom: Record<string, string> = {};
+                          try {
+                            parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
+                          } catch { parsedCustom = {}; }
+
+                          return (
+                            <tr 
+                              key={ch.id}
+                              onClick={() => setSelectedCh(ch)}
+                              style={{
+                                cursor: 'pointer',
+                                background: selectedCh?.id === ch.id ? 'rgba(59, 130, 246, 0.08)' : undefined,
+                                transition: 'all 0.2s',
+                              }}
+                            >
+                              <td>
+                                <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                  {(() => {
+                                    const effectivePhoto = getEffectivePhotoUrl(ch);
+                                    return effectivePhoto ? (
+                                      <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                                    );
+                                  })()}
+                                </div>
                               </td>
+                              <td style={{ fontWeight: 'bold' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  {ch.name}
+                                  {(() => {
+                                    const warnings = getCardholderWarnings(ch);
+                                    if (warnings.length > 0) {
+                                      return (
+                                        <span 
+                                          title={warnings.join('\n')}
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            background: 'rgba(245,158,11,0.15)',
+                                            color: '#fbbf24',
+                                            padding: '2px 6px',
+                                            borderRadius: '4px',
+                                            fontSize: '0.7rem',
+                                            fontWeight: 'normal',
+                                            border: '1px solid rgba(245,158,11,0.3)',
+                                            cursor: 'help'
+                                          }}
+                                        >
+                                          <AlertCircle size={12} />
+                                          {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                        </span>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
+                                </div>
+                               </td>
+                              <td style={{ fontSize: '0.85rem' }}>
+                                <span style={{
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                  background: ch.enrollToken === enrollToken || !ch.enrollToken ? 'rgba(255,255,255,0.05)' : 'rgba(59, 130, 246, 0.1)',
+                                  color: ch.enrollToken === enrollToken || !ch.enrollToken ? 'var(--muted)' : 'var(--primary)',
+                                  border: '1px solid var(--glass-border)'
+                                }}>
+                                  {getCardholderDeptName(ch)}
+                                </span>
+                              </td>
+                              {hasDesignation && <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>}
+                              {hasUniqueKey && <td><code>{ch.uniqueKey || '—'}</code></td>}
+
+                              {/* Dynamic Custom Text Fields */}
+                              {formFields.map(field => (
+                                <td key={field}>{parsedCustom[field] || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                              ))}
+
+                              {/* Dynamic Custom Image Fields */}
+                              {customImgFields.map(field => {
+                                const val = parsedCustom[field.field];
+                                return (
+                                  <td key={field.field}>
+                                    {val ? (
+                                      <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                        <img src={val} alt={field.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: 'var(--muted)' }}>—</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+
+                              <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                                {new Date(ch.createdAt).toLocaleDateString()}
+                              </td>
+                              <td className="sticky-actions">
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={(e) => { e.stopPropagation(); setSelectedCh(ch); }} title="Preview ID Card">
+                                    <Eye size={14} style={{ color: 'var(--primary)' }} />
+                                  </button>
+                                  <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={(e) => { e.stopPropagation(); openEditModal(ch); }} title="Edit Cardholder">
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={(e) => { e.stopPropagation(); handleDeleteCardholder(ch.id); }} title="Delete Cardholder">
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Side Preview Panel */}
+              {selectedCh && template && (
+                <div style={{
+                  width: '360px',
+                  flexShrink: 0,
+                  position: 'sticky',
+                  top: '24px',
+                  background: 'var(--card-bg)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '16px',
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '20px',
+                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                  maxHeight: 'calc(100vh - 80px)',
+                  overflowY: 'auto'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>ID Card Preview</h3>
+                    <button 
+                      onClick={() => setSelectedCh(null)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '50%',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+
+                  {/* Card Preview Renderer */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                    <CardPreview
+                      template={template}
+                      cardholder={{
+                        ...selectedCh,
+                        customFields: typeof selectedCh.customFields === 'string' ? selectedCh.customFields : JSON.stringify(selectedCh.customFields || {}),
+                      }}
+                      side={previewSide}
+                      pressFonts={pressFonts}
+                      forceWeb={true}
+                      style={{
+                        width: '100%',
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                        borderRadius: '12px',
+                      }}
+                    />
+
+                    {/* Front / Back switch */}
+                    {template.backImageUrl && (
+                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                        <button
+                          onClick={() => setPreviewSide('front')}
+                          style={{
+                            padding: '6px 16px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
+                            color: previewSide === 'front' ? '#000' : 'var(--muted)',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          Front
+                        </button>
+                        <button
+                          onClick={() => setPreviewSide('back')}
+                          style={{
+                            padding: '6px 16px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
+                            color: previewSide === 'back' ? '#000' : 'var(--muted)',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          Back
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Cardholder metadata */}
+                  <div style={{
+                    borderTop: '1px solid var(--glass-border)',
+                    paddingTop: '16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    fontSize: '0.85rem'
+                  }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Cardholder Information</div>
+                    
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--muted)' }}>Name:</span>
+                      <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{selectedCh.name}</span>
+                    </div>
+
+                    {hasDesignation && selectedCh.designation && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--muted)' }}>Designation:</span>
+                        <span style={{ color: 'var(--foreground)' }}>{selectedCh.designation}</span>
+                      </div>
+                    )}
+
+                    {hasUniqueKey && selectedCh.uniqueKey && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--muted)' }}>Unique ID:</span>
+                        <span style={{ color: 'var(--foreground)' }}><code>{selectedCh.uniqueKey}</code></span>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--muted)' }}>Department:</span>
+                      <span style={{ color: 'var(--foreground)' }}>{getCardholderDeptName(selectedCh)}</span>
+                    </div>
+
+                    {/* Custom fields */}
+                    {(() => {
+                      let parsedCustom: Record<string, string> = {};
+                      try {
+                        parsedCustom = typeof selectedCh.customFields === 'string' ? JSON.parse(selectedCh.customFields) : (selectedCh.customFields || {});
+                      } catch { parsedCustom = {}; }
+                      
+                      const entries = Object.entries(parsedCustom).filter(([k, v]) => {
+                        return v && typeof v === 'string' && !v.startsWith('data:') && !v.startsWith('http');
+                      });
+
+                      if (entries.length === 0) return null;
+
+                      return (
+                        <>
+                          <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
+                          {entries.map(([key, val]) => {
+                            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                            return (
+                              <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--muted)' }}>{label}:</span>
+                                <span style={{ color: 'var(--foreground)', textAlign: 'right' }}>{val}</span>
+                              </div>
                             );
                           })}
-
-                          <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                            {new Date(ch.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="sticky-actions">
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                              <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={() => { setPreviewCardholder(ch); setPreviewSide('front'); }} title="Preview ID Card">
-                                <Eye size={14} style={{ color: 'var(--primary)' }} />
-                              </button>
-                              <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEditModal(ch)} title="Edit Cardholder">
-                                <Edit2 size={14} />
-                              </button>
-                              <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => handleDeleteCardholder(ch.id)} title="Delete Cardholder">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                        </>
                       );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           /* DEPARTMENTS TAB CONTENT */
