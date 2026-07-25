@@ -4116,7 +4116,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                     const isPdf = t.frontImageUrl?.toLowerCase().endsWith('.pdf');
                     return (
                       <option key={t.id} value={t.id}>
-                        {t.name} {isPdf ? '📄 [PDF Format]' : '🖼️ [Image Format]'}
+                        {t.name} {isPdf ? '📄 [PDF Format]' : ''}
                       </option>
                     );
                   })}
