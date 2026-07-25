@@ -2404,13 +2404,7 @@ export default function ClientDetailsPage() {
                   }
 
                   const cols = getTemplateColumns(tmpl);
-                  const hasImageCol = cols.some(c => 
-                    c.type === 'image' || 
-                    ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(c.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
-                    c.key.toLowerCase().includes('photo') ||
-                    c.key.toLowerCase().includes('picture') ||
-                    c.key.toLowerCase().includes('avatar')
-                  );
+                  const hasNameCol = cols.some(c => c.key === 'name' || c.key === 'fullName' || c.key.toLowerCase().includes('name'));
 
                   return (
                     <div key={tmpl.id || tmpl.name} style={{ marginBottom: '32px' }}>
@@ -2441,11 +2435,10 @@ export default function ClientDetailsPage() {
                                     style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
                                   />
                                 </th>
-                                {!hasImageCol && <th>Photo</th>}
                                 {cols.map(col => (
                                   <th key={col.key}>{col.label}</th>
                                 ))}
-                                {!cols.some(c => c.key === 'name' || c.key === 'fullName') && <th>Name</th>}
+                                {cols.length === 0 && <th>Name</th>}
                                 <th>Date Added</th>
                                 <th>Actions</th>
                               </tr>
@@ -2470,35 +2463,9 @@ export default function ClientDetailsPage() {
                                       />
                                     </td>
 
-                                    {!hasImageCol && (
-                                      <td>
-                                        {effectivePhoto ? (
-                                          <img 
-                                            src={effectivePhoto} 
-                                            alt={ch.name} 
-                                            style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                                          />
-                                        ) : (
-                                          <div style={{
-                                            width: '40px',
-                                            height: '40px',
-                                            borderRadius: '6px',
-                                            background: 'rgba(255,255,255,0.05)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: 'var(--muted)',
-                                            fontSize: '0.75rem'
-                                          }}>
-                                            None
-                                          </div>
-                                        )}
-                                      </td>
-                                    )}
-
-                                    {cols.map(col => {
+                                    {cols.map((col, idx) => {
                                       const val = getFieldValue(ch, col.key);
-                                      const isNameCol = col.key === 'name' || col.key === 'fullName';
+                                      const isNameCol = col.key === 'name' || col.key === 'fullName' || col.key.toLowerCase().includes('name') || (!hasNameCol && idx === 0);
                                       const isImgCol = col.type === 'image' || 
                                         ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(col.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
                                         col.key.toLowerCase().includes('photo') ||
@@ -2574,7 +2541,7 @@ export default function ClientDetailsPage() {
                                       );
                                     })}
 
-                                    {!cols.some(c => c.key === 'name' || c.key === 'fullName') && (
+                                    {cols.length === 0 && (
                                       <td style={{ fontWeight: '500' }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                           {ch.name}
