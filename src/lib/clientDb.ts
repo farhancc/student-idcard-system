@@ -3,7 +3,10 @@
 export interface CustomCard {
   id: string;
   name: string;
-  pdfBytes: string; // base64 string
+  pdfBytes: string; // base64 string for front side
+  backPdfBytes?: string; // base64 string for back side (if double-sided)
+  isDoubleSided?: boolean;
+  cardType?: string; // e.g. 'PAN Card', 'Driving License', 'Visitor Pass', etc.
   createdAt: number; // timestamp
   expiresAt: number; // timestamp
 }
@@ -30,7 +33,13 @@ export function initClientDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveCustomCard(name: string, pdfBytes: string): Promise<CustomCard> {
+export async function saveCustomCard(
+  name: string,
+  pdfBytes: string,
+  backPdfBytes?: string,
+  isDoubleSided?: boolean,
+  cardType?: string
+): Promise<CustomCard> {
   const db = await initClientDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('customCards', 'readwrite');
@@ -41,6 +50,9 @@ export async function saveCustomCard(name: string, pdfBytes: string): Promise<Cu
       id: Math.random().toString(36).substring(2) + now.toString(36),
       name,
       pdfBytes,
+      backPdfBytes,
+      isDoubleSided: !!isDoubleSided,
+      cardType: cardType || 'Custom PDF',
       createdAt: now,
       expiresAt
     };

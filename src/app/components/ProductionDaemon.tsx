@@ -501,12 +501,14 @@ export default function ProductionDaemon() {
     const rowGap = metadata.rowGap !== undefined ? Number(metadata.rowGap) : 15;
 
     let customCardPdfBytes = '';
+    let customCardBackPdfBytes = '';
     if (metadata.emptySlotStrategy === 'FILL_CUSTOM' && metadata.emptySlotCustomCardId) {
       try {
         const customCard = await getCustomCardById(metadata.emptySlotCustomCardId);
         if (customCard && customCard.pdfBytes) {
           customCardPdfBytes = customCard.pdfBytes;
-          addLog(`Found custom PDF card "${customCard.name}" in client DB to fill empty slots.`);
+          customCardBackPdfBytes = customCard.backPdfBytes || '';
+          addLog(`Found custom PDF card "${customCard.name}" (${customCard.isDoubleSided ? 'Double Sided' : 'Single Sided'}) in client DB to fill empty slots.`);
         } else {
           addLog(`Warning: Custom PDF card with ID ${metadata.emptySlotCustomCardId} not found in client DB or expired. Leaving blank.`);
         }
@@ -604,6 +606,7 @@ export default function ProductionDaemon() {
             name: 'Custom PDF Card',
             isCustomPdf: true,
             pdfBytes: customCardPdfBytes,
+            backPdfBytes: customCardBackPdfBytes || undefined,
           });
         }
       } else {
@@ -677,9 +680,16 @@ export default function ProductionDaemon() {
             frontEmbedded = fPage;
 
             if (!isSingleSided && backsY !== null) {
-              const pageIndexForBack = pageCount > 1 ? 1 : 0;
-              const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
-              backEmbedded = bPage;
+              if (ch.backPdfBytes) {
+                const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
+                const backDoc = await PDFDocument.load(backRawBytes);
+                const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                backEmbedded = bPage;
+              } else {
+                const pageIndexForBack = pageCount > 1 ? 1 : 0;
+                const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
+                backEmbedded = bPage;
+              }
             }
           } catch (loadErr: any) {
             addLog(`Error loading custom PDF page: ${loadErr.message}`);
