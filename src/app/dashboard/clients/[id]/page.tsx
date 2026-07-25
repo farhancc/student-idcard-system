@@ -260,6 +260,10 @@ export default function ClientDetailsPage() {
   const [validationResult, setValidationResult] = useState<any>(null);
   const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM'>('LEAVE_BLANK');
   const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+  const [pendingPaperSize, setPendingPaperSize] = useState('A3');
+  const [pendingOrientation, setPendingOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
+  const [pendingLayoutConfig, setPendingLayoutConfig] = useState<{ marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean; } | null>(null);
+  const [pendingCustomCardId, setPendingCustomCardId] = useState<string | undefined>(undefined);
 
   // Load local custom cards list for wizard step 4
   const loadWizardCustomCards = async () => {
@@ -1476,10 +1480,6 @@ export default function ClientDetailsPage() {
       const totalPages = Math.ceil(totalCards / cardsPerPage);
       const totalSlots = totalPages * cardsPerPage;
 
-      setValidationResult({ missingFields: missingList, totalCards, totalSlots });
-      setPendingCompileType(type);
-      setQCompiling(null);
-
       const layoutConfig = {
         marginLeft: liveML, marginRight: liveMR,
         marginTop: liveMT, marginBottom: liveMB,
@@ -1487,9 +1487,19 @@ export default function ClientDetailsPage() {
         bleed: liveBl, cropMarks: liveCrp, foldLine: liveFl,
       };
 
+      setValidationResult({ missingFields: missingList, totalCards, totalSlots });
+      setPendingCompileType(type);
+      setPendingPaperSize(livePaper);
+      setPendingOrientation(liveOri);
+      setPendingLayoutConfig(layoutConfig);
+      setPendingCustomCardId(liveCustomId);
+      setQCompiling(null);
+
       if (missingList.length > 0) {
         setShowValidationModal(true);
-      } else if (totalSlots > totalCards) {
+      } else if (totalSlots > totalCards && !cfg) {
+        // Only show the legacy empty-slot modal when NOT coming from the wizard
+        // (wizard already captured the strategy in Step 4)
         setShowEmptySlotModal(true);
       } else {
         await proceedWithQuickCompile(type, false, liveStrategy, livePaper, liveOri, layoutConfig, liveCustomId);
@@ -3647,11 +3657,19 @@ export default function ClientDetailsPage() {
                 style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
                 onClick={async () => {
                   setShowValidationModal(false);
-                  if (validationResult.totalSlots > validationResult.totalCards) {
+                  if (validationResult.totalSlots > validationResult.totalCards && !pendingLayoutConfig) {
                     setShowEmptySlotModal(true);
                   } else {
                     if (pendingCompileType) {
-                      await proceedWithQuickCompile(pendingCompileType, true, emptySlotStrategy);
+                      await proceedWithQuickCompile(
+                        pendingCompileType,
+                        true,
+                        wizardEmptySlotStrategy || emptySlotStrategy,
+                        pendingPaperSize,
+                        pendingOrientation,
+                        pendingLayoutConfig || undefined,
+                        pendingCustomCardId
+                      );
                     }
                   }
                 }}
@@ -3722,7 +3740,15 @@ export default function ClientDetailsPage() {
               <button className="btn btn-primary" onClick={async () => {
                 setShowEmptySlotModal(false);
                 if (pendingCompileType) {
-                  await proceedWithQuickCompile(pendingCompileType, true, emptySlotStrategy);
+                  await proceedWithQuickCompile(
+                    pendingCompileType,
+                    true,
+                    emptySlotStrategy,
+                    pendingPaperSize,
+                    pendingOrientation,
+                    pendingLayoutConfig || undefined,
+                    pendingCustomCardId
+                  );
                 }
               }}>
                 Confirm & Queue Print
