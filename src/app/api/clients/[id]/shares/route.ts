@@ -66,41 +66,36 @@ export async function GET(
       })
     );
 
-    // Templates for UI: prefer client-assigned templates, fall back to all press templates
-    // First check if any templates are assigned to this specific client
+    // Templates for UI: Strictly show client-assigned templates (via join table or direct column)
     const clientAssignments = await prisma.templateClientAssignment.findMany({
       where: { clientId },
       select: { templateId: true },
     });
+    const assignedIds = clientAssignments.map(a => a.templateId);
 
-    let templates: any[];
-    if (clientAssignments.length > 0) {
-      // Only show templates assigned to this client
-      const assignedIds = clientAssignments.map(a => a.templateId);
-      templates = await prisma.cardTemplate.findMany({
-        where: {
-          id: { in: assignedIds },
-          isLatest: true,
-          OR: [{ pressId: null }, { pressId }],
-        },
-        select: { id: true, name: true, frontImageUrl: true },
-      });
-    } else {
-      // No assignments — fall back to all press templates (backward compat)
-      templates = await prisma.cardTemplate.findMany({
-        where: {
-          isLatest: true,
-          OR: [{ pressId: null }, { pressId }],
-        },
-        select: { id: true, name: true, frontImageUrl: true },
-      });
-    }
+    const templates = await prisma.cardTemplate.findMany({
+      where: {
+        isLatest: true,
+        OR: [{ pressId: null }, { pressId }],
+        AND: [
+          {
+            OR: [
+              { id: { in: assignedIds } },
+              { clientId: clientId }
+            ]
+          }
+        ]
+      },
+      select: { id: true, name: true, frontImageUrl: true, clientId: true },
+    });
+
+    const hasClientAssignments = clientAssignments.length > 0 || templates.some(t => t.clientId === clientId);
 
     return NextResponse.json({
       success: true,
       shares: sharesWithCount,
       templates,
-      hasClientAssignments: clientAssignments.length > 0,
+      hasClientAssignments,
     });
   } catch (error) {
     console.error('Get client shares error:', error);
