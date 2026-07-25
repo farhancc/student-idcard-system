@@ -1577,7 +1577,16 @@ export default function ClientDetailsPage() {
         if (!f.field || seen.has(f.field) || f.type === 'qr' || f.type === 'barcode') return;
         seen.add(f.field);
 
-        const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+        let label = (f.label || f.name || f.field).trim();
+        if (!f.label && !f.name) {
+          label = f.field
+            .replace(/([A-Z])/g, ' $1')
+            .replace(/_/g, ' ')
+            .replace(/^./, (str: string) => str.toUpperCase())
+            .replace(/\s+/g, ' ')
+            .trim();
+        }
+
         cols.push({
           key: f.field,
           label,
@@ -1602,9 +1611,15 @@ export default function ClientDetailsPage() {
       try {
         const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
         const val = getCustomFieldValueCaseInsensitive(parsed, colKey);
-        if (val !== undefined && val !== null) return String(val);
+        if (val !== undefined && val !== null && String(val).trim() !== '') return String(val);
       } catch (e) {}
     }
+
+    const cleanKey = colKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (cleanKey.includes('photo') || cleanKey.includes('avatar') || cleanKey.includes('image') || cleanKey.includes('picture')) {
+      return getEffectivePhotoUrl(ch) || '';
+    }
+
     return '';
   }
 
@@ -2389,6 +2404,13 @@ export default function ClientDetailsPage() {
                   }
 
                   const cols = getTemplateColumns(tmpl);
+                  const hasImageCol = cols.some(c => 
+                    c.type === 'image' || 
+                    ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(c.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+                    c.key.toLowerCase().includes('photo') ||
+                    c.key.toLowerCase().includes('picture') ||
+                    c.key.toLowerCase().includes('avatar')
+                  );
 
                   return (
                     <div key={tmpl.id || tmpl.name} style={{ marginBottom: '32px' }}>
@@ -2419,11 +2441,10 @@ export default function ClientDetailsPage() {
                                     style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
                                   />
                                 </th>
-                                <th>Photo</th>
-                                {cols.map(col => {
-                                  if (col.type === 'image' || col.key === 'photo' || col.key === 'avatar' || col.key === 'photoUrl') return null;
-                                  return <th key={col.key}>{col.label}</th>;
-                                })}
+                                {!hasImageCol && <th>Photo</th>}
+                                {cols.map(col => (
+                                  <th key={col.key}>{col.label}</th>
+                                ))}
                                 {!cols.some(c => c.key === 'name' || c.key === 'fullName') && <th>Name</th>}
                                 <th>Date Added</th>
                                 <th>Actions</th>
@@ -2448,34 +2469,70 @@ export default function ClientDetailsPage() {
                                         style={{ width: '15px', height: '15px', cursor: 'pointer', accentColor: 'var(--primary)' }}
                                       />
                                     </td>
-                                    <td>
-                                      {effectivePhoto ? (
-                                        <img 
-                                          src={effectivePhoto} 
-                                          alt={ch.name} 
-                                          style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                                        />
-                                      ) : (
-                                        <div style={{
-                                          width: '40px',
-                                          height: '40px',
-                                          borderRadius: '6px',
-                                          background: 'rgba(255,255,255,0.05)',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          color: 'var(--muted)',
-                                          fontSize: '0.75rem'
-                                        }}>
-                                          None
-                                        </div>
-                                      )}
-                                    </td>
+
+                                    {!hasImageCol && (
+                                      <td>
+                                        {effectivePhoto ? (
+                                          <img 
+                                            src={effectivePhoto} 
+                                            alt={ch.name} 
+                                            style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                                          />
+                                        ) : (
+                                          <div style={{
+                                            width: '40px',
+                                            height: '40px',
+                                            borderRadius: '6px',
+                                            background: 'rgba(255,255,255,0.05)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: 'var(--muted)',
+                                            fontSize: '0.75rem'
+                                          }}>
+                                            None
+                                          </div>
+                                        )}
+                                      </td>
+                                    )}
 
                                     {cols.map(col => {
-                                      if (col.type === 'image' || col.key === 'photo' || col.key === 'avatar' || col.key === 'photoUrl') return null;
                                       const val = getFieldValue(ch, col.key);
                                       const isNameCol = col.key === 'name' || col.key === 'fullName';
+                                      const isImgCol = col.type === 'image' || 
+                                        ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(col.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+                                        col.key.toLowerCase().includes('photo') ||
+                                        col.key.toLowerCase().includes('picture') ||
+                                        col.key.toLowerCase().includes('avatar');
+
+                                      if (isImgCol) {
+                                        const imgUrl = val || effectivePhoto;
+                                        return (
+                                          <td key={col.key}>
+                                            {imgUrl ? (
+                                              <img 
+                                                src={imgUrl} 
+                                                alt={col.label} 
+                                                style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
+                                              />
+                                            ) : (
+                                              <div style={{
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '6px',
+                                                background: 'rgba(255,255,255,0.05)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'var(--muted)',
+                                                fontSize: '0.75rem'
+                                              }}>
+                                                None
+                                              </div>
+                                            )}
+                                          </td>
+                                        );
+                                      }
 
                                       return (
                                         <td key={col.key} style={{ fontWeight: isNameCol ? '500' : 'normal' }}>

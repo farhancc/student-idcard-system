@@ -2,6 +2,96 @@
  * Utility helper for resolving field values from cardholder records and customFields JSON,
  * supporting case-insensitive normalization, key alias mapping, and fallback standard fields.
  */
+
+/**
+ * Universal photo URL resolver matching the Client Directory table column logic.
+ */
+export function resolveCardholderPhotoUrl(
+  cardholder?: {
+    photoUrl?: string | null;
+    customFields?: string | null | Record<string, any>;
+  } | null,
+  customData?: Record<string, any>
+): string | null {
+  if (!cardholder) return null;
+
+  // 1. Direct photoUrl property
+  if (
+    cardholder.photoUrl &&
+    typeof cardholder.photoUrl === 'string' &&
+    cardholder.photoUrl.trim() !== '' &&
+    cardholder.photoUrl !== 'null' &&
+    cardholder.photoUrl !== 'undefined'
+  ) {
+    return cardholder.photoUrl.trim();
+  }
+
+  // 2. Custom fields
+  let customObj: Record<string, any> = customData || {};
+  if (!customData && cardholder.customFields) {
+    if (typeof cardholder.customFields === 'string') {
+      try {
+        customObj = JSON.parse(cardholder.customFields);
+      } catch (e) {}
+    } else if (typeof cardholder.customFields === 'object') {
+      customObj = cardholder.customFields || {};
+    }
+  }
+
+  if (customObj && typeof customObj === 'object') {
+    const photoKeys = [
+      'photo',
+      'photourl',
+      'photo_url',
+      'avatar',
+      'image',
+      'picture',
+      'student_photo',
+      'employee_photo',
+      'studentphoto',
+      'employeephoto',
+      'pic',
+      'profile',
+      'profilephoto',
+      'profile_photo',
+      'photopath',
+      'photo_path',
+    ];
+
+    // Priority search by key
+    for (const key of Object.keys(customObj)) {
+      const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (photoKeys.includes(cleanKey)) {
+        const val = customObj[key];
+        if (val && typeof val === 'string' && val.trim() !== '' && val !== 'null' && val !== 'undefined') {
+          return val.trim();
+        }
+      }
+    }
+
+    // Fallback: search values for image URLs or base64
+    for (const [_, val] of Object.entries(customObj)) {
+      if (val && typeof val === 'string') {
+        const cleanVal = val.trim();
+        if (
+          cleanVal.startsWith('http://') ||
+          cleanVal.startsWith('https://') ||
+          cleanVal.startsWith('data:image/') ||
+          cleanVal.startsWith('/uploads/') ||
+          cleanVal.startsWith('uploads/') ||
+          cleanVal.startsWith('/api/uploads/') ||
+          cleanVal.startsWith('local://') ||
+          cleanVal.startsWith('file://')
+        ) {
+          return cleanVal;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 export function getResolvedFieldValue(
   fieldKey: string,
   data: Record<string, any>,
@@ -39,69 +129,34 @@ export function getResolvedFieldValue(
       'field_4',
       'field_5',
       'field_6',
-      'text_1',
-      'text_2',
-      'text_3',
-      'text_4',
-      'text_5'
+      'field_7',
+      'field_8',
+      'field_9',
+      'field_10'
     ];
-    if (canvasPlaceholders.includes(lower)) return true;
-    if (lower.startsWith('field_') || lower.startsWith('text_')) return true;
 
-    return false;
+    return canvasPlaceholders.includes(lower);
   };
 
-  // Check for standard field types
-  const isNameField =
-    fieldType === 'name' ||
-    targetClean === 'name' ||
-    targetClean === 'studentname' ||
-    targetClean === 'employeename' ||
-    targetClean === 'cardholdername' ||
-    targetClean === 'fullname' ||
-    targetClean === 'candidatename' ||
-    targetClean === 'stname' ||
-    targetClean === 'firstlastname' ||
-    targetClean.includes('name');
+  const isIdField = targetClean === 'id' || fieldType === 'id';
 
-  const isIdField =
-    fieldType === 'id' ||
-    targetClean === 'id' ||
-    targetClean === 'idnumber' ||
-    targetClean === 'idno' ||
-    targetClean === 'cardid' ||
-    targetClean === 'cardno' ||
-    targetClean === 'uniqueekey' ||
-    targetClean === 'uniquekey' ||
-    targetClean === 'admissionnumber' ||
-    targetClean === 'rollnumber' ||
-    targetClean === 'admissionno' ||
-    targetClean === 'studentid' ||
-    targetClean === 'employeeid' ||
-    targetClean === 'regno' ||
-    targetClean === 'registrationno' ||
-    targetClean === 'memberid' ||
-    targetClean === 'serial' ||
-    targetClean === 'serialno' ||
-    targetClean === 'serialnumber' ||
-    targetClean.includes('unique') ||
-    targetClean.includes('studentid') ||
-    targetClean.includes('roll') ||
-    targetClean.includes('admno') ||
-    targetClean.includes('empid') ||
-    targetClean.includes('idno') ||
-    targetClean.includes('idnumber') ||
-    targetClean.includes('cardid') ||
-    targetClean.includes('regno');
+  // 1. Try exact match in data object first (if not a placeholder or invalid value)
+  if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
+    if (!isIdField || fieldKey !== 'cardSerial') {
+      return data[fieldKey];
+    }
+  }
 
-  const isSerialField =
-    targetClean === 'serial' ||
-    targetClean === 'cardserial' ||
-    targetClean === 'serialno' ||
-    targetClean === 'serialnumber' ||
-    targetClean.includes('serial');
+  // 2. Try normalized exact match in data
+  for (const [k, v] of Object.entries(data)) {
+    if (clean(k) === targetClean && v !== undefined && v !== null && !isPlaceholderValue(v)) {
+      if (!isIdField || k !== 'cardSerial') {
+        return v;
+      }
+    }
+  }
 
-  // Parse customFields if present
+  // 3. Try customFields JSON if passed as string or object
   let customObj: Record<string, any> = {};
   if (cardholder.customFields) {
     if (typeof cardholder.customFields === 'string') {
@@ -109,74 +164,51 @@ export function getResolvedFieldValue(
         customObj = JSON.parse(cardholder.customFields);
       } catch (e) {}
     } else if (typeof cardholder.customFields === 'object') {
-      customObj = cardholder.customFields || {};
+      customObj = cardholder.customFields;
     }
   }
 
-  // 1. Try exact match in data object first (if not a placeholder and not cardSerial for ID fields)
-  if (data[fieldKey] !== undefined && data[fieldKey] !== null && !isPlaceholderValue(data[fieldKey])) {
-    if (!isIdField || fieldKey !== 'cardSerial') {
-      return data[fieldKey];
-    }
-  }
-
-  // 2. Try normalized search across data keys
-  if (targetClean) {
-    for (const k of Object.keys(data)) {
-      if (clean(k) === targetClean) {
-        if (data[k] !== undefined && data[k] !== null && !isPlaceholderValue(data[k])) {
-          if (!isIdField || k !== 'cardSerial') {
-            return data[k];
-          }
-        }
+  // Check normalized keys in customFields
+  for (const [k, v] of Object.entries(customObj)) {
+    if (clean(k) === targetClean && v !== undefined && v !== null && !isPlaceholderValue(v)) {
+      if (!isIdField || k !== 'cardSerial') {
+        return v;
       }
     }
   }
 
-  // 3. Try exact match in customObj
-  if (customObj[fieldKey] !== undefined && customObj[fieldKey] !== null && !isPlaceholderValue(customObj[fieldKey])) {
-    return customObj[fieldKey];
-  }
+  // 4. Standard Field Alias Resolution
 
-  // 4. Try normalized search inside customObj keys
-  if (targetClean && customObj) {
+  // ID resolution
+  if (isIdField) {
+    // Priority 1: Check if customObj has an explicit ID field
     for (const [ck, cv] of Object.entries(customObj)) {
-      if (clean(ck) === targetClean) {
-        if (cv !== undefined && cv !== null && !isPlaceholderValue(cv)) {
-          return cv;
-        }
+      const ckClean = clean(ck);
+      if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'rollno' || ckClean === 'admno') && cv && !isPlaceholderValue(cv)) {
+        return cv;
       }
+    }
+    // Priority 2: Use cardholder's uniqueKey if set
+    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
+      return cardholder.uniqueKey;
+    }
+    // Priority 3: Fall back to cardSerial if uniqueKey isn't available
+    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') {
+      return cardholder.cardSerial;
     }
   }
 
-  // 5. NAME resolution fallback
+  // NAME resolution fallback
+  const isNameField =
+    targetClean === 'name' ||
+    targetClean === 'fullname' ||
+    targetClean === 'studentname' ||
+    targetClean === 'employeename' ||
+    targetClean.includes('name');
+
   if (isNameField) {
     if (cardholder.name && String(cardholder.name).trim() !== '' && !isPlaceholderValue(cardholder.name)) {
       return cardholder.name;
-    }
-    for (const [ck, cv] of Object.entries(customObj)) {
-      const ckClean = clean(ck);
-      if ((ckClean.includes('name') || ckClean === 'stname') && cv && !isPlaceholderValue(cv)) {
-        return cv;
-      }
-    }
-  }
-
-  // 6. UNIQUE ID resolution fallback (Always prioritize uniqueKey and custom ID fields over cardSerial!)
-  if (isIdField) {
-    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '' && !isPlaceholderValue(cardholder.uniqueKey)) {
-      return cardholder.uniqueKey;
-    }
-    // Search customObj for any key that looks like an ID / Roll / Admission / Reg / Serial Number
-    for (const [ck, cv] of Object.entries(customObj)) {
-      const ckClean = clean(ck);
-      if (
-        (ckClean.includes('id') || ckClean.includes('roll') || ckClean.includes('adm') || ckClean.includes('unique') || ckClean.includes('reg') || ckClean.includes('cardno') || ckClean.includes('serial')) &&
-        cv &&
-        !isPlaceholderValue(cv)
-      ) {
-        return cv;
-      }
     }
   }
 
@@ -205,18 +237,16 @@ export function getResolvedFieldValue(
     targetClean === 'avatar' ||
     targetClean.includes('photo') ||
     targetClean.includes('picture') ||
-    targetClean.includes('avatar');
+    targetClean.includes('avatar') ||
+    fieldType === 'image';
 
   if (isPhotoField) {
-    if (cardholder.photoUrl && String(cardholder.photoUrl).trim() !== '') return cardholder.photoUrl;
-    for (const [ck, cv] of Object.entries(customObj)) {
-      if (typeof cv === 'string' && (cv.startsWith('http') || cv.startsWith('data:image'))) {
-        return cv;
-      }
-    }
+    const resolvedPhoto = resolveCardholderPhotoUrl(cardholder, customObj);
+    if (resolvedPhoto) return resolvedPhoto;
   }
 
   // SERIAL resolution fallback
+  const isSerialField = targetClean === 'cardserial' || targetClean === 'serial' || targetClean === 'serialno';
   if (isSerialField) {
     // If customObj has explicit serial field, use it
     for (const [ck, cv] of Object.entries(customObj)) {
@@ -243,4 +273,72 @@ export function getResolvedFieldValue(
   }
 
   return undefined;
+}
+
+export function isPlaceholderStaticValue(val: any, fieldKey?: string): boolean {
+  if (val === undefined || val === null) return true;
+  const str = String(val).trim();
+  if (!str) return true;
+  const lower = str.toLowerCase();
+  
+  // If fieldKey is 'id', do not treat values as placeholders unless strictly generic builder text
+  if (fieldKey && (fieldKey.toLowerCase() === 'id' || fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '') === 'id')) {
+    return lower === 'field_1' || lower === 'static text' || lower === 'sample text';
+  }
+
+  const canvasPlaceholders = [
+    'static text',
+    'sample text',
+    'field_1',
+    'field_2',
+    'field_3',
+    'field_4',
+    'field_5',
+    'field_6',
+    'field_7',
+    'field_8',
+    'field_9',
+    'field_10'
+  ];
+
+  return canvasPlaceholders.includes(lower);
+}
+
+export function computeYOffsets(
+  fields: Array<any>,
+  measureTextWidth: (field: any, text: string) => number,
+  getFieldValueStr: (field: any) => string
+): Map<number, number> {
+  const yOffsets = new Map<number, number>();
+
+  for (let i = 0; i < fields.length; i++) {
+    const f = fields[i];
+    if (f.verticalAlign !== 'bottom') continue;
+
+    const baseValStr = getFieldValueStr(f);
+    if (!baseValStr) continue;
+
+    const baseWidth = measureTextWidth(f, baseValStr);
+    const textHeight = f.fontSize || 20;
+
+    let shiftY = 0;
+    for (let j = 0; j < i; j++) {
+      const topF = fields[j];
+      if (topF.verticalAlign === 'bottom') continue;
+
+      const topValStr = getFieldValueStr(topF);
+      if (!topValStr) continue;
+
+      const topWidth = measureTextWidth(topF, topValStr);
+      const leftOverlap = Math.max(f.x, topF.x);
+      const rightOverlap = Math.min(f.x + baseWidth, topF.x + topWidth);
+
+      if (leftOverlap < rightOverlap) {
+        shiftY += textHeight;
+      }
+    }
+    yOffsets.set(i, shiftY);
+  }
+
+  return yOffsets;
 }

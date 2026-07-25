@@ -50,8 +50,8 @@ export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: s
 const globalBgBytesCache = new Map<string, Uint8Array>();
 const globalFontBytesCache = new Map<string, ArrayBuffer>();
 
-import { getResolvedFieldValue } from './field-resolver';
-export { getResolvedFieldValue };
+import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl };
 
 /**
  * Loads a custom font using the browser's FontFace API.
@@ -85,9 +85,19 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
       reject(new Error('Image URL is empty'));
       return;
     }
-    let srcUrl = url;
-    if (typeof window !== 'undefined' && srcUrl.startsWith('/')) {
-      srcUrl = `${window.location.origin}${srcUrl}`;
+    let srcUrl = url.trim();
+    if (typeof window !== 'undefined') {
+      if (srcUrl.startsWith('/')) {
+        srcUrl = `${window.location.origin}${srcUrl}`;
+      } else if (
+        !srcUrl.startsWith('http://') &&
+        !srcUrl.startsWith('https://') &&
+        !srcUrl.startsWith('data:image/') &&
+        !srcUrl.startsWith('local://') &&
+        !srcUrl.startsWith('file://')
+      ) {
+        srcUrl = `${window.location.origin}/${srcUrl}`;
+      }
     }
     const img = new Image();
     if (srcUrl.startsWith('http://') || srcUrl.startsWith('https://')) {
@@ -377,7 +387,13 @@ export async function renderCardSideClient(
   }
 
   // 3. Parse Custom Fields JSON
-  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+  const customData = cardholder.customFields
+    ? typeof cardholder.customFields === 'string'
+      ? JSON.parse(cardholder.customFields)
+      : cardholder.customFields
+    : {};
+
+  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
 
   // Formatted date string for validTill
   let formattedValidTill = '';
@@ -390,13 +406,20 @@ export async function renderCardSideClient(
   const data: Record<string, any> = {
     name: cardholder.name || '',
     designation: cardholder.designation || '',
-    photo: cardholder.photoUrl || '',
+    photo: effectivePhotoUrl || cardholder.photoUrl || '',
+    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
     uniqueKey: cardholder.uniqueKey || '',
     id: cardholder.uniqueKey || '',
     validTill: formattedValidTill,
     ...customData,
   };
+
+  // Ensure effectivePhotoUrl overwrites any empty photo key from customData
+  if (effectivePhotoUrl) {
+    data.photo = effectivePhotoUrl;
+    data.photoUrl = effectivePhotoUrl;
+  }
 
   // 4. Pre-compute Y offsets
   const tempCanvas = document.createElement('canvas');
@@ -410,10 +433,19 @@ export async function renderCardSideClient(
     if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
       rv = cardholder.uniqueKey || '';
     }
-    if (f.type === 'image' && !rv) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rv = cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      const isValidImage = typeof rv === 'string' && (
+        rv.startsWith('http://') ||
+        rv.startsWith('https://') ||
+        rv.startsWith('data:image/') ||
+        rv.startsWith('/uploads/') ||
+        rv.startsWith('uploads/') ||
+        rv.startsWith('/api/uploads/') ||
+        rv.startsWith('local://') ||
+        rv.startsWith('file://')
+      );
+      if (!isValidImage) {
+        rv = effectivePhotoUrl || cardholder.photoUrl || '';
       }
     }
     if (rv === undefined || rv === null) return '';
@@ -459,10 +491,19 @@ export async function renderCardSideClient(
         rawValue = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && !rawValue) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rawValue = cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      const isValidImage = typeof rawValue === 'string' && (
+        rawValue.startsWith('http://') ||
+        rawValue.startsWith('https://') ||
+        rawValue.startsWith('data:image/') ||
+        rawValue.startsWith('/uploads/') ||
+        rawValue.startsWith('uploads/') ||
+        rawValue.startsWith('/api/uploads/') ||
+        rawValue.startsWith('local://') ||
+        rawValue.startsWith('file://')
+      );
+      if (!isValidImage) {
+        rawValue = effectivePhotoUrl || cardholder.photoUrl || '';
       }
     }
     if (rawValue === undefined || rawValue === null) continue;

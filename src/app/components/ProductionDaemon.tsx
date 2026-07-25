@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, embedImageBuffer } from '@/lib/pdf/card-renderer-client';
+import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
 async function safeDrawTextClient(
@@ -306,13 +307,15 @@ export default function ProductionDaemon() {
   };
 
   const cachePhotosForJob = async (cardholdersList: any[]) => {
-    const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
-    if (!electronAPI) return;
-
     addLog(`Pre-caching ${cardholdersList.length} photo(s) locally...`);
     for (let i = 0; i < cardholdersList.length; i++) {
       const ch = cardholdersList[i];
-      if (ch.photoUrl) {
+      const effectivePhoto = resolveCardholderPhotoUrl(ch);
+      if (effectivePhoto) {
+        ch.photoUrl = effectivePhoto;
+      }
+      const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+      if (electronAPI && ch.photoUrl) {
         try {
           const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
           if (res && res.success && res.localUrl) {

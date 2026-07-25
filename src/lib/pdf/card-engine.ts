@@ -4,7 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { getResolvedFieldValue } from './field-resolver';
+import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -69,18 +69,23 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
   if (fileUrl.startsWith('/')) {
     const filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
-    return fs.readFileSync(filePath);
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath);
+    }
   } else if (fileUrl.startsWith('http')) {
     const res = await fetch(fileUrl);
     if (!res.ok) throw new Error(`Failed to download file: ${res.statusText}`);
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
-  } else {
-    if (fs.existsSync(fileUrl)) {
-      return fs.readFileSync(fileUrl);
-    }
-    throw new Error(`File not found: ${fileUrl}`);
   }
+  if (fs.existsSync(fileUrl)) {
+    return fs.readFileSync(fileUrl);
+  }
+  const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
+  if (fs.existsSync(publicPath)) {
+    return fs.readFileSync(publicPath);
+  }
+  throw new Error(`File not found: ${fileUrl}`);
 }
 
 /**
@@ -878,7 +883,13 @@ export async function renderCardSideToPdfBytes(
   }
 
   // 3. Prepare data
-  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+  const customData = cardholder.customFields
+    ? typeof cardholder.customFields === 'string'
+      ? JSON.parse(cardholder.customFields)
+      : cardholder.customFields
+    : {};
+
+  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
 
   let formattedValidTill = '';
   if (validTillDate) {
@@ -890,13 +901,19 @@ export async function renderCardSideToPdfBytes(
   const data: Record<string, any> = {
     name: cardholder.name || '',
     designation: cardholder.designation || '',
-    photo: cardholder.photoUrl || '',
+    photo: effectivePhotoUrl || cardholder.photoUrl || '',
+    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
     uniqueKey: cardholder.uniqueKey || '',
     id: cardholder.uniqueKey || '',
     validTill: formattedValidTill,
     ...customData,
   };
+
+  if (effectivePhotoUrl) {
+    data.photo = effectivePhotoUrl;
+    data.photoUrl = effectivePhotoUrl;
+  }
 
   // 4. Pre-embed fonts to allow accurate text measurement in computeYOffsets
   const fontCache = new Map<string, any>();
@@ -1416,11 +1433,36 @@ export async function renderCardSideToPdfBytes(
       }
 
       case 'image': {
+        if (f.type === 'image') {
+          const isValidImage = typeof rawValue === 'string' && (
+            rawValue.startsWith('http://') ||
+            rawValue.startsWith('https://') ||
+            rawValue.startsWith('data:image/') ||
+            rawValue.startsWith('/uploads/') ||
+            rawValue.startsWith('uploads/') ||
+            rawValue.startsWith('/api/uploads/') ||
+            rawValue.startsWith('local://') ||
+            rawValue.startsWith('file://')
+          );
+          if (!isValidImage) {
+            rawValue = effectivePhotoUrl || cardholder.photoUrl || '';
+          }
+        }
         if (!rawValue) continue;
         try {
-          let absoluteImgPath = rawValue;
-          if (rawValue.startsWith('/')) {
-            absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', rawValue);
+          let absoluteImgPath = String(rawValue).trim();
+          if (absoluteImgPath.startsWith('/')) {
+            absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', absoluteImgPath);
+          } else if (
+            !absoluteImgPath.startsWith('http') &&
+            !absoluteImgPath.startsWith('data:image') &&
+            !absoluteImgPath.startsWith('local://') &&
+            !absoluteImgPath.startsWith('file://')
+          ) {
+            const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', absoluteImgPath);
+            if (fs.existsSync(publicPath)) {
+              absoluteImgPath = publicPath;
+            }
           }
           const img = await safeLoadImage(absoluteImgPath);
 
