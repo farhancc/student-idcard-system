@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "prisma generate",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "build": "prisma migrate deploy --no-advisory-lock && prisma generate && next build",
     "start": "next start",
     "lint": "eslint"
   },
