@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, FileText, Zap, CheckCircle2, AlertCircle, Upload, Layers } from 'lucide-react';
+import { X, FileText, Zap, CheckCircle2, AlertCircle, Plus, Trash2, Layers } from 'lucide-react';
 
 export interface CompileWizardConfig {
   compileType: 'APPROVAL' | 'PRODUCTION';
@@ -13,6 +13,15 @@ export interface CompileWizardConfig {
   bleed: number; cropMarks: boolean; foldLine: boolean;
   emptySlotStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM';
   customCardId?: string;
+}
+
+interface AddedFillerCard {
+  id: string;
+  title: string;
+  isDoubleSided: boolean;
+  frontFile: File;
+  backFile: File | null;
+  slotsToFill: number;
 }
 
 interface Props {
@@ -37,16 +46,16 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
   const [cropMarks, setCropMarks] = useState(true);
   const [foldLine, setFoldLine] = useState(true);
   const [strategy, setStrategy] = useState<'LEAVE_BLANK'|'REPEAT_LAST'|'REPEAT_FIRST'|'FILL_CUSTOM'>('LEAVE_BLANK');
-  const [customCards, setCustomCards] = useState<any[]>([]);
-  const [selectedCardId, setSelectedCardId] = useState('');
-  
-  // Custom Card Upload State
+
+  // Multi-Card Filler State
+  const [addedFillerCards, setAddedFillerCards] = useState<AddedFillerCard[]>([]);
   const [uploadTitle, setUploadTitle] = useState('');
   const [isDoubleSided, setIsDoubleSided] = useState(false);
   const [frontFile, setFrontFile] = useState<File | null>(null);
   const [backFile, setBackFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState('');
+  const [slotsCount, setSlotsCount] = useState<number>(1);
+  const [formError, setFormError] = useState('');
+  const [preparingCompile, setPreparingCompile] = useState(false);
 
   // Calculate live slot capacity
   const calcSlots = () => {
@@ -77,23 +86,57 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
   };
 
   const { totalSlots, emptySlots } = calcSlots();
+  const totalAssignedSlots = addedFillerCards.reduce((acc, c) => acc + c.slotsToFill, 0);
+  const remainingSlots = Math.max(0, emptySlots - totalAssignedSlots);
 
   useEffect(() => {
     if (step === 4) {
-      loadCards();
       if (emptySlots === 0 && strategy === 'FILL_CUSTOM') {
         setStrategy('LEAVE_BLANK');
       }
     }
   }, [step, emptySlots]);
 
-  const loadCards = async () => {
-    try {
-      const { getCustomCards } = await import('@/lib/clientDb');
-      const list = await getCustomCards();
-      setCustomCards(list);
-      if (list.length > 0 && !selectedCardId) setSelectedCardId(list[0].id);
-    } catch {}
+  useEffect(() => {
+    // Reset slots count default whenever remaining slots change
+    setSlotsCount(remainingSlots > 0 ? 1 : 0);
+  }, [remainingSlots]);
+
+  const handleAddCardToList = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    if (!frontFile) {
+      setFormError('Please select Front Side File (PDF/Image).');
+      return;
+    }
+    if (isDoubleSided && !backFile) {
+      setFormError('Please select Back Side File (PDF/Image).');
+      return;
+    }
+    if (slotsCount < 1 || slotsCount > remainingSlots) {
+      setFormError(`Slots to fill must be between 1 and ${remainingSlots}.`);
+      return;
+    }
+
+    const title = uploadTitle.trim() || frontFile.name.replace(/\.[^/.]+$/, "");
+    const newCard: AddedFillerCard = {
+      id: Math.random().toString(36).substring(2) + Date.now().toString(36),
+      title,
+      isDoubleSided,
+      frontFile,
+      backFile: isDoubleSided ? backFile : null,
+      slotsToFill: slotsCount,
+    };
+
+    setAddedFillerCards(prev => [...prev, newCard]);
+    setUploadTitle('');
+    setFrontFile(null);
+    setBackFile(null);
+    setIsDoubleSided(false);
+  };
+
+  const handleRemoveCard = (id: string) => {
+    setAddedFillerCards(prev => prev.filter(c => c.id !== id));
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -108,54 +151,54 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
     });
   };
 
-  const handleUploadCustomCard = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setUploadError('');
-    if (!frontFile) {
-      setUploadError('Please select front side PDF/image file.');
-      return;
-    }
-    if (isDoubleSided && !backFile) {
-      setUploadError('Please select back side PDF/image file.');
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const frontBase64 = await fileToBase64(frontFile);
-      const backBase64 = isDoubleSided && backFile ? await fileToBase64(backFile) : undefined;
-      const title = uploadTitle.trim() || frontFile.name.replace(/\.[^/.]+$/, "");
-
-      const { saveCustomCard } = await import('@/lib/clientDb');
-      const saved = await saveCustomCard(title, frontBase64, backBase64, isDoubleSided, isDoubleSided ? 'Double Sided' : 'Single Sided');
-      setSelectedCardId(saved.id);
-      setFrontFile(null);
-      setBackFile(null);
-      setUploadTitle('');
-      await loadCards();
-    } catch (err: any) {
-      setUploadError(err?.message || 'Failed to save custom card.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this custom card?')) return;
-    const { deleteCustomCard } = await import('@/lib/clientDb');
-    await deleteCustomCard(id);
-    if (selectedCardId === id) setSelectedCardId('');
-    await loadCards();
-  };
-
-  const handleCompile = () => {
+  const handleCompile = async () => {
     if (!compileType) return;
+
+    let customCardPayload: string | undefined = undefined;
+
+    if (emptySlots > 0 && strategy === 'FILL_CUSTOM') {
+      if (addedFillerCards.length === 0) {
+        alert('Please add at least 1 custom card to fill the empty slots.');
+        return;
+      }
+
+      setPreparingCompile(true);
+      try {
+        const { saveCustomCard } = await import('@/lib/clientDb');
+        const cardIdList: string[] = [];
+
+        for (const card of addedFillerCards) {
+          const frontBase64 = await fileToBase64(card.frontFile);
+          const backBase64 = card.isDoubleSided && card.backFile ? await fileToBase64(card.backFile) : undefined;
+          
+          const savedCard = await saveCustomCard(
+            card.title,
+            frontBase64,
+            backBase64,
+            card.isDoubleSided,
+            card.isDoubleSided ? 'Double Sided' : 'Single Sided'
+          );
+
+          // Repeat this card ID according to slotsToFill count
+          for (let s = 0; s < card.slotsToFill; s++) {
+            cardIdList.push(savedCard.id);
+          }
+        }
+
+        customCardPayload = JSON.stringify(cardIdList);
+      } catch (err: any) {
+        alert('Failed to process custom card files: ' + (err?.message || err));
+        setPreparingCompile(false);
+        return;
+      }
+    }
+
     onCompile({
       compileType, paperSize, orientation,
       marginLeft, marginRight, marginTop, marginBottom,
       colGap, rowGap, bleed, cropMarks, foldLine,
       emptySlotStrategy: emptySlots > 0 ? strategy : 'LEAVE_BLANK',
-      customCardId: (emptySlots > 0 && strategy === 'FILL_CUSTOM') ? selectedCardId : undefined,
+      customCardId: customCardPayload,
     });
   };
 
@@ -172,7 +215,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 9900, background: 'rgba(3,4,7,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '540px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', maxHeight: '90vh', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '20px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)', maxHeight: '90vh', overflowY: 'auto' }}>
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -299,7 +342,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
               { v: 'LEAVE_BLANK', label: 'Leave Blank', desc: 'Keep empty slots as white space.' },
               { v: 'REPEAT_LAST', label: 'Repeat Last Card', desc: 'Fill slots by repeating the last card.' },
               { v: 'REPEAT_FIRST', label: 'Repeat First Card', desc: 'Fill slots with the first card (calibration).' },
-              { v: 'FILL_CUSTOM', label: 'Custom Filler Card (PAN, Driving License, Visitor ID)', desc: emptySlots > 0 ? `Upload single/double sided PDF card to fill all ${emptySlots} empty slots.` : 'Disabled — No empty slots remaining.' },
+              { v: 'FILL_CUSTOM', label: 'Custom Filler Cards (PAN, Driving License, Visitor ID)', desc: emptySlots > 0 ? `Add custom cards to fill all ${emptySlots} empty slot(s).` : 'Disabled — No empty slots remaining.' },
             ] as const).map(opt => {
               const disabled = opt.v === 'FILL_CUSTOM' && emptySlots === 0;
               return (
@@ -322,127 +365,174 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
               );
             })}
 
-            {/* Custom Card Selection & Upload Form */}
+            {/* Custom Multi-Card Filler Form */}
             {strategy === 'FILL_CUSTOM' && emptySlots > 0 && (
               <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)', display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '4px' }}>
                 
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Layers size={15} color="var(--primary)" /> Fill {emptySlots} Empty Slot(s)
-                  </span>
-                  <span style={{ fontSize: '0.72rem', background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(99,102,241,0.3)' }}>
-                    Fills all remaining slots
-                  </span>
+                {/* Header Progress Bar */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Layers size={15} color="var(--primary)" /> Fill {emptySlots} Empty Slot(s)
+                    </span>
+                    <span style={{ fontSize: '0.74rem', color: remainingSlots === 0 ? '#4ade80' : '#a5b4fc', fontWeight: 600 }}>
+                      {totalAssignedSlots} / {emptySlots} Slots Assigned {remainingSlots === 0 ? '✓ All Full' : `(${remainingSlots} left)`}
+                    </span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(100, (totalAssignedSlots / emptySlots) * 100)}%`, height: '100%', background: remainingSlots === 0 ? '#22c55e' : 'var(--primary)', transition: 'all 0.3s' }} />
+                  </div>
                 </div>
 
-                {/* Existing Saved Local Cards */}
-                {customCards.length > 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Select Saved Local Card</span>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <select value={selectedCardId} onChange={e => setSelectedCardId(e.target.value)} style={{ ...inp, flex: 1 }}>
-                        {customCards.map(c => (
-                          <option key={c.id} value={c.id} style={{ background: '#0a0d14' }}>
-                            {c.name} {c.isDoubleSided ? '[Double Sided]' : '[Single Sided]'} — {new Date(c.createdAt).toLocaleDateString()}
-                          </option>
-                        ))}
-                      </select>
-                      <button type="button" onClick={() => handleDelete(selectedCardId)} style={{ padding: '7px 12px', background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '6px', cursor: 'pointer', fontSize: '0.78rem' }}>Delete</button>
+                {/* List of Added Cards */}
+                {addedFillerCards.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '0.76rem', color: 'var(--muted)', fontWeight: 500 }}>Added Custom Cards ({addedFillerCards.length})</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto' }}>
+                      {addedFillerCards.map((card, idx) => (
+                        <div key={card.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700 }}>
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#fff' }}>{card.title}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                                {card.isDoubleSided ? 'Double Sided (Front & Back)' : 'Single Sided'} • {card.slotsToFill} Slot{card.slotsToFill > 1 ? 's' : ''}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCard(card.id)}
+                            style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                            title="Remove card"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {/* Upload New Custom Card Form */}
-                <form onSubmit={handleUploadCustomCard} style={{ borderTop: customCards.length > 0 ? '1px solid var(--glass-border)' : 'none', paddingTop: customCards.length > 0 ? '12px' : '0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Upload size={14} /> Upload New Custom Card (PAN, Driving License, etc.)
-                  </span>
+                {/* Form to add another custom card */}
+                {remainingSlots > 0 ? (
+                  <form onSubmit={handleAddCardToList} style={{ borderTop: addedFillerCards.length > 0 ? '1px solid var(--glass-border)' : 'none', paddingTop: addedFillerCards.length > 0 ? '12px' : '0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Plus size={14} color="var(--primary)" /> Add Custom Filler Card {addedFillerCards.length > 0 ? `(#${addedFillerCards.length + 1})` : ''}
+                    </span>
 
-                  {uploadError && (
-                    <div style={{ fontSize: '0.75rem', color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '6px 10px', borderRadius: '6px' }}>
-                      {uploadError}
-                    </div>
-                  )}
+                    {formError && (
+                      <div style={{ fontSize: '0.75rem', color: '#ef4444', background: 'rgba(239,68,68,0.1)', padding: '6px 10px', borderRadius: '6px' }}>
+                        {formError}
+                      </div>
+                    )}
 
-                  {/* Card Title / Name */}
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
-                    Card Title / Label (e.g. PAN Card, Visitor Pass)
-                    <input
-                      type="text"
-                      placeholder="e.g. PAN Card Front & Back"
-                      value={uploadTitle}
-                      onChange={e => setUploadTitle(e.target.value)}
-                      style={{ ...inp, width: '100%' }}
-                    />
-                  </label>
-
-                  {/* Single vs Both Sided Selection */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Card Type</span>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setIsDoubleSided(false)}
-                        style={{
-                          flex: 1, padding: '7px 10px', borderRadius: '6px', fontSize: '0.76rem',
-                          border: `1px solid ${!isDoubleSided ? 'var(--primary)' : 'var(--glass-border)'}`,
-                          background: !isDoubleSided ? 'rgba(99,102,241,0.15)' : 'transparent',
-                          color: !isDoubleSided ? '#fff' : 'var(--muted)', cursor: 'pointer'
-                        }}
-                      >
-                        Single Sided
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsDoubleSided(true)}
-                        style={{
-                          flex: 1, padding: '7px 10px', borderRadius: '6px', fontSize: '0.76rem',
-                          border: `1px solid ${isDoubleSided ? 'var(--primary)' : 'var(--glass-border)'}`,
-                          background: isDoubleSided ? 'rgba(99,102,241,0.15)' : 'transparent',
-                          color: isDoubleSided ? '#fff' : 'var(--muted)', cursor: 'pointer'
-                        }}
-                      >
-                        Both Sided (Front & Back)
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Front Side File Input */}
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Front Side (PDF / Image)</span>
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={e => setFrontFile(e.target.files?.[0] || null)}
-                      style={{ fontSize: '0.75rem', color: '#fff', padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)', cursor: 'pointer' }}
-                    />
-                  </label>
-
-                  {/* Back Side File Input (If Double Sided) */}
-                  {isDoubleSided && (
-                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                      <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Back Side (PDF / Image)</span>
+                    {/* Card Title / Label */}
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
+                      Card Title / Label (e.g. PAN Card, Driving License, Visitor ID)
                       <input
-                        type="file"
-                        accept=".pdf,image/*"
-                        onChange={e => setBackFile(e.target.files?.[0] || null)}
-                        style={{ fontSize: '0.75rem', color: '#fff', padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)', cursor: 'pointer' }}
+                        type="text"
+                        placeholder="e.g. PAN Card - Front & Back"
+                        value={uploadTitle}
+                        onChange={e => setUploadTitle(e.target.value)}
+                        style={{ ...inp, width: '100%' }}
                       />
                     </label>
-                  )}
 
-                  <button
-                    type="submit"
-                    disabled={uploading || !frontFile || (isDoubleSided && !backFile)}
-                    style={{
-                      marginTop: '4px', padding: '8px 14px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600,
-                      background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer',
-                      opacity: (uploading || !frontFile || (isDoubleSided && !backFile)) ? 0.5 : 1
-                    }}
-                  >
-                    {uploading ? 'Saving Card…' : `Save & Fill All ${emptySlots} Empty Slots`}
-                  </button>
-                </form>
+                    {/* Single vs Both Sided Selection */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Card Type</span>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                          type="button"
+                          onClick={() => setIsDoubleSided(false)}
+                          style={{
+                            flex: 1, padding: '7px 10px', borderRadius: '6px', fontSize: '0.76rem',
+                            border: `1px solid ${!isDoubleSided ? 'var(--primary)' : 'var(--glass-border)'}`,
+                            background: !isDoubleSided ? 'rgba(99,102,241,0.15)' : 'transparent',
+                            color: !isDoubleSided ? '#fff' : 'var(--muted)', cursor: 'pointer'
+                          }}
+                        >
+                          Single Sided
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsDoubleSided(true)}
+                          style={{
+                            flex: 1, padding: '7px 10px', borderRadius: '6px', fontSize: '0.76rem',
+                            border: `1px solid ${isDoubleSided ? 'var(--primary)' : 'var(--glass-border)'}`,
+                            background: isDoubleSided ? 'rgba(99,102,241,0.15)' : 'transparent',
+                            color: isDoubleSided ? '#fff' : 'var(--muted)', cursor: 'pointer'
+                          }}
+                        >
+                          Both Sided (Front & Back)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Front & Back File Inputs */}
+                    <div style={{ display: 'grid', gridTemplateColumns: isDoubleSided ? '1fr 1fr' : '1fr', gap: '10px' }}>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Front Side (PDF / Image)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          onChange={e => setFrontFile(e.target.files?.[0] || null)}
+                          style={{ fontSize: '0.75rem', color: '#fff', padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)', cursor: 'pointer' }}
+                        />
+                      </label>
+
+                      {isDoubleSided && (
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{ fontSize: '0.76rem', color: 'var(--muted)' }}>Back Side (PDF / Image)</span>
+                          <input
+                            type="file"
+                            accept=".pdf,image/*"
+                            onChange={e => setBackFile(e.target.files?.[0] || null)}
+                            style={{ fontSize: '0.75rem', color: '#fff', padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)', cursor: 'pointer' }}
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {/* Slots to fill count */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.76rem', color: 'var(--muted)' }}>
+                        Fill how many slots with this card?
+                        <select
+                          value={slotsCount}
+                          onChange={e => setSlotsCount(Number(e.target.value))}
+                          style={{ ...inp, padding: '4px 8px' }}
+                        >
+                          {Array.from({ length: remainingSlots }, (_, i) => i + 1).map(n => (
+                            <option key={n} value={n} style={{ background: '#0a0d14' }}>
+                              {n} slot{n > 1 ? 's' : ''} {n === remainingSlots ? '(All remaining)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <button
+                        type="submit"
+                        disabled={!frontFile || (isDoubleSided && !backFile)}
+                        style={{
+                          padding: '8px 14px', borderRadius: '6px', fontSize: '0.78rem', fontWeight: 600,
+                          background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '6px',
+                          opacity: (!frontFile || (isDoubleSided && !backFile)) ? 0.5 : 1
+                        }}
+                      >
+                        <Plus size={14} /> Add Card ({slotsCount} Slot{slotsCount > 1 ? 's' : ''})
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div style={{ padding: '10px 12px', borderRadius: '8px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', color: '#4ade80', fontSize: '0.78rem', textAlign: 'center', fontWeight: 500 }}>
+                    ✓ All {emptySlots} empty slot(s) assigned! Click "Compile PDF" below to process.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -455,14 +545,13 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
             <button className="btn btn-primary" onClick={() => {
               if (step === 1 && !compileType) return;
               setStep((s) => (s + 1) as any);
-              if (step + 1 === 4) loadCards();
             }} disabled={step === 1 && !compileType}>
               Next
             </button>
           ) : (
-            <button className="btn btn-primary" onClick={handleCompile} disabled={!!compiling || (strategy === 'FILL_CUSTOM' && (emptySlots === 0 || !selectedCardId))}>
-              {compiling ? <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} /> : null}
-              Compile PDF
+            <button className="btn btn-primary" onClick={handleCompile} disabled={!!compiling || preparingCompile || (strategy === 'FILL_CUSTOM' && (emptySlots === 0 || addedFillerCards.length === 0))}>
+              {compiling || preparingCompile ? <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} /> : null}
+              {preparingCompile ? ' Processing Files…' : 'Compile PDF'}
             </button>
           )}
         </div>

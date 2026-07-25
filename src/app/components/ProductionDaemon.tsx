@@ -500,20 +500,36 @@ export default function ProductionDaemon() {
     const colGap = metadata.colGap !== undefined ? Number(metadata.colGap) : 15;
     const rowGap = metadata.rowGap !== undefined ? Number(metadata.rowGap) : 15;
 
-    let customCardPdfBytes = '';
-    let customCardBackPdfBytes = '';
+    let customCardsList: Array<{ name: string; pdfBytes: string; backPdfBytes?: string }> = [];
     if (metadata.emptySlotStrategy === 'FILL_CUSTOM' && metadata.emptySlotCustomCardId) {
       try {
-        const customCard = await getCustomCardById(metadata.emptySlotCustomCardId);
-        if (customCard && customCard.pdfBytes) {
-          customCardPdfBytes = customCard.pdfBytes;
-          customCardBackPdfBytes = customCard.backPdfBytes || '';
-          addLog(`Found custom PDF card "${customCard.name}" (${customCard.isDoubleSided ? 'Double Sided' : 'Single Sided'}) in client DB to fill empty slots.`);
+        let cardIds: string[] = [];
+        try {
+          const parsed = JSON.parse(metadata.emptySlotCustomCardId);
+          if (Array.isArray(parsed)) cardIds = parsed;
+          else cardIds = [metadata.emptySlotCustomCardId];
+        } catch {
+          cardIds = [metadata.emptySlotCustomCardId];
+        }
+
+        for (const cid of cardIds) {
+          const card = await getCustomCardById(cid);
+          if (card && card.pdfBytes) {
+            customCardsList.push({
+              name: card.name,
+              pdfBytes: card.pdfBytes,
+              backPdfBytes: card.backPdfBytes || undefined,
+            });
+          }
+        }
+
+        if (customCardsList.length > 0) {
+          addLog(`Found ${customCardsList.length} custom PDF card(s) in client DB to fill empty slots.`);
         } else {
-          addLog(`Warning: Custom PDF card with ID ${metadata.emptySlotCustomCardId} not found in client DB or expired. Leaving blank.`);
+          addLog(`Warning: Custom PDF card(s) with ID(s) ${metadata.emptySlotCustomCardId} not found in client DB or expired. Leaving blank.`);
         }
       } catch (err: any) {
-        addLog(`Error loading custom PDF card from client DB: ${err.message}`);
+        addLog(`Error loading custom PDF cards from client DB: ${err.message}`);
       }
     }
 
@@ -599,14 +615,15 @@ export default function ProductionDaemon() {
         for (let i = 0; i < diff; i++) {
           finalCardholders.push({ ...firstCard });
         }
-      } else if (strategy === 'FILL_CUSTOM' && customCardPdfBytes) {
+      } else if (strategy === 'FILL_CUSTOM' && customCardsList.length > 0) {
         for (let i = 0; i < diff; i++) {
+          const cardToUse = customCardsList[i] || customCardsList[customCardsList.length - 1];
           finalCardholders.push({
             id: -999 - i,
-            name: 'Custom PDF Card',
+            name: cardToUse.name || 'Custom PDF Card',
             isCustomPdf: true,
-            pdfBytes: customCardPdfBytes,
-            backPdfBytes: customCardBackPdfBytes || undefined,
+            pdfBytes: cardToUse.pdfBytes,
+            backPdfBytes: cardToUse.backPdfBytes || undefined,
           });
         }
       } else {
