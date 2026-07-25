@@ -66,6 +66,7 @@ model CardholderValue {
 - [x] Enforce template name uniqueness validation during save, update, cloning, and marketplace purchases.
 - [x] Relocate suggested fields panel directly above the front side layout design canvas for enhanced accessibility.
 - [x] Clean up 'Select Template' dropdown in the Client Portal generator to hide '[Image Format]' suffixes.
+- [x] Strictly enforce template assignments to client organizations (removed the backward-compatible fallback showing all templates in the portal generator when no templates were assigned).
 - [ ] Refactor the visual canvas drag-and-drop state to direct CRUD (Postponed/skipped per user request).
 
 ---
