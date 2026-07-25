@@ -65,6 +65,21 @@ export async function POST(request: Request) {
       category, sides, clientIds,
     } = result.data;
 
+    // Check if a template with this name already exists for this press
+    const existing = await prisma.cardTemplate.findFirst({
+      where: {
+        pressId,
+        isLatest: true,
+        name: {
+          equals: name.trim(),
+          mode: 'insensitive',
+        },
+      },
+    });
+    if (existing) {
+      return NextResponse.json({ error: `A template with the name "${name.trim()}" already exists` }, { status: 400 });
+    }
+
     const template = await prisma.cardTemplate.create({
       data: {
         pressId,

@@ -275,11 +275,19 @@ export default function TemplatesPage() {
   const handleCloneTemplate = async (tmpl: any) => {
     setLoading(true);
     try {
+      let baseName = `${tmpl.name} (Copy)`;
+      let uniqueName = baseName;
+      let counter = 2;
+      while (templates.some(t => t.name.trim().toLowerCase() === uniqueName.trim().toLowerCase())) {
+        uniqueName = `${baseName} ${counter}`;
+        counter++;
+      }
+
       const res = await fetch('/api/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: `${tmpl.name} (Copy)`,
+          name: uniqueName,
           cardWidth: tmpl.cardWidth,
           cardHeight: tmpl.cardHeight,
           frontImageUrl: tmpl.frontImageUrl,
@@ -2275,6 +2283,14 @@ export default function TemplatesPage() {
       if (!name.trim()) {
         setTimeout(() => scrollAndFocus('template-name'), 50);
         throw new Error('Template Name is required.');
+      }
+      const nameDuplicate = templates.some(t => 
+        t.name.trim().toLowerCase() === name.trim().toLowerCase() && 
+        t.id !== editingTemplateId
+      );
+      if (nameDuplicate) {
+        setTimeout(() => scrollAndFocus('template-name'), 50);
+        throw new Error(`A template with the name "${name.trim()}" already exists.`);
       }
       if (!cardWidth || cardWidth <= 0) {
         setTimeout(() => scrollAndFocus('card-width-px'), 50);

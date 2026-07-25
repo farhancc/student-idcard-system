@@ -65,6 +65,23 @@ export async function PUT(
 
     const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId, category, sides, clientIds } = result.data;
 
+    // Check if the template name is being changed and is already taken
+    if (name && name.trim().toLowerCase() !== oldTemplate.name.trim().toLowerCase()) {
+      const existing = await prisma.cardTemplate.findFirst({
+        where: {
+          pressId,
+          isLatest: true,
+          name: {
+            equals: name.trim(),
+            mode: 'insensitive',
+          },
+        },
+      });
+      if (existing) {
+        return NextResponse.json({ error: `A template with the name "${name.trim()}" already exists` }, { status: 400 });
+      }
+    }
+
     // 1. Transaction to handle versioning
     const newTemplate = await prisma.$transaction(async (tx) => {
       await tx.cardTemplate.update({

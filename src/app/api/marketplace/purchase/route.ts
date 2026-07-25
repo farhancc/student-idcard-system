@@ -67,11 +67,24 @@ export async function POST(request: Request) {
         }
       }
 
+      // Generate a unique name for the purchased template in the buyer's library
+      let baseName = `${template.name} (Purchased)`;
+      let uniqueName = baseName;
+      let counter = 2;
+      while (true) {
+        const existing = await tx.cardTemplate.findFirst({
+          where: { pressId: buyerPressId, isLatest: true, name: uniqueName },
+        });
+        if (!existing) break;
+        uniqueName = `${baseName} ${counter}`;
+        counter++;
+      }
+
       // Clone the template to the buyer's library
       const cloned = await tx.cardTemplate.create({
         data: {
           pressId: buyerPressId,
-          name: `${template.name} (Purchased)`,
+          name: uniqueName,
           cardWidth: template.cardWidth,
           cardHeight: template.cardHeight,
           frontImageUrl: template.frontImageUrl,
