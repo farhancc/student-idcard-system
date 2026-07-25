@@ -2285,11 +2285,11 @@ export default function TemplatesPage() {
         throw new Error('Card Height is required and must be greater than 0.');
       }
       if (!finalFrontWebUrl) {
-        setTimeout(() => scrollAndFocus('front-image-url'), 50);
+        setTimeout(() => scrollAndFocus(isElectron ? 'front-image-file' : 'front-image-url'), 50);
         throw new Error('Front background design image is required.');
       }
       if (sides === 2 && !finalBackWebUrl) {
-        setTimeout(() => scrollAndFocus('back-image-url'), 50);
+        setTimeout(() => scrollAndFocus(isElectron ? 'back-image-file' : 'back-image-url'), 50);
         throw new Error('Back background design image is required for 2-sided templates.');
       }
 
@@ -3031,6 +3031,7 @@ export default function TemplatesPage() {
                 <label className="form-label" style={{ fontWeight: '500' }}>Front Background Design Image</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <input 
+                    id="front-image-file"
                     type="file" 
                     accept=".svg,.pdf,.png" 
                     className="form-input" 
@@ -3040,15 +3041,16 @@ export default function TemplatesPage() {
                   />
                   {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
                   {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
-                  <input 
-                    id="front-image-url"
-                    type="text" 
-                    required 
-                    className="form-input" 
-                    placeholder="Or paste background image URL: https://example.com/..." 
-                    value={frontImageUrl} 
-                    onChange={e => setFrontImageUrl(e.target.value)} 
-                  />
+                  {!isElectron && (
+                    <input 
+                      id="front-image-url"
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Or paste background image URL: https://example.com/..." 
+                      value={frontImageUrl} 
+                      onChange={e => setFrontImageUrl(e.target.value)} 
+                    />
+                  )}
                 </div>
               </div>
               
@@ -3057,6 +3059,7 @@ export default function TemplatesPage() {
                   <label className="form-label" style={{ fontWeight: '500' }}>Back Background Design Image <span style={{ color: '#f472b6', fontSize: '0.75rem' }}>Required for 2-sided</span></label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     <input 
+                      id="back-image-file"
                       type="file" 
                       accept=".svg,.pdf,.png" 
                       className="form-input" 
@@ -3066,14 +3069,16 @@ export default function TemplatesPage() {
                     />
                     {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
                     {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
-                    <input 
-                      id="back-image-url"
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Or paste background image URL: https://example.com/..." 
-                      value={backImageUrl} 
-                      onChange={e => setBackImageUrl(e.target.value)} 
-                    />
+                    {!isElectron && (
+                      <input 
+                        id="back-image-url"
+                        type="text" 
+                        className="form-input" 
+                        placeholder="Or paste background image URL: https://example.com/..." 
+                        value={backImageUrl} 
+                        onChange={e => setBackImageUrl(e.target.value)} 
+                      />
+                    )}
                   </div>
                 </div>
               ) : (
