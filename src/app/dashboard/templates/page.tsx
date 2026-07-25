@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -188,6 +188,21 @@ export default function TemplatesPage() {
   const [clients, setClients] = useState<any[]>([]);
   // Category filter for the list view
   const [filterCategory, setFilterCategory] = useState<TemplateCategory | 'ALL'>('ALL');
+
+  // Client multi-select dropdown states
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState('');
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target as Node)) {
+        setShowClientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Grid overlay state
   const [showGrid, setShowGrid] = useState(false);
@@ -2634,40 +2649,229 @@ export default function TemplatesPage() {
 
             {/* Assign to Clients */}
             {clients.length > 0 && (
-              <div className="form-group">
-                <label className="form-label">Assign to Clients <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(multi-select)</span></label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
-                  {clients.map((cl: any) => {
-                    const selected = selectedClientIds.includes(cl.id);
-                    return (
+              <div className="form-group" ref={clientDropdownRef} style={{ position: 'relative' }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Assign to Clients <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(multi-select)</span></span>
+                  {selectedClientIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedClientIds([])}
+                      style={{
+                        background: 'none', border: 'none', color: '#f87171', fontSize: '0.72rem', cursor: 'pointer', padding: 0
+                      }}
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </label>
+
+                {/* Dropdown Trigger */}
+                <div
+                  onClick={() => setShowClientDropdown(!showClientDropdown)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    minHeight: '42px',
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: showClientDropdown ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    cursor: 'pointer',
+                    gap: '8px',
+                    flexWrap: 'wrap',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', flex: 1 }}>
+                    {selectedClientIds.length === 0 ? (
+                      <span style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Select clients to assign...</span>
+                    ) : (
+                      selectedClientIds.map(id => {
+                        const cl = clients.find(c => c.id === id);
+                        if (!cl) return null;
+                        return (
+                          <span
+                            key={id}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '2px 8px',
+                              background: 'rgba(79, 70, 229, 0.2)',
+                              border: '1px solid rgba(79, 70, 229, 0.4)',
+                              borderRadius: '4px',
+                              color: '#818cf8',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                            }}
+                          >
+                            {cl.name}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedClientIds(prev => prev.filter(i => i !== id));
+                              }}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#a5b4fc',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: 0,
+                                cursor: 'pointer',
+                                fontSize: '0.8rem',
+                                fontWeight: 'bold',
+                                marginLeft: '2px'
+                              }}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        );
+                      })
+                    )}
+                  </div>
+                  <ChevronDown size={16} style={{ color: 'var(--muted)', transform: showClientDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                </div>
+
+                {/* Dropdown Panel */}
+                {showClientDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      left: 0,
+                      right: 0,
+                      zIndex: 100,
+                      background: 'rgba(15, 23, 42, 0.95)',
+                      backdropFilter: 'blur(12px)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5)',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                    }}
+                  >
+                    {/* Search and Action Bar */}
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ position: 'relative', flex: 1 }}>
+                        <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+                        <input
+                          type="text"
+                          placeholder="Search clients..."
+                          value={clientSearchQuery}
+                          onChange={(e) => setClientSearchQuery(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px 6px 30px',
+                            borderRadius: '6px',
+                            border: '1px solid var(--glass-border)',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            color: '#fff',
+                            fontSize: '0.8rem',
+                            outline: 'none',
+                          }}
+                        />
+                      </div>
                       <button
-                        key={cl.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedClientIds(prev =>
-                            selected ? prev.filter(id => id !== cl.id) : [...prev, cl.id]
-                          );
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const filtered = clients.filter(c => c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()));
+                          const filteredIds = filtered.map(c => c.id);
+                          setSelectedClientIds(prev => {
+                            const union = new Set([...prev, ...filteredIds]);
+                            return Array.from(union);
+                          });
                         }}
                         style={{
-                          padding: '5px 14px',
-                          borderRadius: '99px',
-                          fontSize: '0.78rem',
-                          fontWeight: selected ? 600 : 400,
-                          border: selected ? '1.5px solid rgba(79,70,229,0.7)' : '1px solid var(--glass-border)',
-                          background: selected ? 'rgba(79,70,229,0.2)' : 'rgba(255,255,255,0.04)',
-                          color: selected ? '#818cf8' : 'var(--muted)',
+                          background: 'rgba(79, 70, 229, 0.1)',
+                          border: '1px solid rgba(79, 70, 229, 0.3)',
+                          borderRadius: '6px',
+                          color: '#818cf8',
+                          fontSize: '0.72rem',
+                          padding: '6px 10px',
                           cursor: 'pointer',
-                          transition: 'all 0.15s',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {selected ? '✓ ' : ''}{cl.name}
+                        Select All
                       </button>
-                    );
-                  })}
-                </div>
-                {selectedClientIds.length > 0 && (
-                  <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px' }}>
-                    {selectedClientIds.length} client{selectedClientIds.length > 1 ? 's' : ''} assigned
+                    </div>
+
+                    {/* Scrollable List */}
+                    <div
+                      style={{
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px',
+                        paddingRight: '4px',
+                      }}
+                    >
+                      {(() => {
+                        const filtered = clients.filter(c => c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()));
+                        if (filtered.length === 0) {
+                          return (
+                            <div style={{ color: 'var(--muted)', fontSize: '0.8rem', textAlign: 'center', padding: '12px 0' }}>
+                              No clients found
+                            </div>
+                          );
+                        }
+                        return filtered.map(cl => {
+                          const isSelected = selectedClientIds.includes(cl.id);
+                          return (
+                            <div
+                              key={cl.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedClientIds(prev =>
+                                  isSelected ? prev.filter(id => id !== cl.id) : [...prev, cl.id]
+                                );
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                padding: '8px 10px',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                background: isSelected ? 'rgba(79, 70, 229, 0.08)' : 'transparent',
+                                color: isSelected ? '#818cf8' : 'var(--muted)',
+                                fontSize: '0.82rem',
+                                transition: 'all 0.15s',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(79, 70, 229, 0.12)' : 'rgba(255, 255, 255, 0.04)';
+                                e.currentTarget.style.color = '#fff';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = isSelected ? 'rgba(79, 70, 229, 0.08)' : 'transparent';
+                                e.currentTarget.style.color = isSelected ? '#818cf8' : 'var(--muted)';
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}} // Controlled via parent div onClick
+                                style={{
+                                  cursor: 'pointer',
+                                  accentColor: 'var(--primary)',
+                                }}
+                              />
+                              <span style={{ fontWeight: isSelected ? 600 : 400 }}>{cl.name}</span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
                 )}
               </div>
