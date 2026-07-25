@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient } from '@/lib/pdf/card-renderer-client';
+import { renderCardSideToPdfBytesClient, embedImageBuffer } from '@/lib/pdf/card-renderer-client';
 import { getCustomCardById } from '@/lib/clientDb';
 
 async function safeDrawTextClient(
@@ -693,32 +693,61 @@ export default function ProductionDaemon() {
         // ── Render front side as vector PDF ──
         addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Front)`);
 
-        let frontEmbedded;
-        let backEmbedded;
+        let frontEmbeddedPdf: any = null;
+        let frontEmbeddedImg: any = null;
+        let backEmbeddedPdf: any = null;
+        let backEmbeddedImg: any = null;
 
         if (ch.isCustomPdf && ch.pdfBytes) {
           try {
             const rawBytes = Uint8Array.from(atob(ch.pdfBytes), c => c.charCodeAt(0));
-            const customDoc = await PDFDocument.load(rawBytes);
-            const pageCount = customDoc.getPageCount();
-            
-            const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
-            frontEmbedded = fPage;
+            const isPdf = rawBytes[0] === 0x25 && rawBytes[1] === 0x50 && rawBytes[2] === 0x44 && rawBytes[3] === 0x46; // %PDF-
 
-            if (!isSingleSided && backsY !== null) {
-              if (ch.backPdfBytes) {
-                const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
-                const backDoc = await PDFDocument.load(backRawBytes);
-                const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
-                backEmbedded = bPage;
-              } else {
-                const pageIndexForBack = pageCount > 1 ? 1 : 0;
-                const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
-                backEmbedded = bPage;
+            if (isPdf) {
+              const customDoc = await PDFDocument.load(rawBytes);
+              const pageCount = customDoc.getPageCount();
+              const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
+              frontEmbeddedPdf = fPage;
+
+              if (!isSingleSided && backsY !== null) {
+                if (ch.backPdfBytes) {
+                  const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
+                  const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                  if (isBackPdf) {
+                    const backDoc = await PDFDocument.load(backRawBytes);
+                    const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                    backEmbeddedPdf = bPage;
+                  } else {
+                    backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                  }
+                } else {
+                  const pageIndexForBack = pageCount > 1 ? 1 : 0;
+                  const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
+                  backEmbeddedPdf = bPage;
+                }
+              }
+            } else {
+              // It's an image file (PNG / JPG / WebP / BMP / GIF)
+              frontEmbeddedImg = await embedImageBuffer(pdfDoc, rawBytes);
+
+              if (!isSingleSided && backsY !== null) {
+                if (ch.backPdfBytes) {
+                  const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
+                  const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                  if (isBackPdf) {
+                    const backDoc = await PDFDocument.load(backRawBytes);
+                    const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                    backEmbeddedPdf = bPage;
+                  } else {
+                    backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                  }
+                } else {
+                  backEmbeddedImg = frontEmbeddedImg;
+                }
               }
             }
           } catch (loadErr: any) {
-            addLog(`Error loading custom PDF page: ${loadErr.message}`);
+            addLog(`Error loading custom card asset: ${loadErr.message}`);
           }
         } else {
           const clientTemplate = {
@@ -747,11 +776,13 @@ export default function ProductionDaemon() {
           );
           const frontCardDoc = await PDFDocument.load(frontPdfBytes);
           const [fPage] = await pdfDoc.embedPdf(frontCardDoc, [0]);
-          frontEmbedded = fPage;
+          frontEmbeddedPdf = fPage;
         }
 
-        if (frontEmbedded) {
-          page.drawPage(frontEmbedded, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
+        if (frontEmbeddedPdf) {
+          page.drawPage(frontEmbeddedPdf, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
+        } else if (frontEmbeddedImg) {
+          page.drawImage(frontEmbeddedImg, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
         }
 
         // If double-sided, render back side
@@ -785,12 +816,19 @@ export default function ProductionDaemon() {
             );
             const backCardDoc = await PDFDocument.load(backPdfBytes);
             const [bPage] = await pdfDoc.embedPdf(backCardDoc, [0]);
-            backEmbedded = bPage;
+            backEmbeddedPdf = bPage;
           }
 
-          if (backEmbedded) {
-            // Draw back image rotated 180 degrees
-            page.drawPage(backEmbedded, {
+          if (backEmbeddedPdf) {
+            page.drawPage(backEmbeddedPdf, {
+              x: xPos + cWidth,
+              y: backsY + cHeight,
+              width: cWidth,
+              height: cHeight,
+              rotate: degrees(180),
+            });
+          } else if (backEmbeddedImg) {
+            page.drawImage(backEmbeddedImg, {
               x: xPos + cWidth,
               y: backsY + cHeight,
               width: cWidth,

@@ -77,17 +77,31 @@ export async function ensureFontLoadedClient(fontName: string, fontUrl: string):
 }
 
 /**
- * Loads an image in the browser.
+ * Loads an image in the browser with robust CORS fallback and relative URL resolution.
  */
 function loadImageClient(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
+    if (!url) {
+      reject(new Error('Image URL is empty'));
+      return;
+    }
+    let srcUrl = url;
+    if (typeof window !== 'undefined' && srcUrl.startsWith('/')) {
+      srcUrl = `${window.location.origin}${srcUrl}`;
+    }
     const img = new Image();
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      img.crossOrigin = 'anonymous'; // Prevent tainted canvas issues
+    if (srcUrl.startsWith('http://') || srcUrl.startsWith('https://')) {
+      img.crossOrigin = 'anonymous'; // Try anonymous first for canvas export
     }
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error(`Failed to load image: ${url}`));
-    img.src = url;
+    img.onerror = () => {
+      // Fallback: If CORS anonymous failed, try loading without crossOrigin
+      const imgFallback = new Image();
+      imgFallback.onload = () => resolve(imgFallback);
+      imgFallback.onerror = () => reject(new Error(`Failed to load image: ${srcUrl}`));
+      imgFallback.src = srcUrl;
+    };
+    img.src = srcUrl;
   });
 }
 
@@ -141,9 +155,9 @@ function generateBarcodeCanvas(text: string, width: number, height: number, scal
 
 /**
  * Robust helper to dynamically embed an image buffer as either PNG or JPEG
- * by verifying the file format magic bytes.
+ * by verifying the file format magic bytes or converting via canvas.
  */
-async function embedImageBuffer(pdfDoc: any, buffer: ArrayBuffer | Uint8Array) {
+export async function embedImageBuffer(pdfDoc: any, buffer: ArrayBuffer | Uint8Array) {
   const bytes = new Uint8Array(buffer);
   
   // PNG Magic Bytes: 0x89 0x50 0x4E 0x47
@@ -154,6 +168,30 @@ async function embedImageBuffer(pdfDoc: any, buffer: ArrayBuffer | Uint8Array) {
   // JPEG Magic Bytes: 0xFF 0xD8
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
     return pdfDoc.embedJpg(buffer);
+  }
+
+  // Fallback for WebP / GIF / BMP / non-standard images via browser Canvas:
+  if (typeof window !== 'undefined') {
+    try {
+      const blob = new Blob([bytes]);
+      const blobUrl = URL.createObjectURL(blob);
+      const img = await loadImageClient(blobUrl);
+      URL.revokeObjectURL(blobUrl);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width || 800;
+      canvas.height = img.height || 800;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0);
+        const dataUrl = canvas.toDataURL('image/png');
+        const base64 = dataUrl.split(',')[1];
+        const pngBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+        return pdfDoc.embedPng(pngBytes);
+      }
+    } catch (convErr) {
+      console.warn('Failed to convert non-PNG/JPEG image to PNG via canvas:', convErr);
+    }
   }
 
   // Attempt to parse text prefix to see if this is an HTML or JSON error response
