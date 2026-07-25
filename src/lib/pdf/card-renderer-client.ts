@@ -502,8 +502,8 @@ export async function renderCardSideClient(
         rawValue.startsWith('local://') ||
         rawValue.startsWith('file://')
       );
-      if (!isValidImage) {
-        rawValue = effectivePhotoUrl || cardholder.photoUrl || '';
+      if (!isValidImage || !rawValue) {
+        rawValue = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
       }
     }
     if (rawValue === undefined || rawValue === null) continue;
@@ -1082,11 +1082,8 @@ export async function renderCardSideToPdfBytesClient(
         rv = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && !rv) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rv = cardholder.photoUrl || '';
-      }
+    if (f.type === 'image' && (!rv || String(rv).trim() === '')) {
+      rv = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
     }
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
@@ -1411,6 +1408,9 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       case 'image': {
+        if (!rawValue || String(rawValue).trim() === '') {
+          rawValue = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
+        }
         if (!rawValue) continue;
         try {
           const imgUrl = String(rawValue);

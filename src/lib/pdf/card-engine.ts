@@ -41,6 +41,8 @@ const globalFontBufferCache = new Map<string, Buffer>();
 
 // Helper to load file (local or HTTP) as a Buffer
 async function getFileBuffer(fileUrl: string): Promise<Buffer> {
+  if (!fileUrl) throw new Error('File URL is empty');
+
   if (fileUrl.startsWith('data:')) {
     const commaIndex = fileUrl.indexOf(',');
     if (commaIndex !== -1) {
@@ -48,6 +50,7 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
       return Buffer.from(base64Data, 'base64');
     }
   }
+
   // local:// is the Electron custom protocol — on the server, strip the scheme
   // and read the file directly from disk using the absolute path embedded in the URL.
   if (fileUrl.startsWith('local://')) {
@@ -67,24 +70,53 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     }
     throw new Error(`[card-engine] local:// file not found on server: ${localPath}`);
   }
-  if (fileUrl.startsWith('/')) {
-    const filePath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
+
+  // file:// protocol handling
+  if (fileUrl.startsWith('file://')) {
+    let filePath = fileUrl.replace(/^file:\/\//i, '');
+    if (process.platform === 'win32' && filePath.startsWith('/')) {
+      filePath = filePath.slice(1);
+    }
+    filePath = decodeURIComponent(filePath);
     if (fs.existsSync(filePath)) {
       return fs.readFileSync(filePath);
     }
-  } else if (fileUrl.startsWith('http')) {
+  }
+
+  // Check if direct fileUrl path exists on disk
+  if (fs.existsSync(fileUrl)) {
+    return fs.readFileSync(fileUrl);
+  }
+
+  // Extract relative /uploads/... path if present in URL (even HTTP URLs)
+  let cleanRelPath = fileUrl;
+  if (fileUrl.includes('/uploads/')) {
+    cleanRelPath = fileUrl.substring(fileUrl.indexOf('/uploads/'));
+  } else if (fileUrl.includes('uploads/')) {
+    cleanRelPath = '/' + fileUrl.substring(fileUrl.indexOf('uploads/'));
+  } else if (fileUrl.startsWith('/')) {
+    cleanRelPath = fileUrl;
+  }
+
+  if (cleanRelPath.startsWith('/')) {
+    const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', cleanRelPath);
+    if (fs.existsSync(publicPath)) {
+      return fs.readFileSync(publicPath);
+    }
+  }
+
+  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     const res = await fetch(fileUrl);
     if (!res.ok) throw new Error(`Failed to download file: ${res.statusText}`);
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
   }
-  if (fs.existsSync(fileUrl)) {
-    return fs.readFileSync(fileUrl);
-  }
+
   const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
   if (fs.existsSync(publicPath)) {
     return fs.readFileSync(publicPath);
   }
+
   throw new Error(`File not found: ${fileUrl}`);
 }
 
@@ -529,11 +561,8 @@ export async function renderCardSide(
         rawValue = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && !rawValue) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rawValue = cardholder.photoUrl || '';
-      }
+    if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
+      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || effectivePhotoUrl || '';
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1179,11 +1208,8 @@ export async function renderCardSideToPdfBytes(
         rawValue = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && !rawValue) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rawValue = cardholder.photoUrl || '';
-      }
+    if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
+      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || effectivePhotoUrl || '';
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1444,8 +1470,8 @@ export async function renderCardSideToPdfBytes(
             rawValue.startsWith('local://') ||
             rawValue.startsWith('file://')
           );
-          if (!isValidImage) {
-            rawValue = effectivePhotoUrl || cardholder.photoUrl || '';
+          if (!isValidImage || !rawValue) {
+            rawValue = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
           }
         }
         if (!rawValue) continue;
