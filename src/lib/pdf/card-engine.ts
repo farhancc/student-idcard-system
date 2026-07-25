@@ -83,6 +83,20 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
 }
 
+/**
+ * Safe image loader that handles HTTP URLs and local files via getFileBuffer.
+ */
+async function safeLoadImage(urlOrPath: string): Promise<any> {
+  try {
+    const buffer = await getFileBuffer(urlOrPath);
+    return await loadImage(buffer);
+  } catch (err) {
+    console.error(`[safeLoadImage] Failed to load image from buffer, falling back to direct loadImage for: ${urlOrPath}`, err);
+    return await loadImage(urlOrPath);
+  }
+}
+
+
 
 /**
  * Robust helper to dynamically embed an image buffer as either PNG or JPEG
@@ -393,7 +407,7 @@ export async function renderCardSide(
       if (absoluteBgPath.startsWith('/')) {
         absoluteBgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', absoluteBgPath);
       }
-      const bg = await loadImage(absoluteBgPath);
+      const bg = await safeLoadImage(absoluteBgPath);
       ctx.drawImage(bg, 0, 0, width, height);
     } catch (err) {
       console.error(`Error loading background image ${bgUrl}:`, err);
@@ -651,7 +665,7 @@ export async function renderCardSide(
           if (rawValue.startsWith('/')) {
             absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', rawValue);
           }
-          const img = await loadImage(absoluteImgPath);
+          const img = await safeLoadImage(absoluteImgPath);
 
           ctx.save();
           // Draw image inside bounding box with optional border radius
@@ -708,7 +722,7 @@ export async function renderCardSide(
         if (!rawValue) continue;
         try {
           const qrDataUrl = await generateQrCode(String(rawValue));
-          const qrImg = await loadImage(qrDataUrl);
+          const qrImg = await safeLoadImage(qrDataUrl);
           ctx.drawImage(qrImg, f.x, effectiveY, f.width, f.height);
         } catch (err) {
           console.error('QR code render error:', err);
@@ -1408,7 +1422,7 @@ export async function renderCardSideToPdfBytes(
           if (rawValue.startsWith('/')) {
             absoluteImgPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', rawValue);
           }
-          const img = await loadImage(absoluteImgPath);
+          const img = await safeLoadImage(absoluteImgPath);
 
           const scaleFactor = 3;
           const boxWidth = f.width * scaleFactor;
