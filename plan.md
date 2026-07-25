@@ -60,10 +60,9 @@ model CardholderValue {
 - Auto-assign `category` based on template name keywords (e.g. name contains "certificate" → `CERTIFICATE`; "badge" → `BADGE`; else → `ID_CARD`).
 
 ### 1c. API & Frontend Refactor (Action Items)
-- [ ] Refactor the frontend state in the canvas template editor to use a normalized structure corresponding to the `TemplateField` model.
-- [ ] Create endpoint wrappers/hooks to handle individual field coordinate updates on drag-end.
-- [ ] Add batch-save transactions to upsert multiple `TemplateField` rows on "Save Layout".
-- [ ] Ensure backward-compatibility fallback handles local edits smoothly in offline/desktop mode (keep JSON strings as secondary source of truth during transition).
+- [x] Implement robust client-side validation UX that highlights and auto-scrolls to missing/empty template fields (Name, Dimensions, Background images, Coordinate columns) upon clicking Save/Update.
+- [x] Conditionally hide raw background URL input text fields in the Electron desktop environment to keep the UI clean and clutter-free.
+- [ ] Refactor the visual canvas drag-and-drop state to direct CRUD (Postponed/skipped per user request).
 
 ---
 
