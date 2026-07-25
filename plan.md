@@ -65,6 +65,7 @@ model CardholderValue {
 - [x] Add a delete button for each field directly on the canvas layout next to the edit and copy buttons for easier field management.
 - [x] Enforce template name uniqueness validation during save, update, cloning, and marketplace purchases.
 - [x] Relocate suggested fields panel directly above the front side layout design canvas for enhanced accessibility.
+- [x] Clean up 'Select Template' dropdown in the Client Portal generator to hide '[Image Format]' suffixes.
 - [ ] Refactor the visual canvas drag-and-drop state to direct CRUD (Postponed/skipped per user request).
 
 ---
