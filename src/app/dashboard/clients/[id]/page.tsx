@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CompileWizardModal from '@/app/components/CompileWizardModal';
 import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
 import {
   Building2,
@@ -223,11 +224,31 @@ export default function ClientDetailsPage() {
   const [filterEndDate, setFilterEndDate] = useState('');
   const [quickTemplates, setQuickTemplates] = useState<QuickTemplate[]>([]);
   const [showCompileModal, setShowCompileModal] = useState(false);
+  // Compile Wizard multi-step state
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
+  const [wizardCompileType, setWizardCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+  const [wizardPaperSize, setWizardPaperSize] = useState('A3');
+  const [wizardOrientation, setWizardOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
+  const [wizardMarginLeft, setWizardMarginLeft] = useState(40);
+  const [wizardMarginRight, setWizardMarginRight] = useState(40);
+  const [wizardMarginTop, setWizardMarginTop] = useState(40);
+  const [wizardMarginBottom, setWizardMarginBottom] = useState(40);
+  const [wizardColGap, setWizardColGap] = useState(15);
+  const [wizardRowGap, setWizardRowGap] = useState(15);
+  const [wizardBleed, setWizardBleed] = useState(0);
+  const [wizardCropMarks, setWizardCropMarks] = useState(true);
+  const [wizardFoldLine, setWizardFoldLine] = useState(true);
+  const [wizardEmptySlotStrategy, setWizardEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM'>('LEAVE_BLANK');
+  const [wizardCustomCards, setWizardCustomCards] = useState<any[]>([]);
+  const [wizardSelectedCustomCardId, setWizardSelectedCustomCardId] = useState('');
+  const [wizardUploadingCard, setWizardUploadingCard] = useState(false);
+
   const [qTemplateId, setQTemplateId] = useState('');
   const [qPricePerCard, setQPricePerCard] = useState('50');
-  const [qCropMarks, setQCropMarks] = useState(true);
-  const [qFoldLine, setQFoldLine] = useState(true);
-  const [qBleed, setQBleed] = useState(0);
+  // Legacy aliases kept for inner helpers
+  const qCropMarks = wizardCropMarks;
+  const qFoldLine = wizardFoldLine;
+  const qBleed = wizardBleed;
   const [qCompiling, setQCompiling] = useState<string | null>(null);
   const [qJobResult, setQJobResult] = useState<QuickJobResult | null>(null);
   const [qTemplateMixed, setQTemplateMixed] = useState(false);
@@ -237,8 +258,52 @@ export default function ClientDetailsPage() {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showEmptySlotModal, setShowEmptySlotModal] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
-  const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST'>('LEAVE_BLANK');
+  const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM'>('LEAVE_BLANK');
   const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+
+  // Load local custom cards list for wizard step 4
+  const loadWizardCustomCards = async () => {
+    try {
+      const { getCustomCards } = await import('@/lib/clientDb');
+      const list = await getCustomCards();
+      setWizardCustomCards(list);
+      if (list.length > 0 && !wizardSelectedCustomCardId) {
+        setWizardSelectedCustomCardId(list[0].id);
+      }
+    } catch {}
+  };
+
+  const handleWizardCustomCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') { toast('Please upload a PDF file only.', 'error'); return; }
+    setWizardUploadingCard(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const b64 = (reader.result as string).split(',')[1];
+        const { saveCustomCard } = await import('@/lib/clientDb');
+        const saved = await saveCustomCard(file.name, b64);
+        toast(`"${file.name}" saved locally!`, 'success');
+        setWizardSelectedCustomCardId(saved.id);
+        await loadWizardCustomCards();
+      } catch (err: any) {
+        toast(err.message || 'Failed to save', 'error');
+      } finally { setWizardUploadingCard(false); }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleWizardCustomCardDelete = async (id: string) => {
+    if (!confirm('Delete this custom PDF card?')) return;
+    try {
+      const { deleteCustomCard } = await import('@/lib/clientDb');
+      await deleteCustomCard(id);
+      toast('Custom PDF card deleted.', 'success');
+      if (wizardSelectedCustomCardId === id) setWizardSelectedCustomCardId('');
+      await loadWizardCustomCards();
+    } catch (err: any) { toast(err.message || 'Failed to delete', 'error'); }
+  };
 
   // View / Edit Cardholder Details Modals State
   const [viewingCardholder, setViewingCardholder] = useState<Cardholder | null>(null);
@@ -955,6 +1020,11 @@ export default function ClientDetailsPage() {
       }
     }
     setQJobResult(null);
+    setWizardStep(1);
+    setWizardCompileType(null);
+    setWizardPaperSize('A3');
+    setWizardOrientation('PORTRAIT');
+    setWizardEmptySlotStrategy('LEAVE_BLANK');
     setShowCompileModal(true);
   };
 
@@ -1165,36 +1235,54 @@ export default function ClientDetailsPage() {
     )] as number[];
 
     if (templateIds.length === 1) {
-      // All same template — auto-select it
       setQTemplateId(String(templateIds[0]));
       const tpl = quickTemplates.find(t => t.id === templateIds[0]);
       setQDetectedTemplateName(tpl?.name || null);
       setQTemplateMixed(false);
     } else if (templateIds.length > 1) {
-      // Mixed templates — warn user, keep first detected
       setQTemplateId(String(templateIds[0]));
       setQDetectedTemplateName(null);
       setQTemplateMixed(true);
     } else {
-      // No template resolved — fallback to dropdown default
       setQDetectedTemplateName(null);
       setQTemplateMixed(false);
       if (quickTemplates.length > 0 && !qTemplateId) {
         setQTemplateId(String(quickTemplates[0].id));
       }
     }
+    // Reset wizard state
+    setWizardStep(1);
+    setWizardCompileType(null);
+    setWizardPaperSize('A3');
+    setWizardOrientation('PORTRAIT');
+    setWizardMarginLeft(40); setWizardMarginRight(40);
+    setWizardMarginTop(40); setWizardMarginBottom(40);
+    setWizardColGap(15); setWizardRowGap(15);
+    setWizardBleed(0); setWizardCropMarks(true); setWizardFoldLine(true);
+    setWizardEmptySlotStrategy('LEAVE_BLANK');
     setShowCompileModal(true);
   };
 
   const proceedWithQuickCompile = async (
     type: 'APPROVAL' | 'PRODUCTION',
     skipValidation = false,
-    selectedStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' = 'LEAVE_BLANK'
+    selectedStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM' = 'LEAVE_BLANK',
+    overridePaperSize?: string,
+    overrideOrientation?: string,
+    layoutConfig?: {
+      marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
+      colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean;
+    },
+    customCardId?: string
   ) => {
     if (!qTemplateId || selectedIds.length === 0) return;
     setQCompiling(type);
     setQJobResult(null);
     try {
+      const targetPaperSize = overridePaperSize || 'A3';
+      const targetOrientation = overrideOrientation || 'PORTRAIT';
+      const lc = layoutConfig || { marginLeft: 40, marginRight: 40, marginTop: 40, marginBottom: 40, colGap: 15, rowGap: 15, bleed: 0, cropMarks: true, foldLine: true };
+
       // 1. Create order
       const orderRes = await fetch('/api/orders', {
         method: 'POST',
@@ -1210,21 +1298,39 @@ export default function ClientDetailsPage() {
       const orderData = await orderRes.json();
       if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create order');
 
-      // 2. Queue job
+      // 2. Queue job with full layout config
+      const jobBody: any = {
+        orderId: orderData.order.id,
+        pdfType: type,
+        paperSize: (targetPaperSize === 'SRA3' || targetPaperSize === '13x19') ? 'CUSTOM' : targetPaperSize,
+        orientation: targetOrientation,
+        bleed: lc.bleed,
+        cropMarks: lc.cropMarks,
+        foldLine: lc.foldLine,
+        marginLeft: lc.marginLeft,
+        marginRight: lc.marginRight,
+        marginTop: lc.marginTop,
+        marginBottom: lc.marginBottom,
+        colGap: lc.colGap,
+        rowGap: lc.rowGap,
+        emptySlotStrategy: selectedStrategy,
+        bypassValidation: skipValidation,
+      };
+      if (selectedStrategy === 'FILL_CUSTOM' && customCardId) {
+        jobBody.emptySlotCustomCardId = customCardId;
+      }
+      if (targetPaperSize === 'SRA3') {
+        jobBody.customWidth = targetOrientation === 'PORTRAIT' ? 907.09 : 1275.59;
+        jobBody.customHeight = targetOrientation === 'PORTRAIT' ? 1275.59 : 907.09;
+      } else if (targetPaperSize === '13x19') {
+        jobBody.customWidth = targetOrientation === 'PORTRAIT' ? 936 : 1368;
+        jobBody.customHeight = targetOrientation === 'PORTRAIT' ? 1368 : 936;
+      }
+
       const jobRes = await fetch('/api/jobs/production-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: orderData.order.id,
-          pdfType: type,
-          paperSize: type === 'PRODUCTION' ? 'A3' : 'A4',
-          orientation: 'PORTRAIT',
-          bleed: qBleed,
-          cropMarks: qCropMarks,
-          foldLine: qFoldLine,
-          emptySlotStrategy: selectedStrategy,
-          bypassValidation: skipValidation,
-        }),
+        body: JSON.stringify(jobBody),
       });
       const jobData = await jobRes.json();
       if (!jobRes.ok) throw new Error(jobData.error || 'Failed to queue PDF job');
@@ -1247,7 +1353,26 @@ export default function ClientDetailsPage() {
   };
 
   // Quick-compile handler (with validation flow)
-  const handleQuickCompile = async (type: 'APPROVAL' | 'PRODUCTION') => {
+  const handleQuickCompile = async (type: 'APPROVAL' | 'PRODUCTION', cfg?: {
+    paperSize: string; orientation: 'PORTRAIT'|'LANDSCAPE';
+    marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
+    colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean;
+    emptySlotStrategy: 'LEAVE_BLANK'|'REPEAT_LAST'|'REPEAT_FIRST'|'FILL_CUSTOM';
+    customCardId?: string;
+  }) => {
+    const livePaper = cfg?.paperSize ?? wizardPaperSize;
+    const liveOri = cfg?.orientation ?? wizardOrientation;
+    const liveML = cfg?.marginLeft ?? wizardMarginLeft;
+    const liveMR = cfg?.marginRight ?? wizardMarginRight;
+    const liveMT = cfg?.marginTop ?? wizardMarginTop;
+    const liveMB = cfg?.marginBottom ?? wizardMarginBottom;
+    const liveCG = cfg?.colGap ?? wizardColGap;
+    const liveRG = cfg?.rowGap ?? wizardRowGap;
+    const liveBl = cfg?.bleed ?? wizardBleed;
+    const liveCrp = cfg?.cropMarks ?? wizardCropMarks;
+    const liveFl = cfg?.foldLine ?? wizardFoldLine;
+    const liveStrategy = cfg?.emptySlotStrategy ?? wizardEmptySlotStrategy;
+    const liveCustomId = cfg?.customCardId ?? wizardSelectedCustomCardId;
     if (!qTemplateId || selectedIds.length === 0) return;
     setQCompiling(type);
     setQJobResult(null);
@@ -1273,18 +1398,13 @@ export default function ClientDetailsPage() {
 
       for (const ch of selectedCards) {
         const missingFields: string[] = [];
-        
         let custom: Record<string, any> = {};
         if (ch.customFields) {
-          try {
-            custom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-          } catch {}
+          try { custom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields; } catch {}
         }
-        
         for (const f of requiredFields) {
           let hasValue = false;
           const fieldName = f.field.toLowerCase();
-          
           if (fieldName === 'name' || fieldName === 'fullname') {
             hasValue = !!ch.name && ch.name.trim().length > 0;
           } else if (fieldName === 'designation' || fieldName === 'role') {
@@ -1294,73 +1414,61 @@ export default function ClientDetailsPage() {
           } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
             hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
           } else {
-            // Case-insensitive custom field check
             const targetLower = f.field.toLowerCase().trim();
             let val = undefined;
             for (const [key, v] of Object.entries(custom)) {
-              if (key.toLowerCase().trim() === targetLower) {
-                val = v;
-                break;
-              }
+              if (key.toLowerCase().trim() === targetLower) { val = v; break; }
             }
             hasValue = val !== undefined && val !== null && String(val).trim().length > 0;
           }
-          
-          if (!hasValue) {
-            missingFields.push(f.prefix || f.field);
-          }
+          if (!hasValue) missingFields.push(f.prefix || f.field);
         }
-        
         if (missingFields.length > 0) {
-          missingList.push({
-            cardholderName: ch.name || `Cardholder #${ch.id}`,
-            missingFields,
-            cardholderId: ch.id,
-          });
+          missingList.push({ cardholderName: ch.name || `Cardholder #${ch.id}`, missingFields, cardholderId: ch.id });
         }
       }
 
-      // 3. Calculate empty slots
-      let pageWidth = 841.89; // A3
-      let pageHeight = 1190.55;
-      if (type === 'APPROVAL') {
-        pageWidth = 595.27;
-        pageHeight = 841.89;
+      // 3. Calculate empty slots using live wizard config
+      let pageWidth: number;
+      let pageHeight: number;
+      if (livePaper === 'SRA3') {
+        pageWidth = liveOri === 'PORTRAIT' ? 907.09 : 1275.59;
+        pageHeight = liveOri === 'PORTRAIT' ? 1275.59 : 907.09;
+      } else if (livePaper === '13x19') {
+        pageWidth = liveOri === 'PORTRAIT' ? 936 : 1368;
+        pageHeight = liveOri === 'PORTRAIT' ? 1368 : 936;
+      } else if (livePaper === 'A4') {
+        pageWidth = liveOri === 'PORTRAIT' ? 595.27 : 841.89;
+        pageHeight = liveOri === 'PORTRAIT' ? 841.89 : 595.27;
+      } else {
+        pageWidth = liveOri === 'PORTRAIT' ? 841.89 : 1190.55;
+        pageHeight = liveOri === 'PORTRAIT' ? 1190.55 : 841.89;
       }
 
-      const bleedPt = (qBleed || 0) * 2.83464567;
+      const bleedPt = (liveBl || 0) * 2.83464567;
       const isPortraitTemplate = (template.cardWidth || 673) < (template.cardHeight || 1039);
       const cardBaseWidth = isPortraitTemplate ? 153 : 242.6;
       const cardBaseHeight = isPortraitTemplate ? 242.6 : 153;
-
       const cWidth = cardBaseWidth + bleedPt * 2;
       const cHeight = cardBaseHeight + bleedPt * 2;
 
-      // Default layout margins/gaps for quick compile
-      const marginX    = 40;
-      const marginXR   = 40;
-      const marginY    = 40;
-      const marginYB   = 40;
-      const colGap     = 15;
-      const rowGap     = 15;
+      const marginX = liveML; const marginXR = liveMR;
+      const marginY = liveMT; const marginYB = liveMB;
+      const colGap = liveCG; const rowGap = liveRG;
 
       const foldGap = 10;
       const isSingleSided = !template.backImageUrl || (template.backFields === '[]' || !template.backFields);
-
       const cols = Math.floor((pageWidth - marginX - marginXR + colGap) / (cWidth + colGap)) || 1;
 
       let cardsPerPage: number;
-      let rowsPerPage: number;
-
       if (isSingleSided) {
         const fullHeight = pageHeight - marginY - marginYB;
-        rowsPerPage = Math.floor((fullHeight + rowGap) / (cHeight + rowGap)) || 1;
+        const rowsPerPage = Math.floor((fullHeight + rowGap) / (cHeight + rowGap)) || 1;
         cardsPerPage = cols * rowsPerPage;
       } else {
         const centerY = pageHeight / 2;
         const halfHeight = centerY - Math.max(marginY, marginYB);
         const rowsPerHalf = Math.floor((halfHeight - foldGap + rowGap) / (cHeight + rowGap)) || 1;
-        rowsPerPage = rowsPerHalf;
         cardsPerPage = cols * rowsPerHalf;
       }
 
@@ -1368,23 +1476,23 @@ export default function ClientDetailsPage() {
       const totalPages = Math.ceil(totalCards / cardsPerPage);
       const totalSlots = totalPages * cardsPerPage;
 
-      const validation = {
-        missingFields: missingList,
-        totalCards,
-        totalSlots,
-      };
-
-      setValidationResult(validation);
+      setValidationResult({ missingFields: missingList, totalCards, totalSlots });
       setPendingCompileType(type);
       setQCompiling(null);
 
-      // Trigger modals based on validation
+      const layoutConfig = {
+        marginLeft: liveML, marginRight: liveMR,
+        marginTop: liveMT, marginBottom: liveMB,
+        colGap: liveCG, rowGap: liveRG,
+        bleed: liveBl, cropMarks: liveCrp, foldLine: liveFl,
+      };
+
       if (missingList.length > 0) {
         setShowValidationModal(true);
       } else if (totalSlots > totalCards) {
         setShowEmptySlotModal(true);
       } else {
-        await proceedWithQuickCompile(type, false, 'LEAVE_BLANK');
+        await proceedWithQuickCompile(type, false, liveStrategy, livePaper, liveOri, layoutConfig, liveCustomId);
       }
     } catch (err: any) {
       toast(err.message || 'Validation failed', 'error');
@@ -2588,179 +2696,50 @@ export default function ClientDetailsPage() {
             </div>
           )}
 
-          {/* ── Quick Compile Modal ─────────────────────────── */}
-          {showCompileModal && (
-            <div
-              onClick={() => setShowCompileModal(false)}
-              style={{
-                position: 'fixed', inset: 0, zIndex: 9000,
-                background: 'rgba(3,4,7,0.75)', backdropFilter: 'blur(6px)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+          {/* ── Compile Wizard Modal ─────────────────────────── */}
+          {showCompileModal && !qJobResult && (
+            <CompileWizardModal
+              cardCount={selectedIds.length}
+              onClose={() => setShowCompileModal(false)}
+              compiling={!!qCompiling}
+              onCompile={async (cfg) => {
+                await handleQuickCompile(cfg.compileType, cfg);
               }}
-            >
-              <div
-                onClick={e => e.stopPropagation()}
-                style={{
-                  background: 'rgba(13,16,27,0.97)',
-                  border: '1px solid var(--glass-border)',
-                  borderTop: '2px solid var(--primary)',
-                  borderRadius: '16px',
-                  padding: '28px 32px',
-                  width: '100%', maxWidth: '500px',
-                  boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <Zap size={18} color="var(--primary)" />
-                    Compile {selectedIds.length} Card{selectedIds.length !== 1 ? 's' : ''}
-                  </h3>
-                  <button onClick={() => setShowCompileModal(false)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                    <X size={18} />
-                  </button>
+            />
+          )}
+
+          {/* Job progress display after compile started */}
+          {showCompileModal && qJobResult && (
+            <div onClick={() => { setShowCompileModal(false); setQJobResult(null); }} style={{ position: 'fixed', inset: 0, zIndex: 9900, background: 'rgba(3,4,7,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '28px 32px', width: '100%', maxWidth: '460px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <strong style={{ fontSize: '0.85rem', color: '#fff' }}>
+                    {qJobResult.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'} Job #{qJobResult.id}
+                  </strong>
+                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: qJobResult.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : qJobResult.status === 'FAILED' ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)', color: qJobResult.status === 'COMPLETED' ? '#10b981' : qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary)', fontWeight: 'bold' }}>
+                    {qJobResult.status}
+                  </span>
                 </div>
-
-                {qJobResult ? (
-                  <div style={{ padding: '10px 0' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                      <strong style={{ fontSize: '0.85rem', color: '#fff' }}>
-                        {qJobResult.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'} Job #{qJobResult.id}
-                      </strong>
-                      <span style={{ 
-                        fontSize: '0.7rem', 
-                        padding: '2px 8px', 
-                        borderRadius: '10px', 
-                        background: qJobResult.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : qJobResult.status === 'FAILED' ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)',
-                        color: qJobResult.status === 'COMPLETED' ? '#10b981' : qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary)',
-                        fontWeight: 'bold'
-                      }}>
-                        {qJobResult.status}
-                      </span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
-                      <div style={{ 
-                        width: `${qJobResult.progress ?? 0}%`, 
-                        height: '100%', 
-                        background: qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary-gradient)', 
-                        transition: 'width 0.3s ease' 
-                      }}></div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '24px' }}>
-                      <span>Progress: {qJobResult.progress ?? 0}%</span>
-                      {qJobResult.status === 'COMPLETED' && (
-                        qJobResult.isLocalJob ? (
-                          <span style={{ color: '#10b981', fontWeight: 'bold' }}>Saved to Documents</span>
-                        ) : qJobResult.downloadUrl && (
-                          <a 
-                            href={qJobResult.downloadUrl} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            style={{ color: '#10b981', fontWeight: 'bold', textDecoration: 'underline' }}
-                          >
-                            Download PDF
-                          </a>
-                        )
-                      )}
-                      {qJobResult.status === 'FAILED' && qJobResult.errorMsg && (
-                        <span style={{ color: 'var(--danger)' }}>Error: {qJobResult.errorMsg}</span>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                      {qJobResult.status === 'FAILED' && (
-                        <button className="btn btn-secondary" onClick={() => { setQJobResult(null); }}>Retry</button>
-                      )}
-                      {(qJobResult.status === 'COMPLETED' || qJobResult.status === 'FAILED') && (
-                        <button className="btn btn-primary" style={{ minWidth: '100px' }} onClick={() => { setShowCompileModal(false); setQJobResult(null); setSelectedIds([]); }}>Close</button>
-                      )}
-                      {qJobResult.status !== 'COMPLETED' && qJobResult.status !== 'FAILED' && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                          Compiling cards... Keep this window and Desktop App open.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    {/* Template selector — auto-detected or manual */}
-                    <div className="form-group">
-                      <label className="form-label">Card Template</label>
-                      {qDetectedTemplateName && !qTemplateMixed ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', borderRadius: '8px', background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-                          <span style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: '600' }}>✓ Auto-detected:</span>
-                          <span style={{ fontSize: '0.85rem', color: '#fff', fontWeight: '500' }}>{qDetectedTemplateName}</span>
-                          <button type="button" onClick={() => setQDetectedTemplateName(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: '0.7rem' }}>Change</button>
-                        </div>
-                      ) : (
-                        <>
-                          {qTemplateMixed && (
-                            <div style={{ padding: '7px 12px', marginBottom: '8px', background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '7px', fontSize: '0.75rem', color: '#f59e0b' }}>
-                              ⚠ Selected cards have mixed templates. All will be compiled under the selected template below.
-                            </div>
-                          )}
-                          <select className="form-select" value={qTemplateId} onChange={e => setQTemplateId(e.target.value)}>
-                            {quickTemplates.map(t => (
-                              <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                          </select>
-                        </>
-                      )}
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Price per Card (Rs.)</label>
-                      <input type="number" className="form-input" value={qPricePerCard} onChange={e => setQPricePerCard(e.target.value)} />
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={qCropMarks} onChange={e => setQCropMarks(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
-                        Crop Marks
-                      </label>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={qFoldLine} onChange={e => setQFoldLine(e.target.checked)} style={{ accentColor: 'var(--primary)' }} />
-                        Fold Line
-                      </label>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem' }}>
-                        <label style={{ color: 'var(--muted)' }}>Bleed (pt):</label>
-                        <input
-                          type="number" min={0} max={20}
-                          value={qBleed}
-                          onChange={e => setQBleed(Number(e.target.value))}
-                          style={{ width: '60px', padding: '4px 8px', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: '#fff' }}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ flex: 1, gap: '8px' }}
-                        disabled={!!qCompiling}
-                        onClick={() => handleQuickCompile('APPROVAL')}
-                      >
-                        {qCompiling === 'APPROVAL' ? (
-                          <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} />
-                        ) : <FileText size={15} />}
-                        Approval Proof (A4)
-                      </button>
-                      <button
-                        className="btn btn-primary"
-                        style={{ flex: 1, gap: '8px' }}
-                        disabled={!!qCompiling}
-                        onClick={() => handleQuickCompile('PRODUCTION')}
-                      >
-                        {qCompiling === 'PRODUCTION' ? (
-                          <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }} />
-                        ) : <Zap size={15} />}
-                        Production PDF (A3)
-                      </button>
-                    </div>
-                  </>
-                )}
+                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
+                  <div style={{ width: `${qJobResult.progress ?? 0}%`, height: '100%', background: qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary-gradient)', transition: 'width 0.3s ease' }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '24px' }}>
+                  <span>Progress: {qJobResult.progress ?? 0}%</span>
+                  {qJobResult.status === 'COMPLETED' && (
+                    qJobResult.isLocalJob ? <span style={{ color: '#10b981', fontWeight: 'bold' }}>Saved to Documents</span>
+                    : qJobResult.downloadUrl && <a href={qJobResult.downloadUrl} target="_blank" rel="noreferrer" style={{ color: '#10b981', fontWeight: 'bold', textDecoration: 'underline' }}>Download PDF</a>
+                  )}
+                  {qJobResult.status === 'FAILED' && qJobResult.errorMsg && <span style={{ color: 'var(--danger)' }}>Error: {qJobResult.errorMsg}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                  {qJobResult.status === 'FAILED' && <button className="btn btn-secondary" onClick={() => setQJobResult(null)}>Retry</button>}
+                  {(qJobResult.status === 'COMPLETED' || qJobResult.status === 'FAILED') && (
+                    <button className="btn btn-primary" onClick={() => { setShowCompileModal(false); setQJobResult(null); setSelectedIds([]); }}>Close</button>
+                  )}
+                  {qJobResult.status !== 'COMPLETED' && qJobResult.status !== 'FAILED' && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Compiling… Keep this window and Desktop App open.</span>
+                  )}
+                </div>
               </div>
             </div>
           )}
