@@ -2249,14 +2249,74 @@ export default function TemplatesPage() {
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError('');
-    setSubmitting(true);
+
+    const scrollAndFocus = (id: string) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus();
+        const originalBorder = el.style.border;
+        const originalBoxShadow = el.style.boxShadow;
+        el.style.border = '1.5px solid #f87171';
+        el.style.boxShadow = '0 0 0 3px rgba(248, 113, 113, 0.4)';
+        setTimeout(() => {
+          el.style.border = originalBorder;
+          el.style.boxShadow = originalBoxShadow;
+        }, 3000);
+      }
+    };
 
     try {
       const electronAPI = (window as any).electronAPI;
       const finalFrontWebUrl = frontWebUrl || (frontImageUrl.startsWith('local://') ? '' : frontImageUrl);
       const finalBackWebUrl = backWebUrl || (backImageUrl.startsWith('local://') ? '' : backImageUrl);
 
-      if (!finalFrontWebUrl) throw new Error('Front background web preview is still uploading or missing.');
+      // Validate form fields on Save/Update
+      if (!name.trim()) {
+        setTimeout(() => scrollAndFocus('template-name'), 50);
+        throw new Error('Template Name is required.');
+      }
+      if (!cardWidth || cardWidth <= 0) {
+        setTimeout(() => scrollAndFocus('card-width-px'), 50);
+        throw new Error('Card Width is required and must be greater than 0.');
+      }
+      if (!cardHeight || cardHeight <= 0) {
+        setTimeout(() => scrollAndFocus('card-height-px'), 50);
+        throw new Error('Card Height is required and must be greater than 0.');
+      }
+      if (!finalFrontWebUrl) {
+        setTimeout(() => scrollAndFocus('front-image-url'), 50);
+        throw new Error('Front background design image is required.');
+      }
+      if (sides === 2 && !finalBackWebUrl) {
+        setTimeout(() => scrollAndFocus('back-image-url'), 50);
+        throw new Error('Back background design image is required for 2-sided templates.');
+      }
+
+      // Validate Coordinates Table Fields (Columns)
+      for (let i = 0; i < frontFields.length; i++) {
+        if (!frontFields[i].field.trim()) {
+          setTimeout(() => scrollAndFocus(`front-field-name-${i}`), 50);
+          throw new Error(`Field Name is missing at row ${i + 1} of Front Side Coordinates mapping.`);
+        }
+        if (isNaN(frontFields[i].x) || isNaN(frontFields[i].y) || isNaN(frontFields[i].width) || isNaN(frontFields[i].height)) {
+          throw new Error(`Row ${i + 1} of Front Side has invalid coordinate values.`);
+        }
+      }
+
+      if (sides === 2) {
+        for (let i = 0; i < backFields.length; i++) {
+          if (!backFields[i].field.trim()) {
+            setTimeout(() => scrollAndFocus(`back-field-name-${i}`), 50);
+            throw new Error(`Field Name is missing at row ${i + 1} of Back Side Coordinates mapping.`);
+          }
+          if (isNaN(backFields[i].x) || isNaN(backFields[i].y) || isNaN(backFields[i].width) || isNaN(backFields[i].height)) {
+            throw new Error(`Row ${i + 1} of Back Side has invalid coordinate values.`);
+          }
+        }
+      }
+
+      setSubmitting(true);
 
       const url = editingTemplateId ? `/api/templates/${editingTemplateId}` : '/api/templates';
       const method = editingTemplateId ? 'PUT' : 'POST';
@@ -2517,7 +2577,7 @@ export default function TemplatesPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr', gap: '20px' }}>
               <div className="form-group">
                 <label className="form-label">Template Name</label>
-                <input type="text" required className="form-input" placeholder="Classic Devanagari School ID" value={name} onChange={e => setName(e.target.value)} />
+                <input id="template-name" type="text" required className="form-input" placeholder="Classic Devanagari School ID" value={name} onChange={e => setName(e.target.value)} />
               </div>
 
               <div className="form-group">
@@ -2940,6 +3000,7 @@ export default function TemplatesPage() {
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Width (px at 300 DPI)</span>
                       <input 
+                        id="card-width-px"
                         type="number" 
                         required 
                         className="form-input" 
@@ -2951,6 +3012,7 @@ export default function TemplatesPage() {
                     <div style={{ flex: 1 }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Height (px at 300 DPI)</span>
                       <input 
+                        id="card-height-px"
                         type="number" 
                         required 
                         className="form-input" 
@@ -2979,6 +3041,7 @@ export default function TemplatesPage() {
                   {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
                   {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
                   <input 
+                    id="front-image-url"
                     type="text" 
                     required 
                     className="form-input" 
@@ -3004,6 +3067,7 @@ export default function TemplatesPage() {
                     {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
                     {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
                     <input 
+                      id="back-image-url"
                       type="text" 
                       className="form-input" 
                       placeholder="Or paste background image URL: https://example.com/..." 
@@ -4155,7 +4219,7 @@ export default function TemplatesPage() {
                           {frontFields.map((f, i) => (
                             <tr key={i} style={{ background: selectedFieldIndex === i && selectedSide === 'front' ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} onClick={() => { setSelectedFieldIndex(i); setSelectedSide('front'); }}>
                               <td>
-                                <input type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('front', i, 'field', e.target.value)} />
+                                <input id={`front-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('front', i, 'field', e.target.value)} />
                               </td>
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('front', i, 'type', e.target.value)}>
@@ -4341,7 +4405,7 @@ export default function TemplatesPage() {
                           {backFields.map((f, i) => (
                             <tr key={i} style={{ background: selectedFieldIndex === i && selectedSide === 'back' ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} onClick={() => { setSelectedFieldIndex(i); setSelectedSide('back'); }}>
                               <td>
-                                <input type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('back', i, 'field', e.target.value)} />
+                                <input id={`back-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('back', i, 'field', e.target.value)} />
                               </td>
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('back', i, 'type', e.target.value)}>
