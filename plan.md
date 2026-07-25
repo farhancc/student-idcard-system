@@ -63,6 +63,8 @@ model CardholderValue {
 - [x] Implement robust client-side validation UX that highlights and auto-scrolls to missing/empty template fields (Name, Dimensions, Background images, Coordinate columns) upon clicking Save/Update.
 - [x] Conditionally hide raw background URL input text fields in the Electron desktop environment to keep the UI clean and clutter-free.
 - [x] Add a delete button for each field directly on the canvas layout next to the edit and copy buttons for easier field management.
+- [x] Enforce template name uniqueness validation during save, update, cloning, and marketplace purchases.
+- [x] Relocate suggested fields panel directly above the front side layout design canvas for enhanced accessibility.
 - [ ] Refactor the visual canvas drag-and-drop state to direct CRUD (Postponed/skipped per user request).
 
 ---
