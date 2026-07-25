@@ -16,6 +16,7 @@ export interface PdfGeneratorOptions {
   marginBottom?: number;
   colGap?: number;
   rowGap?: number;
+  emptySlotStrategy?: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST';
 }
 
 export async function generateProductionPdfClient(
@@ -111,6 +112,30 @@ export async function generateProductionPdfClient(
   const total = cardholders.length;
   const totalPages = Math.ceil(total / cardsPerPage);
 
+  // Apply Empty Slot Strategy padding
+  let finalCardholders = [...cardholders];
+  const totalSlotsNeeded = totalPages * cardsPerPage;
+  if (finalCardholders.length < totalSlotsNeeded && totalSlotsNeeded > 0) {
+    const strategy = options.emptySlotStrategy || 'LEAVE_BLANK';
+    const diff = totalSlotsNeeded - finalCardholders.length;
+    if (strategy === 'REPEAT_LAST' && finalCardholders.length > 0) {
+      const lastCard = finalCardholders[finalCardholders.length - 1];
+      for (let i = 0; i < diff; i++) {
+        finalCardholders.push({ ...lastCard });
+      }
+    } else if (strategy === 'REPEAT_FIRST' && finalCardholders.length > 0) {
+      const firstCard = finalCardholders[0];
+      for (let i = 0; i < diff; i++) {
+        finalCardholders.push({ ...firstCard });
+      }
+    } else {
+      // LEAVE_BLANK
+      for (let i = 0; i < diff; i++) {
+        finalCardholders.push({}); // Empty object
+      }
+    }
+  }
+
   const clientTemplate = {
     id: template.id,
     cardWidth: template.cardWidth,
@@ -138,8 +163,8 @@ export async function generateProductionPdfClient(
     page.setTrimBox(0, 0, pageWidth, pageHeight);
 
     const startIdx = pIdx * cardsPerPage;
-    const endIdx = Math.min(startIdx + cardsPerPage, total);
-    const batchCards = cardholders.slice(startIdx, endIdx);
+    const endIdx = startIdx + cardsPerPage;
+    const batchCards = finalCardholders.slice(startIdx, endIdx);
 
     // Draw fold line only for duplex templates
     if (!isSingleSided && options.foldLine) {
@@ -163,6 +188,10 @@ export async function generateProductionPdfClient(
 
     for (let gridIdx = 0; gridIdx < batchCards.length; gridIdx++) {
       const cardholder = batchCards[gridIdx];
+      if (!cardholder || (!cardholder.id && !cardholder.name)) {
+        // Leave slot blank
+        continue;
+      }
       const colIdx = gridIdx % cols;
       const rowIdx = Math.floor(gridIdx / cols);
 

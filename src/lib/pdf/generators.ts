@@ -95,6 +95,7 @@ export interface PdfGeneratorOptions {
   marginBottom?: number; // default 40
   colGap?: number;       // gap between card columns (default 15)
   rowGap?: number;       // gap between card rows (default 15)
+  emptySlotStrategy?: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST';
 }
 
 export interface IPdfGenerator {
@@ -559,6 +560,30 @@ export class ProductionPdfGenerator implements IPdfGenerator {
     const total = cardholderIds.length;
     const totalPages = Math.ceil(total / cardsPerPage);
 
+    // Apply Empty Slot Strategy padding
+    let finalCardholderIds = [...cardholderIds];
+    const totalSlotsNeeded = totalPages * cardsPerPage;
+    if (finalCardholderIds.length < totalSlotsNeeded && totalSlotsNeeded > 0) {
+      const strategy = options.emptySlotStrategy || 'LEAVE_BLANK';
+      const diff = totalSlotsNeeded - finalCardholderIds.length;
+      if (strategy === 'REPEAT_LAST' && finalCardholderIds.length > 0) {
+        const lastId = finalCardholderIds[finalCardholderIds.length - 1];
+        for (let i = 0; i < diff; i++) {
+          finalCardholderIds.push(lastId);
+        }
+      } else if (strategy === 'REPEAT_FIRST' && finalCardholderIds.length > 0) {
+        const firstId = finalCardholderIds[0];
+        for (let i = 0; i < diff; i++) {
+          finalCardholderIds.push(firstId);
+        }
+      } else {
+        // LEAVE_BLANK -> pad with -1 (representing empty/blank slot)
+        for (let i = 0; i < diff; i++) {
+          finalCardholderIds.push(-1);
+        }
+      }
+    }
+
     for (let pIdx = 0; pIdx < totalPages; pIdx++) {
       const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
@@ -568,8 +593,8 @@ export class ProductionPdfGenerator implements IPdfGenerator {
       page.setTrimBox(0, 0, pageWidth, pageHeight);
 
       const startIdx = pIdx * cardsPerPage;
-      const endIdx = Math.min(startIdx + cardsPerPage, total);
-      const batchIds = cardholderIds.slice(startIdx, endIdx);
+      const endIdx = startIdx + cardsPerPage;
+      const batchIds = finalCardholderIds.slice(startIdx, endIdx);
 
       // Draw fold line only for duplex templates
       if (!isSingleSided && options.foldLine) {
@@ -593,6 +618,10 @@ export class ProductionPdfGenerator implements IPdfGenerator {
 
       for (let gridIdx = 0; gridIdx < batchIds.length; gridIdx++) {
         const chId = batchIds[gridIdx];
+        if (chId === -1) {
+          // Leave slot blank
+          continue;
+        }
         const cardholder = await prisma.cardholder.findFirst({ where: { id: chId, pressId } });
         if (!cardholder) continue;
 

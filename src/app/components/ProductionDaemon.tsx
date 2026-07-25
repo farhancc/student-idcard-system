@@ -564,6 +564,31 @@ export default function ProductionDaemon() {
 
     const total = localCardholders.length;
     const totalPages = Math.ceil(total / cardsPerPage);
+
+    // Apply Empty Slot Strategy padding
+    let finalCardholders = [...localCardholders];
+    const totalSlotsNeeded = totalPages * cardsPerPage;
+    if (finalCardholders.length < totalSlotsNeeded && totalSlotsNeeded > 0) {
+      const strategy = metadata.emptySlotStrategy || 'LEAVE_BLANK';
+      const diff = totalSlotsNeeded - finalCardholders.length;
+      if (strategy === 'REPEAT_LAST' && finalCardholders.length > 0) {
+        const lastCard = finalCardholders[finalCardholders.length - 1];
+        for (let i = 0; i < diff; i++) {
+          finalCardholders.push({ ...lastCard });
+        }
+      } else if (strategy === 'REPEAT_FIRST' && finalCardholders.length > 0) {
+        const firstCard = finalCardholders[0];
+        for (let i = 0; i < diff; i++) {
+          finalCardholders.push({ ...firstCard });
+        }
+      } else {
+        // LEAVE_BLANK
+        for (let i = 0; i < diff; i++) {
+          finalCardholders.push({}); // Empty object representing blank slot
+        }
+      }
+    }
+
     addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}`);
 
     // Loop pages and add grids
@@ -574,8 +599,8 @@ export default function ProductionDaemon() {
       page.setTrimBox(0, 0, pageWidth, pageHeight);
 
       const startIdx = pIdx * cardsPerPage;
-      const endIdx = Math.min(startIdx + cardsPerPage, total);
-      const batchCardholders = localCardholders.slice(startIdx, endIdx);
+      const endIdx = startIdx + cardsPerPage;
+      const batchCardholders = finalCardholders.slice(startIdx, endIdx);
 
       // Draw fold line only for duplex templates
       if (!isSingleSided && foldLine) {
@@ -590,6 +615,10 @@ export default function ProductionDaemon() {
 
       for (let gridIdx = 0; gridIdx < batchCardholders.length; gridIdx++) {
         const ch = batchCardholders[gridIdx];
+        if (!ch || (!ch.id && !ch.name)) {
+          // Leave slot blank
+          continue;
+        }
         const overallIndex = startIdx + gridIdx;
 
         const colIdx = gridIdx % cols;

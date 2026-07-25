@@ -17,6 +17,8 @@ const productionRequestSchema = z.object({
   marginBottom: z.union([z.number(), z.string().transform(Number)]).optional(),
   colGap: z.union([z.number(), z.string().transform(Number)]).optional(),
   rowGap: z.union([z.number(), z.string().transform(Number)]).optional(),
+  emptySlotStrategy: z.enum(['LEAVE_BLANK', 'REPEAT_LAST', 'REPEAT_FIRST']).optional().default('LEAVE_BLANK'),
+  bypassValidation: z.boolean().optional().default(false),
 });
 
 export async function POST(request: Request) {
@@ -43,7 +45,8 @@ export async function POST(request: Request) {
 
     const {
       orderId, pdfType, paperSize, orientation, bleed, cropMarks, foldLine,
-      marginLeft, marginTop, marginRight, marginBottom, colGap, rowGap
+      marginLeft, marginTop, marginRight, marginBottom, colGap, rowGap,
+      emptySlotStrategy, bypassValidation
     } = validation.data;
 
 
@@ -97,6 +100,8 @@ export async function POST(request: Request) {
       marginBottom: marginBottom !== undefined ? Number(marginBottom) : undefined,
       colGap:       colGap       !== undefined ? Number(colGap)       : undefined,
       rowGap:       rowGap       !== undefined ? Number(rowGap)       : undefined,
+      emptySlotStrategy: emptySlotStrategy || 'LEAVE_BLANK',
+      bypassValidation: !!bypassValidation,
     };
 
     let cardCountLocked = totalCreditsNeeded;

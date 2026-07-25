@@ -22,6 +22,7 @@ import {
   Eye,
   X,
   AlertCircle,
+  AlertTriangle,
   Edit,
   Zap,
   Activity
@@ -60,12 +61,22 @@ interface OrderPdfJob {
   orderId?: number;
 }
 
+interface OrderTemplate {
+  id: number;
+  name: string;
+  cardWidth?: number;
+  cardHeight?: number;
+  backImageUrl?: string | null;
+  backFields?: string | null;
+}
+
 interface OrderDetails {
   id: number;
   clientId: number;
   templateId: number;
   status: string;
   client?: OrderClient;
+  template?: OrderTemplate;
   invoice?: OrderInvoice;
   pdfJobs?: OrderPdfJob[];
   _count?: {
@@ -120,6 +131,13 @@ export default function OrderDetailsPage() {
   // PDF trigger states
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const [previewJob, setPreviewJob] = useState<OrderPdfJob | null>(null);
+
+  // Pre-print Validation Modals
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [showEmptySlotModal, setShowEmptySlotModal] = useState(false);
+  const [validationResult, setValidationResult] = useState<any>(null);
+  const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST'>('LEAVE_BLANK');
+  const [pendingCompileType, setPendingCompileType] = useState<string | null>(null);
 
   // Production layout settings
   const [showLayoutSettings, setShowLayoutSettings] = useState(true);
@@ -399,8 +417,11 @@ export default function OrderDetailsPage() {
     }
   };
 
-  // Compile PDF Job
-  const handleCompilePdf = async (type: string) => {
+  const proceedWithCompile = async (
+    type: string,
+    skipValidation = false,
+    selectedStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' = 'LEAVE_BLANK'
+  ) => {
     setPdfLoading(type);
     try {
       const body: any = {
@@ -408,6 +429,8 @@ export default function OrderDetailsPage() {
         pdfType: type,
         paperSize: type === 'INVOICE' ? 'A4' : layoutPaperSize,
         orientation: type === 'INVOICE' ? 'PORTRAIT' : layoutOrientation,
+        emptySlotStrategy: selectedStrategy,
+        bypassValidation: skipValidation,
       };
 
       // Attach layout settings for compiler jobs
@@ -423,7 +446,6 @@ export default function OrderDetailsPage() {
         body.foldLine     = layoutFoldLine;
       }
 
-      const isProduction = type === 'PRODUCTION';
       const endpoint = '/api/jobs/production-request';
 
       const res = await fetch(endpoint, {
@@ -449,6 +471,157 @@ export default function OrderDetailsPage() {
     } catch (err: any) {
       toast(err.message || 'Error compiling PDF', 'error');
     } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  // Compile PDF Job (with pre-print validation checks)
+  const handleCompilePdf = async (type: string) => {
+    if (type === 'INVOICE') {
+      await proceedWithCompile(type);
+      return;
+    }
+
+    if (!order || !order.cardholders || order.cardholders.length === 0) {
+      toast('No cardholders in this order to print.', 'error');
+      return;
+    }
+
+    setPdfLoading(type);
+    try {
+      // 1. Fetch template field requirements
+      const fieldsRes = await fetch(`/api/templates/${order.templateId}/fields`);
+      if (!fieldsRes.ok) throw new Error('Failed to fetch template fields for validation');
+      const fieldsData = await fieldsRes.json();
+      const templateFields = fieldsData.fields || [];
+
+      // 2. Scan cardholders for missing required fields
+      const missingList: { cardholderName: string; missingFields: string[]; cardholderId: number }[] = [];
+      const requiredFields = templateFields.filter((f: any) => f.isRequired);
+
+      for (const item of order.cardholders) {
+        const ch = item.cardholder;
+        if (!ch) continue;
+        const missingFields: string[] = [];
+        
+        let custom: Record<string, any> = {};
+        if (ch.customFields) {
+          try {
+            custom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+          } catch {}
+        }
+        
+        for (const f of requiredFields) {
+          let hasValue = false;
+          const fieldName = f.field.toLowerCase();
+          
+          if (fieldName === 'name' || fieldName === 'fullname') {
+            hasValue = !!ch.name && ch.name.trim().length > 0;
+          } else if (fieldName === 'designation' || fieldName === 'role') {
+            hasValue = !!ch.designation && ch.designation.trim().length > 0;
+          } else if (fieldName === 'photo' || fieldName === 'photourl' || fieldName === 'avatar' || fieldName === 'profile') {
+            hasValue = !!ch.photoUrl && ch.photoUrl.trim().length > 0;
+          } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
+            hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
+          } else {
+            // Case-insensitive custom field check
+            const targetLower = f.field.toLowerCase().trim();
+            let val = undefined;
+            for (const [key, v] of Object.entries(custom)) {
+              if (key.toLowerCase().trim() === targetLower) {
+                val = v;
+                break;
+              }
+            }
+            hasValue = val !== undefined && val !== null && String(val).trim().length > 0;
+          }
+          
+          if (!hasValue) {
+            missingFields.push(f.prefix || f.field);
+          }
+        }
+        
+        if (missingFields.length > 0) {
+          missingList.push({
+            cardholderName: ch.name || `Cardholder #${ch.id}`,
+            missingFields,
+            cardholderId: ch.id,
+          });
+        }
+      }
+
+      // 3. Calculate empty slots
+      let pageWidth = 841.89; // A3
+      let pageHeight = 1190.55;
+      if (layoutPaperSize === 'A4') {
+        pageWidth = 595.27;
+        pageHeight = 841.89;
+      }
+      if (layoutOrientation === 'LANDSCAPE') {
+        const temp = pageWidth;
+        pageWidth = pageHeight;
+        pageHeight = temp;
+      }
+
+      const bleedPt = (layoutBleed || 0) * 2.83464567;
+      const isPortraitTemplate = (order.template?.cardWidth || 673) < (order.template?.cardHeight || 1039);
+      const cardBaseWidth = isPortraitTemplate ? 153 : 242.6;
+      const cardBaseHeight = isPortraitTemplate ? 242.6 : 153;
+
+      const cWidth = cardBaseWidth + bleedPt * 2;
+      const cHeight = cardBaseHeight + bleedPt * 2;
+
+      const marginX    = layoutMarginLeft  ?? 40;
+      const marginXR   = layoutMarginRight ?? 40;
+      const marginY    = layoutMarginTop   ?? 40;
+      const marginYB   = layoutMarginBottom ?? 40;
+      const colGap     = layoutColGap      ?? 15;
+      const rowGap     = layoutRowGap      ?? 15;
+
+      const foldGap = 10;
+      const isSingleSided = !order.template?.backImageUrl || (order.template?.backFields === '[]' || !order.template?.backFields);
+
+      const cols = Math.floor((pageWidth - marginX - marginXR + colGap) / (cWidth + colGap)) || 1;
+
+      let cardsPerPage: number;
+      let rowsPerPage: number;
+
+      if (isSingleSided) {
+        const fullHeight = pageHeight - marginY - marginYB;
+        rowsPerPage = Math.floor((fullHeight + rowGap) / (cHeight + rowGap)) || 1;
+        cardsPerPage = cols * rowsPerPage;
+      } else {
+        const centerY = pageHeight / 2;
+        const halfHeight = centerY - Math.max(marginY, marginYB);
+        const rowsPerHalf = Math.floor((halfHeight - foldGap + rowGap) / (cHeight + rowGap)) || 1;
+        rowsPerPage = rowsPerHalf;
+        cardsPerPage = cols * rowsPerHalf;
+      }
+
+      const totalCards = order.cardholders.length;
+      const totalPages = Math.ceil(totalCards / cardsPerPage);
+      const totalSlots = totalPages * cardsPerPage;
+
+      const validation = {
+        missingFields: missingList,
+        totalCards,
+        totalSlots,
+      };
+
+      setValidationResult(validation);
+      setPendingCompileType(type);
+      setPdfLoading(null);
+
+      // Trigger modals based on validation
+      if (missingList.length > 0) {
+        setShowValidationModal(true);
+      } else if (totalSlots > totalCards) {
+        setShowEmptySlotModal(true);
+      } else {
+        await proceedWithCompile(type, false, 'LEAVE_BLANK');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Validation failed', 'error');
       setPdfLoading(null);
     }
   };
@@ -1317,6 +1490,155 @@ export default function OrderDetailsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Pre-Print Missing Field Validation Modal ───────────────────── */}
+      {showValidationModal && validationResult && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{
+            background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid #f59e0b',
+            borderRadius: '16px', padding: '28px', maxWidth: '640px', width: '100%',
+            maxHeight: '80vh', display: 'flex', flexDirection: 'column', gap: '16px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertTriangle size={22} color="#f59e0b" />
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#f59e0b', fontWeight: '600' }}>Missing Data Detected</h3>
+            </div>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+              <strong style={{ color: '#fff' }}>{validationResult.missingFields.length} record(s)</strong>{' '}
+              have incomplete required fields. Fix them or skip to proceed.
+            </p>
+            <div style={{ overflowY: 'auto', maxHeight: '280px', border: '1px solid var(--glass-border)', borderRadius: '8px', background: 'rgba(255,255,255,0.02)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }} className="custom-table">
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', fontWeight: '600' }}>#</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', fontWeight: '600' }}>Cardholder</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', borderBottom: '1px solid var(--glass-border)', fontWeight: '600' }}>Missing Fields</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {validationResult.missingFields.map((row: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <td style={{ padding: '8px 12px', color: 'var(--muted)' }}>{i + 1}</td>
+                      <td style={{ padding: '8px 12px', fontWeight: '500' }}>{row.cardholderName}</td>
+                      <td style={{ padding: '8px 12px' }}>
+                        {row.missingFields.map((f: string, fi: number) => (
+                          <span key={fi} style={{
+                            display: 'inline-block', background: 'rgba(239,68,68,0.12)', color: '#f87171',
+                            borderRadius: '4px', padding: '2px 7px', fontSize: '0.75rem', marginRight: '4px', marginBottom: '2px',
+                            fontWeight: '500'
+                          }}>{f}</span>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setShowValidationModal(false);
+                  setPendingCompileType(null);
+                  router.push(`/dashboard/clients/${order?.clientId}?tab=list`);
+                }}
+              >
+                Fix Records
+              </button>
+              <button
+                className="btn"
+                style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+                onClick={async () => {
+                  setShowValidationModal(false);
+                  if (validationResult.totalSlots > validationResult.totalCards) {
+                    setShowEmptySlotModal(true);
+                  } else {
+                    if (pendingCompileType) {
+                      await proceedWithCompile(pendingCompileType, true, emptySlotStrategy);
+                    }
+                  }
+                }}
+              >
+                Skip & Print Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Empty Slot Strategy Modal ────────────────────────────────────── */}
+      {showEmptySlotModal && validationResult && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{
+            background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)',
+            borderRadius: '16px', padding: '28px', maxWidth: '480px', width: '100%',
+            display: 'flex', flexDirection: 'column', gap: '16px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <AlertCircle size={22} color="var(--primary)" />
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '600' }}>Empty Sheet Slots</h3>
+            </div>
+            <p style={{ margin: 0, color: 'var(--muted)', fontSize: '0.9rem' }}>
+              Your <strong style={{ color: '#fff' }}>{validationResult.totalCards}</strong> records
+              will fill <strong style={{ color: '#fff' }}>{validationResult.totalCards}</strong> of{' '}
+              <strong style={{ color: '#fff' }}>{validationResult.totalSlots}</strong> available sheet slots.
+              How should the remaining <strong style={{ color: 'var(--primary)' }}>
+                {validationResult.totalSlots - validationResult.totalCards}
+              </strong> slots be filled?
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {([
+                { value: 'LEAVE_BLANK', label: 'Leave Blank', desc: 'Empty slots print as white space. Safe for cut-and-stack printing.' },
+                { value: 'REPEAT_LAST', label: 'Repeat Last Card', desc: 'Fill remaining slots by repeating the last record.' },
+                { value: 'REPEAT_FIRST', label: 'Repeat First Card', desc: 'Fill remaining slots with the first record (useful for calibration).' },
+              ] as const).map(opt => (
+                <label
+                  key={opt.value}
+                  style={{
+                    display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '10px 14px',
+                    border: `1px solid ${emptySlotStrategy === opt.value ? 'var(--primary)' : 'var(--glass-border)'}`,
+                    borderRadius: '8px', cursor: 'pointer',
+                    background: emptySlotStrategy === opt.value ? 'rgba(99,102,241,0.08)' : 'transparent',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  <input type="radio" name="emptySlot" value={opt.value}
+                    checked={emptySlotStrategy === opt.value}
+                    onChange={() => setEmptySlotStrategy(opt.value)}
+                    style={{ marginTop: '4px' }}
+                  />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#fff' }}>{opt.label}</div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '2px' }}>{opt.desc}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              <button className="btn btn-secondary" onClick={() => { setShowEmptySlotModal(false); setPendingCompileType(null); }}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={async () => {
+                setShowEmptySlotModal(false);
+                if (pendingCompileType) {
+                  await proceedWithCompile(pendingCompileType, true, emptySlotStrategy);
+                }
+              }}>
+                Confirm & Queue Print
+              </button>
+            </div>
           </div>
         </div>
       )}
