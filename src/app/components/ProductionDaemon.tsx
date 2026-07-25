@@ -503,7 +503,7 @@ export default function ProductionDaemon() {
     let customCardsList: Array<{ name: string; pdfBytes: string; backPdfBytes?: string }> = [];
     if (metadata.emptySlotStrategy === 'FILL_CUSTOM' && metadata.emptySlotCustomCardId) {
       try {
-        let cardIds: string[] = [];
+        let cardIds: Array<string | null> = [];
         try {
           const parsed = JSON.parse(metadata.emptySlotCustomCardId);
           if (Array.isArray(parsed)) cardIds = parsed;
@@ -513,20 +513,24 @@ export default function ProductionDaemon() {
         }
 
         for (const cid of cardIds) {
-          const card = await getCustomCardById(cid);
-          if (card && card.pdfBytes) {
-            customCardsList.push({
-              name: card.name,
-              pdfBytes: card.pdfBytes,
-              backPdfBytes: card.backPdfBytes || undefined,
-            });
+          if (cid) {
+            const card = await getCustomCardById(cid);
+            if (card && card.pdfBytes) {
+              customCardsList.push({
+                name: card.name,
+                pdfBytes: card.pdfBytes,
+                backPdfBytes: card.backPdfBytes || undefined,
+              });
+            } else {
+              customCardsList.push(null as any);
+            }
+          } else {
+            customCardsList.push(null as any);
           }
         }
 
-        if (customCardsList.length > 0) {
-          addLog(`Found ${customCardsList.length} custom PDF card(s) in client DB to fill empty slots.`);
-        } else {
-          addLog(`Warning: Custom PDF card(s) with ID(s) ${metadata.emptySlotCustomCardId} not found in client DB or expired. Leaving blank.`);
+        if (customCardsList.some(c => c !== null)) {
+          addLog(`Loaded custom PDF cards for assigned slots.`);
         }
       } catch (err: any) {
         addLog(`Error loading custom PDF cards from client DB: ${err.message}`);
@@ -617,14 +621,19 @@ export default function ProductionDaemon() {
         }
       } else if (strategy === 'FILL_CUSTOM' && customCardsList.length > 0) {
         for (let i = 0; i < diff; i++) {
-          const cardToUse = customCardsList[i] || customCardsList[customCardsList.length - 1];
-          finalCardholders.push({
-            id: -999 - i,
-            name: cardToUse.name || 'Custom PDF Card',
-            isCustomPdf: true,
-            pdfBytes: cardToUse.pdfBytes,
-            backPdfBytes: cardToUse.backPdfBytes || undefined,
-          });
+          const cardToUse = customCardsList[i];
+          if (cardToUse && cardToUse.pdfBytes) {
+            finalCardholders.push({
+              id: -999 - i,
+              name: cardToUse.name || `Custom Card Slot ${i + 1}`,
+              isCustomPdf: true,
+              pdfBytes: cardToUse.pdfBytes,
+              backPdfBytes: cardToUse.backPdfBytes || undefined,
+            });
+          } else {
+            // Empty/Unassigned slot stays BLANK
+            finalCardholders.push({});
+          }
         }
       } else {
         // LEAVE_BLANK
