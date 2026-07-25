@@ -136,8 +136,89 @@ export default function OrderDetailsPage() {
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [showEmptySlotModal, setShowEmptySlotModal] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
-  const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST'>('LEAVE_BLANK');
+  const [emptySlotStrategy, setEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM'>('LEAVE_BLANK');
   const [pendingCompileType, setPendingCompileType] = useState<string | null>(null);
+
+  // Compile Wizard states
+  const [showCompileWizard, setShowCompileWizard] = useState(false);
+  const [wizardCompileType, setWizardCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
+  const [wizardPaperSize, setWizardPaperSize] = useState('A3');
+  const [wizardOrientation, setWizardOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
+  const [wizardStrategy, setWizardStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM'>('LEAVE_BLANK');
+
+  const [customCards, setCustomCards] = useState<any[]>([]);
+  const [selectedCustomCardId, setSelectedCustomCardId] = useState<string>('');
+  const [isUploadingCustomCard, setIsUploadingCustomCard] = useState(false);
+
+  const loadCustomCardsList = async () => {
+    try {
+      const { getCustomCards } = await import('@/lib/clientDb');
+      const list = await getCustomCards();
+      setCustomCards(list);
+      if (list.length > 0 && !selectedCustomCardId) {
+        setSelectedCustomCardId(list[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to load custom cards:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (showCompileWizard || showEmptySlotModal) {
+      loadCustomCardsList();
+    }
+  }, [showCompileWizard, showEmptySlotModal]);
+
+  const handleCustomCardUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      toast('Please upload a PDF file only.', 'error');
+      return;
+    }
+    setIsUploadingCustomCard(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const base64Bytes = (reader.result as string).split(',')[1];
+          const { saveCustomCard } = await import('@/lib/clientDb');
+          const saved = await saveCustomCard(file.name, base64Bytes);
+          toast(`Custom PDF card "${file.name}" saved locally!`, 'success');
+          setSelectedCustomCardId(saved.id);
+          await loadCustomCardsList();
+        } catch (err: any) {
+          toast(err.message || 'Failed to save custom card', 'error');
+        } finally {
+          setIsUploadingCustomCard(false);
+        }
+      };
+      reader.onerror = () => {
+        toast('Failed to read PDF file', 'error');
+        setIsUploadingCustomCard(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      toast(err.message || 'Failed to upload custom card', 'error');
+      setIsUploadingCustomCard(false);
+    }
+  };
+
+  const handleCustomCardDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this custom PDF card?')) return;
+    try {
+      const { deleteCustomCard } = await import('@/lib/clientDb');
+      await deleteCustomCard(id);
+      toast('Custom PDF card deleted.', 'success');
+      if (selectedCustomCardId === id) {
+        setSelectedCustomCardId('');
+      }
+      await loadCustomCardsList();
+    } catch (err: any) {
+      toast(err.message || 'Failed to delete custom card', 'error');
+    }
+  };
 
   // Production layout settings
   const [showLayoutSettings, setShowLayoutSettings] = useState(true);
@@ -404,9 +485,9 @@ export default function OrderDetailsPage() {
 
       // Automate PDF compilation depending on the new status
       if (newStatus === 'APPROVAL_PDF_SENT') {
-        await handleCompilePdf('APPROVAL');
+        openCompileWizard('APPROVAL');
       } else if (newStatus === 'PRINTING') {
-        await handleCompilePdf('PRODUCTION');
+        openCompileWizard('PRODUCTION');
       } else if (newStatus === 'DELIVERED' && isOwner) {
         await handleCompilePdf('INVOICE');
       }
@@ -420,18 +501,37 @@ export default function OrderDetailsPage() {
   const proceedWithCompile = async (
     type: string,
     skipValidation = false,
-    selectedStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' = 'LEAVE_BLANK'
+    selectedStrategy: 'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST' | 'FILL_CUSTOM' = 'LEAVE_BLANK',
+    overridePaperSize?: string,
+    overrideOrientation?: string
   ) => {
     setPdfLoading(type);
     try {
+      const targetPaperSize = overridePaperSize || layoutPaperSize;
+      const targetOrientation = overrideOrientation || layoutOrientation;
+
       const body: any = {
         orderId,
         pdfType: type,
-        paperSize: type === 'INVOICE' ? 'A4' : layoutPaperSize,
-        orientation: type === 'INVOICE' ? 'PORTRAIT' : layoutOrientation,
+        paperSize: type === 'INVOICE' ? 'A4' : (targetPaperSize === 'SRA3' || targetPaperSize === '13x19' ? 'CUSTOM' : targetPaperSize),
+        orientation: type === 'INVOICE' ? 'PORTRAIT' : targetOrientation,
         emptySlotStrategy: selectedStrategy,
         bypassValidation: skipValidation,
       };
+
+      if (selectedStrategy === 'FILL_CUSTOM') {
+        body.emptySlotCustomCardId = selectedCustomCardId;
+      }
+
+      if (type !== 'INVOICE') {
+        if (targetPaperSize === 'SRA3') {
+          body.customWidth = targetOrientation === 'PORTRAIT' ? 907.09 : 1275.59;
+          body.customHeight = targetOrientation === 'PORTRAIT' ? 1275.59 : 907.09;
+        } else if (targetPaperSize === '13x19') {
+          body.customWidth = targetOrientation === 'PORTRAIT' ? 936 : 1368;
+          body.customHeight = targetOrientation === 'PORTRAIT' ? 1368 : 936;
+        }
+      }
 
       // Attach layout settings for compiler jobs
       if (type === 'PRODUCTION' || type === 'APPROVAL' || type === 'INDIVIDUAL') {
@@ -471,6 +571,105 @@ export default function OrderDetailsPage() {
     } catch (err: any) {
       toast(err.message || 'Error compiling PDF', 'error');
     } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const openCompileWizard = (type: 'APPROVAL' | 'PRODUCTION') => {
+    setWizardCompileType(type);
+    setWizardPaperSize(layoutPaperSize);
+    setWizardOrientation(layoutOrientation as any);
+    setWizardStrategy(emptySlotStrategy);
+    setWizardStep(1);
+    setShowCompileWizard(true);
+  };
+
+  const handleWizardCompile = async () => {
+    if (!wizardCompileType || !order) return;
+
+    // 1. Update the layout configs so the compiler uses them
+    handleUpdateLayoutConfig('paperSize', wizardPaperSize);
+    handleUpdateLayoutConfig('orientation', wizardOrientation);
+    setEmptySlotStrategy(wizardStrategy);
+
+    setShowCompileWizard(false);
+    setPdfLoading(wizardCompileType);
+
+    try {
+      // 1. Fetch template field requirements for validation
+      const fieldsRes = await fetch(`/api/templates/${order.templateId}/fields`);
+      if (!fieldsRes.ok) throw new Error('Failed to fetch template fields for validation');
+      const fieldsData = await fieldsRes.json();
+      const templateFields = fieldsData.fields || [];
+
+      // 2. Scan cardholders for missing required fields
+      const missingList: { cardholderName: string; missingFields: string[]; cardholderId: number }[] = [];
+      const requiredFields = templateFields.filter((f: any) => f.isRequired);
+
+      for (const item of (order.cardholders || [])) {
+        const ch = item.cardholder;
+        if (!ch) continue;
+        const missingFields: string[] = [];
+        
+        let custom: Record<string, any> = {};
+        if (ch.customFields) {
+          try {
+            custom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+          } catch {}
+        }
+        
+        for (const f of requiredFields) {
+          let hasValue = false;
+          const fieldName = f.field.toLowerCase();
+          
+          if (fieldName === 'name' || fieldName === 'fullname') {
+            hasValue = !!ch.name && ch.name.trim().length > 0;
+          } else if (fieldName === 'designation' || fieldName === 'role') {
+            hasValue = !!ch.designation && ch.designation.trim().length > 0;
+          } else if (fieldName === 'photo' || fieldName === 'photourl' || fieldName === 'avatar' || fieldName === 'profile') {
+            hasValue = !!ch.photoUrl && ch.photoUrl.trim().length > 0;
+          } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
+            hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
+          } else {
+            const targetLower = f.field.toLowerCase().trim();
+            let val = undefined;
+            for (const [key, v] of Object.entries(custom)) {
+              if (key.toLowerCase().trim() === targetLower) {
+                val = v;
+                break;
+              }
+            }
+            hasValue = val !== undefined && val !== null && String(val).trim().length > 0;
+          }
+          
+          if (!hasValue) {
+            missingFields.push(f.prefix || f.field);
+          }
+        }
+        
+        if (missingFields.length > 0) {
+          missingList.push({
+            cardholderName: ch.name || `Cardholder #${ch.id}`,
+            missingFields,
+            cardholderId: ch.id,
+          });
+        }
+      }
+
+      if (missingList.length > 0) {
+        setValidationResult({
+          missingFields: missingList,
+          totalCards: (order.cardholders || []).length,
+          totalSlots: 0,
+        });
+        setPendingCompileType(wizardCompileType);
+        setShowValidationModal(true);
+        setPdfLoading(null);
+      } else {
+        await proceedWithCompile(wizardCompileType, false, wizardStrategy, wizardPaperSize, wizardOrientation);
+      }
+    } catch (err: any) {
+      toast(err.message || 'Validation failed', 'error');
       setPdfLoading(null);
     }
   };
@@ -557,7 +756,14 @@ export default function OrderDetailsPage() {
         pageWidth = 595.27;
         pageHeight = 841.89;
       }
-      if (layoutOrientation === 'LANDSCAPE') {
+      
+      if (layoutPaperSize === 'SRA3') {
+        pageWidth = layoutOrientation === 'PORTRAIT' ? 907.09 : 1275.59;
+        pageHeight = layoutOrientation === 'PORTRAIT' ? 1275.59 : 907.09;
+      } else if (layoutPaperSize === '13x19') {
+        pageWidth = layoutOrientation === 'PORTRAIT' ? 936 : 1368;
+        pageHeight = layoutOrientation === 'PORTRAIT' ? 1368 : 936;
+      } else if (layoutOrientation === 'LANDSCAPE') {
         const temp = pageWidth;
         pageWidth = pageHeight;
         pageHeight = temp;
@@ -1040,6 +1246,8 @@ export default function OrderDetailsPage() {
                     >
                       <option value="A3">A3 Sheet</option>
                       <option value="A4">A4 Sheet</option>
+                      <option value="SRA3">SRA3 Sheet</option>
+                      <option value="13x19">13" x 19" Sheet</option>
                     </select>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -1103,24 +1311,37 @@ export default function OrderDetailsPage() {
                   Default: Margins 40 pt · Col/Row Gap 15 pt · Bleed 0 pt · Values in PDF points (1 pt ≈ 0.35 mm)
                 </div>
 
-                <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '8px 12px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    onClick={() => handleCompilePdf('INDIVIDUAL')}
-                    disabled={pdfLoading !== null}
-                  >
-                    Compile CR-80 Cards
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.8rem', padding: '8px 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    onClick={handleWhatsAppShare}
-                  >
-                    <Share2 size={12} /> Share Proofs Link
-                  </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ fontSize: '0.8rem', padding: '10px 14px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      onClick={() => openCompileWizard('PRODUCTION')}
+                      disabled={pdfLoading !== null}
+                    >
+                      <FileText size={14} /> Generate PDF Grid...
+                    </button>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '8px 12px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                      onClick={() => handleCompilePdf('INDIVIDUAL')}
+                      disabled={pdfLoading !== null}
+                    >
+                      Compile CR-80 Cards
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      style={{ fontSize: '0.8rem', padding: '8px 12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+                      onClick={handleWhatsAppShare}
+                    >
+                      <Share2 size={12} /> Share Proofs Link
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -1603,6 +1824,7 @@ export default function OrderDetailsPage() {
                 { value: 'LEAVE_BLANK', label: 'Leave Blank', desc: 'Empty slots print as white space. Safe for cut-and-stack printing.' },
                 { value: 'REPEAT_LAST', label: 'Repeat Last Card', desc: 'Fill remaining slots by repeating the last record.' },
                 { value: 'REPEAT_FIRST', label: 'Repeat First Card', desc: 'Fill remaining slots with the first record (useful for calibration).' },
+                { value: 'FILL_CUSTOM', label: 'Upload Custom PDF', desc: 'Fill empty slots with a custom PDF card stored locally (cleared after 3 days).' },
               ] as const).map(opt => (
                 <label
                   key={opt.value}
@@ -1625,6 +1847,64 @@ export default function OrderDetailsPage() {
                   </div>
                 </label>
               ))}
+
+              {emptySlotStrategy === 'FILL_CUSTOM' && (
+                <div style={{
+                  marginTop: '10px', padding: '14px', borderRadius: '10px',
+                  background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
+                  display: 'flex', flexDirection: 'column', gap: '12px'
+                }}>
+                  {customCards.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Select Local Card</span>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <select
+                          className="form-input"
+                          value={selectedCustomCardId}
+                          onChange={(e) => setSelectedCustomCardId(e.target.value)}
+                          style={{ flex: 1, background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}
+                        >
+                          {customCards.map(card => (
+                            <option key={card.id} value={card.id} style={{ background: '#0a0d14' }}>
+                              {card.name} (Uploaded {new Date(card.createdAt).toLocaleDateString()})
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => handleCustomCardDelete(selectedCustomCardId)}
+                          style={{
+                            padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
+                            border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', cursor: 'pointer'
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center', padding: '8px' }}>
+                      No local PDF cards uploaded yet.
+                    </div>
+                  )}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
+                      {isUploadingCustomCard ? 'Saving file...' : 'Upload New PDF Card'}
+                    </span>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      disabled={isUploadingCustomCard}
+                      onChange={handleCustomCardUpload}
+                      style={{
+                        fontSize: '0.78rem', color: '#fff', cursor: 'pointer',
+                        padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)'
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
               <button className="btn btn-secondary" onClick={() => { setShowEmptySlotModal(false); setPendingCompileType(null); }}>
@@ -1638,6 +1918,243 @@ export default function OrderDetailsPage() {
               }}>
                 Confirm & Queue Print
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Compile Wizard Modal ────────────────────────────────────────── */}
+      {showCompileWizard && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{
+            background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)',
+            borderRadius: '16px', padding: '28px', maxWidth: '520px', width: '100%',
+            display: 'flex', flexDirection: 'column', gap: '20px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+          }}>
+            {/* Header */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '600', color: '#fff' }}>
+                  Generate PDF File
+                </h3>
+                <span style={{ fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', background: 'rgba(255,255,255,0.06)', color: 'var(--muted)' }}>
+                  Step {wizardStep} of 2
+                </span>
+              </div>
+              <p style={{ margin: '4px 0 0 0', color: 'var(--muted)', fontSize: '0.82rem' }}>
+                {wizardStep === 1 
+                  ? 'Configure the paper size and layout orientation settings.' 
+                  : 'Define how extra space on the output sheets should be handled.'}
+              </p>
+            </div>
+
+            {/* Step 1 Content */}
+            {wizardStep === 1 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* File Type Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>File Type</span>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setWizardCompileType('APPROVAL')}
+                      style={{
+                        flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${wizardCompileType === 'APPROVAL' ? 'var(--primary)' : 'var(--glass-border)'}`,
+                        background: wizardCompileType === 'APPROVAL' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        color: wizardCompileType === 'APPROVAL' ? '#fff' : 'var(--muted)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Approval File
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWizardCompileType('PRODUCTION')}
+                      style={{
+                        flex: 1, padding: '12px', borderRadius: '8px', border: `1px solid ${wizardCompileType === 'PRODUCTION' ? 'var(--primary)' : 'var(--glass-border)'}`,
+                        background: wizardCompileType === 'PRODUCTION' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        color: wizardCompileType === 'PRODUCTION' ? '#fff' : 'var(--muted)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Production File
+                    </button>
+                  </div>
+                </div>
+
+                {/* Paper Size Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <label className="form-label" style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)' }}>Paper Size</label>
+                  <select
+                    className="form-input"
+                    value={wizardPaperSize}
+                    onChange={(e) => setWizardPaperSize(e.target.value)}
+                    style={{ background: 'rgba(255,255,255,0.02)', color: '#fff', border: '1px solid var(--glass-border)' }}
+                  >
+                    <option value="A4" style={{ background: '#0a0d14' }}>A4 (210 x 297 mm)</option>
+                    <option value="A3" style={{ background: '#0a0d14' }}>A3 (297 x 420 mm)</option>
+                    <option value="SRA3" style={{ background: '#0a0d14' }}>SRA3 (320 x 450 mm)</option>
+                    <option value="13x19" style={{ background: '#0a0d14' }}>13" x 19" (330.2 x 482.6 mm)</option>
+                  </select>
+                </div>
+
+                {/* Orientation Selection */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Orientation</span>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setWizardOrientation('PORTRAIT')}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${wizardOrientation === 'PORTRAIT' ? 'var(--primary)' : 'var(--glass-border)'}`,
+                        background: wizardOrientation === 'PORTRAIT' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        color: wizardOrientation === 'PORTRAIT' ? '#fff' : 'var(--muted)', fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Portrait
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWizardOrientation('LANDSCAPE')}
+                      style={{
+                        flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${wizardOrientation === 'LANDSCAPE' ? 'var(--primary)' : 'var(--glass-border)'}`,
+                        background: wizardOrientation === 'LANDSCAPE' ? 'rgba(99,102,241,0.08)' : 'transparent',
+                        color: wizardOrientation === 'LANDSCAPE' ? '#fff' : 'var(--muted)', fontSize: '0.85rem', cursor: 'pointer', transition: 'all 0.15s'
+                      }}
+                    >
+                      Landscape
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Step 2 Content */}
+            {wizardStep === 2 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500, marginBottom: '4px' }}>
+                  What should we do with extra space / empty slots?
+                </span>
+                {([
+                  { value: 'LEAVE_BLANK', label: 'Leave Blank', desc: 'Keep empty slots blank (recommended for cut-and-stack).' },
+                  { value: 'REPEAT_LAST', label: 'Repeat Last Card', desc: 'Fill the rest of the sheet by repeating the last card.' },
+                  { value: 'REPEAT_FIRST', label: 'Repeat First Card', desc: 'Fill the rest of the sheet by repeating the first card.' },
+                  { value: 'FILL_CUSTOM', label: 'Upload Custom PDF', desc: 'Fill empty slots with a custom PDF card stored locally (cleared after 3 days).' },
+                ] as const).map(opt => (
+                  <label
+                    key={opt.value}
+                    style={{
+                      display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '12px 14px',
+                      border: `1px solid ${wizardStrategy === opt.value ? 'var(--primary)' : 'var(--glass-border)'}`,
+                      borderRadius: '8px', cursor: 'pointer',
+                      background: wizardStrategy === opt.value ? 'rgba(99,102,241,0.08)' : 'transparent',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <input type="radio" name="wizardStrategy" value={opt.value}
+                      checked={wizardStrategy === opt.value}
+                      onChange={() => setWizardStrategy(opt.value)}
+                      style={{ marginTop: '4px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '0.85rem', color: '#fff' }}>{opt.label}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
+
+                {wizardStrategy === 'FILL_CUSTOM' && (
+                  <div style={{
+                    marginTop: '10px', padding: '14px', borderRadius: '10px',
+                    background: 'rgba(255,255,255,0.02)', border: '1px solid var(--glass-border)',
+                    display: 'flex', flexDirection: 'column', gap: '12px'
+                  }}>
+                    {customCards.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Select Local Card</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <select
+                            className="form-input"
+                            value={selectedCustomCardId}
+                            onChange={(e) => setSelectedCustomCardId(e.target.value)}
+                            style={{ flex: 1, background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}
+                          >
+                            {customCards.map(card => (
+                              <option key={card.id} value={card.id} style={{ background: '#0a0d14' }}>
+                                {card.name} (Uploaded {new Date(card.createdAt).toLocaleDateString()})
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => handleCustomCardDelete(selectedCustomCardId)}
+                            style={{
+                              padding: '8px 12px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444',
+                              border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '6px', cursor: 'pointer'
+                            }}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', textAlign: 'center', padding: '8px' }}>
+                        No local PDF cards uploaded yet.
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
+                        {isUploadingCustomCard ? 'Saving file...' : 'Upload New PDF Card'}
+                      </span>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        disabled={isUploadingCustomCard}
+                        onChange={handleCustomCardUpload}
+                        style={{
+                          fontSize: '0.78rem', color: '#fff', cursor: 'pointer',
+                          padding: '6px', background: 'rgba(255,255,255,0.02)', borderRadius: '6px', border: '1px dashed var(--glass-border)'
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Footer Buttons */}
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '10px' }}>
+              {wizardStep === 1 ? (
+                <>
+                  <button className="btn btn-secondary" onClick={() => setShowCompileWizard(false)}>
+                    Cancel
+                  </button>
+                  <button 
+                    className="btn btn-primary" 
+                    onClick={() => {
+                      if (!wizardCompileType) {
+                        toast('Please select either Approval or Production file type.', 'error');
+                        return;
+                      }
+                      setWizardStep(2);
+                    }}
+                  >
+                    Next
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button className="btn btn-secondary" onClick={() => setWizardStep(1)}>
+                    Back
+                  </button>
+                  <button className="btn btn-primary" onClick={handleWizardCompile}>
+                    Compile PDF
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

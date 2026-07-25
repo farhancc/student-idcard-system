@@ -17,8 +17,11 @@ const productionRequestSchema = z.object({
   marginBottom: z.union([z.number(), z.string().transform(Number)]).optional(),
   colGap: z.union([z.number(), z.string().transform(Number)]).optional(),
   rowGap: z.union([z.number(), z.string().transform(Number)]).optional(),
-  emptySlotStrategy: z.enum(['LEAVE_BLANK', 'REPEAT_LAST', 'REPEAT_FIRST']).optional().default('LEAVE_BLANK'),
+  emptySlotStrategy: z.enum(['LEAVE_BLANK', 'REPEAT_LAST', 'REPEAT_FIRST', 'FILL_CUSTOM']).optional().default('LEAVE_BLANK'),
+  emptySlotCustomCardId: z.string().optional(),
   bypassValidation: z.boolean().optional().default(false),
+  customWidth: z.union([z.number(), z.string().transform(Number)]).optional(),
+  customHeight: z.union([z.number(), z.string().transform(Number)]).optional(),
 });
 
 export async function POST(request: Request) {
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
     const {
       orderId, pdfType, paperSize, orientation, bleed, cropMarks, foldLine,
       marginLeft, marginTop, marginRight, marginBottom, colGap, rowGap,
-      emptySlotStrategy, bypassValidation
+      emptySlotStrategy, emptySlotCustomCardId, bypassValidation, customWidth, customHeight
     } = validation.data;
 
 
@@ -101,7 +104,10 @@ export async function POST(request: Request) {
       colGap:       colGap       !== undefined ? Number(colGap)       : undefined,
       rowGap:       rowGap       !== undefined ? Number(rowGap)       : undefined,
       emptySlotStrategy: emptySlotStrategy || 'LEAVE_BLANK',
+      emptySlotCustomCardId: emptySlotCustomCardId || undefined,
       bypassValidation: !!bypassValidation,
+      customWidth: customWidth !== undefined ? Number(customWidth) : undefined,
+      customHeight: customHeight !== undefined ? Number(customHeight) : undefined,
     };
 
     let cardCountLocked = totalCreditsNeeded;

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient } from '@/lib/pdf/card-renderer-client';
+import { getCustomCardById } from '@/lib/clientDb';
 
 async function safeDrawTextClient(
   page: any,
@@ -499,6 +500,21 @@ export default function ProductionDaemon() {
     const colGap = metadata.colGap !== undefined ? Number(metadata.colGap) : 15;
     const rowGap = metadata.rowGap !== undefined ? Number(metadata.rowGap) : 15;
 
+    let customCardPdfBytes = '';
+    if (metadata.emptySlotStrategy === 'FILL_CUSTOM' && metadata.emptySlotCustomCardId) {
+      try {
+        const customCard = await getCustomCardById(metadata.emptySlotCustomCardId);
+        if (customCard && customCard.pdfBytes) {
+          customCardPdfBytes = customCard.pdfBytes;
+          addLog(`Found custom PDF card "${customCard.name}" in client DB to fill empty slots.`);
+        } else {
+          addLog(`Warning: Custom PDF card with ID ${metadata.emptySlotCustomCardId} not found in client DB or expired. Leaving blank.`);
+        }
+      } catch (err: any) {
+        addLog(`Error loading custom PDF card from client DB: ${err.message}`);
+      }
+    }
+
     await updateProgress(job.id, 5, 'PROCESSING');
     addLog(`Preparing PDF Document (${paperSize} ${orientation}). Total cardholders: ${cardholders.length}`);
 
@@ -581,6 +597,15 @@ export default function ProductionDaemon() {
         for (let i = 0; i < diff; i++) {
           finalCardholders.push({ ...firstCard });
         }
+      } else if (strategy === 'FILL_CUSTOM' && customCardPdfBytes) {
+        for (let i = 0; i < diff; i++) {
+          finalCardholders.push({
+            id: -999 - i,
+            name: 'Custom PDF Card',
+            isCustomPdf: true,
+            pdfBytes: customCardPdfBytes,
+          });
+        }
       } else {
         // LEAVE_BLANK
         for (let i = 0; i < diff; i++) {
@@ -639,56 +664,104 @@ export default function ProductionDaemon() {
         // ── Render front side as vector PDF ──
         addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Front)`);
 
-        const clientTemplate = {
-          id: template.id,
-          cardWidth: template.width || 1011,
-          cardHeight: template.height || 638,
-          frontImageUrl: template.frontImageUrl,
-          backImageUrl: template.backImageUrl,
-          frontOriginalUrl: template.frontOriginalUrl || null,
-          backOriginalUrl: template.backOriginalUrl || null,
-          frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
-          backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
-        };
+        let frontEmbedded;
+        let backEmbedded;
 
-        const clientCardholder = {
-          ...ch,
-          customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
-        };
+        if (ch.isCustomPdf && ch.pdfBytes) {
+          try {
+            const rawBytes = Uint8Array.from(atob(ch.pdfBytes), c => c.charCodeAt(0));
+            const customDoc = await PDFDocument.load(rawBytes);
+            const pageCount = customDoc.getPageCount();
+            
+            const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
+            frontEmbedded = fPage;
 
-        const frontPdfBytes = await renderCardSideToPdfBytesClient(
-          clientTemplate,
-          clientCardholder,
-          'front',
-          template.validTillDate ? new Date(template.validTillDate) : null,
-          pressFonts
-        );
-        const frontCardDoc = await PDFDocument.load(frontPdfBytes);
-        const [frontEmbedded] = await pdfDoc.embedPdf(frontCardDoc, [0]);
-        page.drawPage(frontEmbedded, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
+            if (!isSingleSided && backsY !== null) {
+              const pageIndexForBack = pageCount > 1 ? 1 : 0;
+              const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
+              backEmbedded = bPage;
+            }
+          } catch (loadErr: any) {
+            addLog(`Error loading custom PDF page: ${loadErr.message}`);
+          }
+        } else {
+          const clientTemplate = {
+            id: template.id,
+            cardWidth: template.width || 1011,
+            cardHeight: template.height || 638,
+            frontImageUrl: template.frontImageUrl,
+            backImageUrl: template.backImageUrl,
+            frontOriginalUrl: template.frontOriginalUrl || null,
+            backOriginalUrl: template.backOriginalUrl || null,
+            frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
+            backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+          };
+
+          const clientCardholder = {
+            ...ch,
+            customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
+          };
+
+          const frontPdfBytes = await renderCardSideToPdfBytesClient(
+            clientTemplate,
+            clientCardholder,
+            'front',
+            template.validTillDate ? new Date(template.validTillDate) : null,
+            pressFonts
+          );
+          const frontCardDoc = await PDFDocument.load(frontPdfBytes);
+          const [fPage] = await pdfDoc.embedPdf(frontCardDoc, [0]);
+          frontEmbedded = fPage;
+        }
+
+        if (frontEmbedded) {
+          page.drawPage(frontEmbedded, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
+        }
 
         // If double-sided, render back side
         if (!isSingleSided && backsY !== null) {
           addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Back)`);
 
-          const backPdfBytes = await renderCardSideToPdfBytesClient(
-            clientTemplate,
-            clientCardholder,
-            'back',
-            template.validTillDate ? new Date(template.validTillDate) : null,
-            pressFonts
-          );
-          const backCardDoc = await PDFDocument.load(backPdfBytes);
-          const [backEmbedded] = await pdfDoc.embedPdf(backCardDoc, [0]);
+          if (!ch.isCustomPdf) {
+            const clientTemplate = {
+              id: template.id,
+              cardWidth: template.width || 1011,
+              cardHeight: template.height || 638,
+              frontImageUrl: template.frontImageUrl,
+              backImageUrl: template.backImageUrl,
+              frontOriginalUrl: template.frontOriginalUrl || null,
+              backOriginalUrl: template.backOriginalUrl || null,
+              frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
+              backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+            };
 
-          // Draw back image rotated 180 degrees
-          page.drawPage(backEmbedded, {
-            x: xPos + cWidth,
-            y: backsY + cHeight,
-            width: cWidth,
-            height: cHeight,
-            rotate: degrees(180),
-          });
+            const clientCardholder = {
+              ...ch,
+              customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
+            };
+
+            const backPdfBytes = await renderCardSideToPdfBytesClient(
+              clientTemplate,
+              clientCardholder,
+              'back',
+              template.validTillDate ? new Date(template.validTillDate) : null,
+              pressFonts
+            );
+            const backCardDoc = await PDFDocument.load(backPdfBytes);
+            const [bPage] = await pdfDoc.embedPdf(backCardDoc, [0]);
+            backEmbedded = bPage;
+          }
+
+          if (backEmbedded) {
+            // Draw back image rotated 180 degrees
+            page.drawPage(backEmbedded, {
+              x: xPos + cWidth,
+              y: backsY + cHeight,
+              width: cWidth,
+              height: cHeight,
+              rotate: degrees(180),
+            });
+          }
         }
 
         // Draw crop marks
