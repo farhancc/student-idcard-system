@@ -82,17 +82,12 @@ export async function PUT(
       }
     }
 
-    // 1. Transaction to handle versioning
+    // 1. Update template in-place (same ID) so all existing orders/cardholders/shares
+    //    automatically pick up the latest fields without any FK cascading.
     const newTemplate = await prisma.$transaction(async (tx) => {
-      await tx.cardTemplate.update({
+      const updated = await tx.cardTemplate.update({
         where: { id: templateId },
-        data: { isLatest: false },
-      });
-
-      const created = await tx.cardTemplate.create({
         data: {
-          pressId,
-          clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
           name: name || oldTemplate.name,
           cardWidth: cardWidth ? Number(cardWidth) : oldTemplate.cardWidth,
           cardHeight: cardHeight ? Number(cardHeight) : oldTemplate.cardHeight,
@@ -104,66 +99,36 @@ export async function PUT(
           backFields: backFields || oldTemplate.backFields,
           category: category || (oldTemplate as any).category || 'OTHER',
           sides: sides || (oldTemplate as any).sides || 1,
-          version: oldTemplate.version + 1,
-          parentId: oldTemplate.id,
+          clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
+          version: { increment: 1 },
           isLatest: true,
         },
       });
 
       // Sync client assignments if provided
       if (clientIds !== undefined) {
-        // Delete old assignments for the new template (inherited from parent won't exist)
-        await tx.templateClientAssignment.deleteMany({ where: { templateId: created.id } });
+        await tx.templateClientAssignment.deleteMany({ where: { templateId } });
         if (clientIds.length > 0) {
           await tx.templateClientAssignment.createMany({
-            data: clientIds.map((cid) => ({ templateId: created.id, clientId: cid })),
-            skipDuplicates: true,
-          });
-        }
-      } else {
-        // Copy parent's client assignments to the new version
-        const parentAssignments = await tx.templateClientAssignment.findMany({
-          where: { templateId: oldTemplate.id },
-        });
-        if (parentAssignments.length > 0) {
-          await tx.templateClientAssignment.createMany({
-            data: parentAssignments.map((a) => ({ templateId: created.id, clientId: a.clientId })),
+            data: clientIds.map((cid) => ({ templateId, clientId: cid })),
             skipDuplicates: true,
           });
         }
       }
 
-      // Update templateId in orders that are not DELIVERED
-      await tx.cardOrder.updateMany({
-        where: {
-          templateId: oldTemplate.id,
-          status: { not: 'DELIVERED' },
-        },
-        data: {
-          templateId: created.id,
-          templateVersion: created.version,
-        },
-      });
-
-      // Update templateId in cardholders
-      await tx.cardholder.updateMany({
-        where: { templateId: oldTemplate.id },
-        data: { templateId: created.id },
-      });
-
-      // Update templateId in client portal shares
-      await tx.clientPortalShare.updateMany({
-        where: { templateId: oldTemplate.id },
-        data: { templateId: created.id },
-      });
-
-      // Mark any cached CardAssets as stale inside the transaction for atomic consistency
+      // Mark all cached card assets as stale so re-renders are forced on next compile
       await tx.cardAsset.updateMany({
-        where: { templateId: oldTemplate.id },
+        where: { templateId },
         data: { isStale: true },
       });
 
-      return created;
+      // Also update the templateVersion on active orders so the daemon knows the layout changed
+      await tx.cardOrder.updateMany({
+        where: { templateId, status: { not: 'DELIVERED' } },
+        data: { templateVersion: updated.version },
+      });
+
+      return updated;
     });
 
     // 3. Audit log

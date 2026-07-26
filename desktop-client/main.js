@@ -503,6 +503,60 @@ ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64D
   }
 });
 
+// IPC handler to delete stale local template files so fresh ones are downloaded after a template update
+ipcMain.handle('delete-local-template', async (event, { templateId, sides }) => {
+  try {
+    const dir = path.join(app.getPath('userData'), 'templates');
+    if (!fs.existsSync(dir)) return { success: true };
+
+    const sideList = sides || ['front', 'back'];
+    const deleted = [];
+
+    const deleteInDir = (searchDir) => {
+      if (!fs.existsSync(searchDir)) return;
+      const files = fs.readdirSync(searchDir);
+      for (const side of sideList) {
+        const prefix = `original_${templateId}_${side}.`;
+        for (const file of files) {
+          if (file.startsWith(prefix)) {
+            try {
+              fs.unlinkSync(path.join(searchDir, file));
+              deleted.push(file);
+              console.log(`[Main Process] Deleted stale template file: ${file}`);
+            } catch (e) {
+              console.warn(`[Main Process] Failed to delete template file ${file}:`, e.message);
+            }
+          }
+        }
+        // Also delete the companion PNG preview (for PDF templates)
+        for (const file of files) {
+          if (file.startsWith(`original_${templateId}_${side}`) && file.endsWith('.png')) {
+            try {
+              fs.unlinkSync(path.join(searchDir, file));
+              deleted.push(file);
+            } catch (e) {}
+          }
+        }
+      }
+    };
+
+    // Search root templates dir
+    deleteInDir(dir);
+    // Search pressId subfolders
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    for (const item of items) {
+      if (item.isDirectory()) {
+        deleteInDir(path.join(dir, item.name));
+      }
+    }
+
+    return { success: true, deleted };
+  } catch (error) {
+    console.error('delete-local-template error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // IPC handler to search for original local template file
 ipcMain.handle('get-local-template-path', async (event, { templateId, side }) => {
   try {

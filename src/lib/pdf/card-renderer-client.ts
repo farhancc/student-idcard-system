@@ -50,6 +50,22 @@ export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: s
 const globalBgBytesCache = new Map<string, Uint8Array>();
 const globalFontBytesCache = new Map<string, ArrayBuffer>();
 
+/**
+ * Clears all background-byte cache entries for a given set of template URLs.
+ * Call this before rendering a job to ensure template edits are reflected immediately.
+ */
+export function clearTemplateBgCache(...urls: (string | null | undefined)[]) {
+  for (const url of urls) {
+    if (!url) continue;
+    globalBgBytesCache.delete(url);
+    // Also clear any SVG→PNG transformed variants
+    const svgVariant = url.includes('.svg')
+      ? url.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png')
+      : null;
+    if (svgVariant) globalBgBytesCache.delete(svgVariant);
+  }
+}
+
 import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
 export { getResolvedFieldValue, resolveCardholderPhotoUrl };
 

@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-template-image', data),
   getLocalTemplatePath: (data) =>
     ipcRenderer.invoke('get-local-template-path', data),
+  deleteLocalTemplate: (data) =>
+    ipcRenderer.invoke('delete-local-template', data),
   finalizeTemplateOriginals: (data) =>
     ipcRenderer.invoke('finalize-template-originals', data),
   saveTemplateOriginal: (data) =>

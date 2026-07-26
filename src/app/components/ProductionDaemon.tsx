@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient, embedImageBuffer } from '@/lib/pdf/card-renderer-client';
+import { renderCardSideToPdfBytesClient, embedImageBuffer, clearTemplateBgCache } from '@/lib/pdf/card-renderer-client';
 import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
@@ -508,6 +508,26 @@ export default function ProductionDaemon() {
 
   const processJob = async (jobPayload: any) => {
     const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
+
+    // ── Cache invalidation ─────────────────────────────────────────────────
+    // Clear in-memory background bytes so the latest template image is fetched,
+    // not a version that was cached from a prior compile in this session.
+    clearTemplateBgCache(
+      template.frontImageUrl,
+      template.backImageUrl,
+      template.frontOriginalUrl,
+      template.backOriginalUrl,
+    );
+    // Delete stale on-disk original files so they are re-downloaded from the server.
+    const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+    if (electronAPI?.deleteLocalTemplate) {
+      try {
+        await electronAPI.deleteLocalTemplate({ templateId: template.id });
+      } catch (e) {
+        console.warn('[Daemon] Failed to purge stale local template files:', e);
+      }
+    }
+    // ──────────────────────────────────────────────────────────────────────
     if (job.pdfType === 'INVOICE') {
       await compileInvoiceLocally(jobPayload);
       return;
