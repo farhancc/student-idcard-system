@@ -186,6 +186,7 @@ model TemplateField {
   verticalAlign String?      @default("top") @map("vertical_align") // "top" | "middle" | "bottom"
   isRequired    Boolean      @default(false) @map("is_required")
   prefix        String?      // label prefix shown on approval PDF
+  suffix        String?      // label suffix
   lineHeight    Float?       @default(1.2) @map("line_height")
   sortOrder     Int          @default(0) @map("sort_order")
   validationPattern String?    @map("validation_pattern")

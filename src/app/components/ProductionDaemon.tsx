@@ -814,6 +814,18 @@ export default function ProductionDaemon() {
             backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
           };
 
+          // ── DIAGNOSTIC LOG ── Remove after debugging ──────────────────────
+          try {
+            const parsedFront = JSON.parse(clientTemplate.frontFields || '[]');
+            console.log('[Daemon] Template frontFields field count:', parsedFront.length);
+            parsedFront.forEach((f: any, i: number) => {
+              console.log(`[Daemon] Field[${i}] field=${f.field} type=${f.type} fontSize=${f.fontSize} fontWeight=${f.fontWeight} color=${f.color} align=${f.align} prefix="${f.prefix}" suffix="${f.suffix}" x=${f.x} y=${f.y}`);
+            });
+          } catch (diagErr) {
+            console.warn('[Daemon] Could not parse frontFields for diagnostic:', diagErr);
+          }
+          // ─────────────────────────────────────────────────────────────────
+
           const clientCardholder = {
             ...ch,
             customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),

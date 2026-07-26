@@ -36,12 +36,11 @@ export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: s
   if (!s) return true;
   const canvasPlaceholders = [
     'static text', 'sample text',
-    'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6',
-    'text_1', 'text_2', 'text_3', 'text_4', 'text_5',
-    'id number', 'id no', 'student id', 'employee id', 'roll no', 'admission no', 'reg no', 'card id', 'unique id', '12345', '00000', '0000'
+    'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6', 'field_7', 'field_8', 'field_9', 'field_10',
+    'text_1', 'text_2', 'text_3', 'text_4', 'text_5'
   ];
   if (canvasPlaceholders.includes(s)) return true;
-  if (s.startsWith('field_') || s.startsWith('field ') || s.startsWith('text_')) return true;
+  if (s.startsWith('field_') || s.startsWith('text_')) return true;
   if (fieldKey && (fieldKey.toLowerCase() === 'id' || fieldKey.toLowerCase() === 'uniquekey') && (s === 'id' || s === 'id number' || s === 'id no')) return true;
   return false;
 }
@@ -458,19 +457,24 @@ export async function renderCardSideClient(
   const tempCtx = tempCanvas.getContext('2d');
 
   const getClientValueStr = (f: FieldCoordinate) => {
+    let rv: any;
     if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
-    }
-    let rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
-    if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-      rv = cardholder.uniqueKey || '';
+      rv = f.staticValue;
+    } else {
+      rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
+      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
+        rv = cardholder.uniqueKey || '';
+      }
+      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.staticValue) {
+        rv = f.staticValue;
+      }
     }
     if (f.type === 'image') {
       if (!isValidImageUrl(rv)) {
         rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
-    if (rv === undefined || rv === null) return '';
+    if (rv === undefined || rv === null) rv = '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
 
@@ -1012,13 +1016,16 @@ export async function renderCardSideToPdfBytesClient(
     return kwMap[fw.toLowerCase().replace(/[\s-_]+/g, '')] ?? 400;
   };
 
-  // Map common system/web font names to pdf-lib StandardFonts (bold = weight >= 700)
+  // Map common system/web font names to pdf-lib StandardFonts (bold = weight >= 600)
   const resolveStandardFont = (family: string, weightNum: number, isItalic: boolean): string | null => {
-    const isBoldStd = weightNum >= 700;
+    const isBoldStd = weightNum >= 600;
     const n = family.toLowerCase().replace(/[\s-_]+/g, '');
-    const timesAliases = ['timesnewroman', 'times', 'timesroman', 'georgia', 'garamond', 'palatino', 'bookantiqua', 'palatinolinotype'];
-    const courierAliases = ['couriernew', 'courier', 'lucidaconsole', 'consolascourier'];
-    const helveticaAliases = ['arial', 'helvetica', 'arialnarrow', 'calibri', 'tahoma', 'verdana', 'trebuchetms', 'gillsans', 'centuryschoolbook'];
+    const timesAliases = ['timesnewroman', 'times', 'timesroman', 'georgia', 'garamond', 'palatino', 'bookantiqua', 'palatinolinotype', 'serif'];
+    const courierAliases = ['couriernew', 'courier', 'lucidaconsole', 'consolas', 'monospace', 'mono'];
+    const helveticaAliases = [
+      'arial', 'helvetica', 'arialnarrow', 'calibri', 'tahoma', 'verdana', 'trebuchetms', 'gillsans', 'centuryschoolbook',
+      'inter', 'roboto', 'outfit', 'poppins', 'montserrat', 'lato', 'opensans', 'open-sans', 'sans-serif', 'sansserif', 'system-ui', 'segoeui', 'segoe'
+    ];
     if (timesAliases.some(a => n.includes(a))) {
       return isBoldStd && isItalic ? StandardFonts.TimesRomanBoldItalic
         : isBoldStd ? StandardFonts.TimesRomanBold
@@ -1037,7 +1044,11 @@ export async function renderCardSideToPdfBytesClient(
         : isItalic  ? StandardFonts.HelveticaOblique
         :             StandardFonts.Helvetica;
     }
-    return null;
+    // Default fallback for any unspecified sans-serif/web font
+    return isBoldStd && isItalic ? StandardFonts.HelveticaBoldOblique
+      : isBoldStd ? StandardFonts.HelveticaBold
+      : isItalic  ? StandardFonts.HelveticaOblique
+      :             StandardFonts.Helvetica;
   };
 
   const getEmbeddedFont = async (f: FieldCoordinate): Promise<any> => {
@@ -1096,8 +1107,8 @@ export async function renderCardSideToPdfBytesClient(
         return fontCache.get(mappedStd);
       }
     }
-    // Final fallback: Helvetica with bold collapsed at >=700
-    const isBoldFallback = weightNum >= 700;
+    // Final fallback: Helvetica with bold collapsed at >=600
+    const isBoldFallback = weightNum >= 600;
     const stdFont =
       isBoldFallback && isItalic ? StandardFonts.HelveticaBoldOblique
       : isBoldFallback           ? StandardFonts.HelveticaBold
@@ -1138,95 +1149,26 @@ export async function renderCardSideToPdfBytesClient(
   const tempCtx = tempCanvas ? tempCanvas.getContext('2d') : null;
 
   const pdfMeasureProxy = (f: FieldCoordinate, s: string) => {
-    // Get preloaded font from cache — mirrors the weight-aware logic in getEmbeddedFont
-    let embeddedFont;
-    const weightNum = resolveWeightNumber(f.fontWeight);
-    const isItalic = f.fontStyle === 'italic';
-
+    if (!tempCtx) return s.length * ((f.fontSize || 20) * 0.5);
+    let fontName = 'sans-serif';
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-      const baseName = f.fontFamily.toLowerCase();
-      const weightLabel = (
-        weightNum <= 100 ? 'thin'
-        : weightNum <= 200 ? 'extralight'
-        : weightNum <= 300 ? 'light'
-        : weightNum <= 400 ? 'regular'
-        : weightNum <= 500 ? 'medium'
-        : weightNum <= 600 ? 'semibold'
-        : weightNum <= 700 ? 'bold'
-        : weightNum <= 800 ? 'extrabold'
-        :                    'black'
-      );
-      const italicSuffix = isItalic ? ' italic' : '';
-      const candidates = [
-        `${baseName} ${weightLabel}${italicSuffix}`,
-        `${baseName} ${weightNum}${italicSuffix}`,
-        isItalic ? `${baseName} ${weightLabel} italic` : null,
-        isItalic ? `${baseName} italic` : null,
-        baseName,
-      ].filter(Boolean) as string[];
+      fontName = f.fontFamily.replace(/\s+/g, '_');
+    }
+    const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
+    const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
+    tempCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
 
-      for (const candidate of candidates) {
-        const match = pressFonts.find(pf => pf.name.toLowerCase() === candidate);
-        if (match) { embeddedFont = fontCache.get(match.fileUrl); break; }
-      }
+    const spacing = f.letterSpacing || 0;
+    if (!spacing) return tempCtx.measureText(s).width;
 
-      if (!embeddedFont) {
-        const mappedStd = resolveStandardFont(f.fontFamily, weightNum, isItalic);
-        if (mappedStd) embeddedFont = fontCache.get(mappedStd);
+    let totalWidth = 0;
+    for (let charIndex = 0; charIndex < s.length; charIndex++) {
+      totalWidth += tempCtx.measureText(s[charIndex]).width;
+      if (charIndex < s.length - 1) {
+        totalWidth += spacing;
       }
     }
-    if (!embeddedFont) {
-      const isBoldFallback = weightNum >= 700;
-      const stdFont =
-        isBoldFallback && isItalic ? StandardFonts.HelveticaBoldOblique
-        : isBoldFallback           ? StandardFonts.HelveticaBold
-        : isItalic                 ? StandardFonts.HelveticaOblique
-        :                            StandardFonts.Helvetica;
-      embeddedFont = fontCache.get(stdFont);
-    }
-    const fontSizePt = (f.fontSize || 20) * PX_TO_PT;
-
-    const localClientMeasure = (f: FieldCoordinate, textVal: string) => {
-      if (!tempCtx) return textVal.length * fontSizePt * 0.55 / PX_TO_PT;
-      let fontName = 'sans-serif';
-      if (f.fontFamily && f.fontFamily !== 'sans-serif') {
-        const familyName = f.fontFamily.replace(/\s+/g, '_');
-        fontName = familyName;
-      }
-      const fontStyle = f.fontStyle && f.fontStyle !== 'normal' ? f.fontStyle : 'normal';
-      const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
-      tempCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
-
-      const spacing = f.letterSpacing || 0;
-      if (!spacing) return tempCtx.measureText(textVal).width;
-
-      let totalWidth = 0;
-      for (let charIndex = 0; charIndex < textVal.length; charIndex++) {
-        totalWidth += tempCtx.measureText(textVal[charIndex]).width;
-        if (charIndex < textVal.length - 1) {
-          totalWidth += spacing;
-        }
-      }
-      return totalWidth;
-    };
-
-    if (!embeddedFont) return localClientMeasure(f, s);
-
-    const letterSpacingPt = (f.letterSpacing || 0) * PX_TO_PT;
-    let wPt = 0;
-    try {
-      if (!letterSpacingPt) {
-        wPt = embeddedFont.widthOfTextAtSize(s, fontSizePt);
-      } else {
-        for (let ci = 0; ci < s.length; ci++) {
-          wPt += embeddedFont.widthOfTextAtSize(s[ci], fontSizePt);
-          if (ci < s.length - 1) wPt += letterSpacingPt;
-        }
-      }
-      return wPt / PX_TO_PT;
-    } catch (e) {
-      return localClientMeasure(f, s);
-    }
+    return totalWidth;
   };
 
   const pdfYOffsets = computeYOffsets(fields, pdfMeasureProxy, getPdfValueStr);
@@ -1243,6 +1185,9 @@ export async function renderCardSideToPdfBytesClient(
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.staticValue) {
+        rawValue = f.staticValue;
+      }
     }
 
     // Photo field fallback
@@ -1251,9 +1196,12 @@ export async function renderCardSideToPdfBytesClient(
         rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
-    if (rawValue === undefined || rawValue === null) continue;
+    const hasPrefixOrSuffix = Boolean((f.prefix && f.prefix.trim()) || (f.suffix && f.suffix.trim()));
+    if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && f.type !== 'image') continue;
+    if (rawValue === undefined || rawValue === null) rawValue = '';
 
     const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
+    if (!valueStr.trim() && f.type !== 'image') continue;
     const xPt = f.x * PX_TO_PT;
     const yPt = (heightPx - f.y - f.height) * PX_TO_PT - yOffsetPx * PX_TO_PT;
     const wPt = f.width  * PX_TO_PT;
