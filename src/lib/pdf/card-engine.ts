@@ -19,6 +19,22 @@ function resolveSvgToPng(url: string, width = 3000): string {
   return url;
 }
 
+function isValidImageUrl(val: any): boolean {
+  if (typeof val !== 'string' || !val.trim()) return false;
+  const lower = val.toLowerCase().trim();
+  return (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('data:image/') ||
+    lower.startsWith('/uploads/') ||
+    lower.startsWith('uploads/') ||
+    lower.startsWith('/api/uploads/') ||
+    lower.startsWith('local://') ||
+    lower.startsWith('file://') ||
+    lower.startsWith('blob:')
+  );
+}
+
 // Helper to convert hex to RGB for pdf-lib
 function hexToRgb(hex?: string) {
   if (!hex) return rgb(0, 0, 0);
@@ -561,8 +577,10 @@ export async function renderCardSide(
         rawValue = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
-      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      if (!isValidImageUrl(rawValue)) {
+        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+      }
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1208,8 +1226,10 @@ export async function renderCardSideToPdfBytes(
         rawValue = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && (!rawValue || String(rawValue).trim() === '')) {
-      rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      if (!isValidImageUrl(rawValue)) {
+        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+      }
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1459,20 +1479,8 @@ export async function renderCardSideToPdfBytes(
       }
 
       case 'image': {
-        if (f.type === 'image') {
-          const isValidImage = typeof rawValue === 'string' && (
-            rawValue.startsWith('http://') ||
-            rawValue.startsWith('https://') ||
-            rawValue.startsWith('data:image/') ||
-            rawValue.startsWith('/uploads/') ||
-            rawValue.startsWith('uploads/') ||
-            rawValue.startsWith('/api/uploads/') ||
-            rawValue.startsWith('local://') ||
-            rawValue.startsWith('file://')
-          );
-          if (!isValidImage || !rawValue) {
-            rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-          }
+        if (!isValidImageUrl(rawValue)) {
+          rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
         }
         if (!rawValue) continue;
         try {

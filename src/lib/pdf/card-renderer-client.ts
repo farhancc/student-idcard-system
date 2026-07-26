@@ -53,6 +53,22 @@ const globalFontBytesCache = new Map<string, ArrayBuffer>();
 import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
 export { getResolvedFieldValue, resolveCardholderPhotoUrl };
 
+export function isValidImageUrl(val: any): boolean {
+  if (typeof val !== 'string' || !val.trim()) return false;
+  const lower = val.toLowerCase().trim();
+  return (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('data:image/') ||
+    lower.startsWith('/uploads/') ||
+    lower.startsWith('uploads/') ||
+    lower.startsWith('/api/uploads/') ||
+    lower.startsWith('local://') ||
+    lower.startsWith('file://') ||
+    lower.startsWith('blob:')
+  );
+}
+
 /**
  * Loads a custom font using the browser's FontFace API.
  */
@@ -434,18 +450,8 @@ export async function renderCardSideClient(
       rv = cardholder.uniqueKey || '';
     }
     if (f.type === 'image') {
-      const isValidImage = typeof rv === 'string' && (
-        rv.startsWith('http://') ||
-        rv.startsWith('https://') ||
-        rv.startsWith('data:image/') ||
-        rv.startsWith('/uploads/') ||
-        rv.startsWith('uploads/') ||
-        rv.startsWith('/api/uploads/') ||
-        rv.startsWith('local://') ||
-        rv.startsWith('file://')
-      );
-      if (!isValidImage) {
-        rv = effectivePhotoUrl || cardholder.photoUrl || '';
+      if (!isValidImageUrl(rv)) {
+        rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
     if (rv === undefined || rv === null) return '';
@@ -492,18 +498,8 @@ export async function renderCardSideClient(
       }
     }
     if (f.type === 'image') {
-      const isValidImage = typeof rawValue === 'string' && (
-        rawValue.startsWith('http://') ||
-        rawValue.startsWith('https://') ||
-        rawValue.startsWith('data:image/') ||
-        rawValue.startsWith('/uploads/') ||
-        rawValue.startsWith('uploads/') ||
-        rawValue.startsWith('/api/uploads/') ||
-        rawValue.startsWith('local://') ||
-        rawValue.startsWith('file://')
-      );
-      if (!isValidImage || !rawValue) {
-        rawValue = resolveCardholderPhotoUrl(cardholder, data) || effectivePhotoUrl || cardholder.photoUrl || '';
+      if (!isValidImageUrl(rawValue)) {
+        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
     if (rawValue === undefined || rawValue === null) continue;
@@ -1113,8 +1109,10 @@ export async function renderCardSideToPdfBytesClient(
         rv = cardholder.uniqueKey || '';
       }
     }
-    if (f.type === 'image' && (!rv || String(rv).trim() === '')) {
-      rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      if (!isValidImageUrl(rv)) {
+        rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+      }
     }
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
@@ -1232,10 +1230,10 @@ export async function renderCardSideToPdfBytesClient(
     }
 
     // Photo field fallback
-    if (f.type === 'image' && !rawValue) {
-      const isProfile = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      const isOnlyImg = fields.filter(x => x.type === 'image').length === 1;
-      if (isProfile) rawValue = cardholder.photoUrl || '';
+    if (f.type === 'image') {
+      if (!isValidImageUrl(rawValue)) {
+        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
+      }
     }
     if (rawValue === undefined || rawValue === null) continue;
 
@@ -1439,7 +1437,7 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       case 'image': {
-        if (!rawValue || String(rawValue).trim() === '') {
+        if (!isValidImageUrl(rawValue)) {
           rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
         }
         if (!rawValue) continue;

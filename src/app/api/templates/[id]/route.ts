@@ -133,13 +133,37 @@ export async function PUT(
         }
       }
 
-      return created;
-    });
+      // Update templateId in orders that are not DELIVERED
+      await tx.cardOrder.updateMany({
+        where: {
+          templateId: oldTemplate.id,
+          status: { not: 'DELIVERED' },
+        },
+        data: {
+          templateId: created.id,
+          templateVersion: created.version,
+        },
+      });
 
-    // 2. Mark any cached CardAssets as stale
-    await prisma.cardAsset.updateMany({
-      where: { templateId: oldTemplate.id },
-      data: { isStale: true },
+      // Update templateId in cardholders
+      await tx.cardholder.updateMany({
+        where: { templateId: oldTemplate.id },
+        data: { templateId: created.id },
+      });
+
+      // Update templateId in client portal shares
+      await tx.clientPortalShare.updateMany({
+        where: { templateId: oldTemplate.id },
+        data: { templateId: created.id },
+      });
+
+      // Mark any cached CardAssets as stale inside the transaction for atomic consistency
+      await tx.cardAsset.updateMany({
+        where: { templateId: oldTemplate.id },
+        data: { isStale: true },
+      });
+
+      return created;
     });
 
     // 3. Audit log
