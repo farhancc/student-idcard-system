@@ -82,6 +82,15 @@ export async function PUT(
       }
     }
 
+    // Sanitize frontFields / backFields input to guarantee valid JSON strings
+    const sanitizedFrontFields = frontFields !== undefined
+      ? (typeof frontFields === 'string' ? frontFields : JSON.stringify(frontFields))
+      : oldTemplate.frontFields;
+
+    const sanitizedBackFields = backFields !== undefined
+      ? (typeof backFields === 'string' ? backFields : JSON.stringify(backFields))
+      : oldTemplate.backFields;
+
     // 1. Update template in-place (same ID) so all existing orders/cardholders/shares
     //    automatically pick up the latest fields without any FK cascading.
     const newTemplate = await prisma.$transaction(async (tx) => {
@@ -95,8 +104,8 @@ export async function PUT(
           backImageUrl: backImageUrl !== undefined ? backImageUrl : oldTemplate.backImageUrl,
           frontOriginalUrl: frontOriginalUrl !== undefined ? frontOriginalUrl : oldTemplate.frontOriginalUrl,
           backOriginalUrl: backOriginalUrl !== undefined ? backOriginalUrl : oldTemplate.backOriginalUrl,
-          frontFields: frontFields || oldTemplate.frontFields,
-          backFields: backFields || oldTemplate.backFields,
+          frontFields: sanitizedFrontFields,
+          backFields: sanitizedBackFields,
           category: category || (oldTemplate as any).category || 'OTHER',
           sides: sides || (oldTemplate as any).sides || 1,
           clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
@@ -104,6 +113,61 @@ export async function PUT(
           isLatest: true,
         },
       });
+
+      // 2. Synchronize normalized TemplateField table
+      await tx.templateField.deleteMany({ where: { templateId } });
+
+      let parsedFront: any[] = [];
+      let parsedBack: any[] = [];
+      try { parsedFront = JSON.parse(sanitizedFrontFields || '[]'); } catch {}
+      try { parsedBack = JSON.parse(sanitizedBackFields || '[]'); } catch {}
+
+      const fieldRows = [
+        ...parsedFront.map((f: any, idx: number) => ({
+          templateId,
+          field: f.field,
+          type: f.type || 'text',
+          side: 'front',
+          x: Number(f.x || 0),
+          y: Number(f.y || 0),
+          width: Number(f.width || 0),
+          height: Number(f.height || 0),
+          fontSize: f.fontSize ? Number(f.fontSize) : null,
+          fontWeight: f.fontWeight || 'normal',
+          fontFamily: f.fontFamily || null,
+          color: f.color || '#000000',
+          align: f.align || 'left',
+          verticalAlign: f.verticalAlign || 'top',
+          isRequired: Boolean(f.required || f.isRequired),
+          prefix: f.prefix || null,
+          lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
+          sortOrder: idx + 1,
+        })),
+        ...parsedBack.map((f: any, idx: number) => ({
+          templateId,
+          field: f.field,
+          type: f.type || 'text',
+          side: 'back',
+          x: Number(f.x || 0),
+          y: Number(f.y || 0),
+          width: Number(f.width || 0),
+          height: Number(f.height || 0),
+          fontSize: f.fontSize ? Number(f.fontSize) : null,
+          fontWeight: f.fontWeight || 'normal',
+          fontFamily: f.fontFamily || null,
+          color: f.color || '#000000',
+          align: f.align || 'left',
+          verticalAlign: f.verticalAlign || 'top',
+          isRequired: Boolean(f.required || f.isRequired),
+          prefix: f.prefix || null,
+          lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
+          sortOrder: idx + 1,
+        })),
+      ];
+
+      if (fieldRows.length > 0) {
+        await tx.templateField.createMany({ data: fieldRows });
+      }
 
       // Sync client assignments if provided
       if (clientIds !== undefined) {
