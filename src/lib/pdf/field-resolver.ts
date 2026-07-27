@@ -69,9 +69,13 @@ export function resolveCardholderPhotoUrl(
       }
     }
 
-    // Fallback: search values for image URLs or base64
-    for (const [_, val] of Object.entries(customObj)) {
+    // Fallback: search values for image URLs or base64 (excluding secondary image fields like signature/logo)
+    for (const [key, val] of Object.entries(customObj)) {
       if (val && typeof val === 'string') {
+        const cleanKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (['signature', 'sig', 'sign', 'logo', 'stamp', 'seal', 'barcode', 'qrcode', 'qr', 'badge', 'thumb'].some(k => cleanKey.includes(k))) {
+          continue;
+        }
         const cleanVal = val.trim();
         if (
           cleanVal.startsWith('http://') ||
@@ -81,7 +85,8 @@ export function resolveCardholderPhotoUrl(
           cleanVal.startsWith('uploads/') ||
           cleanVal.startsWith('/api/uploads/') ||
           cleanVal.startsWith('local://') ||
-          cleanVal.startsWith('file://')
+          cleanVal.startsWith('file://') ||
+          cleanVal.startsWith('blob:')
         ) {
           return cleanVal;
         }
@@ -193,9 +198,16 @@ export function getResolvedFieldValue(
     }
   }
 
-  // Check normalized keys in customFields
+  // Check normalized keys in customFields (exact & partial matching)
   for (const [k, v] of Object.entries(customObj)) {
-    if (clean(k) === targetClean && v !== undefined && v !== null && !isPlaceholderValue(v)) {
+    const ckClean = clean(k);
+    if (
+      (ckClean === targetClean ||
+        (targetClean.length >= 3 && (ckClean.includes(targetClean) || targetClean.includes(ckClean)))) &&
+      v !== undefined &&
+      v !== null &&
+      !isPlaceholderValue(v)
+    ) {
       if (!isIdField || k !== 'cardSerial') {
         return v;
       }
@@ -203,6 +215,17 @@ export function getResolvedFieldValue(
   }
 
   // 4. Standard Field Alias Resolution
+
+  // SIGNATURE / SECONDARY IMAGE resolution
+  const isSignatureField = targetClean.includes('sig') || targetClean.includes('sign') || targetClean.includes('signature');
+  if (isSignatureField) {
+    for (const [ck, cv] of Object.entries(customObj)) {
+      const ckClean = clean(ck);
+      if ((ckClean.includes('sig') || ckClean.includes('sign') || ckClean.includes('signature')) && cv && !isPlaceholderValue(cv)) {
+        return cv;
+      }
+    }
+  }
 
   // ID resolution
   if (isIdField) {
