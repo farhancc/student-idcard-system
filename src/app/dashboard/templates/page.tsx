@@ -4334,7 +4334,7 @@ export default function TemplatesPage() {
                           {frontFields.map((f, i) => (
                             <tr key={i} style={{ background: selectedFieldIndex === i && selectedSide === 'front' ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} onClick={() => { setSelectedFieldIndex(i); setSelectedSide('front'); }}>
                               <td>
-                                <input id={`front-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('front', i, 'field', e.target.value)} />
+                                <input id={`front-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('front', i, 'field', e.target.value)} onClick={e => e.stopPropagation()} />
                               </td>
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('front', i, 'type', e.target.value)}>
@@ -4520,7 +4520,7 @@ export default function TemplatesPage() {
                           {backFields.map((f, i) => (
                             <tr key={i} style={{ background: selectedFieldIndex === i && selectedSide === 'back' ? 'rgba(59, 130, 246, 0.1)' : 'transparent' }} onClick={() => { setSelectedFieldIndex(i); setSelectedSide('back'); }}>
                               <td>
-                                <input id={`back-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('back', i, 'field', e.target.value)} />
+                                <input id={`back-field-name-${i}`} type="text" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.field} onChange={e => handleFieldChange('back', i, 'field', e.target.value)} onClick={e => e.stopPropagation()} />
                               </td>
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('back', i, 'type', e.target.value)}>
