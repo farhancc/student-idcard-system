@@ -113,97 +113,7 @@ export default function ProductionDaemon() {
     setLog(prev => [msg, ...prev.slice(0, 49)]); // keep last 50 logs
   };
 
-  // Background polling loop
-  useEffect(() => {
-    const pollInterval = setInterval(async () => {
-      if (isProcessingRef.current) return; // Busy compiling
-      
-      try {
-        const res = await fetch('/api/jobs/production-poll', { credentials: 'same-origin', cache: 'no-store' });
-        if (!res.ok) {
-          if (res.status === 401) {
-            return;
-          }
-          throw new Error(`Polling request failed: ${res.statusText}`);
-        }
-        
-        // ── Online: check and flush any queued print logs ───────────
-        const electronAPI = (window as any).electronAPI;
-        let currentQueueLength = offlineQueueCount;
-        if (electronAPI?.getQueueStatus) {
-          try {
-            const status = await electronAPI.getQueueStatus();
-            currentQueueLength = status?.queueLength ?? 0;
-            if (currentQueueLength !== offlineQueueCount) {
-              setOfflineQueueCount(currentQueueLength);
-            }
-          } catch (err) {
-            console.error('Failed to get queue status:', err);
-          }
-        }
 
-        if (currentQueueLength > 0) {
-          addLog(`Found ${currentQueueLength} pending offline record(s). Flushing offline print queue...`);
-          try {
-            if (electronAPI?.flushPrintQueue) {
-              const flushResult = await electronAPI.flushPrintQueue('');
-              if (flushResult?.flushed > 0) {
-                addLog(`Sync complete: ${flushResult.flushed} queued record(s) sent to server.`);
-              }
-              setOfflineQueueCount(flushResult?.remaining ?? 0);
-              window.dispatchEvent(new Event('refresh-profile'));
-            }
-          } catch (flushErr: any) {
-            addLog(`Offline queue flush error: ${flushErr.message}`);
-          }
-        }
-
-        const data = await res.json();
-        if (data.success && data.job) {
-          addLog(`Found pending print job #${data.job.id} (${data.job.pdfType}). Starting compilation...`);
-          isProcessingRef.current = true;
-          setActiveJob(data.job);
-          setProgress(0);
-          
-          (async () => {
-            try {
-              await processJob(data);
-            } catch (err: any) {
-              addLog(`Error compiling job #${data.job.id}: ${err.message}`);
-              await reportJobComplete(data.job.id, false, err.message);
-            } finally {
-              isProcessingRef.current = false;
-              setActiveJob(null);
-              setProgress(0);
-            }
-          })();
-        }
-      } catch (err: any) {
-        // Mark as offline for next successful poll
-        wasOfflineRef.current = true;
-        console.error('Local poll error:', err);
-      }
-    }, 4000);
-
-    return () => clearInterval(pollInterval);
-  }, []);
-
-  // Periodically refresh the queue count display
-  useEffect(() => {
-    if (!isDesktop) return;
-    const statusInterval = setInterval(async () => {
-      try {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI?.getQueueStatus) {
-          const status = await electronAPI.getQueueStatus();
-          setOfflineQueueCount(status?.queueLength ?? 0);
-        }
-      } catch (err) {
-        // Silently ignore
-      }
-    }, 30000);
-    return () => clearInterval(statusInterval);
-  }, [isDesktop]);
 
   const updateProgress = async (jobId: number, currentProgress: number, status = 'PROCESSING') => {
     setProgress(currentProgress);
@@ -964,8 +874,99 @@ export default function ProductionDaemon() {
       reader.readAsDataURL(blob);
     });
 
-    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
+
+  // Background polling loop
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (isProcessingRef.current) return; // Busy compiling
+      
+      try {
+        const res = await fetch('/api/jobs/production-poll', { credentials: 'same-origin', cache: 'no-store' });
+        if (!res.ok) {
+          if (res.status === 401) {
+            return;
+          }
+          throw new Error(`Polling request failed: ${res.statusText}`);
+        }
+        
+        // ── Online: check and flush any queued print logs ───────────
+        const electronAPI = (window as any).electronAPI;
+        let currentQueueLength = offlineQueueCount;
+        if (electronAPI?.getQueueStatus) {
+          try {
+            const status = await electronAPI.getQueueStatus();
+            currentQueueLength = status?.queueLength ?? 0;
+            if (currentQueueLength !== offlineQueueCount) {
+              setOfflineQueueCount(currentQueueLength);
+            }
+          } catch (err) {
+            console.error('Failed to get queue status:', err);
+          }
+        }
+
+        if (currentQueueLength > 0) {
+          addLog(`Found ${currentQueueLength} pending offline record(s). Flushing offline print queue...`);
+          try {
+            if (electronAPI?.flushPrintQueue) {
+              const flushResult = await electronAPI.flushPrintQueue('');
+              if (flushResult?.flushed > 0) {
+                addLog(`Sync complete: ${flushResult.flushed} queued record(s) sent to server.`);
+              }
+              setOfflineQueueCount(flushResult?.remaining ?? 0);
+              window.dispatchEvent(new Event('refresh-profile'));
+            }
+          } catch (flushErr: any) {
+            addLog(`Offline queue flush error: ${flushErr.message}`);
+          }
+        }
+
+        const data = await res.json();
+        if (data.success && data.job) {
+          addLog(`Found pending print job #${data.job.id} (${data.job.pdfType}). Starting compilation...`);
+          isProcessingRef.current = true;
+          setActiveJob(data.job);
+          setProgress(0);
+          
+          (async () => {
+            try {
+              await processJob(data);
+            } catch (err: any) {
+              addLog(`Error compiling job #${data.job.id}: ${err.message}`);
+              await reportJobComplete(data.job.id, false, err.message);
+            } finally {
+              isProcessingRef.current = false;
+              setActiveJob(null);
+              setProgress(0);
+            }
+          })();
+        }
+      } catch (err: any) {
+        // Mark as offline for next successful poll
+        wasOfflineRef.current = true;
+        console.error('Local poll error:', err);
+      }
+    }, 4000);
+
+    return () => clearInterval(pollInterval);
+  }, []);
+
+  // Periodically refresh the queue count display
+  useEffect(() => {
+    if (!isDesktop) return;
+    const statusInterval = setInterval(async () => {
+      try {
+        const electronAPI = (window as any).electronAPI;
+        if (electronAPI?.getQueueStatus) {
+          const status = await electronAPI.getQueueStatus();
+          setOfflineQueueCount(status?.queueLength ?? 0);
+        }
+      } catch (err) {
+        // Silently ignore
+      }
+    }, 30000);
+    return () => clearInterval(statusInterval);
+  }, [isDesktop]);
 
   if (!activeJob) return null;
 
