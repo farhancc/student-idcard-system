@@ -129,37 +129,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Limit file size to 10MB
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    // Limit file size to 50MB for source design files (.cdr, .psd, .ai, .pdf)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File size exceeds 10MB limit' }, { status: 400 });
+      return NextResponse.json({ error: 'File size exceeds 50MB limit' }, { status: 400 });
     }
 
-    // Whitelist file extensions and MIME types
-    const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.pdf'];
-    const ALLOWED_MIME_TYPES = [
-      'image/png',
-      'image/jpeg',
-      'image/jpg',
-      'image/webp',
-      'image/svg+xml',
-      'application/pdf',
-    ];
-
+    // Whitelist file extensions
+    const ALLOWED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp', '.svg', '.pdf', '.cdr', '.psd', '.ai'];
     const fileExtension = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_EXTENSIONS.includes(fileExtension) || !ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json({ error: 'Invalid file type. Only standard images, SVGs, and PDFs are allowed.' }, { status: 400 });
+    
+    if (!ALLOWED_EXTENSIONS.includes(fileExtension)) {
+      return NextResponse.json({ error: 'Invalid file type. Allowed formats: PNG, JPG, WEBP, SVG, PDF, CDR, PSD, AI.' }, { status: 400 });
     }
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
-
+    const isSourceDesignFile = ['.cdr', '.psd', '.ai'].includes(fileExtension);
 
     if (isCloudinaryConfigured) {
       const folder = `press_${pressId}/${type}s`;
 
-      if (isVectorOrPdf && type === 'template') {
+      if (isSourceDesignFile) {
+        console.log(`Uploading raw source file ${fileExtension} to Cloudinary (press #${pressId})…`);
+        const url = await uploadBufferToCloudinary(buffer, `${folder}/source_files`, 'raw');
+        return NextResponse.json({ success: true, url, provider: 'cloudinary' });
+      } else if (isVectorOrPdf && type === 'template') {
         // ── Dual-upload strategy for PDF/SVG templates ──────────────
         // 1. Upload the original file (for Electron renderer fallback)
         console.log(`Uploading original ${fileExtension} to Cloudinary (press #${pressId})…`);

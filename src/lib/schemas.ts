@@ -125,6 +125,10 @@ export const templateSchema = z.object({
   category: z.enum(TEMPLATE_CATEGORIES).optional().default('OTHER'),
   sides: z.union([z.literal(1), z.literal(2)]).optional().default(1),
   clientIds: z.array(z.union([z.number(), z.string()]).transform(val => Number(val))).optional(),
+  cdrFileUrl: z.string().nullable().optional(),
+  psdFileUrl: z.string().nullable().optional(),
+  aiFileUrl: z.string().nullable().optional(),
+  pdfFileUrl: z.string().nullable().optional(),
 });
 
 export type TemplateInput = z.infer<typeof templateSchema>;

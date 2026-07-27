@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search, Upload, FileText } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -249,6 +249,11 @@ export default function TemplatesPage() {
   // Marketplace publish state
   const [publishingTemplate, setPublishingTemplate] = useState<any | null>(null);
   const [publishPrice, setPublishPrice] = useState('0');
+  const [publishCdrUrl, setPublishCdrUrl] = useState<string | null>(null);
+  const [publishPsdUrl, setPublishPsdUrl] = useState<string | null>(null);
+  const [publishAiUrl, setPublishAiUrl] = useState<string | null>(null);
+  const [publishPdfUrl, setPublishPdfUrl] = useState<string | null>(null);
+  const [uploadingFormat, setUploadingFormat] = useState<string | null>(null);
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishMsg, setPublishMsg] = useState('');
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -4829,7 +4834,15 @@ export default function TemplatesPage() {
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '4px 8px', fontSize: '0.7rem', background: tmpl.isPublic ? 'rgba(16,185,129,0.1)' : 'transparent', border: tmpl.isPublic ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--glass-border)', color: tmpl.isPublic ? '#10b981' : undefined }}
-                          onClick={() => { setPublishingTemplate(tmpl); setPublishPrice(String(tmpl.price || 0)); setPublishMsg(''); }}
+                          onClick={() => {
+                            setPublishingTemplate(tmpl);
+                            setPublishPrice(String(tmpl.price || 0));
+                            setPublishCdrUrl(tmpl.cdrFileUrl || null);
+                            setPublishPsdUrl(tmpl.psdFileUrl || null);
+                            setPublishAiUrl(tmpl.aiFileUrl || null);
+                            setPublishPdfUrl(tmpl.pdfFileUrl || null);
+                            setPublishMsg('');
+                          }}
                           title={tmpl.isPublic ? 'Listed on Marketplace' : 'Sell on Marketplace'}
                         >
                           <Store size={10} /> {tmpl.isPublic ? 'Listed' : 'Sell'}
@@ -4889,11 +4902,11 @@ export default function TemplatesPage() {
       {/* Sell on Marketplace Modal */}
       {publishingTemplate && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998, padding: '24px' }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '460px', padding: '28px', borderRadius: '16px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', borderRadius: '16px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Store size={18} color="var(--primary)" />
-                {publishingTemplate.isPublic ? 'Manage Listing' : 'Sell on Marketplace'}
+                {publishingTemplate.isPublic ? 'Manage Marketplace Listing' : 'Sell on Marketplace'}
               </h3>
               <button className="btn btn-secondary" style={{ padding: '6px', minWidth: 'auto' }} onClick={() => setPublishingTemplate(null)}>
                 <X size={16} />
@@ -4906,12 +4919,13 @@ export default function TemplatesPage() {
               </div>
             )}
 
-            <div style={{ marginBottom: '8px', fontSize: '0.82rem', color: 'var(--muted)' }}>
+            <div style={{ marginBottom: '16px', fontSize: '0.85rem', color: 'var(--muted)' }}>
               Template: <strong style={{ color: 'var(--text)' }}>{publishingTemplate.name}</strong>
             </div>
 
+            {/* Price input */}
             <div className="form-group" style={{ marginBottom: '20px' }}>
-              <label className="form-label">Price (credits) — set 0 for free</label>
+              <label className="form-label" style={{ fontWeight: '600' }}>Price (credits) — set 0 for free</label>
               <input
                 type="number" min="0" className="form-input"
                 value={publishPrice}
@@ -4920,6 +4934,101 @@ export default function TemplatesPage() {
               <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px' }}>
                 Buyers will pay this many credits. A listing fee may be deducted from your balance.
               </p>
+            </div>
+
+            {/* Source Design Files (.cdr, .psd, .ai, .pdf) */}
+            <div style={{ marginBottom: '24px', borderTop: '1px solid var(--glass-border)', paddingTop: '16px' }}>
+              <label className="form-label" style={{ fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={15} color="var(--primary)" /> Source Design Files (CDR / PSD / AI / PDF)
+              </label>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0', marginBottom: '14px' }}>
+                Attach original vector or raster editable files so buyers can download source files after purchasing.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {[
+                  { key: 'cdr', label: 'CorelDraw (.cdr)', ext: '.cdr', url: publishCdrUrl, setUrl: setPublishCdrUrl },
+                  { key: 'psd', label: 'Photoshop (.psd)', ext: '.psd', url: publishPsdUrl, setUrl: setPublishPsdUrl },
+                  { key: 'ai', label: 'Illustrator (.ai)', ext: '.ai', url: publishAiUrl, setUrl: setPublishAiUrl },
+                  { key: 'pdf', label: 'Vector PDF (.pdf)', ext: '.pdf', url: publishPdfUrl, setUrl: setPublishPdfUrl },
+                ].map(f => (
+                  <div key={f.key} style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid ' + (f.url ? 'rgba(16,185,129,0.4)' : 'var(--glass-border)'),
+                    borderRadius: '10px',
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}>
+                    <div style={{ fontSize: '0.78rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>{f.label}</span>
+                      {f.url ? (
+                        <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16,185,129,0.15)', padding: '1px 6px', borderRadius: '4px' }}>Attached</span>
+                      ) : (
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>Optional</span>
+                      )}
+                    </div>
+
+                    {f.url ? (
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                        <a href={f.url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, padding: '4px 8px', fontSize: '0.72rem', textDecoration: 'none', textAlign: 'center' }}>
+                          View URL
+                        </a>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#ef4444' }}
+                          onClick={() => f.setUrl(null)}
+                          title="Remove file"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="btn btn-secondary" style={{
+                        padding: '6px 10px', fontSize: '0.75rem', cursor: uploadingFormat ? 'not-allowed' : 'pointer',
+                        textAlign: 'center', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px'
+                      }}>
+                        {uploadingFormat === f.key ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            Uploading...
+                          </span>
+                        ) : (
+                          <>
+                            <Upload size={12} /> Add {f.ext.toUpperCase()}
+                          </>
+                        )}
+                        <input
+                          type="file"
+                          accept={f.ext}
+                          style={{ display: 'none' }}
+                          disabled={!!uploadingFormat}
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            setUploadingFormat(f.key);
+                            try {
+                              const fd = new FormData();
+                              fd.append('file', file);
+                              fd.append('type', 'source_file');
+                              const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error);
+                              f.setUrl(data.url || data.originalUrl);
+                              setPublishMsg(`✅ ${f.label} attached!`);
+                            } catch (err: any) {
+                              setPublishMsg(`❌ Upload failed: ${err.message}`);
+                            } finally {
+                              setUploadingFormat(null);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {publishMsg && (
@@ -4937,7 +5046,7 @@ export default function TemplatesPage() {
                 <button
                   className="btn btn-secondary"
                   style={{ flex: 1, gap: '6px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}
-                  disabled={publishLoading}
+                  disabled={publishLoading || !!uploadingFormat}
                   onClick={async () => {
                     setPublishLoading(true); setPublishMsg('');
                     try {
@@ -4946,6 +5055,7 @@ export default function TemplatesPage() {
                       if (!res.ok) throw new Error(d.error);
                       setPublishMsg('✅ Template delisted from marketplace.');
                       setPublishingTemplate((p: any) => ({ ...p, isPublic: false }));
+                      setTemplates((list: any[]) => list.map(t => t.id === publishingTemplate.id ? { ...t, isPublic: false } : t));
                     } catch (e: any) { setPublishMsg('❌ ' + e.message); }
                     finally { setPublishLoading(false); }
                   }}
@@ -4956,19 +5066,43 @@ export default function TemplatesPage() {
               <button
                 className="btn btn-primary"
                 style={{ flex: 1, gap: '6px' }}
-                disabled={publishLoading}
+                disabled={publishLoading || !!uploadingFormat}
                 onClick={async () => {
                   setPublishLoading(true); setPublishMsg('');
                   try {
                     const res = await fetch('/api/marketplace/publish', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ templateId: publishingTemplate.id, price: Number(publishPrice) }),
+                      body: JSON.stringify({
+                        templateId: publishingTemplate.id,
+                        price: Number(publishPrice),
+                        cdrFileUrl: publishCdrUrl,
+                        psdFileUrl: publishPsdUrl,
+                        aiFileUrl: publishAiUrl,
+                        pdfFileUrl: publishPdfUrl,
+                      }),
                     });
                     const d = await res.json();
                     if (!res.ok) throw new Error(d.error);
-                    setPublishMsg('✅ Template listed on marketplace!');
-                    setPublishingTemplate((p: any) => ({ ...p, isPublic: true, price: Number(publishPrice) }));
+                    setPublishMsg('✅ Marketplace listing updated successfully!');
+                    setPublishingTemplate((p: any) => ({
+                      ...p,
+                      isPublic: true,
+                      price: Number(publishPrice),
+                      cdrFileUrl: publishCdrUrl,
+                      psdFileUrl: publishPsdUrl,
+                      aiFileUrl: publishAiUrl,
+                      pdfFileUrl: publishPdfUrl,
+                    }));
+                    setTemplates((list: any[]) => list.map(t => t.id === publishingTemplate.id ? {
+                      ...t,
+                      isPublic: true,
+                      price: Number(publishPrice),
+                      cdrFileUrl: publishCdrUrl,
+                      psdFileUrl: publishPsdUrl,
+                      aiFileUrl: publishAiUrl,
+                      pdfFileUrl: publishPdfUrl,
+                    } : t));
                   } catch (e: any) { setPublishMsg('❌ ' + e.message); }
                   finally { setPublishLoading(false); }
                 }}

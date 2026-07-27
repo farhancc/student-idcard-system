@@ -63,7 +63,7 @@ export async function PUT(
       return NextResponse.json({ error: result.error.issues[0]?.message ?? 'Invalid input' }, { status: 400 });
     }
 
-    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId, category, sides, clientIds } = result.data;
+    const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId, category, sides, clientIds, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = result.data;
 
     // Check if the template name is being changed and is already taken
     if (name && name.trim().toLowerCase() !== oldTemplate.name.trim().toLowerCase()) {
@@ -109,6 +109,10 @@ export async function PUT(
           category: category || (oldTemplate as any).category || 'OTHER',
           sides: sides || (oldTemplate as any).sides || 1,
           clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
+          cdrFileUrl: cdrFileUrl !== undefined ? cdrFileUrl : oldTemplate.cdrFileUrl,
+          psdFileUrl: psdFileUrl !== undefined ? psdFileUrl : oldTemplate.psdFileUrl,
+          aiFileUrl: aiFileUrl !== undefined ? aiFileUrl : oldTemplate.aiFileUrl,
+          pdfFileUrl: pdfFileUrl !== undefined ? pdfFileUrl : oldTemplate.pdfFileUrl,
           version: (oldTemplate.version || 0) + 1,
           isLatest: true,
         },

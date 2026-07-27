@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const pressId = Number(pressIdStr);
 
     const body = await request.json();
-    const { templateId, price = 0 } = body;
+    const { templateId, price = 0, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = body;
 
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
@@ -20,25 +20,27 @@ export async function POST(request: Request) {
     });
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    // Check listing fee from system settings
-    const feeSetting = await prisma.systemSetting.findUnique({
-      where: { key: 'marketplace_listing_fee' },
-    });
-    const listingFee = Number(feeSetting?.value || '0');
-
-    if (listingFee > 0) {
-      // Only deduct from paid credits (not promo) for listing
-      const press = await prisma.press.findUnique({ where: { id: pressId }, select: { credits: true } });
-      if (!press || press.credits < listingFee) {
-        return NextResponse.json(
-          { error: `Insufficient credits for listing fee. Required: ${listingFee} credits.` },
-          { status: 402 }
-        );
-      }
-      await prisma.press.update({
-        where: { id: pressId },
-        data: { credits: { decrement: listingFee } },
+    // Check listing fee from system settings if template is not already public
+    if (!template.isPublic) {
+      const feeSetting = await prisma.systemSetting.findUnique({
+        where: { key: 'marketplace_listing_fee' },
       });
+      const listingFee = Number(feeSetting?.value || '0');
+
+      if (listingFee > 0) {
+        // Only deduct from paid credits (not promo) for listing
+        const press = await prisma.press.findUnique({ where: { id: pressId }, select: { credits: true } });
+        if (!press || press.credits < listingFee) {
+          return NextResponse.json(
+            { error: `Insufficient credits for listing fee. Required: ${listingFee} credits.` },
+            { status: 402 }
+          );
+        }
+        await prisma.press.update({
+          where: { id: pressId },
+          data: { credits: { decrement: listingFee } },
+        });
+      }
     }
 
     const updated = await prisma.cardTemplate.update({
@@ -46,10 +48,25 @@ export async function POST(request: Request) {
       data: {
         isPublic: true,
         price: Math.max(0, Number(price)),
+        ...(cdrFileUrl !== undefined && { cdrFileUrl }),
+        ...(psdFileUrl !== undefined && { psdFileUrl }),
+        ...(aiFileUrl !== undefined && { aiFileUrl }),
+        ...(pdfFileUrl !== undefined && { pdfFileUrl }),
       },
     });
 
-    return NextResponse.json({ success: true, template: { id: updated.id, isPublic: updated.isPublic, price: updated.price } });
+    return NextResponse.json({
+      success: true,
+      template: {
+        id: updated.id,
+        isPublic: updated.isPublic,
+        price: updated.price,
+        cdrFileUrl: updated.cdrFileUrl,
+        psdFileUrl: updated.psdFileUrl,
+        aiFileUrl: updated.aiFileUrl,
+        pdfFileUrl: updated.pdfFileUrl,
+      },
+    });
   } catch (error: any) {
     console.error('Marketplace publish error:', error);
     return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
