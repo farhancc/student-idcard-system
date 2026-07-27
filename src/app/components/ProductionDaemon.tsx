@@ -528,7 +528,7 @@ export default function ProductionDaemon() {
     });
 
     await saveAndCompleteJob(job, order, pdfBytes, base64Data);
-  const processJob = async (jobPayload: any) => {
+  async function processJob(jobPayload: any) {
     const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
 
     addLog(`Processing Job #${job.id} using Template #${template.id} (v${template.version || 1})`);
