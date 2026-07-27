@@ -71,6 +71,7 @@ export async function GET(request: Request) {
           psdFileUrl: true,
           pdfFileUrl: true,
           frontFields: true,
+          backFields: true,
           pressId: true,
           press: { select: { name: true } },
           createdAt: true,
@@ -79,22 +80,42 @@ export async function GET(request: Request) {
       prisma.cardTemplate.count({ where }),
     ]);
 
-    // Enrich: detect field types from JSON without exposing coordinates
+    // Enrich: detect field types & fields summary without exposing exact X/Y coordinates
     const enriched = templates.map(t => {
       let fieldTypes: string[] = [];
+      let fieldsSummary: { key: string; label: string; type: string; side: 'Front' | 'Back' }[] = [];
       try {
         const front = JSON.parse(t.frontFields || '[]');
-        const back = JSON.parse((t as any).backFields || '[]');
+        const back = JSON.parse(t.backFields || '[]');
         fieldTypes = [...new Set([...front, ...back].map((f: any) => f.type))];
-      } catch {}
+        
+        fieldsSummary = [
+          ...front.map((f: any) => ({
+            key: f.key || f.id || f.type || 'field',
+            label: f.label || f.text || f.key || f.name || f.type || 'Field',
+            type: f.type || 'text',
+            side: 'Front' as const,
+          })),
+          ...back.map((f: any) => ({
+            key: f.key || f.id || f.type || 'field',
+            label: f.label || f.text || f.key || f.name || f.type || 'Field',
+            type: f.type || 'text',
+            side: 'Back' as const,
+          })),
+        ];
+      } catch (e) {
+        console.error('Failed to parse fields for marketplace template:', e);
+      }
 
       return {
         ...t,
         frontFields: undefined, // don't expose coordinates in marketplace
+        backFields: undefined,
+        fieldsSummary,
         sellerName: t.pressId ? t.press?.name : 'IDexo Official',
         isOfficial: !t.pressId,
         fieldTypes,
-        hasPhoto: fieldTypes.includes('image'),
+        hasPhoto: fieldTypes.includes('image') || fieldTypes.includes('photo'),
         hasQr: fieldTypes.includes('qr'),
         hasBarcode: fieldTypes.includes('barcode'),
         hasCdr: !!t.cdrFileUrl,
