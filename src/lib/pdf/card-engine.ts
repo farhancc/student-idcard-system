@@ -121,6 +121,19 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     if (fs.existsSync(publicPath)) {
       return fs.readFileSync(publicPath);
     }
+
+    // Remote fallback for relative uploads when running in desktop app or remote runner
+    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+    const remoteUrl = `${portalUrl}${cleanRelPath}`;
+    try {
+      const res = await fetch(remoteUrl, { cache: 'no-store' });
+      if (res.ok) {
+        const arrayBuffer = await res.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+      }
+    } catch (e) {
+      console.warn(`[card-engine] Could not fetch relative image from portal ${remoteUrl}:`, e);
+    }
   }
 
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {

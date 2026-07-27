@@ -176,6 +176,31 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
     }
     img.onload = () => resolve(img);
     img.onerror = () => {
+      let relPath = url.trim();
+      if (relPath.includes('/uploads/')) {
+        relPath = relPath.substring(relPath.indexOf('/uploads/'));
+      } else if (relPath.includes('uploads/')) {
+        relPath = '/' + relPath.substring(relPath.indexOf('uploads/'));
+      } else if (relPath.startsWith('/')) {
+        relPath = relPath;
+      }
+
+      if (relPath.startsWith('/') && !srcUrl.includes('idexocards.vercel.app')) {
+        const portalUrl = 'https://idexocards.vercel.app';
+        const remoteUrl = `${portalUrl}${relPath}`;
+        const portalImg = new Image();
+        portalImg.crossOrigin = 'anonymous';
+        portalImg.onload = () => resolve(portalImg);
+        portalImg.onerror = () => {
+          const imgFallback = new Image();
+          imgFallback.onload = () => resolve(imgFallback);
+          imgFallback.onerror = () => reject(new Error(`Failed to load image: ${srcUrl}`));
+          imgFallback.src = remoteUrl;
+        };
+        portalImg.src = remoteUrl;
+        return;
+      }
+
       // Fallback: If CORS anonymous failed, try loading without crossOrigin
       const imgFallback = new Image();
       imgFallback.onload = () => resolve(imgFallback);
@@ -804,9 +829,31 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
-  const res = await fetch(targetUrl);
-  if (!res.ok) throw new Error(`Fetch failed for ${targetUrl}: ${res.status} ${res.statusText}`);
-  return res.arrayBuffer();
+  try {
+    const res = await fetch(targetUrl);
+    if (res.ok) return await res.arrayBuffer();
+  } catch (err) {
+    // Attempt relative portal fallback below
+  }
+
+  // Fallback: If relative URL or local protocol failed, fetch from production portal URL
+  let relPath = url.trim();
+  if (relPath.includes('/uploads/')) {
+    relPath = relPath.substring(relPath.indexOf('/uploads/'));
+  } else if (relPath.includes('uploads/')) {
+    relPath = '/' + relPath.substring(relPath.indexOf('uploads/'));
+  } else if (relPath.startsWith('/')) {
+    relPath = relPath;
+  }
+
+  if (relPath.startsWith('/')) {
+    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+    const remoteUrl = `${portalUrl}${relPath}`;
+    const remoteRes = await fetch(remoteUrl);
+    if (remoteRes.ok) return await remoteRes.arrayBuffer();
+  }
+
+  throw new Error(`Fetch failed for ${url}`);
 }
 
 /** Convert a hex color string to pdf-lib rgb(). */

@@ -318,7 +318,13 @@ export default function ProductionDaemon() {
       if (electronAPI) {
         if (ch.photoUrl) {
           try {
-            const res = await electronAPI.cachePhoto(ch.id, ch.photoUrl);
+            let fetchUrl = ch.photoUrl;
+            if (ch.photoUrl.startsWith('/uploads/') || ch.photoUrl.startsWith('/api/uploads/') || ch.photoUrl.startsWith('uploads/')) {
+              const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+              const cleanPath = ch.photoUrl.startsWith('/') ? ch.photoUrl : '/' + ch.photoUrl;
+              fetchUrl = `${portalUrl}${cleanPath}`;
+            }
+            const res = await electronAPI.cachePhoto(ch.id, fetchUrl);
             if (res && res.success && res.localUrl) {
               ch.photoUrl = res.localUrl;
             }
@@ -333,9 +339,23 @@ export default function ProductionDaemon() {
               let updated = false;
               for (const key of Object.keys(fieldsObj)) {
                 const val = fieldsObj[key];
-                if (typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('/uploads/') || val.startsWith('uploads/'))) {
+                if (
+                  typeof val === 'string' &&
+                  (val.startsWith('http://') ||
+                    val.startsWith('https://') ||
+                    val.startsWith('/uploads/') ||
+                    val.startsWith('uploads/') ||
+                    val.startsWith('/api/uploads/') ||
+                    val.startsWith('data:image/'))
+                ) {
+                  let fetchUrl = val;
+                  if (val.startsWith('/uploads/') || val.startsWith('/api/uploads/') || val.startsWith('uploads/')) {
+                    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+                    const cleanPath = val.startsWith('/') ? val : '/' + val;
+                    fetchUrl = `${portalUrl}${cleanPath}`;
+                  }
                   try {
-                    const res = await electronAPI.cachePhoto(`${ch.id}_${key}`, val);
+                    const res = await electronAPI.cachePhoto(`${ch.id}_${key}`, fetchUrl);
                     if (res && res.success && res.localUrl) {
                       fieldsObj[key] = res.localUrl;
                       updated = true;
