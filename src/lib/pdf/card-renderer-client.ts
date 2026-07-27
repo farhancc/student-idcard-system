@@ -50,19 +50,59 @@ const globalBgBytesCache = new Map<string, Uint8Array>();
 const globalFontBytesCache = new Map<string, ArrayBuffer>();
 
 /**
+ * Helper to add cache-busting version query parameters to HTTP/HTTPS URLs.
+ */
+export const addCacheBust = (url: string | null | undefined, version?: number) => {
+  if (!url) return url;
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/api/') && !url.startsWith('/uploads/')) {
+    return url;
+  }
+  try {
+    const parsed = new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined);
+    parsed.searchParams.set('v', String(version || Date.now()));
+    return parsed.toString();
+  } catch (e) {
+    return `${url}${url.includes('?') ? '&' : '?'}v=${version || Date.now()}`;
+  }
+};
+
+/**
  * Clears all background-byte cache entries for a given set of template URLs.
  * Call this before rendering a job to ensure template edits are reflected immediately.
  */
 export function clearTemplateBgCache(...urls: (string | null | undefined)[]) {
   for (const url of urls) {
     if (!url) continue;
-    globalBgBytesCache.delete(url);
+    const cleanUrl = url.split('?')[0];
+
+    // Clear all entries that match the clean URL path (ignoring query parameters)
+    for (const key of Array.from(globalBgBytesCache.keys())) {
+      if (key.split('?')[0] === cleanUrl) {
+        globalBgBytesCache.delete(key);
+      }
+    }
+
     // Also clear any SVG→PNG transformed variants
-    const svgVariant = url.includes('.svg')
-      ? url.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png')
+    const svgVariant = cleanUrl.includes('.svg')
+      ? cleanUrl.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png')
       : null;
-    if (svgVariant) globalBgBytesCache.delete(svgVariant);
+    if (svgVariant) {
+      for (const key of Array.from(globalBgBytesCache.keys())) {
+        if (key.split('?')[0] === svgVariant) {
+          globalBgBytesCache.delete(key);
+        }
+      }
+    }
   }
+}
+
+/**
+ * Clears the in-memory font bytes cache.
+ * Call this before rendering a new job to ensure any updated press font files
+ * are re-fetched rather than served from the stale in-memory cache.
+ */
+export function clearFontBytesCache() {
+  globalFontBytesCache.clear();
 }
 
 import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
@@ -818,6 +858,7 @@ export async function renderCardSideToPdfBytesClient(
     backOriginalUrl?: string | null;
     frontFields: string;
     backFields: string;
+    version?: number;
   },
   cardholder: {
     id?: number;
@@ -845,8 +886,12 @@ export async function renderCardSideToPdfBytesClient(
   const originalUrl = side === 'front' ? (template.frontOriginalUrl ?? null) : (template.backOriginalUrl ?? null);
   const previewUrl  = side === 'front' ? template.frontImageUrl : template.backImageUrl;
 
+  // Append cache busting version parameter
+  const bustedOriginalUrl = originalUrl ? addCacheBust(originalUrl, template.version) : null;
+  const bustedPreviewUrl = previewUrl ? addCacheBust(previewUrl, template.version) : null;
+
   // Resolve local paths or download cache if running in Electron
-  let finalBgUrl = originalUrl || previewUrl;
+  let finalBgUrl = bustedOriginalUrl || bustedPreviewUrl;
   let resolvedLocally = false;
 
   if (finalBgUrl && typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
@@ -857,10 +902,10 @@ export async function renderCardSideToPdfBytesClient(
       });
 
       // Auto-download and cache template locally if missing and online
-      if (!localPath && originalUrl) {
+      if (!localPath && bustedOriginalUrl) {
         try {
           console.log(`[PDF client] Template ${template.id} ${side} not cached locally. Downloading original...`);
-          const arrayBuffer = await fetchArrayBuffer(originalUrl);
+          const arrayBuffer = await fetchArrayBuffer(bustedOriginalUrl);
           
           // Verify downloaded data is a PDF or other valid template asset
           const bytes = new Uint8Array(arrayBuffer);
@@ -874,7 +919,7 @@ export async function renderCardSideToPdfBytesClient(
               templateId: template.id,
               side,
               base64Data,
-              fileName: originalUrl,
+              fileName: originalUrl, // Use originalUrl (no cache-bust) to maintain correct extension sniffing
             });
             if (saveRes?.success && saveRes.path) {
               console.log(`[PDF client] Saved template original locally: ${saveRes.path} (isPdf=${isPdf})`);
@@ -890,6 +935,9 @@ export async function renderCardSideToPdfBytesClient(
         const formattedPath = localPath.replace(/\\/g, '/');
         const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
         finalBgUrl = `local://${prefix}${formattedPath}`;
+        if (template.version) {
+          finalBgUrl = `${finalBgUrl}?v=${template.version}`;
+        }
         resolvedLocally = true;
       }
     } catch (err) {
@@ -922,12 +970,12 @@ export async function renderCardSideToPdfBytesClient(
         }
 
         // Fallback to preview url if local resolution or fetch of originalUrl failed
-        if (!bgBytes && resolvedLocally && previewUrl) {
+        if (!bgBytes && resolvedLocally && bustedPreviewUrl) {
           try {
-            console.log(`[PDF client] Local original template load failed, trying preview URL: ${previewUrl}`);
-            bgBytes = new Uint8Array(await fetchArrayBuffer(previewUrl));
-            bgBufferSource = previewUrl;
-            globalBgBytesCache.set(previewUrl, bgBytes);
+            console.log(`[PDF client] Local original template load failed, trying preview URL: ${bustedPreviewUrl}`);
+            bgBytes = new Uint8Array(await fetchArrayBuffer(bustedPreviewUrl));
+            bgBufferSource = bustedPreviewUrl;
+            globalBgBytesCache.set(bustedPreviewUrl, bgBytes);
           } catch (prevErr) {
             console.error(`[PDF client] Failed to load preview background fallback:`, prevErr);
           }
@@ -957,11 +1005,13 @@ export async function renderCardSideToPdfBytesClient(
           
           let finalBytes = bgBytes;
           if (resolvedUrl !== bgBufferSource) {
-            if (globalBgBytesCache.has(resolvedUrl)) {
-              finalBytes = globalBgBytesCache.get(resolvedUrl)!;
+            const targetCacheKey = template.version ? `${resolvedUrl}?v=${template.version}` : resolvedUrl;
+            if (globalBgBytesCache.has(targetCacheKey)) {
+              finalBytes = globalBgBytesCache.get(targetCacheKey)!;
             } else {
-              finalBytes = new Uint8Array(await fetchArrayBuffer(resolvedUrl));
-              globalBgBytesCache.set(resolvedUrl, finalBytes);
+              const resolvedUrlBusted = template.version ? (addCacheBust(resolvedUrl, template.version) as string) : resolvedUrl;
+              finalBytes = new Uint8Array(await fetchArrayBuffer(resolvedUrlBusted));
+              globalBgBytesCache.set(targetCacheKey, finalBytes);
             }
           }
           

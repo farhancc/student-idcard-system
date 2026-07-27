@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient, FieldCoordinate } from './card-renderer-client';
+import { renderCardSideToPdfBytesClient, FieldCoordinate, clearTemplateBgCache } from './card-renderer-client';
 
 export interface PdfGeneratorOptions {
   paperSize?: 'A3' | 'A4' | 'CR80' | 'CUSTOM';
@@ -31,6 +31,7 @@ export async function generateProductionPdfClient(
     frontFields: string;
     backFields: string;
     validTill?: string | Date | null;
+    version?: number;
   },
   cardholders: Array<{
     id?: number;
@@ -45,6 +46,27 @@ export async function generateProductionPdfClient(
   pressFonts: Array<{ name: string; fileUrl: string }> = [],
   onProgress?: (percent: number) => void
 ): Promise<Blob> {
+  // Clear the client-side background bytes caches for this template
+  if (template.id) {
+    clearTemplateBgCache(
+      template.frontImageUrl,
+      template.backImageUrl,
+      template.frontOriginalUrl,
+      template.backOriginalUrl
+    );
+    
+    // Purge local file cached in Electron
+    const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    if (electronAPI?.deleteLocalTemplate) {
+      try {
+        await electronAPI.deleteLocalTemplate({ templateId: template.id });
+        console.log(`[Production PDF] Deleted local template cache for template #${template.id}`);
+      } catch (e) {
+        console.warn('[Production PDF] Failed to delete local template cache:', e);
+      }
+    }
+  }
+
   const pdfDoc = await PDFDocument.create();
 
   // R7: PDF/X Compliance metadata setup

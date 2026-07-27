@@ -109,90 +109,102 @@ export async function PUT(
           category: category || (oldTemplate as any).category || 'OTHER',
           sides: sides || (oldTemplate as any).sides || 1,
           clientId: clientId !== undefined ? (clientId ? Number(clientId) : null) : oldTemplate.clientId,
-          version: { increment: 1 },
+          version: (oldTemplate.version || 0) + 1,
           isLatest: true,
         },
       });
 
-      // 2. Synchronize normalized TemplateField table
-      await tx.templateField.deleteMany({ where: { templateId } });
+      // 2. Synchronize normalized TemplateField table (defensively handle duplicate/missing field names)
+      try {
+        await tx.templateField.deleteMany({ where: { templateId } });
 
-      let parsedFront: any[] = [];
-      let parsedBack: any[] = [];
-      try { parsedFront = JSON.parse(sanitizedFrontFields || '[]'); } catch {}
-      try { parsedBack = JSON.parse(sanitizedBackFields || '[]'); } catch {}
+        let parsedFront: any[] = [];
+        let parsedBack: any[] = [];
+        try { parsedFront = JSON.parse(sanitizedFrontFields || '[]'); } catch {}
+        try { parsedBack = JSON.parse(sanitizedBackFields || '[]'); } catch {}
 
-      const fieldRows = [
-        ...parsedFront.map((f: any, idx: number) => ({
-          templateId,
-          field: f.field,
-          type: f.type || 'text',
-          side: 'front',
-          x: Number(f.x || 0),
-          y: Number(f.y || 0),
-          width: Number(f.width || 0),
-          height: Number(f.height || 0),
-          fontSize: f.fontSize ? Number(f.fontSize) : null,
-          fontWeight: f.fontWeight || 'normal',
-          fontFamily: f.fontFamily || null,
-          color: f.color || '#000000',
-          align: f.align || 'left',
-          verticalAlign: f.verticalAlign || 'top',
-          isRequired: Boolean(f.required || f.isRequired),
-          prefix: f.prefix || null,
-          suffix: f.suffix || null,
-          lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
-          sortOrder: idx + 1,
-        })),
-        ...parsedBack.map((f: any, idx: number) => ({
-          templateId,
-          field: f.field,
-          type: f.type || 'text',
-          side: 'back',
-          x: Number(f.x || 0),
-          y: Number(f.y || 0),
-          width: Number(f.width || 0),
-          height: Number(f.height || 0),
-          fontSize: f.fontSize ? Number(f.fontSize) : null,
-          fontWeight: f.fontWeight || 'normal',
-          fontFamily: f.fontFamily || null,
-          color: f.color || '#000000',
-          align: f.align || 'left',
-          verticalAlign: f.verticalAlign || 'top',
-          isRequired: Boolean(f.required || f.isRequired),
-          prefix: f.prefix || null,
-          suffix: f.suffix || null,
-          lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
-          sortOrder: idx + 1,
-        })),
-      ];
+        const seenFields = new Set<string>();
+        const fieldRows: any[] = [];
 
-      if (fieldRows.length > 0) {
-        await tx.templateField.createMany({ data: fieldRows });
+        const processFields = (fields: any[], side: 'front' | 'back') => {
+          fields.forEach((f: any, idx: number) => {
+            const rawKey = f.field || f.id || `field_${side}_${idx + 1}`;
+            let uniqueKey = String(rawKey).trim();
+            let counter = 1;
+            while (seenFields.has(`${side}:${uniqueKey.toLowerCase()}`)) {
+              counter++;
+              uniqueKey = `${rawKey}_${counter}`;
+            }
+            seenFields.add(`${side}:${uniqueKey.toLowerCase()}`);
+
+            fieldRows.push({
+              templateId,
+              field: uniqueKey,
+              type: f.type || 'text',
+              side,
+              x: Number(f.x || 0),
+              y: Number(f.y || 0),
+              width: Number(f.width || 0),
+              height: Number(f.height || 0),
+              fontSize: f.fontSize ? Number(f.fontSize) : null,
+              fontWeight: f.fontWeight || 'normal',
+              fontFamily: f.fontFamily || null,
+              color: f.color || '#000000',
+              align: f.align || 'left',
+              verticalAlign: f.verticalAlign || 'top',
+              isRequired: Boolean(f.required || f.isRequired),
+              prefix: f.prefix || null,
+              suffix: f.suffix || null,
+              lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
+              sortOrder: idx + 1,
+            });
+          });
+        };
+
+        processFields(parsedFront, 'front');
+        processFields(parsedBack, 'back');
+
+        if (fieldRows.length > 0) {
+          await tx.templateField.createMany({ data: fieldRows, skipDuplicates: true });
+        }
+      } catch (tfErr) {
+        console.warn('[PUT Template] Non-fatal issue syncing templateField table:', tfErr);
       }
 
       // Sync client assignments if provided
       if (clientIds !== undefined) {
-        await tx.templateClientAssignment.deleteMany({ where: { templateId } });
-        if (clientIds.length > 0) {
-          await tx.templateClientAssignment.createMany({
-            data: clientIds.map((cid) => ({ templateId, clientId: cid })),
-            skipDuplicates: true,
-          });
+        try {
+          await tx.templateClientAssignment.deleteMany({ where: { templateId } });
+          if (clientIds.length > 0) {
+            await tx.templateClientAssignment.createMany({
+              data: clientIds.map((cid) => ({ templateId, clientId: cid })),
+              skipDuplicates: true,
+            });
+          }
+        } catch (caErr) {
+          console.warn('[PUT Template] Non-fatal issue syncing templateClientAssignment:', caErr);
         }
       }
 
       // Mark all cached card assets as stale so re-renders are forced on next compile
-      await tx.cardAsset.updateMany({
-        where: { templateId },
-        data: { isStale: true },
-      });
+      try {
+        await tx.cardAsset.updateMany({
+          where: { templateId },
+          data: { isStale: true },
+        });
+      } catch (assetErr) {
+        console.warn('[PUT Template] Non-fatal issue updating cardAsset stale status:', assetErr);
+      }
 
       // Also update the templateVersion on active orders so the daemon knows the layout changed
-      await tx.cardOrder.updateMany({
-        where: { templateId, status: { not: 'DELIVERED' } },
-        data: { templateVersion: updated.version },
-      });
+      try {
+        await tx.cardOrder.updateMany({
+          where: { templateId, status: { not: 'DELIVERED' } },
+          data: { templateVersion: updated.version },
+        });
+      } catch (orderErr) {
+        console.warn('[PUT Template] Non-fatal issue updating cardOrder templateVersion:', orderErr);
+      }
 
       return updated;
     });
@@ -215,9 +227,9 @@ export async function PUT(
       message: `Template updated to version ${newTemplate.version}`,
       template: newTemplate,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Update template error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Internal server error' }, { status: 500 });
   }
 }
 

@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient, FieldCoordinate } from './card-renderer-client';
+import { renderCardSideToPdfBytesClient, FieldCoordinate, clearTemplateBgCache } from './card-renderer-client';
 import { getResolvedFieldValue } from './field-resolver';
 
 async function safeDrawText(
@@ -90,6 +90,7 @@ export async function generateApprovalPdfClient(
     frontFields: string;
     backFields: string;
     validTill?: string | Date | null;
+    version?: number;
   },
   cardholders: Array<{
     id?: number;
@@ -102,6 +103,27 @@ export async function generateApprovalPdfClient(
   }>,
   pressFonts: Array<{ name: string; fileUrl: string }> = []
 ): Promise<Blob> {
+  // Clear the client-side background bytes caches for this template
+  if (template.id) {
+    clearTemplateBgCache(
+      template.frontImageUrl,
+      template.backImageUrl,
+      template.frontOriginalUrl,
+      template.backOriginalUrl
+    );
+    
+    // Purge local file cached in Electron
+    const electronAPI = typeof window !== 'undefined' ? (window as any).electronAPI : null;
+    if (electronAPI?.deleteLocalTemplate) {
+      try {
+        await electronAPI.deleteLocalTemplate({ templateId: template.id });
+        console.log(`[Approval PDF] Deleted local template cache for template #${template.id}`);
+      } catch (e) {
+        console.warn('[Approval PDF] Failed to delete local template cache:', e);
+      }
+    }
+  }
+
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);

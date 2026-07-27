@@ -8,6 +8,7 @@ const AdmZip = require('adm-zip');
 function getSystemPathFromLocalUrl(localUrl) {
   if (!localUrl) return '';
   let urlPath = localUrl.replace(/^local:\/\//i, '');
+  urlPath = urlPath.split('?')[0];
   if (process.platform === 'win32') {
     if (urlPath.startsWith('/')) {
       urlPath = urlPath.slice(1);
@@ -19,6 +20,7 @@ function getSystemPathFromLocalUrl(localUrl) {
   }
   return decodeURIComponent(urlPath);
 }
+
 
 function getLocalUrlFromSystemPath(systemPath) {
   if (!systemPath) return '';

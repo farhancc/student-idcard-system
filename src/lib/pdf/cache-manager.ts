@@ -42,7 +42,7 @@ export async function getOrRenderCard(
   });
 
   // Calculate current template layout hash to check if cache is stale
-  const currentLayoutString = template.frontFields + template.backFields + template.frontImageUrl + (template.backImageUrl || '');
+  const currentLayoutString = template.frontFields + template.backFields + template.frontImageUrl + (template.backImageUrl || '') + String(template.version || 1);
   const templateHash = md5(currentLayoutString);
 
   // 2. Query cache entry

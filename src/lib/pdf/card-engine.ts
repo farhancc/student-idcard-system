@@ -67,10 +67,12 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     }
   }
 
+  const cleanUrl = fileUrl.split('?')[0];
+
   // local:// is the Electron custom protocol — on the server, strip the scheme
   // and read the file directly from disk using the absolute path embedded in the URL.
-  if (fileUrl.startsWith('local://')) {
-    let localPath = fileUrl.replace(/^local:\/\//i, '');
+  if (cleanUrl.startsWith('local://')) {
+    let localPath = cleanUrl.replace(/^local:\/\//i, '');
     if (process.platform === 'win32') {
       if (localPath.startsWith('/')) {
         localPath = localPath.slice(1);
@@ -88,8 +90,8 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
 
   // file:// protocol handling
-  if (fileUrl.startsWith('file://')) {
-    let filePath = fileUrl.replace(/^file:\/\//i, '');
+  if (cleanUrl.startsWith('file://')) {
+    let filePath = cleanUrl.replace(/^file:\/\//i, '');
     if (process.platform === 'win32' && filePath.startsWith('/')) {
       filePath = filePath.slice(1);
     }
@@ -99,19 +101,19 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     }
   }
 
-  // Check if direct fileUrl path exists on disk
-  if (fs.existsSync(fileUrl)) {
-    return fs.readFileSync(fileUrl);
+  // Check if direct cleanUrl path exists on disk
+  if (fs.existsSync(cleanUrl)) {
+    return fs.readFileSync(cleanUrl);
   }
 
   // Extract relative /uploads/... path if present in URL (even HTTP URLs)
-  let cleanRelPath = fileUrl;
-  if (fileUrl.includes('/uploads/')) {
-    cleanRelPath = fileUrl.substring(fileUrl.indexOf('/uploads/'));
-  } else if (fileUrl.includes('uploads/')) {
-    cleanRelPath = '/' + fileUrl.substring(fileUrl.indexOf('uploads/'));
-  } else if (fileUrl.startsWith('/')) {
-    cleanRelPath = fileUrl;
+  let cleanRelPath = cleanUrl;
+  if (cleanUrl.includes('/uploads/')) {
+    cleanRelPath = cleanUrl.substring(cleanUrl.indexOf('/uploads/'));
+  } else if (cleanUrl.includes('uploads/')) {
+    cleanRelPath = '/' + cleanUrl.substring(cleanUrl.indexOf('uploads/'));
+  } else if (cleanUrl.startsWith('/')) {
+    cleanRelPath = cleanUrl;
   }
 
   if (cleanRelPath.startsWith('/')) {
@@ -122,18 +124,18 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
 
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
-    const res = await fetch(fileUrl);
+    const res = await fetch(fileUrl, { cache: 'no-store' });
     if (!res.ok) throw new Error(`Failed to download file: ${res.statusText}`);
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
   }
 
-  const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', fileUrl);
+  const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', cleanUrl);
   if (fs.existsSync(publicPath)) {
     return fs.readFileSync(publicPath);
   }
 
-  throw new Error(`File not found: ${fileUrl}`);
+  throw new Error(`File not found: ${cleanUrl}`);
 }
 
 /**
@@ -414,6 +416,7 @@ export async function renderCardSide(
     backImageUrl: string | null;
     frontFields: string;
     backFields: string;
+    version?: number;
   },
   cardholder: {
     id?: number;
@@ -811,6 +814,7 @@ export async function renderCardSideToPdfBytes(
     backOriginalUrl?: string | null;
     frontFields: string;
     backFields: string;
+    version?: number;
   },
   cardholder: {
     id?: number;
@@ -860,16 +864,21 @@ export async function renderCardSideToPdfBytes(
     try {
       let bgBuffer: Buffer | null = null;
       let bgBufferSource = '';
+      const cacheKey = template.version ? `${bgUrl}?v=${template.version}` : bgUrl;
 
-      if (globalBgBufferCache.has(bgUrl)) {
-        bgBuffer = globalBgBufferCache.get(bgUrl)!;
+      if (globalBgBufferCache.has(cacheKey)) {
+        bgBuffer = globalBgBufferCache.get(cacheKey)!;
         bgBufferSource = bgUrl;
       } else {
         if (originalUrl) {
           try {
-            bgBuffer = await getFileBuffer(originalUrl);
+            // Append cache busting parameters to HTTP fetches
+            const originalUrlBusted = (template.version && (originalUrl.startsWith('http://') || originalUrl.startsWith('https://')))
+              ? `${originalUrl}${originalUrl.includes('?') ? '&' : '?'}v=${template.version}`
+              : originalUrl;
+            bgBuffer = await getFileBuffer(originalUrlBusted);
             bgBufferSource = originalUrl;
-            globalBgBufferCache.set(bgUrl, bgBuffer);
+            globalBgBufferCache.set(cacheKey, bgBuffer);
           } catch (err) {
             console.warn(`[PDF server] Failed to load original background (${originalUrl}), falling back to preview:`, err);
           }
@@ -877,9 +886,13 @@ export async function renderCardSideToPdfBytes(
 
         if (!bgBuffer && previewUrl) {
           try {
-            bgBuffer = await getFileBuffer(previewUrl);
+            // Append cache busting parameters to HTTP fetches
+            const previewUrlBusted = (template.version && (previewUrl.startsWith('http://') || previewUrl.startsWith('https://')))
+              ? `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}v=${template.version}`
+              : previewUrl;
+            bgBuffer = await getFileBuffer(previewUrlBusted);
             bgBufferSource = previewUrl;
-            globalBgBufferCache.set(bgUrl, bgBuffer);
+            globalBgBufferCache.set(cacheKey, bgBuffer);
           } catch (err) {
             console.error(`[PDF server] Failed to load preview background (${previewUrl}):`, err);
           }
@@ -907,11 +920,16 @@ export async function renderCardSideToPdfBytes(
           
           let finalBuffer = bgBuffer;
           if (targetBgUrl !== bgBufferSource) {
-            if (globalBgBufferCache.has(targetBgUrl)) {
-              finalBuffer = globalBgBufferCache.get(targetBgUrl)!;
+            const targetCacheKey = template.version ? `${targetBgUrl}?v=${template.version}` : targetBgUrl;
+            if (globalBgBufferCache.has(targetCacheKey)) {
+              finalBuffer = globalBgBufferCache.get(targetCacheKey)!;
             } else {
-              finalBuffer = await getFileBuffer(targetBgUrl);
-              globalBgBufferCache.set(targetBgUrl, finalBuffer);
+              // Append cache busting parameters to HTTP fetches
+              const targetBgUrlBusted = (template.version && (targetBgUrl.startsWith('http://') || targetBgUrl.startsWith('https://')))
+                ? `${targetBgUrl}${targetBgUrl.includes('?') ? '&' : '?'}v=${template.version}`
+                : targetBgUrl;
+              finalBuffer = await getFileBuffer(targetBgUrlBusted);
+              globalBgBufferCache.set(targetCacheKey, finalBuffer);
             }
           }
           

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient, embedImageBuffer, clearTemplateBgCache } from '@/lib/pdf/card-renderer-client';
+import { renderCardSideToPdfBytesClient, embedImageBuffer, clearTemplateBgCache, clearFontBytesCache } from '@/lib/pdf/card-renderer-client';
 import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
@@ -119,7 +119,7 @@ export default function ProductionDaemon() {
       if (isProcessingRef.current) return; // Busy compiling
       
       try {
-        const res = await fetch('/api/jobs/production-poll', { credentials: 'same-origin' });
+        const res = await fetch('/api/jobs/production-poll', { credentials: 'same-origin', cache: 'no-store' });
         if (!res.ok) {
           if (res.status === 401) {
             return;
@@ -518,6 +518,8 @@ export default function ProductionDaemon() {
       template.frontOriginalUrl,
       template.backOriginalUrl,
     );
+    // Clear the font bytes cache so updated press fonts are re-fetched.
+    clearFontBytesCache();
     // Delete stale on-disk original files so they are re-downloaded from the server.
     const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
     if (electronAPI?.deleteLocalTemplate) {
