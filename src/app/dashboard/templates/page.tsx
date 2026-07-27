@@ -2417,6 +2417,20 @@ export default function TemplatesPage() {
     setSides((tmpl.sides as 1 | 2) || 1);
     setSelectedClientIds(tmpl.clientIds || []);
     setShowForm(true);
+
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+          mainEl.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        const formEl = document.getElementById('template-editor-form');
+        if (formEl) {
+          formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 50);
+    }
   };
 
   const handleDeleteTemplate = (id: number) => {
@@ -2580,7 +2594,7 @@ export default function TemplatesPage() {
       </div>
 
       {showForm && (
-        <div className="glass-panel" style={{ marginBottom: '32px' }}>
+        <div id="template-editor-form" className="glass-panel" style={{ marginBottom: '32px' }}>
           <h3 style={{ marginBottom: '24px' }}>{editingTemplateId ? `Edit Template: ${name}` : 'Template Designer Setup'}</h3>
           {error && (
             <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f77', borderRadius: '6px', marginBottom: '20px', fontSize: '0.85rem' }}>
