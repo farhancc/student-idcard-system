@@ -1358,7 +1358,7 @@ export async function renderCardSideToPdfBytes(
           const renderedHeightPt = lines.length * lineHeightPt;
           const halfLeadingPt = (lineHeightPt - fontSizePt) / 2;
 
-          let startYPt = yPt + hPt - fontSizePt - halfLeadingPt;
+          let startYPt = yPt + hPt - (fontSizePt * 0.80) - halfLeadingPt;
           if (f.verticalAlign === 'center') {
             startYPt -= (hPt - renderedHeightPt) / 2;
           } else if (f.verticalAlign === 'bottom') {
