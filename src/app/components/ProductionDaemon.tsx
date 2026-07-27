@@ -438,6 +438,8 @@ export default function ProductionDaemon() {
     });
 
     await saveAndCompleteJob(job, order, pdfBytes, base64Data);
+  };
+
   async function processJob(jobPayload: any) {
     const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
 
@@ -1074,5 +1076,4 @@ export default function ProductionDaemon() {
       `}</style>
     </div>
   );
-}
 }
