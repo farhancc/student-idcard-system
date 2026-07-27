@@ -1755,11 +1755,13 @@ export default function ClientDetailsPage() {
     return matchesSearch && matchesSearchId && matchesTemplate && matchesDate && matchesWarnings;
   });
 
-  const handleExportExcel = async () => {
+  const handleExportExcel = async (targetList?: Cardholder[], tableTitle?: string) => {
     try {
-      const exportList = selectedIds.length > 0
-        ? cardholders.filter((c: any) => selectedIds.includes(c.id))
-        : filteredCardholders;
+      const exportList = targetList && targetList.length > 0
+        ? targetList
+        : (selectedIds.length > 0
+            ? cardholders.filter((c: any) => selectedIds.includes(c.id))
+            : filteredCardholders);
 
       if (exportList.length === 0) {
         toast('No cardholders to export.', 'warning');
@@ -1819,7 +1821,8 @@ export default function ClientDetailsPage() {
 
       const ExcelJS = await import('exceljs');
       const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet('Cardholders');
+      const sheetName = (tableTitle || 'Cardholders').substring(0, 30);
+      const sheet = workbook.addWorksheet(sheetName);
 
       // Define columns dynamically based on the first object's keys
       const sample = formattedData[0] || {};
@@ -1838,7 +1841,9 @@ export default function ClientDetailsPage() {
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       
-      const fileName = `Cardholders_${(client?.name || 'export').replace(/\s+/g, '_')}.xlsx`;
+      const titleClean = (tableTitle || 'Cardholders').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const clientClean = (client?.name || 'export').replace(/[^a-zA-Z0-9_\-]/g, '_');
+      const fileName = `${clientClean}_${titleClean}.xlsx`;
       const url = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -1849,6 +1854,47 @@ export default function ClientDetailsPage() {
       console.error('Failed to export Excel:', err);
       toast('Error exporting Excel: ' + err.message, 'error');
     }
+  };
+
+  const handleCompileTable = (targetCardholders: Cardholder[], targetTemplate?: any) => {
+    if (!targetCardholders || targetCardholders.length === 0) {
+      toast('No cardholders to compile.', 'warning');
+      return;
+    }
+    const ids = targetCardholders.map(c => c.id);
+    setSelectedIds(ids);
+
+    if (targetTemplate && targetTemplate.id) {
+      setQTemplateId(String(targetTemplate.id));
+      setQDetectedTemplateName(targetTemplate.name || null);
+      setQTemplateMixed(false);
+    } else {
+      const templateIds = [...new Set(targetCardholders.map((ch: any) => ch.resolvedTemplateId).filter(Boolean))];
+      if (templateIds.length === 1) {
+        setQTemplateId(String(templateIds[0]));
+        const tpl = quickTemplates.find(t => t.id === templateIds[0]);
+        setQDetectedTemplateName(tpl?.name || null);
+        setQTemplateMixed(false);
+      } else if (templateIds.length > 1) {
+        setQTemplateId(String(templateIds[0]));
+        setQDetectedTemplateName(null);
+        setQTemplateMixed(true);
+      } else {
+        setQDetectedTemplateName(null);
+        setQTemplateMixed(false);
+        if (quickTemplates.length > 0 && !qTemplateId) {
+          setQTemplateId(String(quickTemplates[0].id));
+        }
+      }
+    }
+
+    setQJobResult(null);
+    setWizardStep(1);
+    setWizardCompileType(null);
+    setWizardPaperSize('A3');
+    setWizardOrientation('PORTRAIT');
+    setWizardEmptySlotStrategy('LEAVE_BLANK');
+    setShowCompileModal(true);
   };
 
   // ── Bulk Operations ───────────────────────────────────────────────────────
@@ -2236,7 +2282,7 @@ export default function ClientDetailsPage() {
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}
-                      onClick={handleExportExcel}
+                      onClick={() => handleExportExcel()}
                     >
                       Export Excel ({selectedIds.length})
                     </button>
@@ -2294,7 +2340,7 @@ export default function ClientDetailsPage() {
                     <button
                       className="btn btn-secondary"
                       style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}
-                      onClick={handleExportExcel}
+                      onClick={() => handleExportExcel()}
                     >
                       Export All Excel ({filteredCardholders.length})
                     </button>
@@ -2408,11 +2454,40 @@ export default function ClientDetailsPage() {
 
                   return (
                     <div key={tmpl.id || tmpl.name} style={{ marginBottom: '32px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px', flexWrap: 'wrap', gap: '8px' }}>
                         <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <CreditCard size={18} />
                           {tmpl.name} <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({tmplCardholders.length} cardholders)</span>
                         </h3>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ fontSize: '0.8rem', padding: '5px 12px', gap: '6px' }}
+                            onClick={() => handleCompileTable(tmplCardholders, tmpl)}
+                            title={`Compile PDF for all ${tmplCardholders.length} cardholders in ${tmpl.name}`}
+                          >
+                            <Zap size={14} />
+                            Compile All PDF ({tmplCardholders.length})
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{
+                              fontSize: '0.8rem',
+                              padding: '5px 12px',
+                              gap: '6px',
+                              background: 'rgba(16,185,129,0.1)',
+                              border: '1px solid rgba(16,185,129,0.3)',
+                              color: '#34d399'
+                            }}
+                            onClick={() => handleExportExcel(tmplCardholders, tmpl.name)}
+                            title={`Export Excel spreadsheet for ${tmpl.name}`}
+                          >
+                            <FileSpreadsheet size={14} />
+                            Export Excel
+                          </button>
+                        </div>
                       </div>
 
                       <div className="table-container">
@@ -2624,11 +2699,40 @@ export default function ClientDetailsPage() {
                 const unassigned = filteredCardholders.filter(c => !processedCardholderIds.has(c.id));
                 const unassignedTable = unassigned.length > 0 ? (
                   <div key="unassigned" style={{ marginBottom: '32px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px', flexWrap: 'wrap', gap: '8px' }}>
                       <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <CreditCard size={18} />
                         Unassigned Cardholders <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({unassigned.length} cardholders)</span>
                       </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.8rem', padding: '5px 12px', gap: '6px' }}
+                          onClick={() => handleCompileTable(unassigned)}
+                          title={`Compile PDF for ${unassigned.length} unassigned cardholders`}
+                        >
+                          <Zap size={14} />
+                          Compile All PDF ({unassigned.length})
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.8rem',
+                            padding: '5px 12px',
+                            gap: '6px',
+                            background: 'rgba(16,185,129,0.1)',
+                            border: '1px solid rgba(16,185,129,0.3)',
+                            color: '#34d399'
+                          }}
+                          onClick={() => handleExportExcel(unassigned, 'Unassigned_Cardholders')}
+                          title="Export Excel spreadsheet for unassigned cardholders"
+                        >
+                          <FileSpreadsheet size={14} />
+                          Export Excel
+                        </button>
+                      </div>
                     </div>
                     <div className="table-container">
                       <table className="custom-table">
