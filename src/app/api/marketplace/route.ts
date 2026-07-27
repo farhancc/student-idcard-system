@@ -83,25 +83,33 @@ export async function GET(request: Request) {
     // Enrich: detect field types & fields summary without exposing exact X/Y coordinates
     const enriched = templates.map(t => {
       let fieldTypes: string[] = [];
-      let fieldsSummary: { key: string; label: string; type: string; side: 'Front' | 'Back' }[] = [];
+      let fieldsSummary: { key: string; name: string; label: string; type: string; side: 'Front' | 'Back' }[] = [];
       try {
         const front = JSON.parse(t.frontFields || '[]');
         const back = JSON.parse(t.backFields || '[]');
         fieldTypes = [...new Set([...front, ...back].map((f: any) => f.type))];
         
         fieldsSummary = [
-          ...front.map((f: any) => ({
-            key: f.key || f.id || f.type || 'field',
-            label: f.label || f.text || f.key || f.name || f.type || 'Field',
-            type: f.type || 'text',
-            side: 'Front' as const,
-          })),
-          ...back.map((f: any) => ({
-            key: f.key || f.id || f.type || 'field',
-            label: f.label || f.text || f.key || f.name || f.type || 'Field',
-            type: f.type || 'text',
-            side: 'Back' as const,
-          })),
+          ...front.map((f: any) => {
+            const resolvedName = formatFieldLabel(f);
+            return {
+              key: f.key || f.field || f.id || f.type || 'field',
+              name: resolvedName,
+              label: resolvedName,
+              type: f.type || 'text',
+              side: 'Front' as const,
+            };
+          }),
+          ...back.map((f: any) => {
+            const resolvedName = formatFieldLabel(f);
+            return {
+              key: f.key || f.field || f.id || f.type || 'field',
+              name: resolvedName,
+              label: resolvedName,
+              type: f.type || 'text',
+              side: 'Back' as const,
+            };
+          }),
         ];
       } catch (e) {
         console.error('Failed to parse fields for marketplace template:', e);
@@ -143,4 +151,36 @@ export async function GET(request: Request) {
     console.error('Marketplace GET error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+}
+
+function formatFieldLabel(f: any): string {
+  if (f.label && typeof f.label === 'string' && f.label.trim()) return f.label.trim();
+  if (f.name && typeof f.name === 'string' && f.name.trim()) return f.name.trim();
+  if (f.field && typeof f.field === 'string' && f.field.trim()) {
+    const raw = f.field.trim();
+    return raw
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/^./, (str: string) => str.toUpperCase())
+      .trim();
+  }
+  if (f.key && typeof f.key === 'string' && f.key.trim() && f.key !== f.type) {
+    const raw = f.key.trim();
+    return raw
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/_/g, ' ')
+      .replace(/^./, (str: string) => str.toUpperCase())
+      .trim();
+  }
+  if (f.text && typeof f.text === 'string' && f.text.trim()) return f.text.trim();
+
+  const t = (f.type || '').toLowerCase();
+  if (t === 'photo' || t === 'image') return 'Cardholder Photo';
+  if (t === 'qr') return 'QR Code';
+  if (t === 'barcode') return 'Barcode';
+  if (t === 'signature' || t === 'sig') return 'Signature';
+  if (t === 'id') return 'ID / Serial Number';
+  if (t === 'date') return 'Date Field';
+
+  return 'Cardholder Field';
 }

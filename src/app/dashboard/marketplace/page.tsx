@@ -18,6 +18,7 @@ const CAT_LABELS: Record<string, string> = {
 
 interface TemplateField {
   key: string;
+  name?: string;
   label: string;
   type: string;
   side: 'Front' | 'Back';
@@ -725,23 +726,27 @@ function TemplateDetailModal({
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} />
                       Front Side Fields ({frontFields.length})
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
                       {frontFields.map((f, i) => {
                         const badge = getFieldTypeBadge(f.type);
+                        const fieldName = f.name || f.label || f.key || 'Field';
                         return (
                           <div key={i} style={{
-                            padding: '9px 12px', borderRadius: '8px',
+                            padding: '10px 14px', borderRadius: '10px',
                             background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
-                            display: 'flex', alignItems: 'center', gap: '10px'
+                            display: 'flex', alignItems: 'center', gap: '12px'
                           }}>
-                            <span style={{ color: badge.color, display: 'flex', padding: '6px', borderRadius: '6px', background: badge.color + '15' }}>
+                            <span style={{ color: badge.color, display: 'flex', padding: '8px', borderRadius: '8px', background: badge.color + '18' }}>
                               {badge.icon}
                             </span>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: '0.84rem', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {f.label}
+                              <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {fieldName}
                               </div>
-                              <div style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{badge.label}</div>
+                              <div style={{ fontSize: '0.72rem', color: badge.color, fontWeight: '500', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ opacity: 0.7 }}>Type:</span>
+                                <span>{badge.label}</span>
+                              </div>
                             </div>
                           </div>
                         );
@@ -756,23 +761,27 @@ function TemplateDetailModal({
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#818cf8' }} />
                       Back Side Fields ({backFields.length})
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
                       {backFields.map((f, i) => {
                         const badge = getFieldTypeBadge(f.type);
+                        const fieldName = f.name || f.label || f.key || 'Field';
                         return (
                           <div key={i} style={{
-                            padding: '9px 12px', borderRadius: '8px',
+                            padding: '10px 14px', borderRadius: '10px',
                             background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
-                            display: 'flex', alignItems: 'center', gap: '10px'
+                            display: 'flex', alignItems: 'center', gap: '12px'
                           }}>
-                            <span style={{ color: badge.color, display: 'flex', padding: '6px', borderRadius: '6px', background: badge.color + '15' }}>
+                            <span style={{ color: badge.color, display: 'flex', padding: '8px', borderRadius: '8px', background: badge.color + '18' }}>
                               {badge.icon}
                             </span>
                             <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: '0.84rem', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {f.label}
+                              <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {fieldName}
                               </div>
-                              <div style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{badge.label}</div>
+                              <div style={{ fontSize: '0.72rem', color: badge.color, fontWeight: '500', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ opacity: 0.7 }}>Type:</span>
+                                <span>{badge.label}</span>
+                              </div>
                             </div>
                           </div>
                         );
