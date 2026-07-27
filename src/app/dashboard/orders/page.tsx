@@ -420,7 +420,7 @@ export default function OrdersPage() {
       photosMap.forEach((val) => {
         if (val.url) URL.revokeObjectURL(val.url);
       });
-      const newPhotosMap = new Map<string, { blob: Blob; url: string }>();
+      const newPhotosMap = new Map<string, { blob: Blob; url: string; dataUri: string }>();
       const filePromises: Promise<void>[] = [];
 
       zip.forEach((relativePath, file) => {
@@ -428,10 +428,15 @@ export default function OrdersPage() {
         const ext = relativePath.substring(relativePath.lastIndexOf('.')).toLowerCase();
         if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
           const baseName = relativePath.split('/').pop()?.replace(ext, '').trim() || '';
-          const promise = file.async('blob').then(blob => {
+          const promise = file.async('blob').then(async (blob) => {
             const sanitizedKey = baseName.toLowerCase().replace(/[^a-zA-Z0-9_\-]/g, '_');
             const url = URL.createObjectURL(blob);
-            newPhotosMap.set(sanitizedKey, { blob, url });
+            const dataUri = await new Promise<string>((res) => {
+              const r = new FileReader();
+              r.onloadend = () => res(r.result as string);
+              r.readAsDataURL(blob);
+            });
+            newPhotosMap.set(sanitizedKey, { blob, url, dataUri });
           });
           filePromises.push(promise);
         }
@@ -445,7 +450,7 @@ export default function OrdersPage() {
         const designation = row[fieldMapping['designation'] || designationCol] ? String(row[fieldMapping['designation'] || designationCol]).trim() : null;
         const uniqueKey = row[fieldMapping['uniqueKey'] || uniqueKeyCol] ? String(row[fieldMapping['uniqueKey'] || uniqueKeyCol]).trim() : null;
         const imageId = imageIdCol ? String(row[imageIdCol] || '').trim() : null;
-        const photoUrl = row[fieldMapping['photoUrl'] || photoUrlCol] ? String(row[fieldMapping['photoUrl'] || photoUrlCol]).trim() : null;
+        const rawPhotoUrl = row[fieldMapping['photoUrl'] || photoUrlCol] ? String(row[fieldMapping['photoUrl'] || photoUrlCol]).trim() : null;
 
         const custom: Record<string, any> = {};
         
@@ -497,17 +502,20 @@ export default function OrdersPage() {
           }
         }
 
+        const matchedPhoto = newPhotosMap.get(foundPhotoKey);
+        const photoUrl = (hasPhoto && matchedPhoto) ? (matchedPhoto.dataUri || matchedPhoto.url) : rawPhotoUrl;
+
         // Map custom sub-images (e.g. signature, parent photo, etc.) from the zip file
         newPhotosMap.forEach((val, key) => {
           if (key.startsWith(`${baseSanitized}_`)) {
             const suffix = key.substring(baseSanitized.length + 1); // e.g. "signature"
             if (suffix && suffix !== 'photo' && suffix !== 'image' && suffix !== 'pic') {
-              custom[suffix] = val.url;
+              custom[suffix] = val.dataUri || val.url;
             }
           } else if (key.startsWith(`${baseSanitized}-`)) {
             const suffix = key.substring(baseSanitized.length + 1);
             if (suffix && suffix !== 'photo' && suffix !== 'image' && suffix !== 'pic') {
-              custom[suffix] = val.url;
+              custom[suffix] = val.dataUri || val.url;
             }
           }
         });
@@ -581,7 +589,7 @@ export default function OrdersPage() {
           id: c.uniqueKey || c.id,
           name: c.name,
           designation: c.designation || null,
-          photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
+          photoUrl: c.hasPhoto && matchedPhoto ? (matchedPhoto.dataUri || matchedPhoto.url) : (c.photoUrl || null),
           cardSerial: c.cardSerial || null,
           uniqueKey: c.uniqueKey || null,
           customFields: c.customFields ? JSON.stringify(c.customFields) : null,
@@ -755,7 +763,7 @@ export default function OrdersPage() {
           id: c.uniqueKey || c.id,
           name: c.name,
           designation: c.designation || null,
-          photoUrl: c.hasPhoto && matchedPhoto ? matchedPhoto.url : null,
+          photoUrl: c.hasPhoto && matchedPhoto ? (matchedPhoto.dataUri || matchedPhoto.url) : (c.photoUrl || null),
           cardSerial: c.cardSerial || null,
           uniqueKey: c.uniqueKey || null,
           customFields: c.customFields ? JSON.stringify(c.customFields) : null,

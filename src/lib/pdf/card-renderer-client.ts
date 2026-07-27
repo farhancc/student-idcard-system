@@ -165,7 +165,8 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
         !srcUrl.startsWith('https://') &&
         !srcUrl.startsWith('data:image/') &&
         !srcUrl.startsWith('local://') &&
-        !srcUrl.startsWith('file://')
+        !srcUrl.startsWith('file://') &&
+        !srcUrl.startsWith('blob:')
       ) {
         srcUrl = `${window.location.origin}/${srcUrl}`;
       }
@@ -823,7 +824,8 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
       !targetUrl.startsWith('http://') &&
       !targetUrl.startsWith('https://') &&
       !targetUrl.startsWith('local://') &&
-      !targetUrl.startsWith('file://')
+      !targetUrl.startsWith('file://') &&
+      !targetUrl.startsWith('blob:')
     ) {
       targetUrl = `${window.location.origin}/${targetUrl}`;
     }

@@ -316,7 +316,7 @@ export default function ProductionDaemon() {
       }
       const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
       if (electronAPI) {
-        if (ch.photoUrl) {
+        if (ch.photoUrl && !ch.photoUrl.startsWith('blob:') && !ch.photoUrl.startsWith('data:')) {
           try {
             let fetchUrl = ch.photoUrl;
             if (ch.photoUrl.startsWith('/uploads/') || ch.photoUrl.startsWith('/api/uploads/') || ch.photoUrl.startsWith('uploads/')) {
@@ -341,12 +341,13 @@ export default function ProductionDaemon() {
                 const val = fieldsObj[key];
                 if (
                   typeof val === 'string' &&
+                  !val.startsWith('blob:') &&
+                  !val.startsWith('data:') &&
                   (val.startsWith('http://') ||
                     val.startsWith('https://') ||
                     val.startsWith('/uploads/') ||
                     val.startsWith('uploads/') ||
-                    val.startsWith('/api/uploads/') ||
-                    val.startsWith('data:image/'))
+                    val.startsWith('/api/uploads/'))
                 ) {
                   let fetchUrl = val;
                   if (val.startsWith('/uploads/') || val.startsWith('/api/uploads/') || val.startsWith('uploads/')) {
