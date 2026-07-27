@@ -45,7 +45,7 @@ export default function OrdersPage() {
   const [showPreviewStep, setShowPreviewStep] = useState(false);
   const [parsedCardholders, setParsedCardholders] = useState<any[]>([]);
   const [selectedPreviewIndexes, setSelectedPreviewIndexes] = useState<number[]>([]);
-  const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string }>>(new Map());
+  const [photosMap, setPhotosMap] = useState<Map<string, { blob: Blob; url: string; dataUri?: string }>>(new Map());
   const [selectedCardholderForDetails, setSelectedCardholderForDetails] = useState<any | null>(null);
   const [selectedCardholderIndexForDetails, setSelectedCardholderIndexForDetails] = useState<number | null>(null);
   const [isEditingDetail, setIsEditingDetail] = useState(false);

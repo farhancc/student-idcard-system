@@ -310,6 +310,15 @@ export function isPlaceholderStaticValue(val: any, fieldKey?: string): boolean {
     return lower === 'field_1' || lower === 'static text' || lower === 'sample text';
   }
 
+  if (
+    lower.includes('images.unsplash.com') ||
+    lower.includes('via.placeholder.com') ||
+    lower === 'sample image' ||
+    lower === 'placeholder'
+  ) {
+    return true;
+  }
+
   const canvasPlaceholders = [
     'static text',
     'sample text',
@@ -322,10 +331,79 @@ export function isPlaceholderStaticValue(val: any, fieldKey?: string): boolean {
     'field_7',
     'field_8',
     'field_9',
-    'field_10'
+    'field_10',
+    'text_1',
+    'text_2',
+    'text_3',
+    'text_4',
+    'text_5'
   ];
 
-  return canvasPlaceholders.includes(lower);
+  if (canvasPlaceholders.includes(lower)) return true;
+  if (lower.startsWith('field_') || lower.startsWith('text_')) return true;
+
+  return false;
+}
+
+export function isValidImageUrl(val: any): boolean {
+  if (typeof val !== 'string' || !val.trim()) return false;
+  const lower = val.toLowerCase().trim();
+  return (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('data:image/') ||
+    lower.startsWith('/uploads/') ||
+    lower.startsWith('uploads/') ||
+    lower.startsWith('/api/uploads/') ||
+    lower.startsWith('local://') ||
+    lower.startsWith('file://') ||
+    lower.startsWith('blob:')
+  );
+}
+
+export function resolveFieldRawValue(
+  f: { field: string; type?: string; staticValue?: string | null; prefix?: string; suffix?: string; [key: string]: any },
+  data: Record<string, any>,
+  cardholder: {
+    id?: number;
+    name?: string | null;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
+    uniqueKey?: string | null;
+    customFields?: string | null | Record<string, any>;
+  } | null | undefined
+): any {
+  if (!f || !f.field) return undefined;
+
+  const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+
+  // 1. Try dynamic cardholder resolution first
+  let resolved = getResolvedFieldValue(f.field, data, cardholder || {}, f.type);
+
+  // 2. ID type fallback
+  if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && f.type === 'id') {
+    resolved = cardholder?.uniqueKey || cardholder?.cardSerial || '';
+  }
+
+  // 3. Image type vs Text/Other type handling
+  if (f.type === 'image') {
+    // If not a valid image URL yet, try photoUrl fallback for primary photo fields
+    if (!isValidImageUrl(resolved) && isPrimaryPhotoField(f.field)) {
+      resolved = resolveCardholderPhotoUrl(cardholder, data) || cardholder?.photoUrl || resolved;
+    }
+    // If still not valid, try staticImg if provided and not a placeholder
+    if (!isValidImageUrl(resolved) && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
+      resolved = staticImg;
+    }
+  } else {
+    // If dynamic value is empty/null, fall back to staticValue if valid and not a placeholder
+    if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
+      resolved = staticImg;
+    }
+  }
+
+  return resolved;
 }
 
 export function computeYOffsets(

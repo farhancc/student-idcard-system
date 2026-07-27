@@ -30,20 +30,7 @@ export interface FieldCoordinate {
 // Map to keep track of loaded font families in the browser
 const loadedFonts = new Set<string>();
 
-export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: string): boolean {
-  if (!staticVal) return true;
-  const s = staticVal.trim().toLowerCase();
-  if (!s) return true;
-  const canvasPlaceholders = [
-    'static text', 'sample text',
-    'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6', 'field_7', 'field_8', 'field_9', 'field_10',
-    'text_1', 'text_2', 'text_3', 'text_4', 'text_5'
-  ];
-  if (canvasPlaceholders.includes(s)) return true;
-  if (s.startsWith('field_') || s.startsWith('text_')) return true;
-  if (fieldKey && (fieldKey.toLowerCase() === 'id' || fieldKey.toLowerCase() === 'uniquekey') && (s === 'id' || s === 'id number' || s === 'id no')) return true;
-  return false;
-}
+
 
 // Global caches for background templates and font files to prevent redundant HTTP downloads during compilation
 const globalBgBytesCache = new Map<string, Uint8Array>();
@@ -105,24 +92,8 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField } from './field-resolver';
-export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField };
-
-export function isValidImageUrl(val: any): boolean {
-  if (typeof val !== 'string' || !val.trim()) return false;
-  const lower = val.toLowerCase().trim();
-  return (
-    lower.startsWith('http://') ||
-    lower.startsWith('https://') ||
-    lower.startsWith('data:image/') ||
-    lower.startsWith('/uploads/') ||
-    lower.startsWith('uploads/') ||
-    lower.startsWith('/api/uploads/') ||
-    lower.startsWith('local://') ||
-    lower.startsWith('file://') ||
-    lower.startsWith('blob:')
-  );
-}
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue };
 
 /**
  * Loads a custom font using the browser's FontFace API.
@@ -523,24 +494,8 @@ export async function renderCardSideClient(
   const tempCtx = tempCanvas.getContext('2d');
 
   const getClientValueStr = (f: FieldCoordinate) => {
-    let rv: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rv = f.staticValue;
-    } else {
-      rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-        rv = cardholder.uniqueKey || '';
-      }
-      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.staticValue) {
-        rv = f.staticValue;
-      }
-    }
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rv)) {
-        rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
-    if (rv === undefined || rv === null) rv = '';
+    const rv = resolveFieldRawValue(f, data, cardholder);
+    if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
 
@@ -574,24 +529,7 @@ export async function renderCardSideClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue: any;
-    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
-    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
-      rawValue = staticImg;
-    } else {
-      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
-        rawValue = cardholder.uniqueKey || '';
-      }
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
-        rawValue = staticImg;
-      }
-    }
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
+    const rawValue = resolveFieldRawValue(f, data, cardholder);
     if (rawValue === undefined || rawValue === null) continue;
 
     const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
@@ -1230,20 +1168,7 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
-    let rv: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rv = f.staticValue;
-    } else {
-      rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-        rv = cardholder.uniqueKey || '';
-      }
-    }
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rv)) {
-        rv = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
+    const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
@@ -1280,26 +1205,7 @@ export async function renderCardSideToPdfBytesClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue: any;
-    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
-    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
-      rawValue = staticImg;
-    } else {
-      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
-        rawValue = cardholder.uniqueKey || '';
-      }
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
-        rawValue = staticImg;
-      }
-    }
-
-    // Photo field fallback (only for primary photo field)
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
+    let rawValue = resolveFieldRawValue(f, data, cardholder);
     const hasPrefixOrSuffix = Boolean((f.prefix && f.prefix.trim()) || (f.suffix && f.suffix.trim()));
     if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && f.type !== 'image') continue;
     if (rawValue === undefined || rawValue === null) rawValue = '';
@@ -1505,9 +1411,6 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       case 'image': {
-        if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-          rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-        }
         if (!rawValue) continue;
         try {
           const rawUrl = String(rawValue).trim();

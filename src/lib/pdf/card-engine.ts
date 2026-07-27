@@ -4,7 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField } from './field-resolver';
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -19,21 +19,7 @@ function resolveSvgToPng(url: string, width = 3000): string {
   return url;
 }
 
-function isValidImageUrl(val: any): boolean {
-  if (typeof val !== 'string' || !val.trim()) return false;
-  const lower = val.toLowerCase().trim();
-  return (
-    lower.startsWith('http://') ||
-    lower.startsWith('https://') ||
-    lower.startsWith('data:image/') ||
-    lower.startsWith('/uploads/') ||
-    lower.startsWith('uploads/') ||
-    lower.startsWith('/api/uploads/') ||
-    lower.startsWith('local://') ||
-    lower.startsWith('file://') ||
-    lower.startsWith('blob:')
-  );
-}
+
 
 // Helper to convert hex to RGB for pdf-lib
 function hexToRgb(hex?: string) {
@@ -225,21 +211,7 @@ export interface FieldCoordinate {
 // Map to keep track of registered font families to prevent double registration warnings
 const registeredFonts = new Set<string>();
 
-export function isPlaceholderStaticValue(staticVal?: string | null, fieldKey?: string): boolean {
-  if (!staticVal) return true;
-  const s = staticVal.trim().toLowerCase();
-  if (!s) return true;
-  const canvasPlaceholders = [
-    'static text', 'sample text',
-    'field_1', 'field_2', 'field_3', 'field_4', 'field_5', 'field_6',
-    'text_1', 'text_2', 'text_3', 'text_4', 'text_5',
-    'id number', 'id no', 'student id', 'employee id', 'roll no', 'admission no', 'reg no', 'card id', 'unique id', '12345', '00000', '0000'
-  ];
-  if (canvasPlaceholders.includes(s)) return true;
-  if (s.startsWith('field_') || s.startsWith('field ') || s.startsWith('text_')) return true;
-  if (fieldKey && (fieldKey.toLowerCase() === 'id' || fieldKey.toLowerCase() === 'uniquekey') && (s === 'id' || s === 'id number' || s === 'id no')) return true;
-  return false;
-}
+export { isPlaceholderStaticValue };
 
 /**
  * Downloads a font from a URL or registers it from local path in node-canvas.
@@ -536,19 +508,7 @@ export async function renderCardSide(
   const tempCtx = createCanvas(1, 1).getContext('2d');
 
   const getCanvasValueStr = (f: FieldCoordinate) => {
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
-    }
-    let rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
-    if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-      rv = cardholder.uniqueKey || '';
-    }
-    if (f.type === 'image' && !rv) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rv = cardholder.photoUrl || '';
-      }
-    }
+    const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
@@ -584,24 +544,7 @@ export async function renderCardSide(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    let rawValue: any;
-    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
-    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
-      rawValue = staticImg;
-    } else {
-      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
-        rawValue = cardholder.uniqueKey || '';
-      }
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
-        rawValue = staticImg;
-      }
-    }
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
+    const rawValue = resolveFieldRawValue(f, data, cardholder);
     if (rawValue === undefined || rawValue === null) continue;
 
     // Apply prefix/suffix
@@ -1128,21 +1071,7 @@ export async function renderCardSideToPdfBytes(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
-    let rv: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rv = f.staticValue;
-    } else {
-      rv = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rv === undefined || rv === null || String(rv).trim() === '') && f.type === 'id') {
-        rv = cardholder.uniqueKey || '';
-      }
-    }
-    if (f.type === 'image' && !rv) {
-      const isProfileField = ['photo', 'avatar', 'image', 'profile', 'pic', 'picture'].some(kw => f.field.toLowerCase().includes(kw));
-      if (isProfileField) {
-        rv = cardholder.photoUrl || '';
-      }
-    }
+    const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv}${f.suffix || ''}`;
   };
@@ -1252,24 +1181,7 @@ export async function renderCardSideToPdfBytes(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
-    let rawValue: any;
-    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
-    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
-      rawValue = staticImg;
-    } else {
-      rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
-        rawValue = cardholder.uniqueKey || '';
-      }
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
-        rawValue = staticImg;
-      }
-    }
-    if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-        rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-      }
-    }
+    const rawValue = resolveFieldRawValue(f, data, cardholder);
     if (rawValue === undefined || rawValue === null) continue;
 
     // Apply prefix/suffix
@@ -1518,9 +1430,6 @@ export async function renderCardSideToPdfBytes(
       }
 
       case 'image': {
-        if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
-          rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
-        }
         if (!rawValue) continue;
         try {
           let absoluteImgPath = String(rawValue).trim();
