@@ -114,7 +114,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         );
 
         // Unique text and ID fields (excluding restricted fields)
-        const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'id') && !restrictedFields.has(f.field));
+        // 'id' type fields are auto-filled (cardSerial / uniqueKey) — never editable by enrollees
+        const textFields = allFields.filter(f => f.type === 'text' && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textFields.map(f => f.field)));
         
         // Remove standard and system ones from customFields list to handle separately
@@ -152,7 +153,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setHasName((mappedFields.includes('name') || mappedFields.includes('fullName')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
         setHasDesignation((mappedFields.includes('designation') || mappedFields.includes('role')) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
         setHasPhoto(mainPhoto !== null);
-        setHasUniqueKey((mappedFields.includes('uniqueKey') || allFields.some(f => f.type === 'id')) && !restrictedFields.has('uniqueKey'));
+        // Only show uniqueKey input when template explicitly maps a 'uniqueKey' field
+        setHasUniqueKey(mappedFields.includes('uniqueKey') && !restrictedFields.has('uniqueKey'));
 
         // Detect if back side has any fields
         const backParsed: FieldCoordinate[] = JSON.parse(data.template.backFields || '[]');
