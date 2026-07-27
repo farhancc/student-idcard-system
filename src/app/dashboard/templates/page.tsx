@@ -2368,6 +2368,17 @@ export default function TemplatesPage() {
         });
       }
 
+      // Always purge stale on-disk template cache after any save/update so the
+      // next PDF job re-downloads the freshest template assets (fields, images).
+      if (editingTemplateId && electronAPI?.deleteLocalTemplate) {
+        try {
+          await electronAPI.deleteLocalTemplate({ templateId: editingTemplateId });
+          console.log(`[Templates] Purged local cache for template #${editingTemplateId} after update`);
+        } catch (e) {
+          console.warn('[Templates] Failed to purge local template cache after update:', e);
+        }
+      }
+
       // Reset
       setName('');
       setCardWidth(673);
