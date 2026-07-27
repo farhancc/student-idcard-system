@@ -876,6 +876,7 @@ export default function ProductionDaemon() {
       reader.readAsDataURL(blob);
     });
 
+    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
 
   // Background polling loop
