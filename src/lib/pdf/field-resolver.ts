@@ -92,6 +92,31 @@ export function resolveCardholderPhotoUrl(
   return null;
 }
 
+export function isPrimaryPhotoField(fieldKey?: string): boolean {
+  if (!fieldKey) return true;
+  const cleanKey = fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!cleanKey) return true;
+
+  const secondaryKeywords = [
+    'signature', 'sig', 'sign',
+    'logo', 'stamp', 'seal',
+    'barcode', 'qrcode', 'qr',
+    'back', 'bg', 'background',
+    'watermark', 'badge', 'banner',
+    'thumb', 'fingerprint'
+  ];
+
+  if (secondaryKeywords.some(kw => cleanKey.includes(kw))) {
+    return false;
+  }
+
+  if (/^(image|photo|img|picture)[_]?\d+$/.test(cleanKey) && !cleanKey.endsWith('1')) {
+    return false;
+  }
+
+  return true;
+}
+
 export function getResolvedFieldValue(
   fieldKey: string,
   data: Record<string, any>,
@@ -232,13 +257,12 @@ export function getResolvedFieldValue(
   const isPhotoField =
     targetClean === 'photo' ||
     targetClean === 'photourl' ||
-    targetClean === 'image' ||
     targetClean === 'picture' ||
     targetClean === 'avatar' ||
     targetClean.includes('photo') ||
     targetClean.includes('picture') ||
     targetClean.includes('avatar') ||
-    fieldType === 'image';
+    (fieldType === 'image' && isPrimaryPhotoField(fieldKey));
 
   if (isPhotoField) {
     const resolvedPhoto = resolveCardholderPhotoUrl(cardholder, customObj);

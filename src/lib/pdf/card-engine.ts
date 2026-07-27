@@ -4,7 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField } from './field-resolver';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -572,16 +572,20 @@ export async function renderCardSide(
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
     let rawValue: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rawValue = f.staticValue;
+    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
+      rawValue = staticImg;
     } else {
       rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
+        rawValue = staticImg;
+      }
     }
     if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue)) {
+      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
         rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
@@ -1236,16 +1240,20 @@ export async function renderCardSideToPdfBytes(
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rawValue = f.staticValue;
+    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
+      rawValue = staticImg;
     } else {
       rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
+        rawValue = staticImg;
+      }
     }
     if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue)) {
+      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
         rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
@@ -1497,7 +1505,7 @@ export async function renderCardSideToPdfBytes(
       }
 
       case 'image': {
-        if (!isValidImageUrl(rawValue)) {
+        if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
           rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
         }
         if (!rawValue) continue;

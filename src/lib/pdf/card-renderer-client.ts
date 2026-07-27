@@ -105,8 +105,8 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl } from './field-resolver';
-export { getResolvedFieldValue, resolveCardholderPhotoUrl };
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField };
 
 export function isValidImageUrl(val: any): boolean {
   if (typeof val !== 'string' || !val.trim()) return false;
@@ -549,16 +549,20 @@ export async function renderCardSideClient(
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
     let rawValue: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rawValue = f.staticValue;
+    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
+      rawValue = staticImg;
     } else {
       rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
+        rawValue = staticImg;
+      }
     }
     if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue)) {
+      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
         rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
@@ -1228,21 +1232,22 @@ export async function renderCardSideToPdfBytesClient(
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue: any;
-    if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
-      rawValue = f.staticValue;
+    const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+    if (staticImg !== undefined && staticImg !== null && !isPlaceholderStaticValue(staticImg, f.field)) {
+      rawValue = staticImg;
     } else {
       rawValue = getResolvedFieldValue(f.field, data, cardholder, f.type);
       if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.type === 'id') {
         rawValue = cardholder.uniqueKey || '';
       }
-      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && f.staticValue) {
-        rawValue = f.staticValue;
+      if ((rawValue === undefined || rawValue === null || String(rawValue).trim() === '') && staticImg) {
+        rawValue = staticImg;
       }
     }
 
-    // Photo field fallback
+    // Photo field fallback (only for primary photo field)
     if (f.type === 'image') {
-      if (!isValidImageUrl(rawValue)) {
+      if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
         rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
       }
     }
@@ -1451,7 +1456,7 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       case 'image': {
-        if (!isValidImageUrl(rawValue)) {
+        if (!isValidImageUrl(rawValue) && isPrimaryPhotoField(f.field)) {
           rawValue = resolveCardholderPhotoUrl(cardholder, data) || cardholder.photoUrl || '';
         }
         if (!rawValue) continue;
