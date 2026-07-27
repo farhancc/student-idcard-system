@@ -121,6 +121,7 @@ export async function GET(request: Request) {
         frontFields: order.template.frontFields,
         backFields: order.template.backFields,
         validTillDate: order.validTill,
+        version: order.template.version,
       },
       cardholders: cardholders.map(ch => ({
         id: ch.id,

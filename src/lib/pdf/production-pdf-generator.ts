@@ -168,6 +168,7 @@ export async function generateProductionPdfClient(
     backOriginalUrl: template.backOriginalUrl ?? null,
     frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
     backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+    version: template.version,
   };
 
   const parsedValidTill = template.validTill

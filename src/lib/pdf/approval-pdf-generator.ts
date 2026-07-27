@@ -154,6 +154,7 @@ export async function generateApprovalPdfClient(
     backOriginalUrl: template.backOriginalUrl ?? null,
     frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
     backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+    version: template.version,
   };
 
   const frontFieldsList: FieldCoordinate[] = JSON.parse(clientTemplate.frontFields || '[]');

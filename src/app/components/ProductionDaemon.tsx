@@ -461,6 +461,7 @@ export default function ProductionDaemon() {
       backImageUrl: template.backImageUrl,
       frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
       backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+      version: template.version,
       validTill: template.validTillDate || null,
     };
 
@@ -814,6 +815,7 @@ export default function ProductionDaemon() {
             backOriginalUrl: template.backOriginalUrl || null,
             frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
             backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+            version: template.version,
           };
 
           // ── DIAGNOSTIC LOG ── Remove after debugging ──────────────────────
