@@ -2273,26 +2273,12 @@ export default function ClientDetailsPage() {
                       Deselect All
                     </button>
                     <button
-                      className="btn btn-primary"
-                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px' }}
-                      onClick={handleOpenCompileModal}
-                    >
-                      <Zap size={14} /> Compile PDF ({selectedIds.length})
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}
-                      onClick={() => handleExportExcel()}
-                    >
-                      Export Excel ({selectedIds.length})
-                    </button>
-                    <button
                       className="btn btn-secondary"
                       style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }}
                       onClick={() => setShowBulkReassignModal(true)}
                       title="Reassign selected cardholders to a different template"
                     >
-                      <Shuffle size={14} /> Reassign Template
+                      <Shuffle size={14} /> Reassign Template ({selectedIds.length})
                     </button>
                     <button
                       className="btn btn-secondary"
@@ -2300,7 +2286,7 @@ export default function ClientDetailsPage() {
                       onClick={() => handleBulkStatusToggle(true)}
                       title="Activate selected cardholders"
                     >
-                      <UserCheck size={14} /> Activate
+                      <UserCheck size={14} /> Activate ({selectedIds.length})
                     </button>
                     <button
                       className="btn btn-secondary"
@@ -2308,7 +2294,7 @@ export default function ClientDetailsPage() {
                       onClick={() => handleBulkStatusToggle(false)}
                       title="Deactivate selected cardholders"
                     >
-                      <UserX size={14} /> Deactivate
+                      <UserX size={14} /> Deactivate ({selectedIds.length})
                     </button>
                     <button
                       className="btn btn-danger"
@@ -2319,33 +2305,7 @@ export default function ClientDetailsPage() {
                       <Trash2 size={14} /> Delete ({selectedIds.length})
                     </button>
                   </>
-                ) : (
-                  <>
-                    <button
-                      className="btn btn-primary"
-                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px' }}
-                      onClick={() => {
-                        if (filteredCardholders.length === 0) {
-                          toast('No cardholders to compile.', 'warning');
-                          return;
-                        }
-                        setSelectedIds(filteredCardholders.map((c: any) => c.id));
-                        setTimeout(() => {
-                          handleOpenCompileModal();
-                        }, 50);
-                      }}
-                    >
-                      <Zap size={14} /> Compile All PDF ({filteredCardholders.length})
-                    </button>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: '0.85rem', padding: '8px 14px', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981' }}
-                      onClick={() => handleExportExcel()}
-                    >
-                      Export All Excel ({filteredCardholders.length})
-                    </button>
-                  </>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -2452,23 +2412,27 @@ export default function ClientDetailsPage() {
                   const cols = getTemplateColumns(tmpl);
                   const hasNameCol = cols.some(c => c.key === 'name' || c.key === 'fullName' || c.key.toLowerCase().includes('name'));
 
+                  const selectedInTmpl = tmplCardholders.filter(c => selectedIds.includes(c.id));
+                  const hasTmplSelection = selectedInTmpl.length > 0;
+                  const targetTmplList = hasTmplSelection ? selectedInTmpl : tmplCardholders;
+
                   return (
                     <div key={tmpl.id || tmpl.name} style={{ marginBottom: '32px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px', flexWrap: 'wrap', gap: '8px' }}>
                         <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <CreditCard size={18} />
-                          {tmpl.name} <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({tmplCardholders.length} cardholders)</span>
+                          {tmpl.name} <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({tmplCardholders.length} cardholders{hasTmplSelection ? `, ${selectedInTmpl.length} selected` : ''})</span>
                         </h3>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <button
                             type="button"
                             className="btn btn-primary"
                             style={{ fontSize: '0.8rem', padding: '5px 12px', gap: '6px' }}
-                            onClick={() => handleCompileTable(tmplCardholders, tmpl)}
-                            title={`Compile PDF for all ${tmplCardholders.length} cardholders in ${tmpl.name}`}
+                            onClick={() => handleCompileTable(targetTmplList, tmpl)}
+                            title={hasTmplSelection ? `Compile PDF for ${selectedInTmpl.length} selected cardholders in ${tmpl.name}` : `Compile PDF for all ${tmplCardholders.length} cardholders in ${tmpl.name}`}
                           >
                             <Zap size={14} />
-                            Compile All PDF ({tmplCardholders.length})
+                            {hasTmplSelection ? `Compile PDF (${selectedInTmpl.length})` : `Compile All PDF (${tmplCardholders.length})`}
                           </button>
                           <button
                             type="button"
@@ -2481,11 +2445,11 @@ export default function ClientDetailsPage() {
                               border: '1px solid rgba(16,185,129,0.3)',
                               color: '#34d399'
                             }}
-                            onClick={() => handleExportExcel(tmplCardholders, tmpl.name)}
-                            title={`Export Excel spreadsheet for ${tmpl.name}`}
+                            onClick={() => handleExportExcel(targetTmplList, tmpl.name)}
+                            title={hasTmplSelection ? `Export Excel for ${selectedInTmpl.length} selected cardholders in ${tmpl.name}` : `Export Excel spreadsheet for ${tmpl.name}`}
                           >
                             <FileSpreadsheet size={14} />
-                            Export Excel
+                            {hasTmplSelection ? `Export Excel (${selectedInTmpl.length})` : 'Export Excel'}
                           </button>
                         </div>
                       </div>
@@ -2697,23 +2661,27 @@ export default function ClientDetailsPage() {
 
                 // Unassigned cardholders check
                 const unassigned = filteredCardholders.filter(c => !processedCardholderIds.has(c.id));
+                const unassignedSelected = unassigned.filter(c => selectedIds.includes(c.id));
+                const hasUnassignedSelection = unassignedSelected.length > 0;
+                const targetUnassignedList = hasUnassignedSelection ? unassignedSelected : unassigned;
+
                 const unassignedTable = unassigned.length > 0 ? (
                   <div key="unassigned" style={{ marginBottom: '32px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', padding: '0 4px', flexWrap: 'wrap', gap: '8px' }}>
                       <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <CreditCard size={18} />
-                        Unassigned Cardholders <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({unassigned.length} cardholders)</span>
+                        Unassigned Cardholders <span style={{ fontSize: '0.8rem', color: 'var(--muted)', fontWeight: 'normal' }}>({unassigned.length} cardholders{hasUnassignedSelection ? `, ${unassignedSelected.length} selected` : ''})</span>
                       </h3>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <button
                           type="button"
                           className="btn btn-primary"
                           style={{ fontSize: '0.8rem', padding: '5px 12px', gap: '6px' }}
-                          onClick={() => handleCompileTable(unassigned)}
-                          title={`Compile PDF for ${unassigned.length} unassigned cardholders`}
+                          onClick={() => handleCompileTable(targetUnassignedList)}
+                          title={hasUnassignedSelection ? `Compile PDF for ${unassignedSelected.length} selected unassigned cardholders` : `Compile PDF for all ${unassigned.length} unassigned cardholders`}
                         >
                           <Zap size={14} />
-                          Compile All PDF ({unassigned.length})
+                          {hasUnassignedSelection ? `Compile PDF (${unassignedSelected.length})` : `Compile All PDF (${unassigned.length})`}
                         </button>
                         <button
                           type="button"
@@ -2726,11 +2694,11 @@ export default function ClientDetailsPage() {
                             border: '1px solid rgba(16,185,129,0.3)',
                             color: '#34d399'
                           }}
-                          onClick={() => handleExportExcel(unassigned, 'Unassigned_Cardholders')}
-                          title="Export Excel spreadsheet for unassigned cardholders"
+                          onClick={() => handleExportExcel(targetUnassignedList, 'Unassigned_Cardholders')}
+                          title={hasUnassignedSelection ? `Export Excel for ${unassignedSelected.length} selected unassigned cardholders` : 'Export Excel spreadsheet for unassigned cardholders'}
                         >
                           <FileSpreadsheet size={14} />
-                          Export Excel
+                          {hasUnassignedSelection ? `Export Excel (${unassignedSelected.length})` : 'Export Excel'}
                         </button>
                       </div>
                     </div>
