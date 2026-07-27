@@ -54,33 +54,11 @@ export const addCacheBust = (url: string | null | undefined, version?: number) =
 };
 
 /**
- * Clears all background-byte cache entries for a given set of template URLs.
+ * Clears all background-byte cache entries.
  * Call this before rendering a job to ensure template edits are reflected immediately.
  */
 export function clearTemplateBgCache(...urls: (string | null | undefined)[]) {
-  for (const url of urls) {
-    if (!url) continue;
-    const cleanUrl = url.split('?')[0];
-
-    // Clear all entries that match the clean URL path (ignoring query parameters)
-    for (const key of Array.from(globalBgBytesCache.keys())) {
-      if (key.split('?')[0] === cleanUrl) {
-        globalBgBytesCache.delete(key);
-      }
-    }
-
-    // Also clear any SVG→PNG transformed variants
-    const svgVariant = cleanUrl.includes('.svg')
-      ? cleanUrl.replace('/image/upload/', '/image/upload/w_3000/').replace('.svg', '.png')
-      : null;
-    if (svgVariant) {
-      for (const key of Array.from(globalBgBytesCache.keys())) {
-        if (key.split('?')[0] === svgVariant) {
-          globalBgBytesCache.delete(key);
-        }
-      }
-    }
-  }
+  globalBgBytesCache.clear();
 }
 
 /**
@@ -1206,11 +1184,13 @@ export async function renderCardSideToPdfBytesClient(
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue = resolveFieldRawValue(f, data, cardholder);
-    const hasPrefixOrSuffix = Boolean((f.prefix && f.prefix.trim()) || (f.suffix && f.suffix.trim()));
+    const safePrefix = (f.prefix && f.prefix !== 'undefined') ? f.prefix : '';
+    const safeSuffix = (f.suffix && f.suffix !== 'undefined') ? f.suffix : '';
+    const hasPrefixOrSuffix = Boolean((safePrefix && safePrefix.trim()) || (safeSuffix && safeSuffix.trim()));
     if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && f.type !== 'image') continue;
     if (rawValue === undefined || rawValue === null) rawValue = '';
 
-    const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
+    const valueStr = `${safePrefix}${rawValue}${safeSuffix}`;
     if (!valueStr.trim() && f.type !== 'image') continue;
     const xPt = f.x * PX_TO_PT;
     const yPt = (heightPx - f.y - f.height) * PX_TO_PT - yOffsetPx * PX_TO_PT;

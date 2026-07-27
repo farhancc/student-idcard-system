@@ -518,7 +518,7 @@ ipcMain.handle('delete-local-template', async (event, { templateId, sides }) => 
       if (!fs.existsSync(searchDir)) return;
       const files = fs.readdirSync(searchDir);
       for (const side of sideList) {
-        const prefix = `original_${templateId}_${side}.`;
+        const prefix = `original_${templateId}_${side}`;
         for (const file of files) {
           if (file.startsWith(prefix)) {
             try {
@@ -528,15 +528,6 @@ ipcMain.handle('delete-local-template', async (event, { templateId, sides }) => 
             } catch (e) {
               console.warn(`[Main Process] Failed to delete template file ${file}:`, e.message);
             }
-          }
-        }
-        // Also delete the companion PNG preview (for PDF templates)
-        for (const file of files) {
-          if (file.startsWith(`original_${templateId}_${side}`) && file.endsWith('.png')) {
-            try {
-              fs.unlinkSync(path.join(searchDir, file));
-              deleted.push(file);
-            } catch (e) {}
           }
         }
       }

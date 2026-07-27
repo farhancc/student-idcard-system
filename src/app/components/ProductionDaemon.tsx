@@ -480,6 +480,8 @@ export default function ProductionDaemon() {
       cardHeight: template.height || 638,
       frontImageUrl: template.frontImageUrl,
       backImageUrl: template.backImageUrl,
+      frontOriginalUrl: template.frontOriginalUrl || null,
+      backOriginalUrl: template.backOriginalUrl || null,
       frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
       backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
       version: template.version,
@@ -526,10 +528,10 @@ export default function ProductionDaemon() {
     });
 
     await saveAndCompleteJob(job, order, pdfBytes, base64Data);
-  };
-
   const processJob = async (jobPayload: any) => {
     const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
+
+    addLog(`Processing Job #${job.id} using Template #${template.id} (v${template.version || 1})`);
 
     // ── Cache invalidation ─────────────────────────────────────────────────
     // Clear in-memory background bytes so the latest template image is fetched,
@@ -546,8 +548,9 @@ export default function ProductionDaemon() {
     const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
     if (electronAPI?.deleteLocalTemplate) {
       try {
-        await electronAPI.deleteLocalTemplate({ templateId: template.id });
-      } catch (e) {
+        const delRes = await electronAPI.deleteLocalTemplate({ templateId: template.id });
+        addLog(`[Daemon] Local cache purge for Template #${template.id}: ${delRes?.deleted?.length || 0} file(s) removed`);
+      } catch (e: any) {
         console.warn('[Daemon] Failed to purge stale local template files:', e);
       }
     }
@@ -889,6 +892,7 @@ export default function ProductionDaemon() {
               backOriginalUrl: template.backOriginalUrl || null,
               frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
               backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+              version: template.version,
             };
 
             const clientCardholder = {
@@ -1069,4 +1073,5 @@ export default function ProductionDaemon() {
       `}</style>
     </div>
   );
+}
 }
