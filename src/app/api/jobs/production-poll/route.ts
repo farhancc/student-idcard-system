@@ -26,11 +26,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: true, job: null });
     }
 
-    // Retrieve order and template details
+    // Retrieve order details — template is fetched separately (fresh direct query)
+    // to guarantee the latest frontFields/backFields after any template edits.
     const order = await prisma.cardOrder.findUnique({
       where: { id: job.orderId },
       include: {
-        template: true,
         client: true,
         invoice: true,
         cardholders: {
@@ -43,6 +43,18 @@ export async function GET(request: Request) {
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found for PDF job' }, { status: 404 });
+    }
+
+    // Fetch template directly with $queryRaw to bypass any ORM-level query plan
+    // caching or JOIN shortcuts — this guarantees we always read the absolute
+    // latest frontFields/backFields that were saved by the most recent template edit.
+    const templateRows = await prisma.$queryRaw<any[]>`
+      SELECT * FROM "card_templates" WHERE id = ${order.templateId} LIMIT 1
+    `;
+    const template = templateRows[0] ?? null;
+
+    if (!template) {
+      return NextResponse.json({ error: 'Template not found for this order' }, { status: 404 });
     }
 
     const press = await prisma.press.findUnique({
@@ -109,19 +121,20 @@ export async function GET(request: Request) {
         fileUrl: pf.fileUrl,
       })),
       template: {
-        id: order.template.id,
-        name: order.template.name,
-        width: order.template.cardWidth,
-        height: order.template.cardHeight,
-        frontImageUrl: order.template.frontImageUrl,
-        backImageUrl: order.template.backImageUrl,
-        frontOriginalUrl: order.template.frontOriginalUrl,
-        backOriginalUrl: order.template.backOriginalUrl,
-        isDoubleSided: !!order.template.backImageUrl,
-        frontFields: order.template.frontFields,
-        backFields: order.template.backFields,
+        id: template.id,
+        name: template.name,
+        // Raw SQL column names (snake_case) — map to the schema field names
+        width: template.card_width ?? template.cardWidth,
+        height: template.card_height ?? template.cardHeight,
+        frontImageUrl: template.front_image_url ?? template.frontImageUrl,
+        backImageUrl: template.back_image_url ?? template.backImageUrl ?? null,
+        frontOriginalUrl: template.front_original_url ?? template.frontOriginalUrl ?? null,
+        backOriginalUrl: template.back_original_url ?? template.backOriginalUrl ?? null,
+        isDoubleSided: !!(template.back_image_url ?? template.backImageUrl),
+        frontFields: template.front_fields ?? template.frontFields ?? '[]',
+        backFields: template.back_fields ?? template.backFields ?? '[]',
         validTillDate: order.validTill,
-        version: order.template.version,
+        version: template.version,
       },
       cardholders: cardholders.map(ch => ({
         id: ch.id,
@@ -132,6 +145,13 @@ export async function GET(request: Request) {
         cardSerial: ch.cardSerial,
         uniqueKey: ch.uniqueKey || '',
       })),
+    }, {
+      headers: {
+        // Prevent any CDN/edge/proxy from caching the poll response —
+        // stale job data would cause the Electron daemon to miss template updates.
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      }
     });
   } catch (error) {
     console.error('Poll PDF jobs error:', error);

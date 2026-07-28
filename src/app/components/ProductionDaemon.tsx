@@ -441,7 +441,8 @@ export default function ProductionDaemon() {
   };
 
   async function processJob(jobPayload: any) {
-    const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
+    const { job, cardholders, order, pressFonts = [] } = jobPayload;
+    let template = jobPayload.template; // mutable reference so the fresh re-fetch below can update it
 
     addLog(`Processing Job #${job.id} using Template #${template.id} (v${template.version || 1})`);
 
@@ -465,6 +466,43 @@ export default function ProductionDaemon() {
       } catch (e: any) {
         console.warn('[Daemon] Failed to purge stale local template files:', e);
       }
+    }
+
+    // ── Fresh template re-fetch (belt-and-suspenders) ──────────────────────
+    // Re-fetch the template directly from the server RIGHT BEFORE rendering
+    // so that any edits made to frontFields/backFields between the poll and
+    // the compilation start are always reflected in the output PDF.
+    try {
+      const freshRes = await fetch(`/api/templates/${template.id}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        headers: { 'Cache-Control': 'no-cache, no-store' },
+      });
+      if (freshRes.ok) {
+        const freshJson = await freshRes.json();
+        if (freshJson.template) {
+          const ft = freshJson.template;
+          // Update both the local variable and the shared payload reference
+          const refreshed = {
+            ...template,
+            frontFields: ft.frontFields ?? template.frontFields,
+            backFields: ft.backFields ?? template.backFields,
+            frontImageUrl: ft.frontImageUrl ?? template.frontImageUrl,
+            backImageUrl: ft.backImageUrl ?? template.backImageUrl,
+            frontOriginalUrl: ft.frontOriginalUrl ?? template.frontOriginalUrl,
+            backOriginalUrl: ft.backOriginalUrl ?? template.backOriginalUrl,
+            version: ft.version ?? template.version,
+          };
+          template = refreshed;
+          jobPayload.template = refreshed;
+          addLog(`[Daemon] Template #${template.id} fields refreshed from server (v${ft.version ?? template.version})`);
+        }
+      } else {
+        addLog(`[Daemon] Warning: Could not refresh template from server (${freshRes.status}) — using poll data`);
+      }
+    } catch (refreshErr: any) {
+      // Non-fatal: fall back to the poll payload data
+      addLog(`[Daemon] Warning: Fresh template fetch failed (${refreshErr.message}) — using poll data`);
     }
     // ──────────────────────────────────────────────────────────────────────
     if (job.pdfType === 'INVOICE') {
