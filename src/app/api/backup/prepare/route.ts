@@ -65,7 +65,6 @@ export async function GET(request: Request) {
           'ID': ch.id,
           'Name': ch.name,
           'Designation': ch.designation || '',
-          'Unique Key': ch.uniqueKey || '',
           'Card Serial': ch.cardSerial || '',
           'Date Added': ch.createdAt.toISOString(),
           'Local Photo File': ch.photoUrl ? `photos/${ch.id}_${ch.name.replace(/[^a-zA-Z0-9]/g, '_')}.${getExt(ch.photoUrl)}` : 'None',

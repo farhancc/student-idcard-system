@@ -66,32 +66,8 @@ export async function POST(
 
     const { name, designation, photoUrl, customFields, uniqueKey } = parsed.data;
 
-    // Automatically fall back to custom fields for uniqueKey if not provided
-    let finalUniqueKey = uniqueKey ?? null;
-    if (!finalUniqueKey && customFields) {
-      const keys = Object.keys(customFields);
-      const possibleUniqueKeys = ['rollNo', 'roll_no', 'empId', 'employeeId', 'uniqueKey', 'id'];
-      const match = keys.find(k => possibleUniqueKeys.some(p => k.toLowerCase() === p.toLowerCase()));
-      if (match) {
-        finalUniqueKey = customFields[match] ?? null;
-      }
-    }
-
-    // Check unique key constraint if provided
-    if (finalUniqueKey) {
-      const existing = await prisma.cardholder.findFirst({
-        where: { clientId: share.clientId, uniqueKey: finalUniqueKey },
-      });
-      if (existing) {
-        return NextResponse.json(
-          { error: `Cardholder with Unique Key/Roll Number '${finalUniqueKey}' already exists.` },
-          { status: 400 }
-        );
-      }
-    }
-
     // Generate unique card serial number if needed
-    const cardSerial = finalUniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const cardholder = await prisma.cardholder.create({
       data: {
@@ -101,7 +77,6 @@ export async function POST(
         designation: designation ?? null,
         photoUrl: photoUrl ?? null,
         customFields: customFields ? JSON.stringify(customFields) : null,
-        uniqueKey: finalUniqueKey || null,
         cardSerial,
         enrollToken, // Stores either the global enrollToken or the department enrollToken
       },

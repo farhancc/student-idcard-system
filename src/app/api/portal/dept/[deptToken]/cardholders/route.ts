@@ -67,19 +67,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    const { name, designation, photoUrl, customFields, uniqueKey } = await request.json();
+    const { name, designation, photoUrl, customFields } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    if (uniqueKey) {
-      const existing = await prisma.cardholder.findFirst({
-        where: { clientId: dept.portalShare.clientId, uniqueKey },
-      });
-      if (existing) {
-        return NextResponse.json({ error: `Cardholder with Unique Key '${uniqueKey}' already exists.` }, { status: 400 });
-      }
     }
 
     const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -92,7 +83,6 @@ export async function POST(
         designation,
         photoUrl,
         customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
-        uniqueKey,
         cardSerial,
         enrollToken: dept.enrollToken, // associate cardholder with this department
       },

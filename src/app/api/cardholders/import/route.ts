@@ -114,7 +114,6 @@ export async function POST(request: Request) {
     const firstRowHeaders = Object.keys(rawData[0]);
     const nameCol = mapping.name || getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name']) || 'name';
     const designationCol = mapping.designation || getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title']) || 'designation';
-    const uniqueKeyCol = mapping.uniqueKey || getHeaderKey(firstRowHeaders, ['id', 'idnumber', 'id no', 'id number', 'empid', 'rollnumber', 'roll no', 'roll', 'employee id', 'unique key', 'uniquekey', 'serial no', 'serial number', 'serial', 'card id', 'card id no', 'reg no', 'registration no', 'adm no', 'admission no']) || 'uniqueKey';
     const photoUrlCol = mapping.photoUrl || getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
 
     // 3. Validate against template required fields (if templateId provided)
@@ -138,8 +137,6 @@ export async function POST(request: Request) {
               strVal = String(row[designationCol] || '').trim();
             } else if (f.field === 'photo') {
               strVal = String(row[photoUrlCol] || '').trim();
-            } else if (f.field === 'id') {
-              strVal = String(row[uniqueKeyCol] || '').trim();
             } else {
               const sourceCol = mapping[f.field] || f.field;
               const val = row[sourceCol];
@@ -210,30 +207,22 @@ export async function POST(request: Request) {
       if (!name) continue; // skip blank name rows
 
       const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
-      const uniqueKey = row[uniqueKeyCol] ? String(row[uniqueKeyCol]).trim() : null;
       const photoUrl = row[photoUrlCol] ? String(row[photoUrlCol]).trim() : null;
 
       // Extract custom fields (all columns not mapped to core fields)
       const custom: Record<string, any> = {};
       Object.keys(row).forEach(key => {
-        if (key !== nameCol && key !== designationCol && key !== uniqueKeyCol && key !== photoUrlCol) {
+        if (key !== nameCol && key !== designationCol && key !== photoUrlCol) {
           if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
             custom[key] = row[key];
           }
         }
       });
 
-      // Find duplicate in DB
-      let duplicate = null;
-      if (uniqueKey) {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, uniqueKey },
-        });
-      } else {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, name, designation: designation ?? null },
-        });
-      }
+      // Find duplicate in DB: name + designation (since uniqueKey concept is deprecated/removed)
+      const duplicate = await prisma.cardholder.findFirst({
+        where: { clientId, name, designation: designation ?? null },
+      });
 
       const cardholderPayload: any = {
         pressId,
@@ -242,7 +231,6 @@ export async function POST(request: Request) {
         designation,
         photoUrl,
         customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
-        uniqueKey,
         ...(templateId ? { templateId } : {}),
       };
 

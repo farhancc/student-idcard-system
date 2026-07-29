@@ -88,7 +88,7 @@ export async function GET(request: Request) {
       const groupKey = `${clientName}::${templateName}`;
 
       // Extract template fields
-      const fieldKeysSet = new Set<string>(['Name', 'Designation', 'Unique Key', 'Card Serial']);
+      const fieldKeysSet = new Set<string>(['Name', 'Designation', 'Card Serial']);
       if (resolvedTemplate) {
         try {
           const front = JSON.parse(resolvedTemplate.frontFields || '[]');
@@ -104,7 +104,6 @@ export async function GET(request: Request) {
       const recordFields: Record<string, string> = {
         'Name': ch.name,
         'Designation': ch.designation || '',
-        'Unique Key': ch.uniqueKey || '',
         'Card Serial': ch.cardSerial || '',
       };
 

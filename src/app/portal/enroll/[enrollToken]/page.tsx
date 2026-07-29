@@ -56,12 +56,10 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [hasName, setHasName] = useState(true);
   const [hasDesignation, setHasDesignation] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
-  const [hasUniqueKey, setHasUniqueKey] = useState(false);
 
   // Form states
   const [name, setName] = useState('');
   const [designation, setDesignation] = useState('');
-  const [uniqueKey, setUniqueKey] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [photoUrl, setPhotoUrl] = useState('');
 
@@ -114,8 +112,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         );
 
         // Unique text and ID fields (excluding restricted fields)
-        // 'id' type fields are auto-filled (cardSerial / uniqueKey) — never editable by enrollees
-        const textFields = allFields.filter(f => f.type === 'text' && !restrictedFields.has(f.field));
+        const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'id') && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textFields.map(f => f.field)));
         
         // Remove standard and system ones from customFields list to handle separately
@@ -128,8 +125,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           k !== 'avatar' &&
           k !== 'validTill' &&
           k !== 'validTillDate' &&
-          k !== 'cardSerial' &&
-          k !== 'uniqueKey'
+          k !== 'cardSerial'
         );
         setFormFields(filteredKeys);
 
@@ -153,8 +149,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setHasName((mappedFields.includes('name') || mappedFields.includes('fullName')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
         setHasDesignation((mappedFields.includes('designation') || mappedFields.includes('role')) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
         setHasPhoto(mainPhoto !== null);
-        // Only show uniqueKey input when template explicitly maps a 'uniqueKey' field
-        setHasUniqueKey(mappedFields.includes('uniqueKey') && !restrictedFields.has('uniqueKey'));
 
         // Detect if back side has any fields
         const backParsed: FieldCoordinate[] = JSON.parse(data.template.backFields || '[]');
@@ -183,9 +177,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
   const validateField = useCallback((field: string, value: string): string => {
     if (field === 'name' && !value.trim()) return 'Full name is required.';
-    if (field === 'uniqueKey' && !value.trim() && hasUniqueKey) return 'ID / Roll number is required.';
     return '';
-  }, [hasUniqueKey]);
+  }, []);
 
   const handleBlur = (field: string, value: string) => {
     markTouched(field);
@@ -327,7 +320,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         designation: hasDesignation ? (designation || null) : null,
         photoUrl: hasPhoto ? (photoUrl || null) : null,
         customFields: updatedCustomFields,
-        uniqueKey: hasUniqueKey ? (uniqueKey || null) : null,
       };
 
       const res = await fetch(`/api/portal/enroll/${enrollToken}`, {
@@ -386,7 +378,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
             setName('');
             setDesignation('');
-            setUniqueKey('');
             setPhotoUrl('');
             setSuccess(false);
           }}>
@@ -576,21 +567,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             </div>
           )}
 
-          {hasUniqueKey && (
-            <div className="form-group">
-              <label className="form-label">Roll Number / Employee ID (Unique Key)</label>
-              <input
-                type="text"
-                className="form-input"
-                style={{ borderColor: touched.uniqueKey && fieldErrors.uniqueKey ? 'var(--danger)' : undefined }}
-                value={uniqueKey}
-                onChange={e => { setUniqueKey(e.target.value); if (touched.uniqueKey) setFieldErrors(prev => ({ ...prev, uniqueKey: validateField('uniqueKey', e.target.value) })); }}
-                onBlur={e => handleBlur('uniqueKey', e.target.value)}
-                placeholder="Enter unique ID or roll number"
-              />
-              {touched.uniqueKey && fieldErrors.uniqueKey && <p style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '4px' }}>{fieldErrors.uniqueKey}</p>}
-            </div>
-          )}
+
 
           {/* Custom Fields dynamically extracted from template */}
           {formFields.map(field => {
@@ -643,7 +620,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                         name: name || 'Full Name',
                         designation: designation || 'Designation',
                         photoUrl: photoUrl || null,
-                        uniqueKey: uniqueKey || null,
+                        uniqueKey: customFields.uniqueKey || customFields.id || customFields.unique_key || null,
                         cardSerial: 'STU-0000',
                         customFields: JSON.stringify(customFields),
                       }}
@@ -668,7 +645,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                           name: name || 'Full Name',
                           designation: designation || 'Designation',
                           photoUrl: photoUrl || null,
-                          uniqueKey: uniqueKey || null,
+                          uniqueKey: customFields.uniqueKey || customFields.id || customFields.unique_key || null,
                           cardSerial: 'STU-0000',
                           customFields: JSON.stringify(customFields),
                         }}

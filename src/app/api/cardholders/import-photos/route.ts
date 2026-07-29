@@ -122,16 +122,28 @@ export async function POST(request: Request) {
       const baseName = path.basename(entry.entryName, ext).trim();
       const imageBuffer = entry.getData();
 
-      // Find matching cardholder
-      let cardholder = null;
-      if (matchBy === 'uniqueKey') {
-        cardholder = await prisma.cardholder.findFirst({
-          where: { clientId, uniqueKey: baseName },
+      // Find matching cardholder: check name first (case-insensitive), then check custom fields
+      let cardholder = await prisma.cardholder.findFirst({
+        where: { clientId, name: { equals: baseName, mode: 'insensitive' } },
+      });
+
+      if (!cardholder) {
+        // Fallback: search custom fields (any key containing the baseName value)
+        const candidates = await prisma.cardholder.findMany({
+          where: { clientId },
         });
-      } else {
-        cardholder = await prisma.cardholder.findFirst({
-          where: { clientId, name: { equals: baseName, mode: 'insensitive' } },
-        });
+        cardholder = candidates.find(c => {
+          if (!c.customFields) return false;
+          try {
+            const parsed = typeof c.customFields === 'string' ? JSON.parse(c.customFields) : c.customFields;
+            if (parsed) {
+              return Object.values(parsed).some((v: any) => 
+                String(v).trim().toLowerCase() === baseName.toLowerCase()
+              );
+            }
+          } catch {}
+          return false;
+        }) || null;
       }
 
       if (!cardholder) {
@@ -139,7 +151,7 @@ export async function POST(request: Request) {
         results.details.push({
           fileName: entry.entryName,
           status: 'UNMATCHED',
-          message: `No cardholder found matching ${matchBy} "${baseName}".`,
+          message: `No cardholder found matching name or custom field value for "${baseName}".`,
         });
         continue;
       }

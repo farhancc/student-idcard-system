@@ -144,7 +144,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const [hasName, setHasName] = useState(true);
   const [hasDesignation, setHasDesignation] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
-  const [hasUniqueKey, setHasUniqueKey] = useState(false);
+  const hasUniqueKey = false;
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
@@ -156,7 +156,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   // Form States
   const [name, setName] = useState('');
   const [designation, setDesignation] = useState('');
-  const [uniqueKey, setUniqueKey] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, string>>({});
   const [photoUrl, setPhotoUrl] = useState('');
 
@@ -196,8 +195,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         k !== 'avatar' &&
         k !== 'validTill' &&
         k !== 'validTillDate' &&
-        k !== 'cardSerial' &&
-        k !== 'uniqueKey'
+        k !== 'cardSerial'
       );
       setFormFields(filteredKeys);
 
@@ -246,7 +244,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       setHasName(mappedFields.includes('name') || mappedFields.includes('fullName'));
       setHasDesignation(mappedFields.includes('designation') || mappedFields.includes('role'));
       setHasPhoto(mainPhoto !== null);
-      setHasUniqueKey(mappedFields.includes('uniqueKey') || allFields.some(f => f.type === 'id'));
 
       const chRes = await fetch(`/api/portal/dept/${deptToken}/cardholders`);
       if (!chRes.ok) throw new Error('Failed to load cardholders');
@@ -275,7 +272,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     setModalMode('add');
     setName('');
     setDesignation('');
-    setUniqueKey('');
     setPhotoUrl('');
     const initialCustom: Record<string, string> = {};
     formFields.forEach(k => { initialCustom[k] = ''; });
@@ -289,7 +285,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     setEditingCardholderId(ch.id);
     setName(ch.name);
     setDesignation(ch.designation || '');
-    setUniqueKey(ch.uniqueKey || '');
     setPhotoUrl(ch.photoUrl || '');
     let parsedCustom: Record<string, string> = {};
     try {
@@ -360,7 +355,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         designation: hasDesignation ? (designation || null) : null,
         photoUrl: hasPhoto ? (photoUrl || null) : null,
         customFields,
-        uniqueKey: hasUniqueKey ? (uniqueKey || null) : null,
       };
       const url = modalMode === 'add'
         ? `/api/portal/dept/${deptToken}/cardholders`
@@ -457,7 +451,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       const cardholderData = {
         name: ch.name,
         designation: ch.designation,
-        uniqueKey: ch.uniqueKey,
+        uniqueKey: ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key || '',
         photoUrl: ch.photoUrl,
         cardSerial: ch.cardSerial,
         customFields: parsedCustom
@@ -495,7 +489,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         }
 
         if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey;
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
           if (!idVal || String(idVal).trim() === '') {
             warnings.push('Unique ID/Key is missing');
           }
@@ -526,9 +520,11 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
   const filtered = cardholders.filter(ch => {
     const q = searchQuery.toLowerCase();
+    const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
+    const idVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '';
     const matchesSearch = ch.name.toLowerCase().includes(q) ||
       (ch.designation && ch.designation.toLowerCase().includes(q)) ||
-      (ch.uniqueKey && ch.uniqueKey.toLowerCase().includes(q));
+      String(idVal).toLowerCase().includes(q);
       
     const matchesWarnings = !filterWarningsOnly || getCardholderWarnings(ch).length > 0;
     
@@ -830,7 +826,9 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                           return <td key={tf.field}>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>;
                         }
                         if (tf.field === 'uniqueKey') {
-                          return <td key={tf.field}><code>{ch.uniqueKey || '—'}</code></td>;
+                          const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
+                          const idVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
+                          return <td key={tf.field}><code>{idVal}</code></td>;
                         }
                         if (tf.type === 'image') {
                           const val = parsedCustom[tf.field];
@@ -958,12 +956,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                   <input type="text" className="form-input" value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Student, Employee, etc." />
                 </div>
               )}
-              {hasUniqueKey && (
-                <div className="form-group">
-                  <label className="form-label">Unique Key / Roll No / Emp ID</label>
-                  <input type="text" className="form-input" value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="Unique ID" />
-                </div>
-              )}
+
               {formFields.map(field => {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
                 return (
@@ -1015,7 +1008,11 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
               })()}
               <div style={{ fontWeight: '700', fontSize: '1.1rem', marginBottom: '4px' }}>{previewCardholder.name}</div>
               {previewCardholder.designation && <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '4px' }}>{previewCardholder.designation}</div>}
-              {previewCardholder.uniqueKey && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {previewCardholder.uniqueKey}</div>}
+              {(() => {
+                const custom = previewCardholder.customFields ? (typeof previewCardholder.customFields === 'string' ? JSON.parse(previewCardholder.customFields) : previewCardholder.customFields) : {};
+                const idVal = previewCardholder.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
+                return idVal ? <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {idVal}</div> : null;
+              })()}
               <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--muted)', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
                 ℹ️ Card template preview is available in the Desktop App only.
               </div>

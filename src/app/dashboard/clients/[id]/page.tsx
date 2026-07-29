@@ -446,7 +446,6 @@ export default function ClientDetailsPage() {
         const imageId = imageIdMap.get(ch.id) || '';
         const row: any = {
           'Name': escapeFormula(ch.name),
-          'ID / Unique Key': escapeFormula(ch.uniqueKey || ''),
           'Image ID': escapeFormula(imageId),
           'Date of Adding': ch.createdAt ? new Date(ch.createdAt).toLocaleDateString() : '',
           'Template Name': escapeFormula(ch.templateName || ''),
@@ -1080,7 +1079,7 @@ export default function ClientDetailsPage() {
         ) || null;
         hasPhoto = mainPhoto !== null;
         
-        hasUniqueKey = mappedFields.includes('uniqueKey') || allFields.some((f: any) => f.type === 'id');
+        hasUniqueKey = false;
 
         // Extract customFields map from record but ONLY keep those in the template
         let existingCustom: Record<string, any> = {};
@@ -1100,7 +1099,6 @@ export default function ClientDetailsPage() {
             f.field !== 'photo' &&
             f.field !== 'avatar' &&
             f.field !== 'photoUrl' &&
-            f.field !== 'uniqueKey' &&
             f.field !== 'validTill' &&
             f.field !== 'validTillDate' &&
             f.field !== 'cardSerial' &&
@@ -1157,7 +1155,6 @@ export default function ClientDetailsPage() {
           name: editName,
           designation: editHasDesignation ? editDesignation : null,
           photoUrl: editHasPhoto ? editPhotoUrl : null,
-          uniqueKey: editHasUniqueKey ? editUniqueKey : null,
           customFields: customJson,
         }),
       });
@@ -1604,7 +1601,10 @@ export default function ClientDetailsPage() {
     if (!ch) return '';
     if (colKey === 'name' || colKey === 'fullName') return ch.name || '';
     if (colKey === 'designation' || colKey === 'role') return ch.designation || '';
-    if (colKey === 'uniqueKey') return ch.uniqueKey || '';
+    if (colKey === 'uniqueKey') {
+      const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
+      return ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '';
+    }
     if (colKey === 'photoUrl' || colKey === 'photo' || colKey === 'avatar') return getEffectivePhotoUrl(ch) || '';
 
     if (ch.customFields) {
@@ -1647,7 +1647,7 @@ export default function ClientDetailsPage() {
       const cardholderData = {
         name: ch.name,
         designation: ch.designation,
-        uniqueKey: ch.uniqueKey,
+        uniqueKey: ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key || '',
         photoUrl: ch.photoUrl,
         cardSerial: ch.cardSerial,
         customFields: parsedCustom
@@ -1691,7 +1691,7 @@ export default function ClientDetailsPage() {
 
         // Unique ID / Key / ID field check
         if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey;
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
           if (!idVal || String(idVal).trim() === '') {
             warnings.push('Unique ID/Key is missing');
           }
@@ -1729,8 +1729,11 @@ export default function ClientDetailsPage() {
       (c.designation && c.designation.toLowerCase().includes(search.toLowerCase()));
 
     // 2. ID / Unique key search (searchId)
-    const matchesSearchId = !searchId.trim() ||
-      (c.uniqueKey && c.uniqueKey.toLowerCase().includes(searchId.toLowerCase()));
+    const matchesSearchId = !searchId.trim() || (() => {
+      const custom = c.customFields ? (typeof c.customFields === 'string' ? JSON.parse(c.customFields) : c.customFields) : {};
+      const idVal = c.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '';
+      return String(idVal).toLowerCase().includes(searchId.toLowerCase());
+    })();
 
     // 3. Template filter
     const matchesTemplate = !filterTemplate ||
@@ -1797,7 +1800,6 @@ export default function ClientDetailsPage() {
       const formattedData = exportList.map((ch: any) => {
         const row: any = {
           'Name': escapeFormula(ch.name),
-          'ID / Unique Key': escapeFormula(ch.uniqueKey || ''),
           'Date of Adding': ch.createdAt ? new Date(ch.createdAt).toLocaleDateString() : '',
           'Template Name': escapeFormula(ch.templateName || ''),
           'Photo URL': escapeFormula(ch.photoUrl || ''),
@@ -2195,7 +2197,7 @@ export default function ClientDetailsPage() {
                     type="text"
                     className="form-input"
                     style={{ paddingLeft: '32px' }}
-                    placeholder="ID / Unique Key includes..."
+                    placeholder="Cardholder ID includes..."
                     value={searchId}
                     onChange={e => setSearchId(e.target.value)}
                   />
@@ -2883,14 +2885,9 @@ export default function ClientDetailsPage() {
               <input type="text" required className="form-input" placeholder="John Doe" value={name} onChange={e => setName(e.target.value)} />
             </div>
 
-            <div className="form-group">
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Designation / Role</label>
               <input type="text" className="form-input" placeholder="Student / Employee / Staff" value={designation} onChange={e => setDesignation(e.target.value)} />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Institutional ID / Unique Key</label>
-              <input type="text" className="form-input" placeholder="EMP-102" value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} />
             </div>
 
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -3392,7 +3389,10 @@ export default function ClientDetailsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{viewingCardholder.name}</h4>
                 <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  ID: <span style={{ color: '#fff', fontWeight: '500' }}>{viewingCardholder.uniqueKey || '—'}</span>
+                  ID: <span style={{ color: '#fff', fontWeight: '500' }}>{(() => {
+                    const custom = viewingCardholder.customFields ? (typeof viewingCardholder.customFields === 'string' ? JSON.parse(viewingCardholder.customFields) : viewingCardholder.customFields) : {};
+                    return viewingCardholder.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
+                  })()}</span>
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
                   Designation: <span style={{ color: '#fff' }}>{viewingCardholder.designation || '—'}</span>
@@ -3486,12 +3486,7 @@ export default function ClientDetailsPage() {
                 </div>
               )}
 
-              {editHasUniqueKey && (
-                <div className="form-group">
-                  <label className="form-label">Institutional ID / Unique Key (ID from Template)</label>
-                  <input type="text" className="form-input" value={editUniqueKey} onChange={e => setEditUniqueKey(e.target.value)} />
-                </div>
-              )}
+
 
               {editHasPhoto && (
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
@@ -3598,13 +3593,12 @@ export default function ClientDetailsPage() {
                   const inlineWarnings: string[] = [];
                   if (editHasName && (!editName || editName.trim() === '')) inlineWarnings.push('Name is required');
                   if (editHasDesignation && (!editDesignation || editDesignation.trim() === '')) inlineWarnings.push('Designation is missing');
-                  if (editHasUniqueKey && (!editUniqueKey || editUniqueKey.trim() === '')) inlineWarnings.push('Unique ID/Key is missing');
 
                   // Validate text fields in editCustomFieldsMap
                   Object.entries(editCustomFieldsMap).forEach(([k, v]) => {
                     const meta = editTemplateFields.find(f => f.field === k);
-                    if (meta && meta.type === 'text') {
-                      const isSystemKey = ['name', 'fullName', 'designation', 'role', 'uniqueKey', 'cardSerial', 'validTill', 'validTillDate'].includes(k);
+                    if (meta && (meta.type === 'text' || meta.type === 'id')) {
+                      const isSystemKey = ['name', 'fullName', 'designation', 'role', 'cardSerial', 'validTill', 'validTillDate'].includes(k);
                       if (!isSystemKey && (!v || String(v).trim() === '')) {
                         const lbl = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
                         inlineWarnings.push(`${lbl} is missing`);

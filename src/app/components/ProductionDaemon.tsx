@@ -398,15 +398,18 @@ export default function ProductionDaemon() {
       validTill: template.validTillDate || null,
     };
 
-    const clientCardholders = cardholders.map((ch: any) => ({
-      id: ch.id,
-      name: ch.name,
-      designation: ch.designation || null,
-      photoUrl: ch.photoUrl || null,
-      cardSerial: ch.cardSerial || null,
-      uniqueKey: ch.uniqueKey || null,
-      customFields: typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields || {},
-    }));
+    const clientCardholders = cardholders.map((ch: any) => {
+      const customData = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields || {};
+      return {
+        id: ch.id,
+        name: ch.name,
+        designation: ch.designation || null,
+        photoUrl: ch.photoUrl || null,
+        cardSerial: ch.cardSerial || null,
+        uniqueKey: ch.uniqueKey || customData.uniqueKey || customData.id || null,
+        customFields: customData,
+      };
+    });
 
     // Pre-cache photos locally in desktop client to enable robust offline rendering
     await cachePhotosForJob(clientCardholders);

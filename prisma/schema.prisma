@@ -92,7 +92,6 @@ model Cardholder {
   designation  String?
   photoUrl     String?  @map("photo_url")
   customFields String?  @map("custom_fields") // JSON: { grade, bloodGroup, empId, ... }
-  uniqueKey    String?  @map("unique_key")    // For duplicate detection (empId, rollNumber, etc.)
   cardSerial   String?  @map("card_serial")
   active       Boolean  @default(true)
   enrollToken  String?  @map("enroll_token")
@@ -103,7 +102,6 @@ model Cardholder {
   orderCards   OrderCardholder[]
   values       CardholderValue[]
 
-  @@unique([clientId, uniqueKey])
   @@index([pressId])
   @@index([enrollToken])
   @@index([templateId])

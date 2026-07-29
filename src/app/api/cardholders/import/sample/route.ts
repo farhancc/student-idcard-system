@@ -9,12 +9,11 @@ export async function GET() {
     sheet.columns = [
       { header: 'name', key: 'name', width: 25 },
       { header: 'designation', key: 'designation', width: 20 },
-      { header: 'uniqueKey', key: 'uniqueKey', width: 15 },
       { header: 'admissionNo', key: 'admissionNo', width: 15 },
     ];
 
-    sheet.addRow({ name: 'John Doe', designation: 'Student', uniqueKey: 'STU-001', admissionNo: '2026-001' });
-    sheet.addRow({ name: 'Jane Smith', designation: 'Teacher', uniqueKey: 'TCH-102', admissionNo: 'EMP-102' });
+    sheet.addRow({ name: 'John Doe', designation: 'Student', admissionNo: '2026-001' });
+    sheet.addRow({ name: 'Jane Smith', designation: 'Teacher', admissionNo: 'EMP-102' });
 
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 

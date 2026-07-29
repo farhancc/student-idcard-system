@@ -121,7 +121,7 @@ export async function GET(
         } else if (tf.field === 'designation' || tf.field === 'role') {
           row[label] = escapeFormula(ch.designation || '');
         } else if (tf.field === 'uniqueKey') {
-          row[label] = escapeFormula(ch.uniqueKey || '');
+          row[label] = escapeFormula(ch.uniqueKey || parsedCustom['uniqueKey'] || parsedCustom['id'] || parsedCustom['unique_key'] || '');
         } else {
           row[label] = escapeFormula(parsedCustom[tf.field] || '');
         }

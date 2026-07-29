@@ -26,20 +26,10 @@ export async function PUT(
       return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
     }
 
-    const { name, designation, photoUrl, customFields, uniqueKey } = await request.json();
+    const { name, designation, photoUrl, customFields } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
-
-    // Check unique key constraint if changed
-    if (uniqueKey && uniqueKey !== cardholder.uniqueKey) {
-      const existing = await prisma.cardholder.findFirst({
-        where: { clientId: dept.portalShare.clientId, uniqueKey },
-      });
-      if (existing) {
-        return NextResponse.json({ error: `Cardholder with Unique Key '${uniqueKey}' already exists.` }, { status: 400 });
-      }
     }
 
     const updated = await prisma.cardholder.update({
@@ -49,7 +39,6 @@ export async function PUT(
         designation,
         photoUrl,
         customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
-        uniqueKey,
         cardSerial: cardholder.cardSerial,
       },
     });

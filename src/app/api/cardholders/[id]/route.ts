@@ -23,7 +23,7 @@ export async function PUT(
       return NextResponse.json({ error: messages || 'Invalid input' }, { status: 400 });
     }
 
-    const { name, designation, photoUrl, customFields, uniqueKey, active } = result.data;
+    const { name, designation, photoUrl, customFields, active } = result.data;
 
     const cardholder = await prisma.cardholder.findFirst({
       where: { id: cardholderId, pressId },
@@ -41,7 +41,6 @@ export async function PUT(
         designation: designation !== undefined ? designation : cardholder.designation,
         photoUrl: photoUrl !== undefined ? photoUrl : cardholder.photoUrl,
         customFields: customFields !== undefined ? (customFields ? JSON.stringify(customFields) : null) : cardholder.customFields,
-        uniqueKey: uniqueKey !== undefined ? uniqueKey : cardholder.uniqueKey,
         active: active !== undefined ? active : cardholder.active,
       },
     });

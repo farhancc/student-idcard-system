@@ -109,7 +109,7 @@ export async function POST(
     const { id } = await params;
     const clientId = Number(id);
 
-    const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate, templateId } = await request.json();
+    const { name, designation, photoUrl, customFields, ignoreDuplicate, templateId } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -124,18 +124,11 @@ export async function POST(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // Duplicate check: uniqueKey (like rollNumber, empId) or name + designation
+    // Duplicate check: name + designation (since uniqueKey concept is deprecated/removed)
     if (!ignoreDuplicate) {
-      let duplicate = null;
-      if (uniqueKey) {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, uniqueKey },
-        });
-      } else {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, name, designation: designation ?? null },
-        });
-      }
+      const duplicate = await prisma.cardholder.findFirst({
+        where: { clientId, name, designation: designation ?? null },
+      });
 
       if (duplicate) {
         return NextResponse.json({
@@ -154,7 +147,6 @@ export async function POST(
         designation,
         photoUrl,
         customFields: customFields ? JSON.stringify(customFields) : null,
-        uniqueKey,
         active: true,
         ...(templateId ? { templateId: Number(templateId) } : {}),
       },
@@ -163,9 +155,6 @@ export async function POST(
     return NextResponse.json({ success: true, cardholder });
   } catch (error: any) {
     console.error('Create cardholder error:', error);
-    if (error.code === 'P2002') {
-      return NextResponse.json({ error: 'Cardholder with this unique key already exists.' }, { status: 400 });
-    }
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
