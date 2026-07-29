@@ -1344,10 +1344,10 @@ export async function renderCardSideToPdfBytesClient(
 
           // Adjust starting Y based on vertical alignment.
           // PDF drawText y = baseline. Canvas textBaseline='top' draws from glyph top.
-          // Standard ascender ratio ≈ 0.72 of fontSize.
-          // So: baseline = (box_top_in_pdf) - halfLeading - fontSize*0.72
+          // Standard ascender ratio ≈ 0.85 of fontSize.
+          // So: baseline = (box_top_in_pdf) - halfLeading - fontSize*0.85
           // box_top_in_pdf = yPt + hPt (since yPt is bottom of box in PDF coords)
-          const ascenderOffsetPt = fontSizePt * 0.72;
+          const ascenderOffsetPt = fontSizePt * 0.85;
           let startYPt = yPt + hPt - halfLeadingPt - ascenderOffsetPt;
           if (f.verticalAlign === 'center') {
             startYPt -= (hPt - renderedHeightPt) / 2;
