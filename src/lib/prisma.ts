@@ -130,11 +130,13 @@ async function syncCardholderValues(cardholderId: number) {
   let customFields: Record<string, any> = {};
   try { if (ch.customFields) customFields = JSON.parse(ch.customFields); } catch {}
 
+  const idVal = customFields.uniqueKey || customFields.id || customFields.unique_key || null;
+
   const allValues: Record<string, string> = {
     name: ch.name,
     ...(ch.designation ? { designation: ch.designation } : {}),
     ...(ch.photoUrl ? { photo: ch.photoUrl } : {}),
-    ...(ch.uniqueKey ? { id: ch.uniqueKey } : {}),
+    ...(idVal ? { id: String(idVal) } : {}),
     ...(ch.cardSerial ? { cardSerial: ch.cardSerial } : {}),
     ...Object.fromEntries(
       Object.entries(customFields)

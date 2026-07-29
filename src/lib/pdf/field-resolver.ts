@@ -236,9 +236,10 @@ export function getResolvedFieldValue(
         return cv;
       }
     }
-    // Priority 2: Use cardholder's uniqueKey if set
-    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
-      return cardholder.uniqueKey;
+    // Priority 2: Use cardholder's uniqueKey if set (fallback to customFields keys)
+    const chUniqueKey = cardholder.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key;
+    if (chUniqueKey && String(chUniqueKey).trim() !== '') {
+      return chUniqueKey;
     }
     // Priority 3: Fall back to cardSerial if uniqueKey isn't available
     if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') {
@@ -306,8 +307,9 @@ export function getResolvedFieldValue(
       return cardholder.cardSerial;
     }
     // If cardSerial is not set, fall back to uniqueKey for serial field
-    if (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '') {
-      return cardholder.uniqueKey;
+    const chUniqueKeyFallback = cardholder.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key;
+    if (chUniqueKeyFallback && String(chUniqueKeyFallback).trim() !== '') {
+      return chUniqueKeyFallback;
     }
     if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') {
       return cardholder.cardSerial;
@@ -406,7 +408,17 @@ export function resolveFieldRawValue(
 
   // 2. ID type fallback
   if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && f.type === 'id') {
-    resolved = cardholder?.uniqueKey || cardholder?.cardSerial || '';
+    let customObj: Record<string, any> = {};
+    if (cardholder?.customFields) {
+      if (typeof cardholder.customFields === 'string') {
+        try {
+          customObj = JSON.parse(cardholder.customFields);
+        } catch (e) {}
+      } else if (typeof cardholder.customFields === 'object') {
+        customObj = cardholder.customFields;
+      }
+    }
+    resolved = cardholder?.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key || cardholder?.cardSerial || '';
   }
 
   // 3. Image type vs Text/Other type handling

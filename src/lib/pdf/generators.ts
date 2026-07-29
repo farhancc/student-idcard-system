@@ -318,6 +318,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         }
 
         const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+        const chUniqueKey = customData.uniqueKey || customData.id || customData.unique_key || '';
 
         let formattedValidTill = '';
         if (order.validTill) {
@@ -329,8 +330,8 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         const cardholderData: Record<string, any> = {
           name: cardholder.name,
           designation: cardholder.designation || '',
-          id: cardholder.uniqueKey || '',
-          uniqueKey: cardholder.uniqueKey || '',
+          id: chUniqueKey,
+          uniqueKey: chUniqueKey,
           validTill: formattedValidTill,
           ...customData,
         };
@@ -346,8 +347,8 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         let currentY = yOffset - 53;
         // Always draw ID if not already in uniqueFieldsMap and present
         const hasIdField = uniqueFieldsMap.has('uniqueKey') || uniqueFieldsMap.has('id');
-        if (!hasIdField && cardholder.uniqueKey) {
-          await safeDrawText(page, pdfDoc, `ID: ${cardholder.uniqueKey}`, {
+        if (!hasIdField && chUniqueKey) {
+          await safeDrawText(page, pdfDoc, `ID: ${chUniqueKey}`, {
             x: 480,
             y: currentY,
             size: 8,

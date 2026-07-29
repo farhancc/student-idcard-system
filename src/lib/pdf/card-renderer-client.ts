@@ -455,8 +455,8 @@ export async function renderCardSideClient(
     photo: effectivePhotoUrl || cardholder.photoUrl || '',
     photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || '',
-    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || '',
+    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
+    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
     validTill: formattedValidTill,
     ...customData,
   };
@@ -1007,8 +1007,8 @@ export async function renderCardSideToPdfBytesClient(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || '',
-    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || '',
+    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
+    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
     validTill: formattedValidTill,
     ...customData,
   };

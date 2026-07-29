@@ -44,14 +44,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Client not found or access denied' }, { status: 404 });
     }
 
+    // Fold uniqueKey into customFields if provided
+    const custom = customFields || {};
+    if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
+      custom.uniqueKey = uniqueKey;
+    }
+
     // Check duplicate
-    if (uniqueKey) {
-      const duplicate = await prisma.cardholder.findFirst({
-        where: { clientId: Number(clientId), uniqueKey },
-      });
-      if (duplicate) {
-        return NextResponse.json({ error: `Cardholder with uniqueKey ${uniqueKey} already exists.` }, { status: 409 });
-      }
+    const duplicate = await prisma.cardholder.findFirst({
+      where: { clientId: Number(clientId), name, designation: designation ?? null },
+    });
+    if (duplicate) {
+      return NextResponse.json({ error: `Cardholder "${name}" with designation "${designation || ''}" already exists.` }, { status: 409 });
     }
 
     // Create
@@ -62,8 +66,7 @@ export async function POST(request: Request) {
         name,
         designation,
         photoUrl,
-        customFields: customFields ? JSON.stringify(customFields) : null,
-        uniqueKey,
+        customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
       },
     });
 

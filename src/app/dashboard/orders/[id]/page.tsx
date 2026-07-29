@@ -629,7 +629,8 @@ export default function OrderDetailsPage() {
           } else if (fieldName === 'photo' || fieldName === 'photourl' || fieldName === 'avatar' || fieldName === 'profile') {
             hasValue = !!ch.photoUrl && ch.photoUrl.trim().length > 0;
           } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
-            hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
+            const idVal = custom.uniqueKey || custom.id || custom.unique_key;
+            hasValue = !!idVal && String(idVal).trim().length > 0;
           } else {
             const targetLower = f.field.toLowerCase().trim();
             let val = undefined;
@@ -721,7 +722,8 @@ export default function OrderDetailsPage() {
           } else if (fieldName === 'photo' || fieldName === 'photourl' || fieldName === 'avatar' || fieldName === 'profile') {
             hasValue = !!ch.photoUrl && ch.photoUrl.trim().length > 0;
           } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
-            hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
+            const idVal = custom.uniqueKey || custom.id || custom.unique_key;
+            hasValue = !!idVal && String(idVal).trim().length > 0;
           } else {
             // Case-insensitive custom field check
             const targetLower = f.field.toLowerCase().trim();

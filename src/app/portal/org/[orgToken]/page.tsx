@@ -110,7 +110,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [hasName, setHasName] = useState(true);
   const [hasDesignation, setHasDesignation] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
-  const hasUniqueKey = false;
 
   // Modal States
   const [showModal, setShowModal] = useState(false);
@@ -1436,12 +1435,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 </div>
               )}
 
-              {hasUniqueKey && (
-                <div className="form-group">
-                  <label className="form-label">Unique Key / Roll No / Emp ID</label>
-                  <input type="text" className="form-input" value={uniqueKey} onChange={e => setUniqueKey(e.target.value)} placeholder="Unique ID" />
-                </div>
-              )}
+
 
               {/* Custom fields mapped dynamically */}
               {formFields.map(field => {

@@ -406,7 +406,7 @@ export default function ProductionDaemon() {
         designation: ch.designation || null,
         photoUrl: ch.photoUrl || null,
         cardSerial: ch.cardSerial || null,
-        uniqueKey: ch.uniqueKey || customData.uniqueKey || customData.id || null,
+        uniqueKey: customData.uniqueKey || customData.id || customData.unique_key || null,
         customFields: customData,
       };
     });

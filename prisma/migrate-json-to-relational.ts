@@ -183,11 +183,12 @@ async function main() {
       }
 
       // Also migrate top-level fields (name, designation, photoUrl) as values
+      const idVal = customFields.uniqueKey || customFields.id || customFields.unique_key || null;
       const allValues: Record<string, string> = {
         name: ch.name,
         ...(ch.designation ? { designation: ch.designation } : {}),
         ...(ch.photoUrl ? { photo: ch.photoUrl } : {}),
-        ...(ch.uniqueKey ? { id: ch.uniqueKey } : {}),
+        ...(idVal ? { id: String(idVal) } : {}),
         ...(ch.cardSerial ? { cardSerial: ch.cardSerial } : {}),
         ...Object.fromEntries(
           Object.entries(customFields).map(([k, v]) => [k, v !== null && v !== undefined ? String(v) : ''])

@@ -467,6 +467,7 @@ export async function renderCardSide(
 
   // 2. Parse Custom Fields JSON
   const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+  const chUniqueKey = cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '';
 
   // Formatted date string for validTill
   let formattedValidTill = '';
@@ -482,8 +483,8 @@ export async function renderCardSide(
     designation: cardholder.designation || '',
     photo: cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || '',
-    id: cardholder.uniqueKey || '',
+    uniqueKey: chUniqueKey,
+    id: chUniqueKey,
     validTill: formattedValidTill,
     ...customData,
   };
@@ -914,6 +915,8 @@ export async function renderCardSideToPdfBytes(
       : cardholder.customFields
     : {};
 
+  const chUniqueKey = cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '';
+
   const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
 
   let formattedValidTill = '';
@@ -929,8 +932,8 @@ export async function renderCardSideToPdfBytes(
     photo: effectivePhotoUrl || cardholder.photoUrl || '',
     photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || '',
-    id: cardholder.uniqueKey || '',
+    uniqueKey: chUniqueKey,
+    id: chUniqueKey,
     validTill: formattedValidTill,
     ...customData,
   };

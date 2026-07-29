@@ -45,14 +45,30 @@ export async function PUT(
       return NextResponse.json({ error: 'Cardholder not found or access denied' }, { status: 404 });
     }
 
+    // Determine custom fields JSON
+    let customFieldsStr = cardholder.customFields;
+    if (customFields !== undefined || uniqueKey !== undefined) {
+      const existingCustom = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+      const newCustom = customFields !== undefined ? { ...customFields } : { ...existingCustom };
+      if (uniqueKey !== undefined) {
+        if (uniqueKey) {
+          newCustom.uniqueKey = uniqueKey;
+        } else {
+          delete newCustom.uniqueKey;
+          delete newCustom.id;
+          delete newCustom.unique_key;
+        }
+      }
+      customFieldsStr = Object.keys(newCustom).length > 0 ? JSON.stringify(newCustom) : null;
+    }
+
     const updated = await prisma.cardholder.update({
       where: { id: cardholderId },
       data: {
         name: name !== undefined ? name : cardholder.name,
         designation: designation !== undefined ? designation : cardholder.designation,
         photoUrl: photoUrl !== undefined ? photoUrl : cardholder.photoUrl,
-        customFields: customFields !== undefined ? (customFields ? JSON.stringify(customFields) : null) : cardholder.customFields,
-        uniqueKey: uniqueKey !== undefined ? uniqueKey : cardholder.uniqueKey,
+        customFields: customFieldsStr,
         active: active !== undefined ? active : cardholder.active,
       },
     });

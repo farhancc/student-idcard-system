@@ -39,7 +39,7 @@ async function main() {
       name: `Student Name ${i}`,
       designation: `Grade ${Math.floor(Math.random() * 12) + 1}`,
       photoUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150',
-      uniqueKey: `STU${String(i).padStart(4, '0')}`,
+      customFields: JSON.stringify({ uniqueKey: `STU${String(i).padStart(4, '0')}` }),
       cardSerial: `GPS${String(i).padStart(4, '0')}`,
     });
   }

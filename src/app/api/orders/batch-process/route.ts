@@ -65,21 +65,18 @@ export async function POST(request: Request) {
       }
 
       // Convert customFields object to string JSON
-      const customFieldsStr = ch.customFields && Object.keys(ch.customFields).length > 0 
-        ? JSON.stringify(ch.customFields) 
+      const custom = ch.customFields && typeof ch.customFields === 'object' ? { ...ch.customFields } : {};
+      if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
+        custom.uniqueKey = uniqueKey;
+      }
+      const customFieldsStr = Object.keys(custom).length > 0 
+        ? JSON.stringify(custom) 
         : null;
 
       // Find duplicate in DB
-      let duplicate = null;
-      if (uniqueKey) {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, uniqueKey },
-        });
-      } else {
-        duplicate = await prisma.cardholder.findFirst({
-          where: { clientId, name, designation: designation ?? null },
-        });
-      }
+      const duplicate = await prisma.cardholder.findFirst({
+        where: { clientId, name, designation: designation ?? null },
+      });
 
       const cardholderPayload = {
         pressId,
@@ -88,7 +85,6 @@ export async function POST(request: Request) {
         designation,
         photoUrl,
         customFields: customFieldsStr,
-        uniqueKey,
       };
 
       let cardholderRecord;

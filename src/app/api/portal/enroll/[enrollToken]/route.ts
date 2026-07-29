@@ -69,6 +69,12 @@ export async function POST(
     // Generate unique card serial number if needed
     const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
+    // Fold uniqueKey into customFields if provided
+    const custom = customFields || {};
+    if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
+      custom.uniqueKey = uniqueKey;
+    }
+
     const cardholder = await prisma.cardholder.create({
       data: {
         pressId: share.pressId,
@@ -76,7 +82,7 @@ export async function POST(
         name,
         designation: designation ?? null,
         photoUrl: photoUrl ?? null,
-        customFields: customFields ? JSON.stringify(customFields) : null,
+        customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
         cardSerial,
         enrollToken, // Stores either the global enrollToken or the department enrollToken
       },

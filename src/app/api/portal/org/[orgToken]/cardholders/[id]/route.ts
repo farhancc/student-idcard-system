@@ -31,14 +31,25 @@ export async function PUT(
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Check unique key constraint if changed
-    if (uniqueKey && uniqueKey !== cardholder.uniqueKey) {
-      const existing = await prisma.cardholder.findFirst({
-        where: { clientId: share.clientId, uniqueKey },
-      });
-      if (existing) {
-        return NextResponse.json({ error: `Cardholder with Unique Key/Roll Number '${uniqueKey}' already exists.` }, { status: 400 });
-      }
+    // Fold uniqueKey into customFields if provided
+    const custom = typeof customFields === 'string' 
+      ? (customFields ? JSON.parse(customFields) : {}) 
+      : (customFields || {});
+    if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
+      custom.uniqueKey = uniqueKey;
+    }
+
+    // Check unique constraint if changed (name + designation, excluding this cardholder)
+    const existing = await prisma.cardholder.findFirst({
+      where: { 
+        clientId: share.clientId, 
+        name, 
+        designation: designation ?? null,
+        id: { not: cardholderId }
+      },
+    });
+    if (existing) {
+      return NextResponse.json({ error: `Cardholder "${name}" with designation "${designation || ''}" already exists.` }, { status: 400 });
     }
 
     // Update the cardholder details
@@ -48,8 +59,7 @@ export async function PUT(
         name,
         designation,
         photoUrl,
-        customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
-        uniqueKey,
+        customFields: JSON.stringify(custom),
         cardSerial: cardholder.cardSerial,
       },
     });

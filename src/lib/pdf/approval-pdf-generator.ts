@@ -204,19 +204,20 @@ export async function generateApprovalPdfClient(
       const cardholder = cardholders[idx];
       const pageItemIdx = idx - startIdx;
 
+      const customData = typeof cardholder.customFields === 'string'
+        ? JSON.parse(cardholder.customFields || '{}')
+        : (cardholder.customFields || {});
+      const chUniqueKey = cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || null;
+
       const clientCardholder = {
         id: cardholder.id,
         name: cardholder.name,
         designation: cardholder.designation,
         photoUrl: cardholder.photoUrl,
         cardSerial: cardholder.cardSerial,
-        uniqueKey: cardholder.uniqueKey || null,
+        uniqueKey: chUniqueKey,
         customFields: typeof cardholder.customFields === 'string' ? cardholder.customFields : JSON.stringify(cardholder.customFields || {}),
       };
-
-      const customData = typeof cardholder.customFields === 'string'
-        ? JSON.parse(cardholder.customFields || '{}')
-        : (cardholder.customFields || {});
 
       let formattedValidTill = '';
       if (parsedValidTill) {
@@ -228,8 +229,8 @@ export async function generateApprovalPdfClient(
       const cardholderData: Record<string, any> = {
         name: cardholder.name,
         designation: cardholder.designation || '',
-        id: cardholder.uniqueKey || '',
-        uniqueKey: cardholder.uniqueKey || '',
+        id: chUniqueKey || '',
+        uniqueKey: chUniqueKey || '',
         validTill: formattedValidTill,
         ...customData,
       };
@@ -295,8 +296,8 @@ export async function generateApprovalPdfClient(
         });
 
         let currentY = yOffset - 53;
-        const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
-          ? cardholder.uniqueKey
+        const displayId = (chUniqueKey && String(chUniqueKey).trim() !== '')
+          ? chUniqueKey
           : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder, 'id'));
 
         if (displayId) {
@@ -396,8 +397,8 @@ export async function generateApprovalPdfClient(
         });
 
         const detailsList: string[] = [];
-        const displayId = (cardholder.uniqueKey && String(cardholder.uniqueKey).trim() !== '')
-          ? cardholder.uniqueKey
+        const displayId = (chUniqueKey && String(chUniqueKey).trim() !== '')
+          ? chUniqueKey
           : (getResolvedFieldValue('uniqueKey', cardholderData, cardholder) || getResolvedFieldValue('id', cardholderData, cardholder, 'id'));
 
         if (displayId) {

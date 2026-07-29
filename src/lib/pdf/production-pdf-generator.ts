@@ -230,13 +230,25 @@ export async function generateProductionPdfClient(
         backsY = 2 * centerY - frontsY - cHeight;
       }
 
+      let customObj = {};
+      if (cardholder.customFields) {
+        if (typeof cardholder.customFields === 'string') {
+          try {
+            customObj = JSON.parse(cardholder.customFields);
+          } catch(e) {}
+        } else if (typeof cardholder.customFields === 'object') {
+          customObj = cardholder.customFields || {};
+        }
+      }
+      const chUniqueKey = cardholder.uniqueKey || (customObj as any).uniqueKey || (customObj as any).id || (customObj as any).unique_key || null;
+
       const clientCardholder = {
         id: cardholder.id,
         name: cardholder.name,
         designation: cardholder.designation,
         photoUrl: cardholder.photoUrl,
         cardSerial: cardholder.cardSerial,
-        uniqueKey: cardholder.uniqueKey || null,
+        uniqueKey: chUniqueKey,
         customFields: typeof cardholder.customFields === 'string' ? cardholder.customFields : JSON.stringify(cardholder.customFields || {}),
       };
 
