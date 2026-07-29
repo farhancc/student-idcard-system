@@ -1409,11 +1409,21 @@ export default function ClientDetailsPage() {
           if (fieldName === 'name' || fieldName === 'fullname') {
             hasValue = !!ch.name && ch.name.trim().length > 0;
           } else if (fieldName === 'designation' || fieldName === 'role') {
-            hasValue = !!ch.designation && ch.designation.trim().length > 0;
+            const hasCustomDesignation = Object.entries(custom).some(([k, v]) => {
+              const kc = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return (kc === 'designation' || kc === 'role' || kc === 'class' || kc === 'grade' || kc === 'standard' || kc === 'position' || kc === 'post') &&
+                     v !== undefined && v !== null && String(v).trim().length > 0;
+            });
+            hasValue = (!!ch.designation && ch.designation.trim().length > 0) || hasCustomDesignation;
           } else if (fieldName === 'photo' || fieldName === 'photourl' || fieldName === 'avatar' || fieldName === 'profile') {
             hasValue = !!ch.photoUrl && ch.photoUrl.trim().length > 0;
           } else if (fieldName === 'uniquekey' || fieldName === 'id' || f.type === 'id') {
-            hasValue = !!ch.uniqueKey && ch.uniqueKey.trim().length > 0;
+            const hasCustomId = Object.entries(custom).some(([k, v]) => {
+              const kc = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return (kc === 'uniquekey' || kc === 'id' || kc === 'unique_key') &&
+                     v !== undefined && v !== null && String(v).trim().length > 0;
+            });
+            hasValue = (!!ch.uniqueKey && ch.uniqueKey.trim().length > 0) || hasCustomId;
           } else {
             const targetLower = f.field.toLowerCase().trim();
             let val = undefined;

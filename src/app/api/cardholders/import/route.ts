@@ -112,9 +112,15 @@ export async function POST(request: Request) {
     };
 
     const firstRowHeaders = Object.keys(rawData[0]);
-    const nameCol = mapping.name || getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name']) || 'name';
-    const designationCol = mapping.designation || getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title']) || 'designation';
-    const photoUrlCol = mapping.photoUrl || getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl';
+    const nameCol = (mapping.name !== undefined && mapping.name !== null)
+      ? mapping.name
+      : (getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name']) || 'name');
+    const designationCol = (mapping.designation !== undefined && mapping.designation !== null)
+      ? mapping.designation
+      : (getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title']) || 'designation');
+    const photoUrlCol = (mapping.photoUrl !== undefined && mapping.photoUrl !== null)
+      ? mapping.photoUrl
+      : (getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl');
 
     // 3. Validate against template required fields (if templateId provided)
     const validationErrors: Array<{ row: number; name: string; missingFields: string[] }> = [];
@@ -206,8 +212,8 @@ export async function POST(request: Request) {
       const name = String(row[nameCol] || '').trim();
       if (!name) continue; // skip blank name rows
 
-      const designation = row[designationCol] ? String(row[designationCol]).trim() : null;
-      const photoUrl = row[photoUrlCol] ? String(row[photoUrlCol]).trim() : null;
+      const designation = (designationCol && row[designationCol]) ? String(row[designationCol]).trim() : null;
+      const photoUrl = (photoUrlCol && row[photoUrlCol]) ? String(row[photoUrlCol]).trim() : null;
 
       // Extract custom fields (all columns not mapped to core fields)
       const custom: Record<string, any> = {};

@@ -275,6 +275,14 @@ export function getResolvedFieldValue(
     if (cardholder.designation && String(cardholder.designation).trim() !== '' && !isPlaceholderValue(cardholder.designation)) {
       return cardholder.designation;
     }
+    const designationAliases = ['designation', 'role', 'class', 'grade', 'standard', 'position', 'post', 'jobtitle'];
+    for (const alias of designationAliases) {
+      for (const [k, v] of Object.entries(customObj)) {
+        if (clean(k) === clean(alias) && v !== undefined && v !== null && String(v).trim() !== '' && !isPlaceholderValue(v)) {
+          return String(v).trim();
+        }
+      }
+    }
   }
 
   // PHOTO URL resolution fallback
