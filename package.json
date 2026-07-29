@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "postinstall": "prisma generate",
-    "build": "prisma migrate deploy && prisma generate && next build",
+    "postinstall": "export DIRECT_URL=\"$DATABASE_URL\" && prisma generate",
+    "build": "export DIRECT_URL=\"$DATABASE_URL\" && prisma migrate deploy && prisma generate && next build",
     "db:migrate": "prisma migrate deploy",
     "start": "next start",
     "lint": "eslint"
