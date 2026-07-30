@@ -14,7 +14,14 @@ export async function POST(request: Request) {
 
     // Fetch the template
     const template = await prisma.cardTemplate.findFirst({
-      where: { id: Number(templateId), isPublic: true, isModerated: false },
+      where: {
+        id: Number(templateId),
+        isModerated: false,
+        OR: [
+          { isPublic: true },
+          { pressId: null },
+        ],
+      },
       select: {
         id: true, name: true, price: true, pressId: true,
         cardWidth: true, cardHeight: true,
@@ -31,14 +38,6 @@ export async function POST(request: Request) {
     // Can't buy your own template
     if (template.pressId === buyerPressId) {
       return NextResponse.json({ error: 'You cannot purchase your own template' }, { status: 400 });
-    }
-
-    // Check if already purchased
-    const alreadyOwned = await prisma.templatePurchase.findFirst({
-      where: { buyerPressId, templateId: template.id },
-    });
-    if (alreadyOwned) {
-      return NextResponse.json({ error: 'You already own this template' }, { status: 400 });
     }
 
     const price = template.price;

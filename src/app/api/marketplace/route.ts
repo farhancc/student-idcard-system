@@ -24,8 +24,12 @@ export async function GET(request: Request) {
     const priceFilter = searchParams.get('price') || ''; // 'free' | 'paid'
 
     const where: any = {
-      isPublic: true,
       isModerated: false,
+      isLatest: true,
+      OR: [
+        { isPublic: true },
+        { pressId: null },
+      ],
     };
 
     if (category) where.category = category;
@@ -43,6 +47,9 @@ export async function GET(request: Request) {
     if (hasPhoto) where.frontFields = { contains: '"photo"' };
     if (hasQr) where.frontFields = { contains: '"qr"' };
     if (hasBarcode) where.frontFields = { contains: '"barcode"' };
+
+    const pressIdStr = request.headers.get('x-press-id');
+    const pressId = pressIdStr ? Number(pressIdStr) : null;
 
     let orderBy: any = { likes: 'desc' };
     if (sort === 'newest') orderBy = { createdAt: 'desc' };
@@ -80,6 +87,32 @@ export async function GET(request: Request) {
       }),
       prisma.cardTemplate.count({ where }),
     ]);
+
+    const templateIds = templates.map(t => t.id);
+
+    let likedSet = new Set<number>();
+    let reportedSet = new Set<number>();
+    let purchasedSet = new Set<number>();
+
+    if (pressId && templateIds.length > 0) {
+      const [userLikes, userReports, userPurchases] = await Promise.all([
+        prisma.templateLike.findMany({
+          where: { pressId, templateId: { in: templateIds } },
+          select: { templateId: true },
+        }),
+        prisma.templateReport.findMany({
+          where: { pressId, templateId: { in: templateIds } },
+          select: { templateId: true },
+        }),
+        prisma.templatePurchase.findMany({
+          where: { buyerPressId: pressId, templateId: { in: templateIds } },
+          select: { templateId: true },
+        }),
+      ]);
+      likedSet = new Set(userLikes.map(l => l.templateId));
+      reportedSet = new Set(userReports.map(r => r.templateId));
+      purchasedSet = new Set(userPurchases.map(p => p.templateId));
+    }
 
     // Enrich: detect field types & fields summary without exposing exact X/Y coordinates
     const enriched = templates.map(t => {
@@ -124,6 +157,9 @@ export async function GET(request: Request) {
         sellerName: t.pressId ? t.press?.name : 'IDexo Official',
         isOfficial: !t.pressId,
         fieldTypes,
+        isLiked: likedSet.has(t.id),
+        isReported: reportedSet.has(t.id),
+        isPurchased: purchasedSet.has(t.id),
         hasPhoto: fieldTypes.includes('image') || fieldTypes.includes('photo'),
         hasQr: fieldTypes.includes('qr'),
         hasBarcode: fieldTypes.includes('barcode'),

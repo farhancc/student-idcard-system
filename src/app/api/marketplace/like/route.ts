@@ -1,28 +1,68 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// POST /api/marketplace/like?templateId=X   → toggle like
+// POST /api/marketplace/like?templateId=X → toggle like for current press
 export async function POST(request: Request) {
   try {
     const pressIdStr = request.headers.get('x-press-id');
     if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const pressId = Number(pressIdStr);
 
     const { searchParams } = new URL(request.url);
     const templateId = Number(searchParams.get('templateId'));
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
     const template = await prisma.cardTemplate.findFirst({
-      where: { id: templateId, isPublic: true },
+      where: {
+        id: templateId,
+        OR: [
+          { isPublic: true },
+          { pressId: null },
+        ],
+      },
       select: { id: true, likes: true },
     });
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    const updated = await prisma.cardTemplate.update({
-      where: { id: templateId },
-      data: { likes: { increment: 1 } },
+    // Check if already liked by this press
+    const existingLike = await prisma.templateLike.findUnique({
+      where: {
+        pressId_templateId: { pressId, templateId },
+      },
     });
 
-    return NextResponse.json({ success: true, likes: updated.likes });
+    let liked = false;
+    let newLikesCount = template.likes;
+
+    if (existingLike) {
+      // Unlike
+      await prisma.$transaction([
+        prisma.templateLike.delete({
+          where: { id: existingLike.id },
+        }),
+        prisma.cardTemplate.update({
+          where: { id: templateId },
+          data: { likes: { decrement: 1 } },
+        }),
+      ]);
+      liked = false;
+      newLikesCount = Math.max(0, template.likes - 1);
+    } else {
+      // Like
+      await prisma.$transaction([
+        prisma.templateLike.create({
+          data: { pressId, templateId },
+        }),
+        prisma.cardTemplate.update({
+          where: { id: templateId },
+          data: { likes: { increment: 1 } },
+        }),
+      ]);
+      liked = true;
+      newLikesCount = template.likes + 1;
+    }
+
+    return NextResponse.json({ success: true, liked, likes: newLikesCount });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

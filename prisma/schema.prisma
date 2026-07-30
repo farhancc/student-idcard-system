@@ -39,6 +39,8 @@ model Press {
   activities     OrderActivityLog[]
   creditRequests CreditRequest[]
   templatePurchases TemplatePurchase[] @relation("TemplatePurchases")
+  templateLikes     TemplateLike[]
+  templateReports   TemplateReport[]
 
   @@map("press")
 }
@@ -144,6 +146,8 @@ model CardTemplate {
   cardholders   Cardholder[]
   clientAssignments TemplateClientAssignment[]
   fields        TemplateField[]
+  templateLikes TemplateLike[]
+  templateReports TemplateReport[]
 
   @@map("card_templates")
 }
@@ -591,4 +595,29 @@ model TemplatePurchase {
   @@index([buyerPressId])
   @@index([templateId])
   @@map("template_purchases")
+}
+
+model TemplateLike {
+  id         Int          @id @default(autoincrement())
+  pressId    Int          @map("press_id")
+  press      Press        @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  templateId Int          @map("template_id")
+  template   CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([pressId, templateId])
+  @@map("template_likes")
+}
+
+model TemplateReport {
+  id         Int          @id @default(autoincrement())
+  pressId    Int          @map("press_id")
+  press      Press        @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  templateId Int          @map("template_id")
+  template   CardTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  reason     String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  @@unique([pressId, templateId])
+  @@map("template_reports")
 }

@@ -33,6 +33,9 @@ interface Template {
   hasCdr: boolean; hasAi: boolean; hasPsd: boolean; hasPdf: boolean;
   cardWidth: number; cardHeight: number; createdAt: string;
   fieldsSummary?: TemplateField[];
+  isLiked?: boolean;
+  isReported?: boolean;
+  isPurchased?: boolean;
 }
 
 export default function MarketplacePage() {
@@ -44,6 +47,10 @@ export default function MarketplacePage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
+
+  // Like & Report tracking per press
+  const [likedSet, setLikedSet] = useState<Set<number>>(new Set());
+  const [reportedSet, setReportedSet] = useState<Set<number>>(new Set());
 
   // Filters
   const [search, setSearch] = useState('');
@@ -93,9 +100,14 @@ export default function MarketplacePage() {
       });
       const res = await fetch(`/api/marketplace?${params}`);
       const data = await res.json();
-      setTemplates(data.templates || []);
+      const fetched: Template[] = data.templates || [];
+      setTemplates(fetched);
       setTotal(data.pagination?.total || 0);
       setPages(data.pagination?.pages || 1);
+
+      setLikedSet(new Set(fetched.filter(t => t.isLiked).map(t => t.id)));
+      setReportedSet(new Set(fetched.filter(t => t.isReported).map(t => t.id)));
+      setPurchased(new Set(fetched.filter(t => t.isPurchased).map(t => t.id)));
     } catch {
       toast('Failed to load marketplace', 'error');
     } finally {
@@ -146,20 +158,55 @@ export default function MarketplacePage() {
     if (liking) return;
     setLiking(t.id);
     try {
-      await fetch(`/api/marketplace/like?templateId=${t.id}`, { method: 'POST' });
-      setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, likes: x.likes + 1 } : x));
+      const res = await fetch(`/api/marketplace/like?templateId=${t.id}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update like status');
+
+      const isNowLiked = data.liked;
+      const newLikesCount = data.likes;
+
+      setLikedSet(prev => {
+        const next = new Set(prev);
+        if (isNowLiked) next.add(t.id);
+        else next.delete(t.id);
+        return next;
+      });
+
+      setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, likes: newLikesCount, isLiked: isNowLiked } : x));
       if (selectedTemplate && selectedTemplate.id === t.id) {
-        setSelectedTemplate(prev => prev ? { ...prev, likes: prev.likes + 1 } : null);
+        setSelectedTemplate(prev => prev ? { ...prev, likes: newLikesCount, isLiked: isNowLiked } : null);
       }
+    } catch (err: any) {
+      toast(err.message || 'Error updating like status', 'error');
     } finally {
       setLiking(null);
     }
   };
 
   const handleReport = async (t: Template) => {
+    if (reportedSet.has(t.id)) {
+      toast('You have already reported this template.', 'info');
+      return;
+    }
     if (!confirm(`Report "${t.name}" for inappropriate content?`)) return;
-    await fetch(`/api/marketplace/report?templateId=${t.id}`, { method: 'POST' });
-    toast('Report submitted. Thank you.', 'success');
+    try {
+      const res = await fetch(`/api/marketplace/report?templateId=${t.id}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.alreadyReported) {
+          setReportedSet(prev => new Set([...prev, t.id]));
+        }
+        throw new Error(data.error || 'Report submission failed');
+      }
+      setReportedSet(prev => new Set([...prev, t.id]));
+      setTemplates(prev => prev.map(x => x.id === t.id ? { ...x, isReported: true, reports: (x.reports || 0) + 1 } : x));
+      if (selectedTemplate && selectedTemplate.id === t.id) {
+        setSelectedTemplate(prev => prev ? { ...prev, isReported: true, reports: (prev.reports || 0) + 1 } : null);
+      }
+      toast('Report submitted. Thank you.', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Failed to submit report', 'error');
+    }
   };
 
   const handleDownload = (templateId: number, format: string) => {
@@ -284,6 +331,8 @@ export default function MarketplacePage() {
                   isPurchased={purchased.has(t.id)}
                   isPurchasing={purchasing === t.id}
                   isLiking={liking === t.id}
+                  isLiked={likedSet.has(t.id)}
+                  isReported={reportedSet.has(t.id)}
                   onSelect={() => setSelectedTemplate(t)}
                   onPurchase={() => handlePurchase(t)}
                   onLike={() => handleLike(t)}
@@ -349,6 +398,8 @@ export default function MarketplacePage() {
           isPurchased={purchased.has(selectedTemplate.id)}
           isPurchasing={purchasing === selectedTemplate.id}
           isLiking={liking === selectedTemplate.id}
+          isLiked={likedSet.has(selectedTemplate.id)}
+          isReported={reportedSet.has(selectedTemplate.id)}
           onClose={() => setSelectedTemplate(null)}
           onPurchase={() => handlePurchase(selectedTemplate)}
           onLike={() => handleLike(selectedTemplate)}
@@ -361,11 +412,13 @@ export default function MarketplacePage() {
   );
 }
 
-function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, onSelect, onPurchase, onLike, onReport, onDownload }: {
+function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLiked = false, isReported = false, onSelect, onPurchase, onLike, onReport, onDownload }: {
   template: Template;
   isPurchased: boolean;
   isPurchasing: boolean;
   isLiking: boolean;
+  isLiked?: boolean;
+  isReported?: boolean;
   onSelect: () => void;
   onPurchase: () => void;
   onLike: () => void;
@@ -464,8 +517,8 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, onSele
 
         {/* Likes + View Details Trigger */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <Heart size={12} /> {t.likes}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: isLiked ? '#ef4444' : undefined, fontWeight: isLiked ? '600' : 'normal' }}>
+            <Heart size={12} fill={isLiked ? '#ef4444' : 'none'} color={isLiked ? '#ef4444' : 'currentColor'} /> {t.likes}
           </div>
           <span style={{ color: 'var(--primary)', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Eye size={12} /> View Details
@@ -474,29 +527,38 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, onSele
 
         {/* Actions */}
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '7px' }} onClick={e => e.stopPropagation()}>
-          {isPurchased ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.82rem', fontWeight: '600' }}>
-              <CheckCircle size={14} /> In Your Library
+          {isPurchased && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#10b981', fontSize: '0.75rem', fontWeight: '600' }}>
+              <CheckCircle size={13} /> In Your Library
             </div>
-          ) : (
-            <button
-              className="btn btn-primary"
-              style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center' }}
-              onClick={onPurchase}
-              disabled={isPurchasing}
-            >
-              {isPurchasing ? <div className="spinner" style={{ width: '14px', height: '14px' }} /> : <ShoppingCart size={13} />}
-              {isPurchasing ? 'Processing...' : t.price === 0 ? 'Add to Library' : `Buy · ${t.price} cr`}
-            </button>
           )}
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center' }}
+            onClick={onPurchase}
+            disabled={isPurchasing}
+          >
+            {isPurchasing ? <div className="spinner" style={{ width: '14px', height: '14px' }} /> : <ShoppingCart size={13} />}
+            {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add to Library Again' : `Buy Again · ${t.price} cr`) : (t.price === 0 ? 'Add to Library' : `Buy · ${t.price} cr`)}
+          </button>
 
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
               onClick={onLike}
               disabled={isLiking}
-              style={{ flex: 1, padding: '6px', background: 'transparent', border: '1px solid var(--glass-border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+              style={{
+                flex: 1, padding: '6px',
+                background: isLiked ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
+                border: `1px solid ${isLiked ? 'rgba(239, 68, 68, 0.4)' : 'var(--glass-border)'}`,
+                borderRadius: '8px', cursor: 'pointer',
+                color: isLiked ? '#ef4444' : 'var(--muted)',
+                fontSize: '0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                fontWeight: isLiked ? '600' : 'normal',
+                transition: 'all 0.15s',
+              }}
             >
-              <Heart size={12} /> Like
+              <Heart size={12} fill={isLiked ? '#ef4444' : 'none'} color={isLiked ? '#ef4444' : 'currentColor'} />
+              {isLiked ? 'Liked' : 'Like'}
             </button>
             {formats.length > 0 && isPurchased && (
               <div style={{ position: 'relative' }}>
@@ -519,10 +581,19 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, onSele
             )}
             <button
               onClick={onReport}
-              style={{ padding: '6px', background: 'transparent', border: '1px solid var(--glass-border)', borderRadius: '8px', cursor: 'pointer', color: 'var(--muted)' }}
-              title="Report this template"
+              disabled={isReported}
+              style={{
+                padding: '6px',
+                background: isReported ? 'rgba(239, 68, 68, 0.1)' : 'transparent',
+                border: `1px solid ${isReported ? 'rgba(239, 68, 68, 0.3)' : 'var(--glass-border)'}`,
+                borderRadius: '8px',
+                cursor: isReported ? 'not-allowed' : 'pointer',
+                color: isReported ? '#ef4444' : 'var(--muted)',
+                opacity: isReported ? 0.7 : 1,
+              }}
+              title={isReported ? 'You have reported this template' : 'Report this template'}
             >
-              <Flag size={12} />
+              <Flag size={12} fill={isReported ? '#ef4444' : 'none'} color={isReported ? '#ef4444' : 'currentColor'} />
             </button>
           </div>
         </div>
@@ -536,6 +607,8 @@ function TemplateDetailModal({
   isPurchased,
   isPurchasing,
   isLiking,
+  isLiked = false,
+  isReported = false,
   onClose,
   onPurchase,
   onLike,
@@ -546,6 +619,8 @@ function TemplateDetailModal({
   isPurchased: boolean;
   isPurchasing: boolean;
   isLiking: boolean;
+  isLiked?: boolean;
+  isReported?: boolean;
   onClose: () => void;
   onPurchase: () => void;
   onLike: () => void;
@@ -828,22 +903,36 @@ function TemplateDetailModal({
               onClick={onLike}
               disabled={isLiking}
               className="btn btn-secondary"
-              style={{ fontSize: '0.82rem', padding: '8px 14px', gap: '6px' }}
+              style={{
+                fontSize: '0.82rem', padding: '8px 14px', gap: '6px',
+                color: isLiked ? '#ef4444' : undefined,
+                borderColor: isLiked ? 'rgba(239, 68, 68, 0.4)' : undefined,
+                background: isLiked ? 'rgba(239, 68, 68, 0.12)' : undefined,
+                fontWeight: isLiked ? '600' : 'normal',
+              }}
             >
-              <Heart size={14} /> {t.likes} Likes
+              <Heart size={14} fill={isLiked ? '#ef4444' : 'none'} color={isLiked ? '#ef4444' : 'currentColor'} /> {t.likes} {isLiked ? 'Liked' : 'Likes'}
             </button>
             <button
               onClick={onReport}
+              disabled={isReported}
               className="btn btn-secondary"
-              style={{ fontSize: '0.82rem', padding: '8px 14px', gap: '6px' }}
-              title="Report this template"
+              style={{
+                fontSize: '0.82rem', padding: '8px 14px', gap: '6px',
+                color: isReported ? '#ef4444' : undefined,
+                borderColor: isReported ? 'rgba(239, 68, 68, 0.3)' : undefined,
+                background: isReported ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                opacity: isReported ? 0.7 : 1,
+                cursor: isReported ? 'not-allowed' : 'pointer',
+              }}
+              title={isReported ? 'You have reported this template' : 'Report this template'}
             >
-              <Flag size={14} /> Report
+              <Flag size={14} fill={isReported ? '#ef4444' : 'none'} color={isReported ? '#ef4444' : 'currentColor'} /> {isReported ? 'Reported' : 'Report'}
             </button>
           </div>
 
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            {isPurchased ? (
+            {isPurchased && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ color: '#10b981', fontSize: '0.85rem', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CheckCircle size={16} /> In Your Library
@@ -858,17 +947,16 @@ function TemplateDetailModal({
                   </div>
                 )}
               </div>
-            ) : (
-              <button
-                className="btn btn-primary"
-                style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px' }}
-                onClick={onPurchase}
-                disabled={isPurchasing}
-              >
-                {isPurchasing ? <div className="spinner" style={{ width: '16px', height: '16px' }} /> : <ShoppingCart size={16} />}
-                {isPurchasing ? 'Processing...' : t.price === 0 ? 'Add to Library' : `Buy Template · ${t.price} Credits`}
-              </button>
             )}
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px' }}
+              onClick={onPurchase}
+              disabled={isPurchasing}
+            >
+              {isPurchasing ? <div className="spinner" style={{ width: '16px', height: '16px' }} /> : <ShoppingCart size={16} />}
+              {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add Again' : `Buy Again · ${t.price} Credits`) : (t.price === 0 ? 'Add to Library' : `Buy Template · ${t.price} Credits`)}
+            </button>
           </div>
         </div>
 
