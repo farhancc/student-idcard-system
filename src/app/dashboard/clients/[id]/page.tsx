@@ -1078,20 +1078,22 @@ export default function ClientDetailsPage() {
         const front = JSON.parse(tmpl.frontFields || '[]');
         const back = JSON.parse(tmpl.backFields || '[]');
         allFields = [...front, ...back];
-        const mappedFields = allFields.map(f => f.field);
+        const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+        const mappedFields = allFields.map(f => cleanFieldKey(f.field));
 
-        hasName = mappedFields.includes('name') || mappedFields.includes('fullName');
+        hasName = mappedFields.includes('name') || mappedFields.includes('fullname') || mappedFields.includes('studentname');
         hasDesignation = mappedFields.includes('designation') || mappedFields.includes('role');
         
         const imageFields = allFields.filter(f => f.type === 'image');
-        const mainPhoto = imageFields.find(f => 
-          f.field === 'photo' || 
-          f.field === 'avatar' || 
-          f.field === 'photoUrl' ||
-          f.field.toLowerCase().includes('photo') || 
-          f.field.toLowerCase().includes('avatar') || 
-          f.field.toLowerCase().includes('profile')
-        ) || null;
+        const mainPhoto = imageFields.find(f => {
+          const clean = cleanFieldKey(f.field);
+          return clean === 'photo' || 
+            clean === 'avatar' || 
+            clean === 'photourl' ||
+            clean.includes('photo') || 
+            clean.includes('avatar') || 
+            clean.includes('profile');
+        }) || null;
         hasPhoto = mainPhoto !== null;
         
         hasUniqueKey = false;
@@ -1106,17 +1108,19 @@ export default function ClientDetailsPage() {
 
         allFields.forEach(f => {
           const isMainPhotoField = mainPhoto && f.field === mainPhoto.field;
+          const clean = cleanFieldKey(f.field);
           if (
-            f.field !== 'name' &&
-            f.field !== 'fullName' &&
-            f.field !== 'designation' &&
-            f.field !== 'role' &&
-            f.field !== 'photo' &&
-            f.field !== 'avatar' &&
-            f.field !== 'photoUrl' &&
-            f.field !== 'validTill' &&
-            f.field !== 'validTillDate' &&
-            f.field !== 'cardSerial' &&
+            clean !== 'name' &&
+            clean !== 'fullname' &&
+            clean !== 'studentname' &&
+            clean !== 'designation' &&
+            clean !== 'role' &&
+            clean !== 'photo' &&
+            clean !== 'avatar' &&
+            clean !== 'photourl' &&
+            clean !== 'validtill' &&
+            clean !== 'validtilldate' &&
+            clean !== 'cardserial' &&
             !isMainPhotoField
           ) {
             const foundVal = getCustomFieldValueCaseInsensitive(existingCustom, f.field);

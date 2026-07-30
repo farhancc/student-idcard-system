@@ -115,38 +115,43 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'id') && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textFields.map(f => f.field)));
         
+        const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+
         // Remove standard and system ones from customFields list to handle separately
-        const filteredKeys = keys.filter(k => 
-          k !== 'name' && 
-          k !== 'fullName' &&
-          k !== 'designation' && 
-          k !== 'role' &&
-          k !== 'photo' && 
-          k !== 'avatar' &&
-          k !== 'validTill' &&
-          k !== 'validTillDate' &&
-          k !== 'cardSerial'
-        );
+        const filteredKeys = keys.filter(k => {
+          const clean = cleanFieldKey(k);
+          return clean !== 'name' && 
+            clean !== 'fullname' &&
+            clean !== 'studentname' && 
+            clean !== 'designation' && 
+            clean !== 'role' &&
+            clean !== 'photo' && 
+            clean !== 'avatar' &&
+            clean !== 'validtill' &&
+            clean !== 'validtilldate' &&
+            clean !== 'cardserial';
+        });
         setFormFields(filteredKeys);
 
         // Find all non-restricted image fields
         const imageFields = allFields.filter(f => f.type === 'image' && !restrictedFields.has(f.field));
         // Main photo field is named 'photo' or 'avatar', or the first one if neither exists
-        const mainPhoto = imageFields.find(f => 
-          f.field === 'photo' || 
-          f.field === 'avatar' || 
-          f.field === 'photoUrl' ||
-          f.field.toLowerCase().includes('photo') || 
-          f.field.toLowerCase().includes('avatar') || 
-          f.field.toLowerCase().includes('profile')
-        ) || null;
+        const mainPhoto = imageFields.find(f => {
+          const clean = cleanFieldKey(f.field);
+          return clean === 'photo' || 
+            clean === 'avatar' || 
+            clean === 'photourl' ||
+            clean.includes('photo') || 
+            clean.includes('avatar') || 
+            clean.includes('profile');
+        }) || null;
         // Custom image fields are all other image fields
         const customImages = imageFields.filter(f => f !== mainPhoto);
         setCustomImgFields(customImages);
 
         // Detect visibility of standard fields (excluding restricted fields)
-        const mappedFields = allFields.map(f => f.field);
-        setHasName((mappedFields.includes('name') || mappedFields.includes('fullName')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
+        const mappedFields = allFields.map(f => cleanFieldKey(f.field));
+        setHasName((mappedFields.includes('name') || mappedFields.includes('fullname') || mappedFields.includes('studentname')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
         setHasDesignation((mappedFields.includes('designation') || mappedFields.includes('role')) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
         setHasPhoto(mainPhoto !== null);
 

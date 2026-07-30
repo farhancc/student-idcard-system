@@ -186,29 +186,34 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       // Include user-fillable text and ID fields
       const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id');
       const keys = Array.from(new Set(textFields.map(f => f.field)));
-      const filteredKeys = keys.filter(k =>
-        k !== 'name' &&
-        k !== 'fullName' &&
-        k !== 'designation' &&
-        k !== 'role' &&
-        k !== 'photo' &&
-        k !== 'avatar' &&
-        k !== 'validTill' &&
-        k !== 'validTillDate' &&
-        k !== 'cardSerial'
-      );
+      const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+
+      const filteredKeys = keys.filter(k => {
+        const clean = cleanFieldKey(k);
+        return clean !== 'name' && 
+          clean !== 'fullname' &&
+          clean !== 'studentname' && 
+          clean !== 'designation' && 
+          clean !== 'role' &&
+          clean !== 'photo' && 
+          clean !== 'avatar' &&
+          clean !== 'validtill' &&
+          clean !== 'validtilldate' &&
+          clean !== 'cardserial';
+      });
       setFormFields(filteredKeys);
 
       // Find all image fields
       const imageFields = allFields.filter(f => f.type === 'image');
-      const mainPhoto = imageFields.find(f => 
-        f.field === 'photo' || 
-        f.field === 'avatar' || 
-        f.field === 'photoUrl' ||
-        f.field.toLowerCase().includes('photo') || 
-        f.field.toLowerCase().includes('avatar') || 
-        f.field.toLowerCase().includes('profile')
-      ) || null;
+      const mainPhoto = imageFields.find(f => {
+        const clean = cleanFieldKey(f.field);
+        return clean === 'photo' || 
+          clean === 'avatar' || 
+          clean === 'photourl' ||
+          clean.includes('photo') || 
+          clean.includes('avatar') || 
+          clean.includes('profile');
+      }) || null;
       const customImages = imageFields.filter(f => f !== mainPhoto);
       setCustomImgFields(customImages);
 
@@ -221,7 +226,10 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         seen.add(mainPhoto.field);
       }
       
-      const nameField = allFields.find(f => f.field === 'name' || f.field === 'fullName');
+      const nameField = allFields.find(f => {
+        const clean = cleanFieldKey(f.field);
+        return clean === 'name' || clean === 'fullname' || clean === 'studentname';
+      });
       if (nameField) {
         uniqueFields.push({ field: nameField.field, type: 'text', isName: true });
         seen.add(nameField.field);
@@ -240,8 +248,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       });
       setTemplateFields(uniqueFields);
 
-      const mappedFields = allFields.map(f => f.field);
-      setHasName(mappedFields.includes('name') || mappedFields.includes('fullName'));
+      const mappedFields = allFields.map(f => cleanFieldKey(f.field));
+      setHasName(mappedFields.includes('name') || mappedFields.includes('fullname') || mappedFields.includes('studentname'));
       setHasDesignation(mappedFields.includes('designation') || mappedFields.includes('role'));
       setHasPhoto(mainPhoto !== null);
 
@@ -283,13 +291,32 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const openEditModal = (ch: Cardholder) => {
     setModalMode('edit');
     setEditingCardholderId(ch.id);
-    setName(ch.name);
-    setDesignation(ch.designation || '');
-    setPhotoUrl(ch.photoUrl || '');
+    
     let parsedCustom: Record<string, string> = {};
     try {
       parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
     } catch { parsedCustom = {}; }
+
+    let resolvedName = ch.name;
+    let resolvedDesignation = ch.designation || '';
+
+    if ((!resolvedName || resolvedName === 'Cardholder') && parsedCustom) {
+      const customName = getCustomFieldValueCaseInsensitive(parsedCustom, 'name') ||
+                         getCustomFieldValueCaseInsensitive(parsedCustom, 'fullName') ||
+                         getCustomFieldValueCaseInsensitive(parsedCustom, 'NAME');
+      if (customName) resolvedName = customName;
+    }
+    if (!resolvedDesignation && parsedCustom) {
+      const customDesig = getCustomFieldValueCaseInsensitive(parsedCustom, 'designation') ||
+                          getCustomFieldValueCaseInsensitive(parsedCustom, 'role') ||
+                          getCustomFieldValueCaseInsensitive(parsedCustom, 'DESIGNATION');
+      if (customDesig) resolvedDesignation = customDesig;
+    }
+
+    setName(resolvedName);
+    setDesignation(resolvedDesignation);
+    setPhotoUrl(ch.photoUrl || '');
+    
     const finalCustom: Record<string, string> = {};
     formFields.forEach(k => { finalCustom[k] = getCustomFieldValueCaseInsensitive(parsedCustom, k) || ''; });
     customImgFields.forEach(imgField => { finalCustom[imgField.field] = getCustomFieldValueCaseInsensitive(parsedCustom, imgField.field) || ''; });
