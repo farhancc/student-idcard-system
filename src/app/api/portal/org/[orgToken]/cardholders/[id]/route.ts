@@ -25,7 +25,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
     }
 
-    const { name, designation, photoUrl, customFields, uniqueKey } = await request.json();
+    const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = await request.json();
 
     if (!name) {
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
@@ -40,16 +40,22 @@ export async function PUT(
     }
 
     // Check unique constraint if changed (name + designation, excluding this cardholder)
-    const existing = await prisma.cardholder.findFirst({
-      where: { 
-        clientId: share.clientId, 
-        name, 
-        designation: designation ?? null,
-        id: { not: cardholderId }
-      },
-    });
-    if (existing) {
-      return NextResponse.json({ error: `Cardholder "${name}" with designation "${designation || ''}" already exists.` }, { status: 400 });
+    if (!ignoreDuplicate) {
+      const existing = await prisma.cardholder.findFirst({
+        where: { 
+          clientId: share.clientId, 
+          name, 
+          designation: designation ?? null,
+          id: { not: cardholderId }
+        },
+      });
+      if (existing) {
+        return NextResponse.json({ 
+          duplicate: true,
+          error: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
+          message: `Cardholder "${name}" with designation "${designation || ''}" already exists.` 
+        }, { status: 400 });
+      }
     }
 
     // Update the cardholder details

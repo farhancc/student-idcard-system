@@ -423,8 +423,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   };
 
   // Save Cardholder (Submit handler)
-  const handleSaveCardholder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveCardholder = async (e?: React.FormEvent, force: boolean = false) => {
+    if (e) e.preventDefault();
     const finalName = hasName ? name : 'Cardholder';
     if (!finalName) return;
 
@@ -435,19 +435,32 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         designation: hasDesignation ? (designation || null) : null,
         photoUrl: hasPhoto ? (photoUrl || null) : null,
         customFields,
+        ignoreDuplicate: force,
       };
 
       const url = modalMode === 'add'
         ? `/api/portal/org/${orgToken}/cardholders`
-        : `/api/portal/org/[orgToken]/cardholders/${editingCardholderId}`; // Wait, let's keep the exact original template string: /api/portal/org/${orgToken}/cardholders/${editingCardholderId}
-      const res = await fetch(modalMode === 'add' ? `/api/portal/org/${orgToken}/cardholders` : `/api/portal/org/${orgToken}/cardholders/${editingCardholderId}`, {
+        : `/api/portal/org/${orgToken}/cardholders/${editingCardholderId}`;
+      const res = await fetch(url, {
         method: modalMode === 'add' ? 'POST' : 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
+        if (data.duplicate && !force) {
+          const confirmAdd = window.confirm(
+            `${data.message || 'A cardholder with this name and designation already exists.'}\n\nDo you want to save anyway?`
+          );
+          if (confirmAdd) {
+            setLoading(false);
+            handleSaveCardholder(undefined, true);
+            return;
+          } else {
+            throw new Error(data.message || 'Duplicate cardholder entry cancelled.');
+          }
+        }
         throw new Error(data.error || 'Failed to save cardholder details');
       }
 
