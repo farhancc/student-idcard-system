@@ -258,7 +258,7 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAnalytics(); }, []);
 
-  // 90-day archive automatic backup logic for Desktop client
+  // 6-month archive automatic backup logic for Desktop client
   useEffect(() => {
     const runArchiveBackup = async () => {
       // Check if running in desktop Electron client
@@ -271,7 +271,7 @@ export default function DashboardPage() {
 
         const resData = await response.json();
         if (resData.success && resData.data && resData.data.length > 0) {
-          console.log(`[Archive]: Found ${resData.data.length} client groups with expired records (> 90 days).`);
+          console.log(`[Archive]: Found ${resData.data.length} client groups with expired records (> 6 months).`);
           let totalPurged = 0;
 
           for (const group of resData.data) {
@@ -305,7 +305,7 @@ export default function DashboardPage() {
           }
 
           if (totalPurged > 0) {
-            toast(`Storage: Archived ${totalPurged} expired records (>90 days) to Documents/IDexo_Backups. Server storage freed.`, 'success', 8000);
+            toast(`Storage: Archived ${totalPurged} expired records (> 6 months) to Documents/IDexo_Backups. Server storage freed.`, 'success', 8000);
             fetchAnalytics();
           }
         }

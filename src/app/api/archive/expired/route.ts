@@ -9,14 +9,14 @@ export async function GET(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    // 90 days threshold
-    const date90DaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+    // 6 months (180 days) threshold
+    const date6MonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000);
 
     // Find all expired cardholders
     const cardholders = await prisma.cardholder.findMany({
       where: {
         pressId,
-        createdAt: { lt: date90DaysAgo },
+        createdAt: { lt: date6MonthsAgo },
       },
       include: {
         client: true,

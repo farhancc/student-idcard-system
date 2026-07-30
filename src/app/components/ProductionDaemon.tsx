@@ -752,9 +752,8 @@ export default function ProductionDaemon() {
                   } else {
                     backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
                   }
-                } else {
-                  const pageIndexForBack = pageCount > 1 ? 1 : 0;
-                  const [bPage] = await pdfDoc.embedPdf(customDoc, [pageIndexForBack]);
+                } else if (pageCount > 1) {
+                  const [bPage] = await pdfDoc.embedPdf(customDoc, [1]);
                   backEmbeddedPdf = bPage;
                 }
               }
@@ -773,8 +772,6 @@ export default function ProductionDaemon() {
                   } else {
                     backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
                   }
-                } else {
-                  backEmbeddedImg = frontEmbeddedImg;
                 }
               }
             }

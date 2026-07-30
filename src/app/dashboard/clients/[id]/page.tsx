@@ -349,7 +349,7 @@ export default function ClientDetailsPage() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState('');
 
-  const handleDownloadAllDataZip = async (targetCardholders?: any[]) => {
+  const handleDownloadAllDataZip = async (targetCardholders?: any[], templateName?: string) => {
     try {
       const listToExport = targetCardholders || cardholders;
       if (listToExport.length === 0) {
@@ -608,7 +608,9 @@ export default function ClientDetailsPage() {
       setZipProgress('Compiling ZIP archive...');
       const zipBlob = await zip.generateAsync({ type: 'blob' });
 
-      const fileName = `Client_${(client?.name || 'export').replace(/\s+/g, '_')}_Data.zip`;
+      const safeClientName = (client?.name || 'export').replace(/\s+/g, '_');
+      const safeTemplateName = templateName ? `_${templateName.replace(/\s+/g, '_')}` : '';
+      const fileName = `Client_${safeClientName}${safeTemplateName}_Data.zip`;
       const url = window.URL.createObjectURL(zipBlob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -2465,7 +2467,7 @@ export default function ClientDetailsPage() {
                               border: '1px solid rgba(59,130,246,0.3)',
                               color: '#60a5fa'
                             }}
-                            onClick={() => handleDownloadAllDataZip(targetTmplList)}
+                            onClick={() => handleDownloadAllDataZip(targetTmplList, tmpl.name)}
                             disabled={zipping}
                             title="Download ZIP package of photos and Excel metadata for this template"
                           >
@@ -2749,7 +2751,7 @@ export default function ClientDetailsPage() {
                             border: '1px solid rgba(59,130,246,0.3)',
                             color: '#60a5fa'
                           }}
-                          onClick={() => handleDownloadAllDataZip(targetUnassignedList)}
+                          onClick={() => handleDownloadAllDataZip(targetUnassignedList, 'Unassigned')}
                           disabled={zipping}
                           title="Download ZIP package of photos and Excel metadata for unassigned cardholders"
                         >

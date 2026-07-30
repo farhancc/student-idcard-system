@@ -803,7 +803,7 @@ ipcMain.handle('reload-app', () => {
   }
 });
 
-// IPC handler for automatic 90-day exceeded data backup
+// IPC handler for automatic 6-month exceeded data backup
 ipcMain.handle('run-backup', async (event, { clientName, templateName, templateFields, records }) => {
   try {
     const documentsPath = app.getPath('documents');
