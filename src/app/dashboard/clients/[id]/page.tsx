@@ -1685,7 +1685,8 @@ export default function ClientDetailsPage() {
 
         // Standard name field check
         if (fieldClean === 'name' || fieldClean === 'fullname' || fieldClean === 'studentname') {
-          if (!ch.name || ch.name.trim() === '') {
+          const nameVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.name;
+          if (!nameVal || String(nameVal).trim() === '') {
             warnings.push('Name is required');
           }
           return;
@@ -1693,7 +1694,8 @@ export default function ClientDetailsPage() {
 
         // Standard designation field check
         if (fieldClean === 'designation' || fieldClean === 'role') {
-          if (!ch.designation || ch.designation.trim() === '') {
+          const desVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.designation;
+          if (!desVal || String(desVal).trim() === '') {
             warnings.push('Designation is missing');
           }
           return;

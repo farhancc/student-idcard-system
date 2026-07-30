@@ -101,6 +101,15 @@ export async function POST(request: Request) {
       ? JSON.parse(columnMappingJson as string) 
       : {};
 
+    const getMappingValue = (mapping: Record<string, string>, field: string): string | null => {
+      const fieldLower = field.toLowerCase().replace(/[^a-z0-9]/g, '');
+      for (const [k, v] of Object.entries(mapping)) {
+        const kLower = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (kLower === fieldLower) return v;
+      }
+      return null;
+    };
+
     // Helper: auto-detect matching headers if no mapping provided
     const getHeaderKey = (headers: string[], possibleNames: string[]): string | null => {
       for (const h of headers) {
@@ -112,15 +121,20 @@ export async function POST(request: Request) {
     };
 
     const firstRowHeaders = Object.keys(rawData[0]);
-    const nameCol = (mapping.name !== undefined && mapping.name !== null)
-      ? mapping.name
+    const nameMap = getMappingValue(mapping, 'name');
+    const nameCol = (nameMap !== undefined && nameMap !== null)
+      ? nameMap
       : (getHeaderKey(firstRowHeaders, ['name', 'full name', 'student name', 'employee name', 'cardholder name']) || 'name');
-    const designationCol = (mapping.designation !== undefined && mapping.designation !== null)
-      ? mapping.designation
+    
+    const designationMap = getMappingValue(mapping, 'designation');
+    const designationCol = (designationMap !== undefined && designationMap !== null)
+      ? designationMap
       : (getHeaderKey(firstRowHeaders, ['designation', 'role', 'class', 'grade', 'job title']) || 'designation');
-    const photoUrlCol = (mapping.photoUrl !== undefined && mapping.photoUrl !== null)
-      ? mapping.photoUrl
-      : (getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'image', 'picture']) || 'photoUrl');
+
+    const photoUrlMap = getMappingValue(mapping, 'photo') || getMappingValue(mapping, 'photourl');
+    const photoUrlCol = (photoUrlMap !== undefined && photoUrlMap !== null)
+      ? photoUrlMap
+      : (getHeaderKey(firstRowHeaders, ['photo', 'photourl', 'photo url', 'image', 'picture']) || 'photoUrl');
 
     // 3. Validate against template required fields (if templateId provided)
     const validationErrors: Array<{ row: number; name: string; missingFields: string[] }> = [];
@@ -137,16 +151,22 @@ export async function POST(request: Request) {
 
           for (const f of templateFields) {
             let strVal = '';
-            if (f.field === 'name') {
-              strVal = String(row[nameCol] || '').trim();
-            } else if (f.field === 'designation') {
-              strVal = String(row[designationCol] || '').trim();
-            } else if (f.field === 'photo') {
-              strVal = String(row[photoUrlCol] || '').trim();
-            } else {
-              const sourceCol = mapping[f.field] || f.field;
-              const val = row[sourceCol];
+            const userMappedCol = mapping[f.field];
+            if (userMappedCol !== undefined && userMappedCol !== null && userMappedCol !== '') {
+              const val = row[userMappedCol];
               strVal = val !== null && val !== undefined ? String(val).trim() : '';
+            } else {
+              const fFieldClean = f.field.toLowerCase().replace(/[^a-z0-9]/g, '');
+              if (fFieldClean === 'name' || fFieldClean === 'fullname' || fFieldClean === 'studentname') {
+                strVal = String(row[nameCol] || '').trim();
+              } else if (fFieldClean === 'designation' || fFieldClean === 'role') {
+                strVal = String(row[designationCol] || '').trim();
+              } else if (fFieldClean === 'photo' || fFieldClean === 'photourl') {
+                strVal = String(row[photoUrlCol] || '').trim();
+              } else {
+                const val = row[f.field];
+                strVal = val !== null && val !== undefined ? String(val).trim() : '';
+              }
             }
 
             const isProvided = strVal.length > 0;

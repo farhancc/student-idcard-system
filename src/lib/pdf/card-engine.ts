@@ -185,7 +185,7 @@ async function embedImageBuffer(pdfDoc: any, buffer: Buffer | ArrayBuffer | Uint
 // Coordinate layout field mapping format
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
   x: number;
   y: number;
   width: number;
@@ -206,6 +206,7 @@ export interface FieldCoordinate {
   textTransform?: string;
   opacity?: number;
   staticValue?: string; // For non-editable constant text or static image URLs/base64
+  dateFormat?: string;
 }
 
 // Map to keep track of registered font families to prevent double registration warnings
@@ -355,7 +356,7 @@ function computeYOffsets(
   // Process fields in top-to-bottom order of their *original* Y
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text' || f.type === 'id')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date')
     .sort((a, b) => a.f.y - b.f.y);
 
   // Track overflow added by each field so we can shift later fields
@@ -554,7 +555,8 @@ export async function renderCardSide(
 
     switch (f.type) {
       case 'id':
-      case 'text': {
+      case 'text':
+      case 'date': {
         ctx.save();
 
         // Apply text transform
@@ -965,9 +967,9 @@ export async function renderCardSideToPdfBytes(
     return kwMap[fw.toLowerCase().replace(/[\s-_]+/g, '')] ?? 400;
   };
 
-  // Map common system/web font names to pdf-lib StandardFonts (bold = weight >= 700)
+  // Map common system/web font names to pdf-lib StandardFonts (bold = weight >= 600)
   const resolveStandardFont = (family: string, weightNum: number, isItalic: boolean): string | null => {
-    const isBoldStd = weightNum >= 700; // standard fonts only have Regular and Bold
+    const isBoldStd = weightNum >= 600; // standard fonts only have Regular and Bold (600+ is bold)
     const n = family.toLowerCase().replace(/[\s-_]+/g, '');
     const timesAliases = ['timesnewroman', 'times', 'timesroman', 'georgia', 'garamond', 'palatino', 'bookantiqua', 'palatinolinotype'];
     const courierAliases = ['couriernew', 'courier', 'lucidaconsole', 'consolascourier'];
@@ -1198,7 +1200,8 @@ export async function renderCardSideToPdfBytes(
 
     switch (f.type) {
       case 'id':
-      case 'text': {
+      case 'text':
+      case 'date': {
         try {
           const embeddedFont = await getEmbeddedFont(f);
 

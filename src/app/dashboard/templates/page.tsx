@@ -100,7 +100,7 @@ const getOptimizedImageUrl = (url: string) => {
 
 interface FieldCoordinate {
   field: string;
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
   x: number;
   y: number;
   width: number;
@@ -121,6 +121,7 @@ interface FieldCoordinate {
   textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   opacity?: number;
   staticValue?: string;
+  dateFormat?: string;
 }
 
 export default function TemplatesPage() {
@@ -1389,7 +1390,7 @@ export default function TemplatesPage() {
     if (type === 'barcode') color = '245, 158, 11';
     if (type === 'id') color = '219, 39, 119'; // Pink/Magenta for ID Field
 
-    const isTextLike = type === 'text' || type === 'id';
+    const isTextLike = type === 'text' || type === 'id' || type === 'date';
 
     if (showTestData) {
       return {
@@ -1421,7 +1422,7 @@ export default function TemplatesPage() {
   };
 
   const renderFieldTooltip = (side: 'front' | 'back', index: number, f: FieldCoordinate, scale: number) => {
-    const isTextLike = f.type === 'text' || f.type === 'id';
+    const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
     const fields = side === 'front' ? frontFields : backFields;
     const setFields = side === 'front' ? setFrontFields : setBackFields;
 
@@ -1884,11 +1885,15 @@ export default function TemplatesPage() {
                     width: '100%'
                   }}
                 >
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="normal">Normal</option>
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="bold">Bold</option>
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="300">Light</option>
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="500">Medium</option>
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="600">Semi-Bold</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="100">Thin (100)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="200">Extra-Light (200)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="300">Light (300)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="normal">Regular (400)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="500">Medium (500)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="600">Semi-Bold (600)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="bold">Bold (700)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="800">Extra-Bold (800)</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="900">Black (900)</option>
                 </select>
               </div>
             </div>
@@ -3625,7 +3630,7 @@ export default function TemplatesPage() {
                               const isSelected = selectedFieldIndex === i && selectedSide === 'front';
                               const style = getBoxStyle(f, isSelected, scale);
 
-                              const isTextLike = f.type === 'text' || f.type === 'id';
+                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
@@ -4054,7 +4059,7 @@ export default function TemplatesPage() {
                               const isSelected = selectedFieldIndex === i && selectedSide === 'back';
                               const style = getBoxStyle(f, isSelected, scale);
 
-                              const isTextLike = f.type === 'text' || f.type === 'id';
+                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
@@ -4355,6 +4360,7 @@ export default function TemplatesPage() {
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('front', i, 'type', e.target.value)}>
                                   <option value="text">Text Field</option>
+                                  <option value="date">Date Field</option>
                                   <option value="image">Photo / Image</option>
                                   <option value="qr">QR Code</option>
                                   <option value="barcode">Barcode</option>
@@ -4366,7 +4372,7 @@ export default function TemplatesPage() {
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.width} onChange={e => handleFieldChange('front', i, 'width', Number(e.target.value))} /></td>
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.height} onChange={e => handleFieldChange('front', i, 'height', Number(e.target.value))} /></td>
                               <td>
-                                {(f.type === 'text' || f.type === 'id') ? (
+                                {(f.type === 'text' || f.type === 'id' || f.type === 'date') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4449,6 +4455,24 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      {f.type === 'date' && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                          <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Date Format</span>
+                                          <select className="form-select" style={{ padding: '4px', fontSize: '0.7rem', width: '130px' }} value={f.dateFormat || 'DD/MM/YYYY'} onChange={e => handleFieldChange('front', i, 'dateFormat', e.target.value)}>
+                                            <option value="DD/MM/YYYY">DD/MM/YYYY (15/05/2002)</option>
+                                            <option value="MM/DD/YYYY">MM/DD/YYYY (05/15/2002)</option>
+                                            <option value="YYYY-MM-DD">YYYY-MM-DD (2002-05-15)</option>
+                                            <option value="DD-MM-YYYY">DD-MM-YYYY (15-05-2002)</option>
+                                            <option value="DD MMM YYYY">DD MMM YYYY (15 May 2002)</option>
+                                            <option value="DD MMMM YYYY">DD MMMM YYYY (15 May 2002)</option>
+                                            <option value="MMM DD, YYYY">MMM DD, YYYY (May 15, 2002)</option>
+                                            <option value="MMMM DD, YYYY">MMMM DD, YYYY (May 15, 2002)</option>
+                                            <option value="YYYY">YYYY (2002)</option>
+                                            <option value="DD/MM/YY">DD/MM/YY (15/05/02)</option>
+                                            <option value="MM/DD/YY">MM/DD/YY (05/15/02)</option>
+                                          </select>
+                                        </div>
+                                      )}
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                                         <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Letter Spacing</span>
                                         <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} min={-5} max={50} step={0.5} placeholder="0" value={f.letterSpacing ?? 0} onChange={e => handleFieldChange('front', i, 'letterSpacing', Number(e.target.value))} />
@@ -4541,6 +4565,7 @@ export default function TemplatesPage() {
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('back', i, 'type', e.target.value)}>
                                   <option value="text">Text Field</option>
+                                  <option value="date">Date Field</option>
                                   <option value="image">Photo / Image</option>
                                   <option value="qr">QR Code</option>
                                   <option value="barcode">Barcode</option>
@@ -4552,7 +4577,7 @@ export default function TemplatesPage() {
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.width} onChange={e => handleFieldChange('back', i, 'width', Number(e.target.value))} /></td>
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.height} onChange={e => handleFieldChange('back', i, 'height', Number(e.target.value))} /></td>
                               <td>
-                                {(f.type === 'text' || f.type === 'id') ? (
+                                {(f.type === 'text' || f.type === 'id' || f.type === 'date') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4635,6 +4660,24 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      {f.type === 'date' && (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                          <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Date Format</span>
+                                          <select className="form-select" style={{ padding: '4px', fontSize: '0.7rem', width: '130px' }} value={f.dateFormat || 'DD/MM/YYYY'} onChange={e => handleFieldChange('back', i, 'dateFormat', e.target.value)}>
+                                            <option value="DD/MM/YYYY">DD/MM/YYYY (15/05/2002)</option>
+                                            <option value="MM/DD/YYYY">MM/DD/YYYY (05/15/2002)</option>
+                                            <option value="YYYY-MM-DD">YYYY-MM-DD (2002-05-15)</option>
+                                            <option value="DD-MM-YYYY">DD-MM-YYYY (15-05-2002)</option>
+                                            <option value="DD MMM YYYY">DD MMM YYYY (15 May 2002)</option>
+                                            <option value="DD MMMM YYYY">DD MMMM YYYY (15 May 2002)</option>
+                                            <option value="MMM DD, YYYY">MMM DD, YYYY (May 15, 2002)</option>
+                                            <option value="MMMM DD, YYYY">MMMM DD, YYYY (May 15, 2002)</option>
+                                            <option value="YYYY">YYYY (2002)</option>
+                                            <option value="DD/MM/YY">DD/MM/YY (15/05/02)</option>
+                                            <option value="MM/DD/YY">MM/DD/YY (05/15/02)</option>
+                                          </select>
+                                        </div>
+                                      )}
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                                         <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Letter Spacing</span>
                                         <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} min={-5} max={50} step={0.5} placeholder="0" value={f.letterSpacing ?? 0} onChange={e => handleFieldChange('back', i, 'letterSpacing', Number(e.target.value))} />

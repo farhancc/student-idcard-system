@@ -394,8 +394,67 @@ export function isValidImageUrl(val: any): boolean {
   );
 }
 
+export function formatDate(dateVal: any, formatStr?: string): string {
+  if (dateVal === undefined || dateVal === null || String(dateVal).trim() === '') return '';
+  let date: Date;
+  if (dateVal instanceof Date) {
+    date = dateVal;
+  } else if (typeof dateVal === 'number') {
+    date = new Date(dateVal);
+  } else {
+    // String - try parsing
+    const parsed = Date.parse(String(dateVal));
+    if (isNaN(parsed)) {
+      // Try parsing DD/MM/YYYY or DD-MM-YYYY manually if standard parse fails
+      const str = String(dateVal).trim();
+      const match = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (match) {
+        // Assume day, month, year
+        const d = parseInt(match[1], 10);
+        const m = parseInt(match[2], 10) - 1;
+        const y = parseInt(match[3], 10);
+        date = new Date(y, m, d);
+      } else {
+        return String(dateVal); // return original if not parsable
+      }
+    } else {
+      date = new Date(parsed);
+    }
+  }
+
+  if (isNaN(date.getTime())) {
+    return String(dateVal);
+  }
+
+  const format = formatStr || 'DD/MM/YYYY';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  
+  const yyyy = date.getFullYear();
+  const yy = String(yyyy).slice(-2);
+  const m = date.getMonth(); // 0-11
+  const mm = pad(m + 1);
+  const d = date.getDate();
+  const dd = pad(d);
+
+  const monthsShort = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthsLong = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  const mmm = monthsShort[m];
+  const mmmm = monthsLong[m];
+
+  return format
+    .replace(/YYYY/g, String(yyyy))
+    .replace(/YY/g, yy)
+    .replace(/MMMM/g, mmmm)
+    .replace(/MMM/g, mmm)
+    .replace(/MM/g, mm)
+    .replace(/DD/g, dd)
+    .replace(/\bD\b/g, String(d))
+    .replace(/\bM\b/g, String(m + 1));
+}
+
 export function resolveFieldRawValue(
-  f: { field: string; type?: string; staticValue?: string | null; prefix?: string; suffix?: string; [key: string]: any },
+  f: { field: string; type?: string; staticValue?: string | null; prefix?: string; suffix?: string; dateFormat?: string; [key: string]: any },
   data: Record<string, any>,
   cardholder: {
     id?: number;
@@ -444,6 +503,11 @@ export function resolveFieldRawValue(
     if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
       resolved = staticImg;
     }
+  }
+
+  // 4. Date formatting fallback
+  if (f.type === 'date' && resolved !== undefined && resolved !== null) {
+    resolved = formatDate(resolved, f.dateFormat);
   }
 
   return resolved;

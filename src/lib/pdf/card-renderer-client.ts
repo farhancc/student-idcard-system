@@ -4,7 +4,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
   x: number;
   y: number;
   width: number;
@@ -25,6 +25,7 @@ export interface FieldCoordinate {
   textTransform?: string;
   opacity?: number;
   staticValue?: string;
+  dateFormat?: string;
 }
 
 // Map to keep track of loaded font families in the browser
@@ -293,7 +294,7 @@ export function computeYOffsets(
 
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text' || f.type === 'id')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date')
     .sort((a, b) => a.f.y - b.f.y);
 
   const effectiveY = fields.map((f) => f.y);
@@ -515,7 +516,8 @@ export async function renderCardSideClient(
 
     switch (f.type) {
       case 'id':
-      case 'text': {
+      case 'text':
+      case 'date': {
         ctx.save();
 
         let processedValue = valueStr;
