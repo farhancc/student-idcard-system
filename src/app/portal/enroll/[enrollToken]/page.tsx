@@ -111,13 +111,13 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             .map(f => f.field)
         );
 
-        // Unique text and ID fields (excluding restricted fields)
-        const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'id') && !restrictedFields.has(f.field));
+        // Unique text fields (excluding restricted, ID, and serial field types)
+        const textFields = allFields.filter(f => f.type === 'text' && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textFields.map(f => f.field)));
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
-        // Remove standard and system ones from customFields list to handle separately
+        // Remove standard, system, and serial ones from customFields list to handle separately
         const filteredKeys = keys.filter(k => {
           const clean = cleanFieldKey(k);
           return clean !== 'name' && 
@@ -129,7 +129,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             clean !== 'avatar' &&
             clean !== 'validtill' &&
             clean !== 'validtilldate' &&
-            clean !== 'cardserial';
+            clean !== 'cardserial' &&
+            !clean.includes('serial');
         });
         setFormFields(filteredKeys);
 
