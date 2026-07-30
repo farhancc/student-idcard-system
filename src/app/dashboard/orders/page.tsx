@@ -1376,7 +1376,7 @@ export default function OrdersPage() {
             {/* Card Preview Renderer */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div style={{ 
-                height: '240px', 
+                height: '320px', 
                 background: 'rgba(0,0,0,0.3)', 
                 borderRadius: '8px', 
                 border: '1px solid rgba(255,255,255,0.05)',
