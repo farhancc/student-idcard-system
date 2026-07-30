@@ -379,6 +379,9 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <h2 style={{ fontSize: '1.5rem', marginBottom: '12px' }}>Enrollment Successful!</h2>
           <p style={{ color: 'var(--muted)', fontSize: '0.95rem', lineHeight: '1.5', marginBottom: '24px' }}>
             Your details have been submitted successfully. The organization will review and compile your identity card shortly.
+            <span style={{ display: 'block', marginTop: '16px', padding: '10px 14px', background: 'rgba(16, 185, 129, 0.05)', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)', fontSize: '0.82rem', color: '#10b981' }}>
+              <strong>To edit or correct your details:</strong> please contact your department head.
+            </span>
           </p>
           <button type="button" className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
             setName('');
@@ -443,6 +446,22 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             </p>
           )}
           <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Fill in details to generate your ID Card</p>
+          <div style={{ 
+            marginTop: '12px', 
+            padding: '8px 16px', 
+            background: 'linear-gradient(90deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)', 
+            border: '1px solid rgba(99, 102, 241, 0.2)', 
+            borderRadius: '20px', 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
+          }}>
+            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }}></span>
+            <span style={{ fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 500 }}>
+              To edit or modify your details, please contact your department head.
+            </span>
+          </div>
         </div>
 
 
