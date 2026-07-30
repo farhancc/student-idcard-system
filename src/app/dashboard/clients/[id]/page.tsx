@@ -152,6 +152,8 @@ const getEffectivePhotoUrl = (ch: any): string | null => {
   return null;
 };
 
+const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+
 export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -1110,11 +1112,6 @@ export default function ClientDetailsPage() {
           const isMainPhotoField = mainPhoto && f.field === mainPhoto.field;
           const clean = cleanFieldKey(f.field);
           if (
-            clean !== 'name' &&
-            clean !== 'fullname' &&
-            clean !== 'studentname' &&
-            clean !== 'designation' &&
-            clean !== 'role' &&
             clean !== 'photo' &&
             clean !== 'avatar' &&
             clean !== 'photourl' &&
@@ -1124,7 +1121,15 @@ export default function ClientDetailsPage() {
             !isMainPhotoField
           ) {
             const foundVal = getCustomFieldValueCaseInsensitive(existingCustom, f.field);
-            parsedMap[f.field] = foundVal !== undefined ? String(foundVal) : '';
+            let val = foundVal !== undefined ? String(foundVal) : '';
+            if (!val) {
+              if (clean === 'name' || clean === 'fullname' || clean === 'studentname') {
+                val = ch.name || '';
+              } else if (clean === 'designation' || clean === 'role') {
+                val = ch.designation || '';
+              }
+            }
+            parsedMap[f.field] = val;
           }
         });
       } catch (e) {
@@ -3503,19 +3508,7 @@ export default function ClientDetailsPage() {
             )}
 
             <form onSubmit={handleSaveEditCardholder} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              {editHasName && (
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Full Name</label>
-                  <input type="text" required className="form-input" value={editName} onChange={e => setEditName(e.target.value)} />
-                </div>
-              )}
-              
-              {editHasDesignation && (
-                <div className="form-group">
-                  <label className="form-label">Designation / Role</label>
-                  <input type="text" className="form-input" value={editDesignation} onChange={e => setEditDesignation(e.target.value)} />
-                </div>
-              )}
+
 
 
 
@@ -3565,6 +3558,9 @@ export default function ClientDetailsPage() {
                         (!!val && (val.startsWith('http') || val.startsWith('data:')));
                       const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
 
+                      const clean = key.toLowerCase().replace(/[^a-z]/g, '');
+                      const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
+
                       return (
                         <div key={key} style={{ display: 'flex', gap: '12px', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.03)', paddingBottom: '8px' }}>
                           <span style={{
@@ -3572,7 +3568,7 @@ export default function ClientDetailsPage() {
                             minWidth: '120px', maxWidth: '160px', padding: '8px 10px',
                             background: 'rgba(56,189,248,0.05)', border: '1px solid var(--glass-border)',
                             borderRadius: '6px', wordBreak: 'break-all',
-                          }}>{label}</span>
+                          }}>{label}{isNameLike ? ' *' : ''}</span>
                           
                           {isImage ? (
                             <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -3605,10 +3601,19 @@ export default function ClientDetailsPage() {
                           ) : (
                             <input
                               type="text"
+                              required={isNameLike}
                               className="form-input"
                               style={{ flex: 1, fontSize: '0.85rem' }}
                               value={val}
-                              onChange={e => setEditCustomFieldsMap(prev => ({ ...prev, [key]: e.target.value }))}
+                              onChange={e => {
+                                const v = e.target.value;
+                                setEditCustomFieldsMap(prev => ({ ...prev, [key]: v }));
+                                if (isNameLike) {
+                                  setEditName(v);
+                                } else if (clean === 'designation' || clean === 'role') {
+                                  setEditDesignation(v);
+                                }
+                              }}
                             />
                           )}
                         </div>

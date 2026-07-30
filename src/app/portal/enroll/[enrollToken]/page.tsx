@@ -37,6 +37,8 @@ interface Template {
   validTillDate?: string | null;
 }
 
+const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+
 export default function EnrollmentPage({ params }: { params: Promise<{ enrollToken: string }> }) {
   const { enrollToken } = use(params);
   const router = useRouter();
@@ -117,15 +119,10 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
-        // Remove standard, system, and serial ones from customFields list to handle separately
+        // Remove standard system attributes (like photos/serials/expiry) from text fields to handle separately
         const filteredKeys = keys.filter(k => {
           const clean = cleanFieldKey(k);
-          return clean !== 'name' && 
-            clean !== 'fullname' &&
-            clean !== 'studentname' && 
-            clean !== 'designation' && 
-            clean !== 'role' &&
-            clean !== 'photo' && 
+          return clean !== 'photo' && 
             clean !== 'avatar' &&
             clean !== 'validtill' &&
             clean !== 'validtilldate' &&
@@ -567,44 +564,28 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             );
           })}
 
-          {/* Standard Fields */}
-          {hasName && (
-            <div className="form-group">
-              <label className="form-label">Full Name *</label>
-              <input
-                type="text"
-                className="form-input"
-                style={{ borderColor: touched.name && fieldErrors.name ? 'var(--danger)' : undefined }}
-                required
-                value={name}
-                onChange={e => { setName(e.target.value); if (touched.name) setFieldErrors(prev => ({ ...prev, name: validateField('name', e.target.value) })); }}
-                onBlur={e => handleBlur('name', e.target.value)}
-                placeholder="Enter full name"
-              />
-              {touched.name && fieldErrors.name && <p style={{ color: 'var(--danger)', fontSize: '0.78rem', marginTop: '4px' }}>{fieldErrors.name}</p>}
-            </div>
-          )}
-
-          {hasDesignation && (
-            <div className="form-group">
-              <label className="form-label">Designation / Role</label>
-              <input type="text" className="form-input" value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Student, Employee, Staff, etc." />
-            </div>
-          )}
-
-
-
-          {/* Custom Fields dynamically extracted from template */}
+          {/* Fields dynamically extracted from template */}
           {formFields.map(field => {
             const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            const clean = cleanFieldKey(field);
+            const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
             return (
               <div className="form-group" key={field}>
-                <label className="form-label">{label}</label>
+                <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
                 <input
                   type="text"
                   className="form-input"
+                  required={isNameLike}
                   value={customFields[field] || ''}
-                  onChange={e => setCustomFields({ ...customFields, [field]: e.target.value })}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setCustomFields(prev => ({ ...prev, [field]: val }));
+                    if (isNameLike) {
+                      setName(val);
+                    } else if (clean === 'designation' || clean === 'role') {
+                      setDesignation(val);
+                    }
+                  }}
                   placeholder={`Enter ${label.toLowerCase()}`}
                 />
               </div>

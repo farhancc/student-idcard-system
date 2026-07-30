@@ -74,6 +74,8 @@ interface Department {
   enrolledCount: number;
 }
 
+const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+
 export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: string }> }) {
   return (
     <ToastProvider>
@@ -166,12 +168,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       
       const filteredKeys = keys.filter(k => {
         const clean = cleanFieldKey(k);
-        return clean !== 'name' && 
-          clean !== 'fullname' &&
-          clean !== 'studentname' && 
-          clean !== 'designation' && 
-          clean !== 'role' &&
-          clean !== 'photo' && 
+        return clean !== 'photo' && 
           clean !== 'avatar' &&
           clean !== 'validtill' &&
           clean !== 'validtilldate' &&
@@ -373,11 +370,19 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     setName(resolvedName);
     setDesignation(resolvedDesignation);
     setPhotoUrl(ch.photoUrl || '');
-    
     // Ensure all template fields exist in customFields
     const finalCustom: Record<string, string> = {};
     formFields.forEach(k => {
-      finalCustom[k] = getCustomFieldValueCaseInsensitive(parsedCustom, k) || '';
+      let val = getCustomFieldValueCaseInsensitive(parsedCustom, k) || '';
+      if (!val) {
+        const clean = cleanFieldKey(k);
+        if (clean === 'name' || clean === 'fullname' || clean === 'studentname') {
+          val = resolvedName;
+        } else if (clean === 'designation' || clean === 'role') {
+          val = resolvedDesignation;
+        }
+      }
+      finalCustom[k] = val;
     });
     customImgFields.forEach(imgField => {
       finalCustom[imgField.field] = getCustomFieldValueCaseInsensitive(parsedCustom, imgField.field) || '';
@@ -1456,38 +1461,30 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 );
               })}
 
-              {/* Standard inputs */}
-              {hasName && (
-                <div className="form-group">
-                  <label className="form-label">Full Name *</label>
-                  <input type="text" className="form-input" required value={name} onChange={e => setName(e.target.value)} placeholder="Full Name" />
-                </div>
-              )}
-
-              {hasDesignation && (
-                <div className="form-group">
-                  <label className="form-label">Designation / Role</label>
-                  <input type="text" className="form-input" value={designation} onChange={e => setDesignation(e.target.value)} placeholder="Student, Employee, etc." />
-                </div>
-              )}
-
-
-
               {/* Custom fields mapped dynamically */}
               {formFields.map(field => {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const clean = cleanFieldKey(field);
+                const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
                 return (
                   <div className="form-group" key={field}>
-                    <label className="form-label">{label}</label>
+                    <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
                     <input
                       type="text"
+                      required={isNameLike}
                       className="form-input"
                       value={customFields[field] || ''}
                       onChange={e => {
+                        const val = e.target.value;
                         setCustomFields({
                           ...customFields,
-                          [field]: e.target.value,
+                          [field]: val,
                         });
+                        if (isNameLike) {
+                          setName(val);
+                        } else if (clean === 'designation' || clean === 'role') {
+                          setDesignation(val);
+                        }
                       }}
                       placeholder={`Enter ${label.toLowerCase()}`}
                     />
