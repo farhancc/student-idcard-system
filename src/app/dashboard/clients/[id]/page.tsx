@@ -4437,7 +4437,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                             borderRadius: '8px',
                             border: '1px solid var(--glass-border)'
                           }}>
-                            <div className="form-group" style={{ margin: 0 }}>
+                            <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
                               <label className="form-label" style={{ fontSize: '0.75rem' }}>Price Per Card (Rs)</label>
                               <input 
                                 type="number" 
@@ -4445,16 +4445,6 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                                 style={{ padding: '6px 10px', fontSize: '0.85rem' }}
                                 value={batchPricePerCard} 
                                 onChange={e => setBatchPricePerCard(e.target.value)} 
-                              />
-                            </div>
-                            <div className="form-group" style={{ margin: 0 }}>
-                              <label className="form-label" style={{ fontSize: '0.75rem' }}>Expiry Validity Date</label>
-                              <input 
-                                type="date" 
-                                className="form-input" 
-                                style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-                                value={batchValidTill} 
-                                onChange={e => setBatchValidTill(e.target.value)} 
                               />
                             </div>
 

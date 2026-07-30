@@ -1061,23 +1061,6 @@ export default function OrdersPage() {
             </div>
           )}
 
-          <div className="form-group">
-            <label className="form-label">Card Expiry Validity Date</label>
-            <input 
-              type="date" 
-              required 
-              className="form-input" 
-              value={validTill} 
-              onChange={e => setValidTill(e.target.value)} 
-              onClick={(e) => {
-                try {
-                  e.currentTarget.showPicker();
-                } catch (err) {
-                  console.warn('showPicker is not supported:', err);
-                }
-              }}
-            />
-          </div>
 
           <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
             <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: 0 }}>
@@ -2171,25 +2154,6 @@ export default function OrdersPage() {
                   </>
                 )}
 
-                {orderMethod === 'standard' && (
-                  <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                    <label className="form-label">Card Expiry Validity Date</label>
-                    <input 
-                      type="date" 
-                      required 
-                      className="form-input" 
-                      value={validTill} 
-                      onChange={e => setValidTill(e.target.value)} 
-                      onClick={(e) => {
-                        try {
-                          e.currentTarget.showPicker();
-                        } catch (err) {
-                          console.warn('showPicker is not supported:', err);
-                        }
-                      }}
-                    />
-                  </div>
-                )}
 
                 {orderMethod === 'batch' && (
                   <>
