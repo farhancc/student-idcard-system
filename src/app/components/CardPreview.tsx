@@ -146,18 +146,33 @@ export default function CardPreview({
   }
 
   // Use CSS scale or sizing to make it fit nicely
+  const wrapperStyle: React.CSSProperties = {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: '100%',
+    minHeight: '100px',
+    maxHeight: style.maxHeight || '100%',
+    maxWidth: style.maxWidth || '100%',
+    ...style,
+  };
+
   const displayStyle: React.CSSProperties = {
     maxWidth: '100%',
+    maxHeight: '100%',
+    width: 'auto',
     height: 'auto',
+    objectFit: 'contain',
     borderRadius: '8px',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
     border: '1px solid var(--border)',
     display: loading && !canvasRef.current ? 'none' : 'block',
-    ...style,
   };
 
   return (
-    <div className={`relative flex items-center justify-center ${className}`} style={{ minHeight: '100px' }}>
+    <div className={className} style={wrapperStyle}>
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 rounded-lg">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
