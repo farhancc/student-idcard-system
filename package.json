@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "export DIRECT_URL=\"$DATABASE_URL\" && prisma generate",
-    "build": "export DIRECT_URL=\"$DATABASE_URL\" && prisma migrate deploy && prisma generate && next build",
+    "build": "export DIRECT_URL=\"$DATABASE_URL\" && export PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=true && prisma migrate deploy && prisma generate && next build",
     "db:migrate": "prisma migrate deploy",
     "start": "next start",
     "lint": "eslint"
