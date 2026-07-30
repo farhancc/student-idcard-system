@@ -2258,25 +2258,25 @@ export default function TemplatesPage() {
     return { xOffset, yOffset, textWidth, textHeight };
   };
 
+  const scrollAndFocus = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.focus();
+      const originalBorder = el.style.border;
+      const originalBoxShadow = el.style.boxShadow;
+      el.style.border = '1.5px solid #f87171';
+      el.style.boxShadow = '0 0 0 3px rgba(248, 113, 113, 0.4)';
+      setTimeout(() => {
+        el.style.border = originalBorder;
+        el.style.boxShadow = originalBoxShadow;
+      }, 3000);
+    }
+  };
+
   const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
     setError('');
-
-    const scrollAndFocus = (id: string) => {
-      const el = document.getElementById(id);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.focus();
-        const originalBorder = el.style.border;
-        const originalBoxShadow = el.style.boxShadow;
-        el.style.border = '1.5px solid #f87171';
-        el.style.boxShadow = '0 0 0 3px rgba(248, 113, 113, 0.4)';
-        setTimeout(() => {
-          el.style.border = originalBorder;
-          el.style.boxShadow = originalBoxShadow;
-        }, 3000);
-      }
-    };
 
     try {
       const electronAPI = (window as any).electronAPI;
@@ -2579,33 +2579,30 @@ export default function TemplatesPage() {
           <h1>Card Templates</h1>
           <p style={{ marginTop: '4px' }}>Upload design layouts and configure placement coordinate fields.</p>
         </div>
-        {isElectron ? (
-          <button className="btn btn-primary" onClick={() => {
-            if (showForm) {
-              setEditingTemplateId(null);
-              setName('');
-              setCardWidth(673);
-              setCardHeight(1039);
-              setFrontImageUrl('');
-              setBackImageUrl('');
-              setFrontFields([]);
-              setBackFields([]);
-              setTestData({});
-              setActiveTooltipIndex(null);
-              setActiveTooltipSide(null);
-              setCategory('OTHER');
-              setSides(1);
-              setSelectedClientIds([]);
-            }
-            setShowForm(!showForm);
-          }}>
-            <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
-          </button>
-        ) : (
-          <div style={{ padding: '8px 14px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '0.85rem', color: '#a0aec0', border: '1px solid rgba(255,255,255,0.08)' }}>
-            ℹ️ Design functions only available in Desktop App
-          </div>
-        )}
+        <button className="btn btn-primary" onClick={() => {
+          if (showForm) {
+            setEditingTemplateId(null);
+            setName('');
+            setCardWidth(673);
+            setCardHeight(1039);
+            setFrontImageUrl('');
+            setBackImageUrl('');
+            setFrontFields([]);
+            setBackFields([]);
+            setTestData({});
+            setActiveTooltipIndex(null);
+            setActiveTooltipSide(null);
+            setCategory('OTHER');
+            setSides(1);
+            setSelectedClientIds([]);
+          }
+          setShowForm(!showForm);
+          if (!showForm) {
+            setTimeout(() => scrollAndFocus('template-name'), 50);
+          }
+        }}>
+          <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
+        </button>
       </div>
 
       {showForm && (
@@ -3024,22 +3021,19 @@ export default function TemplatesPage() {
                     type="file" 
                     accept=".svg,.pdf,.png" 
                     className="form-input" 
-                    style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
+                    style={{ padding: '6px 12px', cursor: 'pointer' }}
                     onChange={e => handleFileUpload(e, 'front')} 
-                    disabled={uploadingFront || !isElectron}
+                    disabled={uploadingFront}
                   />
-                  {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
-                  {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
-                  {!isElectron && (
-                    <input 
-                      id="front-image-url"
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Or paste background image URL: https://example.com/..." 
-                      value={frontImageUrl} 
-                      onChange={e => setFrontImageUrl(e.target.value)} 
-                    />
-                  )}
+                  {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Uploading...</div>}
+                  <input 
+                    id="front-image-url"
+                    type="text" 
+                    className="form-input" 
+                    placeholder="Or paste background image URL: https://example.com/..." 
+                    value={frontImageUrl} 
+                    onChange={e => setFrontImageUrl(e.target.value)} 
+                  />
                 </div>
               </div>
               
@@ -3052,22 +3046,19 @@ export default function TemplatesPage() {
                       type="file" 
                       accept=".svg,.pdf,.png" 
                       className="form-input" 
-                      style={{ padding: '6px 12px', opacity: isElectron ? 1 : 0.4, cursor: isElectron ? 'pointer' : 'not-allowed' }}
+                      style={{ padding: '6px 12px', cursor: 'pointer' }}
                       onChange={e => handleFileUpload(e, 'back')} 
-                      disabled={uploadingBack || !isElectron}
+                      disabled={uploadingBack}
                     />
-                    {!isElectron && <div style={{ fontSize: '0.75rem', color: 'var(--warning)' }}>⚠️ File upload only available in Desktop App</div>}
-                    {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Saving locally...</div>}
-                    {!isElectron && (
-                      <input 
-                        id="back-image-url"
-                        type="text" 
-                        className="form-input" 
-                        placeholder="Or paste background image URL: https://example.com/..." 
-                        value={backImageUrl} 
-                        onChange={e => setBackImageUrl(e.target.value)} 
-                      />
-                    )}
+                    {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Uploading...</div>}
+                    <input 
+                      id="back-image-url"
+                      type="text" 
+                      className="form-input" 
+                      placeholder="Or paste background image URL: https://example.com/..." 
+                      value={backImageUrl} 
+                      onChange={e => setBackImageUrl(e.target.value)} 
+                    />
                   </div>
                 </div>
               ) : (
