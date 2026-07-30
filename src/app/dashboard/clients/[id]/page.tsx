@@ -732,8 +732,8 @@ export default function ClientDetailsPage() {
   };
 
   // Single Add handler
-  const handleAddCardholder = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAddCardholder = async (e?: React.FormEvent, force: boolean = false) => {
+    if (e) e.preventDefault();
     setAddError('');
     setAddLoading(true);
 
@@ -752,12 +752,27 @@ export default function ClientDetailsPage() {
           photoUrl,
           uniqueKey,
           customFields: customJson,
+          ignoreDuplicate: force,
           ...(addTemplateId ? { templateId: Number(addTemplateId) } : {}),
         }),
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to add cardholder');
+      if (!res.ok) {
+        if (json.duplicate && !force) {
+          const confirmAdd = window.confirm(
+            `${json.message || 'A cardholder with this name and designation already exists.'}\n\nDo you want to add them anyway?`
+          );
+          if (confirmAdd) {
+            setAddLoading(false);
+            handleAddCardholder(undefined, true);
+            return;
+          } else {
+            throw new Error(json.message || 'Duplicate cardholder entry cancelled.');
+          }
+        }
+        throw new Error(json.error || json.message || 'Failed to add cardholder');
+      }
 
       // Reset
       setName('');

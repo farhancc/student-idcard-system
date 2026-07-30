@@ -133,6 +133,7 @@ export async function POST(
       if (duplicate) {
         return NextResponse.json({
           duplicate: true,
+          error: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
           message: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
           cardholder: duplicate,
         }, { status: 409 });

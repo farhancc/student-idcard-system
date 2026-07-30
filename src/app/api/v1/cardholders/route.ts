@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { clientId, name, designation, photoUrl, customFields, uniqueKey } = body;
+    const { clientId, name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = body;
 
     if (!clientId || !name) {
       return NextResponse.json({ error: 'Missing clientID or name' }, { status: 400 });
@@ -51,11 +51,18 @@ export async function POST(request: Request) {
     }
 
     // Check duplicate
-    const duplicate = await prisma.cardholder.findFirst({
-      where: { clientId: Number(clientId), name, designation: designation ?? null },
-    });
-    if (duplicate) {
-      return NextResponse.json({ error: `Cardholder "${name}" with designation "${designation || ''}" already exists.` }, { status: 409 });
+    if (!ignoreDuplicate) {
+      const duplicate = await prisma.cardholder.findFirst({
+        where: { clientId: Number(clientId), name, designation: designation ?? null },
+      });
+      if (duplicate) {
+        return NextResponse.json({
+          duplicate: true,
+          error: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
+          message: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
+          cardholder: duplicate,
+        }, { status: 409 });
+      }
     }
 
     // Create
