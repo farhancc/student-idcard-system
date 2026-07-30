@@ -1,9 +1,44 @@
-const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage, session } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage, session, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
 const ExcelJS = require('exceljs');
 const AdmZip = require('adm-zip');
+
+function setupApplicationMenu() {
+  const template = [
+    {
+      label: 'Edit',
+      submenu: [
+        { role: 'undo' },
+        { role: 'redo' },
+        { type: 'separator' },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'pasteAndMatchStyle' },
+        { role: 'delete' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
+        { role: 'toggleDevTools' },
+        { type: 'separator' },
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
+        { role: 'togglefullscreen' }
+      ]
+    }
+  ];
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
 
 function getSystemPathFromLocalUrl(localUrl) {
   if (!localUrl) return '';
@@ -300,6 +335,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  setupApplicationMenu();
   // Register local:// protocol to serve template images stored on disk with CORS headers
   protocol.handle('local', async (request) => {
     const decodedPath = getSystemPathFromLocalUrl(request.url);

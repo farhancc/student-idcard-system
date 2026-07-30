@@ -2619,7 +2619,18 @@ export default function TemplatesPage() {
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr 1fr', gap: '20px' }}>
               <div className="form-group">
                 <label className="form-label">Template Name</label>
-                <input id="template-name" type="text" required className="form-input" placeholder="Classic Devanagari School ID" value={name} onChange={e => setName(e.target.value)} />
+                <input 
+                  id="template-name" 
+                  type="text" 
+                  required 
+                  autoFocus
+                  className="form-input" 
+                  placeholder="Classic Devanagari School ID" 
+                  value={name} 
+                  onChange={e => setName(e.target.value)} 
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
+                />
               </div>
 
               <div className="form-group">
