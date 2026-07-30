@@ -81,11 +81,14 @@ export async function POST(request: Request) {
     // 1. Credit Check & Lock
     const isProduction = pdfType === 'PRODUCTION';
     const isDoubleSided = !!template.backImageUrl;
+    const isIDCard = template.category === 'ID_CARD';
     
     const creditSettings = await getCreditSettings();
     let totalCreditsNeeded = 0;
     if (isProduction) {
-      const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
+      const costPerCard = isIDCard
+        ? (isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided)
+        : (isDoubleSided ? creditSettings.costDoubleSidedFull : creditSettings.costSingleSidedFull);
       totalCreditsNeeded = cardCount * costPerCard;
     } else if (pdfType === 'APPROVAL') {
       totalCreditsNeeded = isDoubleSided ? creditSettings.costApprovalPdfDouble : creditSettings.costApprovalPdfSingle;

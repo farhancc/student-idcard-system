@@ -129,10 +129,13 @@ export async function POST(request: Request) {
               where: { id: order.templateId },
             });
             const isDoubleSided = !!template?.backImageUrl;
+            const isIDCard = template?.category === 'ID_CARD';
 
             const { getCreditSettings } = require('@/lib/system-settings');
             const creditSettings = await getCreditSettings();
-            const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
+            const costPerCard = isIDCard
+              ? (isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided)
+              : (isDoubleSided ? creditSettings.costDoubleSidedFull : creditSettings.costSingleSidedFull);
             creditsUsed = cardCount * costPerCard;
           } else if (job.pdfType === 'APPROVAL' && order) {
             const template = await tx.cardTemplate.findUnique({

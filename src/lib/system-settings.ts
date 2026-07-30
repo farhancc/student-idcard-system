@@ -3,6 +3,8 @@ import { prisma } from './prisma';
 export interface CreditSettings {
   costSingleSided: number;
   costDoubleSided: number;
+  costSingleSidedFull: number;
+  costDoubleSidedFull: number;
   costApprovalPdf: number;
   costApprovalPdfSingle: number;
   costApprovalPdfDouble: number;
@@ -19,6 +21,8 @@ export async function getCreditSettings(): Promise<CreditSettings> {
           in: [
             'credit_cost_single_sided',
             'credit_cost_double_sided',
+            'credit_cost_single_sided_full',
+            'credit_cost_double_sided_full',
             'credit_cost_approval_pdf',
             'credit_cost_approval_pdf_single',
             'credit_cost_approval_pdf_double',
@@ -33,10 +37,14 @@ export async function getCreditSettings(): Promise<CreditSettings> {
     const settingsMap = new Map(settings.map(s => [s.key, s.value]));
 
     const legacyApproval = settingsMap.get('credit_cost_approval_pdf') || '20';
+    const costSingleSided = Number(settingsMap.get('credit_cost_single_sided') || '10');
+    const costDoubleSided = Number(settingsMap.get('credit_cost_double_sided') || '15');
 
     return {
-      costSingleSided: Number(settingsMap.get('credit_cost_single_sided') || '10'),
-      costDoubleSided: Number(settingsMap.get('credit_cost_double_sided') || '15'),
+      costSingleSided,
+      costDoubleSided,
+      costSingleSidedFull: Number(settingsMap.get('credit_cost_single_sided_full') || String(costSingleSided * 1.5 || '15')),
+      costDoubleSidedFull: Number(settingsMap.get('credit_cost_double_sided_full') || String(costDoubleSided * 1.5 || '25')),
       costApprovalPdf: Number(legacyApproval),
       costApprovalPdfSingle: Number(settingsMap.get('credit_cost_approval_pdf_single') || '10'),
       costApprovalPdfDouble: Number(settingsMap.get('credit_cost_approval_pdf_double') || legacyApproval),
@@ -49,6 +57,8 @@ export async function getCreditSettings(): Promise<CreditSettings> {
     return {
       costSingleSided: 10,
       costDoubleSided: 15,
+      costSingleSidedFull: 15,
+      costDoubleSidedFull: 25,
       costApprovalPdf: 20,
       costApprovalPdfSingle: 10,
       costApprovalPdfDouble: 20,

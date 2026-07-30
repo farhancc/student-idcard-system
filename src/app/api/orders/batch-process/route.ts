@@ -185,8 +185,11 @@ export async function POST(request: Request) {
 
     // Credit Check & Lock for batch jobs
     const isDoubleSided = !!template.backImageUrl;
+    const isIDCard = template.category === 'ID_CARD';
     const creditSettings = await getCreditSettings();
-    const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
+    const costPerCard = isIDCard
+      ? (isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided)
+      : (isDoubleSided ? creditSettings.costDoubleSidedFull : creditSettings.costSingleSidedFull);
     const productionCreditsNeeded = cardCount * costPerCard;
     const approvalCreditsNeeded = isDoubleSided ? creditSettings.costApprovalPdfDouble : creditSettings.costApprovalPdfSingle;
     const totalCreditsNeeded = productionCreditsNeeded + approvalCreditsNeeded;

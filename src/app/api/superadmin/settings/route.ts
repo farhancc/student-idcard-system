@@ -17,6 +17,8 @@ export async function POST(request: Request) {
     const {
       costSingleSided,
       costDoubleSided,
+      costSingleSidedFull,
+      costDoubleSidedFull,
       costApprovalPdfSingle,
       costApprovalPdfDouble,
       priceCreditBasic,
@@ -28,6 +30,8 @@ export async function POST(request: Request) {
     if (
       costSingleSided === undefined ||
       costDoubleSided === undefined ||
+      costSingleSidedFull === undefined ||
+      costDoubleSidedFull === undefined ||
       costApprovalPdfSingle === undefined ||
       costApprovalPdfDouble === undefined ||
       priceCreditBasic === undefined ||
@@ -40,6 +44,8 @@ export async function POST(request: Request) {
     const payload = [
       { key: 'credit_cost_single_sided', value: String(Number(costSingleSided)) },
       { key: 'credit_cost_double_sided', value: String(Number(costDoubleSided)) },
+      { key: 'credit_cost_single_sided_full', value: String(Number(costSingleSidedFull)) },
+      { key: 'credit_cost_double_sided_full', value: String(Number(costDoubleSidedFull)) },
       { key: 'credit_cost_approval_pdf_single', value: String(Number(costApprovalPdfSingle)) },
       { key: 'credit_cost_approval_pdf_double', value: String(Number(costApprovalPdfDouble)) },
       { key: 'price_credit_basic', value: String(Number(priceCreditBasic)) },
@@ -79,6 +85,8 @@ export async function POST(request: Request) {
       settings: {
         costSingleSided: Number(costSingleSided),
         costDoubleSided: Number(costDoubleSided),
+        costSingleSidedFull: Number(costSingleSidedFull),
+        costDoubleSidedFull: Number(costDoubleSidedFull),
         costApprovalPdfSingle: Number(costApprovalPdfSingle),
         costApprovalPdfDouble: Number(costApprovalPdfDouble),
         priceCreditBasic: Number(priceCreditBasic),

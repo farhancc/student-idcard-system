@@ -158,6 +158,8 @@ export default function SuperAdminDashboard() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [costSingleSided, setCostSingleSided] = useState('10');
   const [costDoubleSided, setCostDoubleSided] = useState('15');
+  const [costSingleSidedFull, setCostSingleSidedFull] = useState('15');
+  const [costDoubleSidedFull, setCostDoubleSidedFull] = useState('25');
   const [costApprovalPdfSingle, setCostApprovalPdfSingle] = useState('10');
   const [costApprovalPdfDouble, setCostApprovalPdfDouble] = useState('20');
   const [priceCreditBasic, setPriceCreditBasic] = useState('1.5');
@@ -484,6 +486,8 @@ export default function SuperAdminDashboard() {
       if (data.settings) {
         setCostSingleSided(String(data.settings.costSingleSided));
         setCostDoubleSided(String(data.settings.costDoubleSided));
+        setCostSingleSidedFull(String(data.settings.costSingleSidedFull || data.settings.costSingleSided || '15'));
+        setCostDoubleSidedFull(String(data.settings.costDoubleSidedFull || data.settings.costDoubleSided || '25'));
         setCostApprovalPdfSingle(String(data.settings.costApprovalPdfSingle || data.settings.costApprovalPdf || '10'));
         setCostApprovalPdfDouble(String(data.settings.costApprovalPdfDouble || data.settings.costApprovalPdf || '20'));
         setPriceCreditBasic(String(data.settings.priceCreditBasic));
@@ -509,6 +513,8 @@ export default function SuperAdminDashboard() {
         body: JSON.stringify({
           costSingleSided: Number(costSingleSided),
           costDoubleSided: Number(costDoubleSided),
+          costSingleSidedFull: Number(costSingleSidedFull),
+          costDoubleSidedFull: Number(costDoubleSidedFull),
           costApprovalPdfSingle: Number(costApprovalPdfSingle),
           costApprovalPdfDouble: Number(costApprovalPdfDouble),
           priceCreditBasic: Number(priceCreditBasic),
@@ -1964,6 +1970,36 @@ export default function SuperAdminDashboard() {
                   style={{ width: '100%' }}
                 />
                 <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for double-sided templates.</span>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="costSingleSidedFull" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Single-sided Full Card / Certificate Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costSingleSidedFull"
+                  className="form-input"
+                  value={costSingleSidedFull}
+                  onChange={(e) => setCostSingleSidedFull(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for single-sided full-page/certificate templates.</span>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="costDoubleSidedFull" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Double-sided Full Card / Certificate Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costDoubleSidedFull"
+                  className="form-input"
+                  value={costDoubleSidedFull}
+                  onChange={(e) => setCostDoubleSidedFull(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for double-sided full-page/certificate templates.</span>
               </div>
 
               <div style={{ marginBottom: '20px' }}>
