@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { formatFieldLabel } from '@/lib/pdf/field-resolver';
 import ExcelJS from 'exceljs';
 
 export async function GET(
@@ -112,7 +113,7 @@ export async function GET(
       const row: Record<string, any> = {};
 
       templateFields.forEach(tf => {
-        const label = tf.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+        const label = formatFieldLabel(tf.field);
         
         if (tf.isMainPhoto) {
           row[label] = escapeFormula(ch.photoUrl || '');

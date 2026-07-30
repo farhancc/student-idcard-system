@@ -551,3 +551,30 @@ export function computeYOffsets(
 
   return yOffsets;
 }
+
+export function formatFieldLabel(field: string): string {
+  if (!field) return '';
+  
+  // Replace underscores and hyphens with spaces
+  let formatted = field.replace(/[_-]+/g, ' ');
+  
+  // Insert space before uppercase letters (camelCase / PascalCase)
+  // but don't insert space if it's already separated or between multiple uppercase letters
+  formatted = formatted.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  
+  // Split into words, capitalize each word unless it's a short acronym (like ID, DOB)
+  return formatted
+    .split(' ')
+    .filter(Boolean)
+    .map(word => {
+      // If the word is entirely uppercase
+      if (word === word.toUpperCase()) {
+        if (word.length <= 3) return word; // Keep DOB, ID, etc.
+        return word.charAt(0) + word.slice(1).toLowerCase();
+      }
+      // If the word has mixed case (e.g. CamelCase or already capitalized)
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(' ');
+}
+

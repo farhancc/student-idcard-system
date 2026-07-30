@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFString, PDFDict, degrees } from 'pdf-lib';
 import { getOrRenderCard } from './cache-manager';
 import { FieldCoordinate } from './card-engine';
-import { getResolvedFieldValue } from './field-resolver';
+import { getResolvedFieldValue, formatFieldLabel } from './field-resolver';
 import { prisma } from '../prisma';
 import fs from 'fs';
 import path from 'path';
@@ -365,10 +365,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
             if (!label) {
-              label = fieldKey
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase())
-                .trim();
+              label = formatFieldLabel(fieldKey);
             }
             const textToDraw = `${label}: ${val}`;
             await safeDrawText(page, pdfDoc, textToDraw, {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { formatFieldLabel as formatFieldLabelCentral } from '@/lib/pdf/field-resolver';
 
 // GET /api/marketplace?category=&search=&sort=popular|newest|price_asc|price_desc&page=1&limit=20
 export async function GET(request: Request) {
@@ -157,20 +158,10 @@ function formatFieldLabel(f: any): string {
   if (f.label && typeof f.label === 'string' && f.label.trim()) return f.label.trim();
   if (f.name && typeof f.name === 'string' && f.name.trim()) return f.name.trim();
   if (f.field && typeof f.field === 'string' && f.field.trim()) {
-    const raw = f.field.trim();
-    return raw
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/_/g, ' ')
-      .replace(/^./, (str: string) => str.toUpperCase())
-      .trim();
+    return formatFieldLabelCentral(f.field);
   }
   if (f.key && typeof f.key === 'string' && f.key.trim() && f.key !== f.type) {
-    const raw = f.key.trim();
-    return raw
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/_/g, ' ')
-      .replace(/^./, (str: string) => str.toUpperCase())
-      .trim();
+    return formatFieldLabelCentral(f.key);
   }
   if (f.text && typeof f.text === 'string' && f.text.trim()) return f.text.trim();
 

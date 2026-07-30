@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import { ToastProvider, useToast } from '@/components/ui/toast';
-import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
+import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 import {
   Users,
@@ -534,7 +534,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         if (f.type === 'image') {
           const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
           if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
-            const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            const label = formatFieldLabel(f.field);
             warnings.push(`${label} is missing`);
           }
           return;
@@ -542,7 +542,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
         const val = getResolvedFieldValue(f.field, cardholderData, ch);
         if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
-          const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          const label = formatFieldLabel(f.field);
           warnings.push(`${label} is missing`);
         }
       });
@@ -780,7 +780,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                     />
                   </th>
                   {templateFields.map(tf => {
-                    const label = tf.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                    const label = formatFieldLabel(tf.field);
                     return <th key={tf.field}>{label}</th>;
                   })}
                   <th>Enrolled On</th>
@@ -937,7 +937,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
               {/* Custom image fields */}
               {customImgFields.map(field => {
-                const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                const label = formatFieldLabel(field.field);
                 const value = customFields[field.field] || '';
                 const fieldWidth = field.width || 120;
                 const fieldHeight = field.height || 160;
@@ -980,7 +980,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
               })}
 
               {formFields.map(field => {
-                const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                const label = formatFieldLabel(field);
                 const clean = cleanFieldKey(field);
                 const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
                 return (

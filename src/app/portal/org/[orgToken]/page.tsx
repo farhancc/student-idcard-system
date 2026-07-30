@@ -5,7 +5,7 @@ import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
 import { ToastProvider, useToast } from '@/components/ui/toast';
-import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
+import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 import { 
   Users, 
@@ -625,7 +625,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         if (f.type === 'image') {
           const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
           if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
-            const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            const label = formatFieldLabel(f.field);
             warnings.push(`${label} is missing`);
           }
           return;
@@ -633,7 +633,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
         const val = getResolvedFieldValue(f.field, cardholderData, ch);
         if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
-          const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          const label = formatFieldLabel(f.field);
           warnings.push(`${label} is missing`);
         }
       });
@@ -915,12 +915,12 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           {hasDesignation && <th>Designation</th>}
                           {/* Dynamic Custom Text Fields */}
                           {formFields.map(field => {
-                            const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                            const label = formatFieldLabel(field);
                             return <th key={field}>{label}</th>;
                           })}
                           {/* Dynamic Custom Image Fields */}
                           {customImgFields.map(field => {
-                            const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                            const label = formatFieldLabel(field.field);
                             return <th key={field.field}>{label}</th>;
                           })}
                           <th>Enrolled On</th>
@@ -1192,7 +1192,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                         <>
                           <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
                           {entries.map(([key, val]) => {
-                            const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                            const label = formatFieldLabel(key);
                             return (
                               <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <span style={{ color: 'var(--muted)' }}>{label}:</span>
@@ -1419,7 +1419,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
               {/* Custom image fields */}
               {customImgFields.map(field => {
-                const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                const label = formatFieldLabel(field.field);
                 const value = customFields[field.field] || '';
                 const fieldWidth = field.width || 120;
                 const fieldHeight = field.height || 160;
@@ -1463,7 +1463,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
               {/* Custom fields mapped dynamically */}
               {formFields.map(field => {
-                const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const label = formatFieldLabel(field);
                 const clean = cleanFieldKey(field);
                 const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
                 return (

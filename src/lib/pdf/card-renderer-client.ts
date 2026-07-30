@@ -71,8 +71,8 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
-export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue };
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel };
 
 /**
  * Loads a custom font using the browser's FontFace API.

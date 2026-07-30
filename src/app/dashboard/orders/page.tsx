@@ -5,6 +5,7 @@ import { Plus, FileText, Calendar, DollarSign, FolderOpen, RefreshCcw, Image as 
 import { generateApprovalPdfClient } from '@/lib/pdf/approval-pdf-generator';
 import { generateProductionPdfClient } from '@/lib/pdf/production-pdf-generator';
 import CardPreview from '@/app/components/CardPreview';
+import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
@@ -1692,7 +1693,7 @@ export default function OrdersPage() {
                       {/* Dynamic Custom Fields */}
                       {Object.entries(selectedCardholderForDetails.customFields || {}).map(([key, val]) => (
                         <tr key={key} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                          <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').replace(/^./, s => s.toUpperCase())}</td>
+                          <td style={{ padding: '10px 16px', color: 'var(--muted)' }}>{formatFieldLabel(key)}</td>
                           <td style={{ padding: '10px 16px' }}>
                             {typeof val === 'string' && val.startsWith('blob:') ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

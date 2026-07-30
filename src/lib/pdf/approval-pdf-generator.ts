@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, FieldCoordinate, clearTemplateBgCache } from './card-renderer-client';
-import { getResolvedFieldValue } from './field-resolver';
+import { getResolvedFieldValue, formatFieldLabel } from './field-resolver';
 
 async function safeDrawText(
   page: any,
@@ -318,10 +318,7 @@ export async function generateApprovalPdfClient(
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
             if (!label) {
-              label = fieldKey
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase())
-                .trim();
+              label = formatFieldLabel(fieldKey);
             }
             const textToDraw = `${label}: ${val}`;
             await safeDrawText(page, pdfDoc, textToDraw, {
@@ -411,10 +408,7 @@ export async function generateApprovalPdfClient(
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
             if (!label) {
-              label = fieldKey
-                .replace(/([A-Z])/g, ' $1')
-                .replace(/^./, str => str.toUpperCase())
-                .trim();
+              label = formatFieldLabel(fieldKey);
             }
             detailsList.push(`${label}: ${val}`);
           }

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
-import { getResolvedFieldValue, isPlaceholderStaticValue } from '@/lib/pdf/card-renderer-client';
+import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 import {
   Building2,
   ArrowLeft,
@@ -1610,12 +1610,7 @@ export default function ClientDetailsPage() {
 
         let label = (f.label || f.name || f.field).trim();
         if (!f.label && !f.name) {
-          label = f.field
-            .replace(/([A-Z])/g, ' $1')
-            .replace(/_/g, ' ')
-            .replace(/^./, (str: string) => str.toUpperCase())
-            .replace(/\s+/g, ' ')
-            .trim();
+          label = formatFieldLabel(f.field);
         }
 
         cols.push({
@@ -1738,7 +1733,7 @@ export default function ClientDetailsPage() {
         if (f.type === 'image') {
           const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
           if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
-            const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            const label = formatFieldLabel(f.field);
             warnings.push(`${label} is missing`);
           }
           return;
@@ -1747,7 +1742,7 @@ export default function ClientDetailsPage() {
         // All other text/barcode/qrcode fields (class, rollNo, bloodGroup, fatherName, address, phone, etc.)
         const val = getResolvedFieldValue(f.field, cardholderData, ch);
         if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
-          const label = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+          const label = formatFieldLabel(f.field);
           warnings.push(`${label} is missing`);
         }
       });
@@ -3556,7 +3551,7 @@ export default function ClientDetailsPage() {
                       // Detect image field: either template says type=image, or the stored value is a URL
                       const isImage = fieldMeta?.type === 'image' || 
                         (!!val && (val.startsWith('http') || val.startsWith('data:')));
-                      const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+                      const label = formatFieldLabel(key);
 
                       const clean = key.toLowerCase().replace(/[^a-z]/g, '');
                       const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
@@ -3636,7 +3631,7 @@ export default function ClientDetailsPage() {
                     if (meta && (meta.type === 'text' || meta.type === 'id')) {
                       const isSystemKey = ['name', 'fullName', 'designation', 'role', 'cardSerial', 'validTill', 'validTillDate'].includes(k);
                       if (!isSystemKey && (!v || String(v).trim() === '')) {
-                        const lbl = k.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                        const lbl = formatFieldLabel(k);
                         inlineWarnings.push(`${lbl} is missing`);
                       }
                     }
@@ -3654,7 +3649,7 @@ export default function ClientDetailsPage() {
                     const hasPhotoUrl = editPhotoUrl && editPhotoUrl.trim() !== '' && editPhotoUrl !== 'null' && editPhotoUrl !== 'undefined';
 
                     if (!hasCustomVal && !hasPhotoUrl) {
-                      const lbl = f.field.replace(/([A-Z])/g, ' $1').replace(/^./, (s: string) => s.toUpperCase());
+                      const lbl = formatFieldLabel(f.field);
                       inlineWarnings.push(`${lbl} is missing`);
                     }
                   });

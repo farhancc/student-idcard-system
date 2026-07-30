@@ -5,7 +5,7 @@ import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, Refr
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
-import { computeYOffsets, wrapWords } from '@/lib/pdf/card-renderer-client';
+import { computeYOffsets, wrapWords, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 const TEMPLATE_CATEGORIES = [
   'ID_CARD', 'CERTIFICATE', 'BADGE', 'LABEL', 'TICKET',
@@ -421,13 +421,7 @@ export default function TemplatesPage() {
     
     // Auto-update prefix if field name changes and prefix was default or empty
     if (key === 'field') {
-      const formatLabel = (name: string) => {
-        return name
-          .replace(/([A-Z])/g, ' $1')
-          .replace(/_/g, ' ')
-          .trim()
-          .replace(/^./, str => str.toUpperCase());
-      };
+      const formatLabel = (name: string) => formatFieldLabel(name);
       const oldDefaultPrefix1 = `${oldField.field}: `;
       const oldDefaultPrefix2 = `${oldField.field} : `;
       const oldFormattedPrefix1 = `${formatLabel(oldField.field)}: `;
@@ -4503,7 +4497,7 @@ export default function TemplatesPage() {
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--muted)', cursor: 'pointer' }}>
                                       <input type="checkbox" checked={!!f.prefix} onChange={e => {
                                         const isChecked = e.target.checked;
-                                        const fmt = (n: string) => n.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim().replace(/^./, s => s.toUpperCase());
+                                        const fmt = (n: string) => formatFieldLabel(n);
                                         handleFieldChange('front', i, 'prefix', isChecked ? `${fmt(f.field)} : ` : '');
                                       }} />
                                       Add Field Name
@@ -4708,7 +4702,7 @@ export default function TemplatesPage() {
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.7rem', color: 'var(--muted)', cursor: 'pointer' }}>
                                       <input type="checkbox" checked={!!f.prefix} onChange={e => {
                                         const isChecked = e.target.checked;
-                                        const fmt = (n: string) => n.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim().replace(/^./, s => s.toUpperCase());
+                                        const fmt = (n: string) => formatFieldLabel(n);
                                         handleFieldChange('back', i, 'prefix', isChecked ? `${fmt(f.field)} : ` : '');
                                       }} />
                                       Add Field Name

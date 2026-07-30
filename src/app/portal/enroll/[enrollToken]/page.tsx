@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, use, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import ImageCropper from '@/app/components/ImageCropper';
 import CardPreview from '@/app/components/CardPreview';
+import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 import { Upload, Check, AlertCircle, Loader, CreditCard, Camera, X } from 'lucide-react';
 
@@ -522,7 +523,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
           {/* Custom image fields */}
           {customImgFields.map(field => {
-            const label = field.field.replace(/([A-Z])/g, ' $1').replace(/^./, (str: string) => str.toUpperCase());
+            const label = formatFieldLabel(field.field);
             const value = customFields[field.field] || '';
             const fieldWidth = field.width || 120;
             const fieldHeight = field.height || 160;
@@ -566,7 +567,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
           {/* Fields dynamically extracted from template */}
           {formFields.map(field => {
-            const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+            const label = formatFieldLabel(field);
             const clean = cleanFieldKey(field);
             const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
             return (
