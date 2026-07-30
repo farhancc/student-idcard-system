@@ -349,9 +349,10 @@ export default function ClientDetailsPage() {
   const [zipping, setZipping] = useState(false);
   const [zipProgress, setZipProgress] = useState('');
 
-  const handleDownloadAllDataZip = async () => {
+  const handleDownloadAllDataZip = async (targetCardholders?: any[]) => {
     try {
-      if (cardholders.length === 0) {
+      const listToExport = targetCardholders || cardholders;
+      if (listToExport.length === 0) {
         toast('No cardholders to export.', 'warning');
         return;
       }
@@ -389,7 +390,7 @@ export default function ClientDetailsPage() {
 
       // 1. Pre-generate unique image IDs for each cardholder to guarantee exact mapping and unique filename in ZIP
       const usedNames = new Set<string>();
-      const cardholderImageIds = cardholders.map((ch: any) => {
+      const cardholderImageIds = listToExport.map((ch: any) => {
         let baseName = '';
         
         if (ch.uniqueKey && ch.uniqueKey.trim() !== '') {
@@ -444,7 +445,7 @@ export default function ClientDetailsPage() {
       const imageIdMap = new Map(cardholderImageIds.map(x => [x.cardholderId, x.imageId]));
 
       // Format data for Excel
-      const formattedData = cardholders.map((ch: any) => {
+      const formattedData = listToExport.map((ch: any) => {
         const imageId = imageIdMap.get(ch.id) || '';
         const row: any = {
           'Name': escapeFormula(ch.name),
@@ -538,7 +539,7 @@ export default function ClientDetailsPage() {
       const downloadTasks: { cardholder: any; key: string; url: string; isCustom: boolean }[] = [];
       let totalImages = 0;
 
-      cardholders.forEach((ch: any) => {
+      listToExport.forEach((ch: any) => {
         if (ch.photoUrl) {
           downloadTasks.push({ cardholder: ch, key: 'photo', url: ch.photoUrl, isCustom: false });
           totalImages++;
@@ -2076,37 +2077,6 @@ export default function ClientDetailsPage() {
             {loading ? 'Refreshing...' : 'Refresh'}
           </button>
 
-          <button
-            className="btn btn-secondary"
-            style={{
-              fontSize: '0.85rem',
-              padding: '8px 14px',
-              gap: '6px',
-              background: 'rgba(59,130,246,0.1)',
-              border: '1px solid rgba(59,130,246,0.3)',
-              color: '#60a5fa'
-            }}
-            onClick={handleDownloadAllDataZip}
-            disabled={zipping}
-          >
-            <Download size={14} />
-            {zipping ? (zipProgress || 'Zipping...') : `Download Data ZIP (${cardholders.length})`}
-          </button>
-
-          <button
-            className="btn btn-secondary"
-            style={{
-              fontSize: '0.85rem',
-              padding: '8px 14px',
-              gap: '6px',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              color: '#ef4444'
-            }}
-            onClick={handlePurgeClient}
-          >
-            <Trash2 size={14} /> Purge Client Data
-          </button>
         </div>
       </div>
 
@@ -2484,6 +2454,41 @@ export default function ClientDetailsPage() {
                             <FileSpreadsheet size={14} />
                             {hasTmplSelection ? `Export Excel (${selectedInTmpl.length})` : 'Export Excel'}
                           </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{
+                              fontSize: '0.8rem',
+                              padding: '5px 12px',
+                              gap: '6px',
+                              background: 'rgba(59,130,246,0.1)',
+                              border: '1px solid rgba(59,130,246,0.3)',
+                              color: '#60a5fa'
+                            }}
+                            onClick={() => handleDownloadAllDataZip(targetTmplList)}
+                            disabled={zipping}
+                            title="Download ZIP package of photos and Excel metadata for this template"
+                          >
+                            <Download size={14} />
+                            {zipping ? (zipProgress || 'Zipping...') : 'Download Data ZIP'}
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{
+                              fontSize: '0.8rem',
+                              padding: '5px 12px',
+                              gap: '6px',
+                              background: 'rgba(239,68,68,0.1)',
+                              border: '1px solid rgba(239,68,68,0.3)',
+                              color: '#ef4444'
+                            }}
+                            onClick={handlePurgeClient}
+                            title="Purge all client data and files permanently"
+                          >
+                            <Trash2 size={14} />
+                            Purge Client Data
+                          </button>
                         </div>
                       </div>
 
@@ -2732,6 +2737,41 @@ export default function ClientDetailsPage() {
                         >
                           <FileSpreadsheet size={14} />
                           {hasUnassignedSelection ? `Export Excel (${unassignedSelected.length})` : 'Export Excel'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.8rem',
+                            padding: '5px 12px',
+                            gap: '6px',
+                            background: 'rgba(59,130,246,0.1)',
+                            border: '1px solid rgba(59,130,246,0.3)',
+                            color: '#60a5fa'
+                          }}
+                          onClick={() => handleDownloadAllDataZip(targetUnassignedList)}
+                          disabled={zipping}
+                          title="Download ZIP package of photos and Excel metadata for unassigned cardholders"
+                        >
+                          <Download size={14} />
+                          {zipping ? (zipProgress || 'Zipping...') : 'Download Data ZIP'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.8rem',
+                            padding: '5px 12px',
+                            gap: '6px',
+                            background: 'rgba(239,68,68,0.1)',
+                            border: '1px solid rgba(239,68,68,0.3)',
+                            color: '#ef4444'
+                          }}
+                          onClick={handlePurgeClient}
+                          title="Purge all client data and files permanently"
+                        >
+                          <Trash2 size={14} />
+                          Purge Client Data
                         </button>
                       </div>
                     </div>
