@@ -88,7 +88,7 @@ export async function POST(request: Request) {
       const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
       totalCreditsNeeded = cardCount * costPerCard;
     } else if (pdfType === 'APPROVAL') {
-      totalCreditsNeeded = creditSettings.costApprovalPdf;
+      totalCreditsNeeded = isDoubleSided ? creditSettings.costApprovalPdfDouble : creditSettings.costApprovalPdfSingle;
     }
 
     const jobOptions = {

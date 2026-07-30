@@ -134,10 +134,14 @@ export async function POST(request: Request) {
             const creditSettings = await getCreditSettings();
             const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
             creditsUsed = cardCount * costPerCard;
-          } else if (job.pdfType === 'APPROVAL') {
+          } else if (job.pdfType === 'APPROVAL' && order) {
+            const template = await tx.cardTemplate.findUnique({
+              where: { id: order.templateId },
+            });
+            const isDoubleSided = !!template?.backImageUrl;
             const { getCreditSettings } = require('@/lib/system-settings');
             const creditSettings = await getCreditSettings();
-            creditsUsed = creditSettings.costApprovalPdf;
+            creditsUsed = isDoubleSided ? creditSettings.costApprovalPdfDouble : creditSettings.costApprovalPdfSingle;
           }
         }
 

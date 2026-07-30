@@ -158,7 +158,8 @@ export default function SuperAdminDashboard() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [costSingleSided, setCostSingleSided] = useState('10');
   const [costDoubleSided, setCostDoubleSided] = useState('15');
-  const [costApprovalPdf, setCostApprovalPdf] = useState('20');
+  const [costApprovalPdfSingle, setCostApprovalPdfSingle] = useState('10');
+  const [costApprovalPdfDouble, setCostApprovalPdfDouble] = useState('20');
   const [priceCreditBasic, setPriceCreditBasic] = useState('1.5');
   const [priceCreditPro, setPriceCreditPro] = useState('1.2');
   const [priceCreditEnterprise, setPriceCreditEnterprise] = useState('1.0');
@@ -483,7 +484,8 @@ export default function SuperAdminDashboard() {
       if (data.settings) {
         setCostSingleSided(String(data.settings.costSingleSided));
         setCostDoubleSided(String(data.settings.costDoubleSided));
-        setCostApprovalPdf(String(data.settings.costApprovalPdf));
+        setCostApprovalPdfSingle(String(data.settings.costApprovalPdfSingle || data.settings.costApprovalPdf || '10'));
+        setCostApprovalPdfDouble(String(data.settings.costApprovalPdfDouble || data.settings.costApprovalPdf || '20'));
         setPriceCreditBasic(String(data.settings.priceCreditBasic));
         setPriceCreditPro(String(data.settings.priceCreditPro));
         setPriceCreditEnterprise(String(data.settings.priceCreditEnterprise));
@@ -507,7 +509,8 @@ export default function SuperAdminDashboard() {
         body: JSON.stringify({
           costSingleSided: Number(costSingleSided),
           costDoubleSided: Number(costDoubleSided),
-          costApprovalPdf: Number(costApprovalPdf),
+          costApprovalPdfSingle: Number(costApprovalPdfSingle),
+          costApprovalPdfDouble: Number(costApprovalPdfDouble),
           priceCreditBasic: Number(priceCreditBasic),
           priceCreditPro: Number(priceCreditPro),
           priceCreditEnterprise: Number(priceCreditEnterprise),
@@ -1963,19 +1966,34 @@ export default function SuperAdminDashboard() {
                 <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per cardholder in the order for double-sided templates.</span>
               </div>
 
-              <div style={{ marginBottom: '24px' }}>
-                <label className="form-label" htmlFor="costApprovalPdf" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Approval PDF Generation Cost (Credits)</label>
+              <div style={{ marginBottom: '20px' }}>
+                <label className="form-label" htmlFor="costApprovalPdfSingle" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Single-sided Approval PDF Cost (Credits)</label>
                 <input
                   type="number"
-                  id="costApprovalPdf"
+                  id="costApprovalPdfSingle"
                   className="form-input"
-                  value={costApprovalPdf}
-                  onChange={(e) => setCostApprovalPdf(e.target.value)}
+                  value={costApprovalPdfSingle}
+                  onChange={(e) => setCostApprovalPdfSingle(e.target.value)}
                   min="0"
                   required
                   style={{ width: '100%' }}
                 />
-                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated (regardless of cardholder count).</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated for single-sided templates.</span>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="form-label" htmlFor="costApprovalPdfDouble" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Double-sided Approval PDF Cost (Credits)</label>
+                <input
+                  type="number"
+                  id="costApprovalPdfDouble"
+                  className="form-input"
+                  value={costApprovalPdfDouble}
+                  onChange={(e) => setCostApprovalPdfDouble(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated for double-sided templates.</span>
               </div>
 
               <div style={{ margin: '28px 0 16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>

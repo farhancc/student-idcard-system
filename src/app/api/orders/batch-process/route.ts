@@ -188,7 +188,7 @@ export async function POST(request: Request) {
     const creditSettings = await getCreditSettings();
     const costPerCard = isDoubleSided ? creditSettings.costDoubleSided : creditSettings.costSingleSided;
     const productionCreditsNeeded = cardCount * costPerCard;
-    const approvalCreditsNeeded = creditSettings.costApprovalPdf;
+    const approvalCreditsNeeded = isDoubleSided ? creditSettings.costApprovalPdfDouble : creditSettings.costApprovalPdfSingle;
     const totalCreditsNeeded = productionCreditsNeeded + approvalCreditsNeeded;
 
     const press = await prisma.press.findUnique({ where: { id: pressId } });
