@@ -388,8 +388,10 @@ export async function renderCardSideClient(
       });
       if (localPath) {
         const formattedPath = localPath.replace(/\\/g, '/');
-        const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
-        bgUrl = `local://${prefix}${formattedPath}`;
+        // Windows paths like C:/... need triple-slash: local:///C:/...
+        const needsLeadingSlash = /^[a-zA-Z]:/.test(formattedPath);
+        const localPathSegment = needsLeadingSlash ? `/${formattedPath}` : formattedPath.startsWith('/') ? formattedPath : `/${formattedPath}`;
+        bgUrl = `local://${localPathSegment}`;
       } else if (originalUrl) {
         // No local cache → fall back to Cloudinary original (high-res)
         bgUrl = originalUrl;
@@ -903,9 +905,15 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       if (localPath) {
+        // Normalise back-slashes (Windows) to forward-slashes
         const formattedPath = localPath.replace(/\\/g, '/');
-        const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
-        finalBgUrl = `local://${prefix}${formattedPath}`;
+        // Windows absolute paths (e.g. C:/...) need an extra leading slash so
+        // the URL is local:///C:/... rather than local://C:/... — the latter
+        // makes URL parsers treat 'C' as the hostname, causing a silent fetch
+        // failure that falls through to the raster preview fallback.
+        const needsLeadingSlash = /^[a-zA-Z]:/.test(formattedPath);
+        const localPathSegment = needsLeadingSlash ? `/${formattedPath}` : formattedPath.startsWith('/') ? formattedPath : `/${formattedPath}`;
+        finalBgUrl = `local://${localPathSegment}`;
         if (template.version) {
           finalBgUrl = `${finalBgUrl}?v=${template.version}`;
         }
