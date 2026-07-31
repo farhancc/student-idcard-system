@@ -107,6 +107,12 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
       return;
     }
     let srcUrl = url.trim();
+    if (srcUrl.startsWith('local://')) {
+      const withoutScheme = srcUrl.substring(8);
+      if (/^[a-zA-Z]:/.test(withoutScheme)) {
+        srcUrl = `local:///${withoutScheme}`;
+      }
+    }
     if (typeof window !== 'undefined') {
       if (srcUrl.startsWith('/')) {
         srcUrl = `${window.location.origin}${srcUrl}`;
@@ -736,6 +742,14 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
+  // Check local:// on Windows: ensure triple-slash local:///C:/...
+  if (targetUrl.startsWith('local://')) {
+    const withoutScheme = targetUrl.substring(8);
+    if (/^[a-zA-Z]:/.test(withoutScheme)) {
+      targetUrl = `local:///${withoutScheme}`;
+    }
+  }
+
   // Relative path resolution
   if (typeof window !== 'undefined') {
     if (targetUrl.startsWith('/')) {
@@ -1004,7 +1018,15 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   // ── 3. Prepare data ──────────────────────────────────────────────────────
-  const customData = cardholder.customFields ? JSON.parse(cardholder.customFields) : {};
+  const customData = cardholder.customFields
+    ? typeof cardholder.customFields === 'string'
+      ? (cardholder.customFields.trim().startsWith('{') || cardholder.customFields.trim().startsWith('[')
+          ? JSON.parse(cardholder.customFields)
+          : {})
+      : cardholder.customFields
+    : {};
+
+  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
 
   let formattedValidTill = '';
   if (validTillDate) {
@@ -1015,13 +1037,19 @@ export async function renderCardSideToPdfBytesClient(
   const data: Record<string, any> = {
     name: cardholder.name || '',
     designation: cardholder.designation || '',
-    photo: cardholder.photoUrl || '',
+    photo: effectivePhotoUrl || cardholder.photoUrl || '',
+    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
     cardSerial: cardholder.cardSerial || '',
     uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
     id: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
     validTill: formattedValidTill,
     ...customData,
   };
+
+  if (effectivePhotoUrl) {
+    data.photo = effectivePhotoUrl;
+    data.photoUrl = effectivePhotoUrl;
+  }
 
   // \u2500\u2500 4. Pre-embed fonts \u2500\u2500
   const fontCache = new Map<string, any>();
