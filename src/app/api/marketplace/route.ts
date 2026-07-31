@@ -23,13 +23,19 @@ export async function GET(request: Request) {
     const hasBarcode = searchParams.get('has_barcode') === '1';
     const priceFilter = searchParams.get('price') || ''; // 'free' | 'paid'
 
+    const pressIdStr = request.headers.get('x-press-id');
+    const pressId = pressIdStr ? Number(pressIdStr) : null;
+
+    // All marketplace listings must be explicitly published (isPublic: true).
+    // Official/global templates (pressId: null) are also subject to this requirement.
+    // Exclude the requesting press's own templates so sellers don't see their
+    // own listings in the browse view (they manage them from the templates page).
+    const pressIdForExclusion = pressId ? Number(pressId) : null;
     const where: any = {
+      isPublic: true,
       isModerated: false,
       isLatest: true,
-      OR: [
-        { isPublic: true },
-        { pressId: null },
-      ],
+      ...(pressIdForExclusion ? { pressId: { not: pressIdForExclusion } } : {}),
     };
 
     if (category) where.category = category;
@@ -47,9 +53,6 @@ export async function GET(request: Request) {
     if (hasPhoto) where.frontFields = { contains: '"photo"' };
     if (hasQr) where.frontFields = { contains: '"qr"' };
     if (hasBarcode) where.frontFields = { contains: '"barcode"' };
-
-    const pressIdStr = request.headers.get('x-press-id');
-    const pressId = pressIdStr ? Number(pressIdStr) : null;
 
     let orderBy: any = { likes: 'desc' };
     if (sort === 'newest') orderBy = { createdAt: 'desc' };
