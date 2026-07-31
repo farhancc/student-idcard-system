@@ -257,6 +257,7 @@ export default function TemplatesPage() {
   const [uploadingFormat, setUploadingFormat] = useState<string | null>(null);
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishMsg, setPublishMsg] = useState('');
+  const [includeSourceFiles, setIncludeSourceFiles] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
     title: string; message: string; confirmLabel: string; variant: 'danger' | 'warning'; onConfirm: () => void;
   } | null>(null);
@@ -4876,6 +4877,7 @@ export default function TemplatesPage() {
                             setPublishPsdUrl(tmpl.psdFileUrl || null);
                             setPublishAiUrl(tmpl.aiFileUrl || null);
                             setPublishPdfUrl(tmpl.pdfFileUrl || null);
+                            setIncludeSourceFiles(!!(tmpl.cdrFileUrl || tmpl.psdFileUrl || tmpl.aiFileUrl || tmpl.pdfFileUrl));
                             setPublishMsg('');
                           }}
                           title={tmpl.isPublic ? 'Listed on Marketplace' : 'Sell on Marketplace'}
@@ -4971,100 +4973,133 @@ export default function TemplatesPage() {
               </p>
             </div>
 
-            {/* Source Design Files (.cdr, .psd, .ai, .pdf) */}
-            <div style={{ marginBottom: '24px', borderTop: '1px solid var(--glass-border)', paddingTop: '16px' }}>
-              <label className="form-label" style={{ fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <FileText size={15} color="var(--primary)" /> Source Design Files (CDR / PSD / AI / PDF)
+            {/* Choice: Include design source files? */}
+            <div style={{ marginBottom: '20px', borderTop: '1px solid var(--glass-border)', paddingTop: '16px' }}>
+              <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                Are there design source files to include?
               </label>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0', marginBottom: '14px' }}>
-                Attach original vector or raster editable files so buyers can download source files after purchasing.
-              </p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {[
-                  { key: 'cdr', label: 'CorelDraw (.cdr)', ext: '.cdr', url: publishCdrUrl, setUrl: setPublishCdrUrl },
-                  { key: 'psd', label: 'Photoshop (.psd)', ext: '.psd', url: publishPsdUrl, setUrl: setPublishPsdUrl },
-                  { key: 'ai', label: 'Illustrator (.ai)', ext: '.ai', url: publishAiUrl, setUrl: setPublishAiUrl },
-                  { key: 'pdf', label: 'Vector PDF (.pdf)', ext: '.pdf', url: publishPdfUrl, setUrl: setPublishPdfUrl },
-                ].map(f => (
-                  <div key={f.key} style={{
-                    background: 'rgba(255,255,255,0.03)',
-                    border: '1px solid ' + (f.url ? 'rgba(16,185,129,0.4)' : 'var(--glass-border)'),
-                    borderRadius: '10px',
-                    padding: '10px 12px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px',
-                  }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>{f.label}</span>
-                      {f.url ? (
-                        <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16,185,129,0.15)', padding: '1px 6px', borderRadius: '4px' }}>Attached</span>
-                      ) : (
-                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>Optional</span>
-                      )}
-                    </div>
-
-                    {f.url ? (
-                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                        <a href={f.url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, padding: '4px 8px', fontSize: '0.72rem', textDecoration: 'none', textAlign: 'center' }}>
-                          View URL
-                        </a>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#ef4444' }}
-                          onClick={() => f.setUrl(null)}
-                          title="Remove file"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <label className="btn btn-secondary" style={{
-                        padding: '6px 10px', fontSize: '0.75rem', cursor: uploadingFormat ? 'not-allowed' : 'pointer',
-                        textAlign: 'center', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px'
-                      }}>
-                        {uploadingFormat === f.key ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            Uploading...
-                          </span>
-                        ) : (
-                          <>
-                            <Upload size={12} /> Add {f.ext.toUpperCase()}
-                          </>
-                        )}
-                        <input
-                          type="file"
-                          accept={f.ext}
-                          style={{ display: 'none' }}
-                          disabled={!!uploadingFormat}
-                          onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
-                            setUploadingFormat(f.key);
-                            try {
-                              const fd = new FormData();
-                              fd.append('file', file);
-                              fd.append('type', 'source_file');
-                              const res = await fetch('/api/upload', { method: 'POST', body: fd });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error);
-                              f.setUrl(data.url || data.originalUrl);
-                              setPublishMsg(`✅ ${f.label} attached!`);
-                            } catch (err: any) {
-                              setPublishMsg(`❌ Upload failed: ${err.message}`);
-                            } finally {
-                              setUploadingFormat(null);
-                              e.target.value = '';
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-                ))}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button
+                  type="button"
+                  className={`btn ${!includeSourceFiles ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, padding: '10px 14px', fontSize: '0.82rem', justifyContent: 'center' }}
+                  onClick={() => {
+                    setIncludeSourceFiles(false);
+                    setPublishCdrUrl(null);
+                    setPublishPsdUrl(null);
+                    setPublishAiUrl(null);
+                    setPublishPdfUrl(null);
+                  }}
+                >
+                  No, publish template only
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${includeSourceFiles ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ flex: 1, padding: '10px 14px', fontSize: '0.82rem', justifyContent: 'center' }}
+                  onClick={() => setIncludeSourceFiles(true)}
+                >
+                  Yes, upload source files
+                </button>
               </div>
             </div>
+
+            {/* Source Design Files (.cdr, .psd, .ai, .pdf) */}
+            {includeSourceFiles && (
+              <div style={{ marginBottom: '24px', borderTop: '1px dashed var(--glass-border)', paddingTop: '16px' }}>
+                <label className="form-label" style={{ fontWeight: '600', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <FileText size={15} color="var(--primary)" /> Source Design Files (CDR / PSD / AI / PDF)
+                </label>
+                <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0', marginBottom: '14px' }}>
+                  Attach original vector or raster editable files so buyers can download source files after purchasing.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {[
+                    { key: 'cdr', label: 'CorelDraw (.cdr)', ext: '.cdr', url: publishCdrUrl, setUrl: setPublishCdrUrl },
+                    { key: 'psd', label: 'Photoshop (.psd)', ext: '.psd', url: publishPsdUrl, setUrl: setPublishPsdUrl },
+                    { key: 'ai', label: 'Illustrator (.ai)', ext: '.ai', url: publishAiUrl, setUrl: setPublishAiUrl },
+                    { key: 'pdf', label: 'Vector PDF (.pdf)', ext: '.pdf', url: publishPdfUrl, setUrl: setPublishPdfUrl },
+                  ].map(f => (
+                    <div key={f.key} style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid ' + (f.url ? 'rgba(16,185,129,0.4)' : 'var(--glass-border)'),
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                    }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span>{f.label}</span>
+                        {f.url ? (
+                          <span style={{ fontSize: '0.68rem', color: '#10b981', background: 'rgba(16,185,129,0.15)', padding: '1px 6px', borderRadius: '4px' }}>Attached</span>
+                        ) : (
+                          <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>Optional</span>
+                        )}
+                      </div>
+
+                      {f.url ? (
+                        <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
+                          <a href={f.url} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ flex: 1, padding: '4px 8px', fontSize: '0.72rem', textDecoration: 'none', textAlign: 'center' }}>
+                            View URL
+                          </a>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 8px', fontSize: '0.72rem', color: '#ef4444' }}
+                            onClick={() => f.setUrl(null)}
+                            title="Remove file"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="btn btn-secondary" style={{
+                          padding: '6px 10px', fontSize: '0.75rem', cursor: uploadingFormat ? 'not-allowed' : 'pointer',
+                          textAlign: 'center', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px'
+                        }}>
+                          {uploadingFormat === f.key ? (
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              Uploading...
+                            </span>
+                          ) : (
+                            <>
+                              <Upload size={12} /> Add {f.ext.toUpperCase()}
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept={f.ext}
+                            style={{ display: 'none' }}
+                            disabled={!!uploadingFormat}
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              setUploadingFormat(f.key);
+                              try {
+                                const fd = new FormData();
+                                fd.append('file', file);
+                                fd.append('type', 'source_file');
+                                const res = await fetch('/api/upload', { method: 'POST', body: fd });
+                                const data = await res.json();
+                                if (!res.ok) throw new Error(data.error);
+                                f.setUrl(data.url || data.originalUrl);
+                                setPublishMsg(`✅ ${f.label} attached!`);
+                              } catch (err: any) {
+                                setPublishMsg(`❌ Upload failed: ${err.message}`);
+                              } finally {
+                                setUploadingFormat(null);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {publishMsg && (
               <div style={{ marginBottom: '16px', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem',

@@ -191,6 +191,14 @@ function getPortalUrl() {
   if (process.env.PORTAL_URL) {
     return process.env.PORTAL_URL;
   }
+  // Check if we are running within the local development workspace folder
+  const isDevFolder = (process.cwd() && process.cwd().includes('student-id-pdf-system')) || 
+                      (process.env.APPIMAGE && process.env.APPIMAGE.includes('student-id-pdf-system')) ||
+                      (app.getAppPath() && app.getAppPath().includes('student-id-pdf-system'));
+  if (isDevFolder) {
+    console.log('Detected running in local development folder context. Using http://localhost:3000');
+    return 'http://localhost:3000';
+  }
   return app.isPackaged ? 'https://idexocards.vercel.app' : 'http://localhost:3000';
 }
 

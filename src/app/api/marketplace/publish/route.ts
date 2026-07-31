@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/marketplace/publish  — seller marks their template as public
 // Body: { templateId, price, description }
 export async function POST(request: Request) {

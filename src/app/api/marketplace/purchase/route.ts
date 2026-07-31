@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // POST /api/marketplace/purchase
 // Body: { templateId }
 export async function POST(request: Request) {

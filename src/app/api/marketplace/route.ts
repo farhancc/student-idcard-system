@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { formatFieldLabel as formatFieldLabelCentral } from '@/lib/pdf/field-resolver';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/marketplace?category=&search=&sort=popular|newest|price_asc|price_desc&page=1&limit=20
 export async function GET(request: Request) {
   try {
@@ -46,9 +48,36 @@ export async function GET(request: Request) {
     if (priceFilter === 'paid') where.price = { gt: 0 };
 
     // Field content filters: check JSON fields contain certain types
-    if (hasPhoto) where.frontFields = { contains: '"photo"' };
-    if (hasQr) where.frontFields = { contains: '"qr"' };
-    if (hasBarcode) where.frontFields = { contains: '"barcode"' };
+    const fieldConditions: any[] = [];
+    if (hasPhoto) {
+      fieldConditions.push({
+        OR: [
+          { frontFields: { contains: '"photo"' } },
+          { frontFields: { contains: '"image"' } },
+          { backFields: { contains: '"photo"' } },
+          { backFields: { contains: '"image"' } },
+        ],
+      });
+    }
+    if (hasQr) {
+      fieldConditions.push({
+        OR: [
+          { frontFields: { contains: '"qr"' } },
+          { backFields: { contains: '"qr"' } },
+        ],
+      });
+    }
+    if (hasBarcode) {
+      fieldConditions.push({
+        OR: [
+          { frontFields: { contains: '"barcode"' } },
+          { backFields: { contains: '"barcode"' } },
+        ],
+      });
+    }
+    if (fieldConditions.length > 0) {
+      where.AND = fieldConditions;
+    }
 
     let orderBy: any = { likes: 'desc' };
     if (sort === 'newest') orderBy = { createdAt: 'desc' };

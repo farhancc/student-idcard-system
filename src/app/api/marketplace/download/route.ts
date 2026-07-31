@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/marketplace/download?templateId=X&format=cdr|ai|pdf|psd
 // Secure download gateway — only accessible to buyers or original owner
 export async function GET(request: Request) {
