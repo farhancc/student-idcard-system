@@ -3039,9 +3039,7 @@ export default function TemplatesPage() {
                   {uploadingFront && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Uploading...</div>}
                   <input 
                     id="front-image-url"
-                    type="text" 
-                    className="form-input" 
-                    placeholder="Or paste background image URL: https://example.com/..." 
+                    type="hidden" 
                     value={frontImageUrl} 
                     onChange={e => setFrontImageUrl(e.target.value)} 
                   />
@@ -3064,9 +3062,7 @@ export default function TemplatesPage() {
                     {uploadingBack && <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>💾 Uploading...</div>}
                     <input 
                       id="back-image-url"
-                      type="text" 
-                      className="form-input" 
-                      placeholder="Or paste background image URL: https://example.com/..." 
+                      type="hidden" 
                       value={backImageUrl} 
                       onChange={e => setBackImageUrl(e.target.value)} 
                     />
