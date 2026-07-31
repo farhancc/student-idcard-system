@@ -776,6 +776,21 @@ ipcMain.handle('save-template-original', async (event, { templateId, side, base6
 // IPC handler to download and cache student photos locally
 ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
   try {
+    // Guard: local:// and file:// URLs are already on disk — the main process
+    // Node.js fetch() cannot resolve custom Electron protocol schemes, so
+    // attempting to fetch them would fail. Return the URL as-is if it is
+    // already a local file reference.
+    if (photoUrl && (photoUrl.startsWith('local://') || photoUrl.startsWith('file://'))) {
+      // Re-derive the system path and return a canonical local URL so the
+      // caller always gets a consistent local:// reference back.
+      const systemPath = getSystemPathFromLocalUrl(photoUrl);
+      if (systemPath && fs.existsSync(systemPath)) {
+        return { success: true, localUrl: getLocalUrlFromSystemPath(systemPath) };
+      }
+      // File doesn't exist (e.g. stale reference) — let the normal flow try
+      // to re-download it from the network (will fail gracefully below).
+    }
+
     const dir = path.join(app.getPath('userData'), 'cached_photos');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -799,6 +814,11 @@ ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
 
     const filePath = path.join(dir, `${cardholderId}${ext}`);
 
+    // Short-circuit: file is already cached on disk — skip re-download
+    if (fs.existsSync(filePath)) {
+      return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
+    }
+
     // If it's already a data URI, write it directly
     if (photoUrl.startsWith('data:')) {
       const matches = photoUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
@@ -809,7 +829,7 @@ ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
       }
     }
 
-    // Otherwise download the file
+    // Otherwise download the file from the network
     const response = await fetch(photoUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch photo from ${photoUrl}: ${response.statusText}`);
