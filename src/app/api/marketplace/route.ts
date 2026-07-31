@@ -28,14 +28,10 @@ export async function GET(request: Request) {
 
     // All marketplace listings must be explicitly published (isPublic: true).
     // Official/global templates (pressId: null) are also subject to this requirement.
-    // Exclude the requesting press's own templates so sellers don't see their
-    // own listings in the browse view (they manage them from the templates page).
-    const pressIdForExclusion = pressId ? Number(pressId) : null;
     const where: any = {
       isPublic: true,
       isModerated: false,
       isLatest: true,
-      ...(pressIdForExclusion ? { pressId: { not: pressIdForExclusion } } : {}),
     };
 
     if (category) where.category = category;

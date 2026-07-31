@@ -36,6 +36,7 @@ interface Template {
   isLiked?: boolean;
   isReported?: boolean;
   isPurchased?: boolean;
+  pressId?: number | null;
 }
 
 export default function MarketplacePage() {
@@ -74,6 +75,7 @@ export default function MarketplacePage() {
 
   // Credits display
   const [credits, setCredits] = useState<number | null>(null);
+  const [currentPressId, setCurrentPressId] = useState<number | null>(null);
 
   const fetchCredits = async () => {
     try {
@@ -81,6 +83,7 @@ export default function MarketplacePage() {
       if (res.ok) {
         const d = await res.json();
         setCredits((d.press?.credits ?? 0) + (d.press?.promoCredits ?? 0));
+        setCurrentPressId(d.press?.id ? Number(d.press.id) : null);
       }
     } catch {}
   };
@@ -333,6 +336,7 @@ export default function MarketplacePage() {
                   isLiking={liking === t.id}
                   isLiked={likedSet.has(t.id)}
                   isReported={reportedSet.has(t.id)}
+                  isOwnTemplate={t.pressId !== null && t.pressId === currentPressId}
                   onSelect={() => setSelectedTemplate(t)}
                   onPurchase={() => handlePurchase(t)}
                   onLike={() => handleLike(t)}
@@ -400,6 +404,7 @@ export default function MarketplacePage() {
           isLiking={liking === selectedTemplate.id}
           isLiked={likedSet.has(selectedTemplate.id)}
           isReported={reportedSet.has(selectedTemplate.id)}
+          isOwnTemplate={selectedTemplate.pressId !== null && selectedTemplate.pressId === currentPressId}
           onClose={() => setSelectedTemplate(null)}
           onPurchase={() => handlePurchase(selectedTemplate)}
           onLike={() => handleLike(selectedTemplate)}
@@ -412,13 +417,14 @@ export default function MarketplacePage() {
   );
 }
 
-function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLiked = false, isReported = false, onSelect, onPurchase, onLike, onReport, onDownload }: {
+function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLiked = false, isReported = false, isOwnTemplate = false, onSelect, onPurchase, onLike, onReport, onDownload }: {
   template: Template;
   isPurchased: boolean;
   isPurchasing: boolean;
   isLiking: boolean;
   isLiked?: boolean;
   isReported?: boolean;
+  isOwnTemplate?: boolean;
   onSelect: () => void;
   onPurchase: () => void;
   onLike: () => void;
@@ -461,6 +467,9 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
         <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
           {t.isOfficial && (
             <span style={{ background: '#6366f1', color: '#fff', padding: '2px 8px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '700' }}>OFFICIAL</span>
+          )}
+          {isOwnTemplate && (
+            <span style={{ background: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '700' }}>YOUR LISTING</span>
           )}
           <span style={{ background: 'rgba(0,0,0,0.7)', color: '#fff', padding: '2px 8px', borderRadius: '20px', fontSize: '0.65rem' }}>
             {CAT_LABELS[t.category] || t.category}
@@ -532,15 +541,26 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
               <CheckCircle size={13} /> In Your Library
             </div>
           )}
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center' }}
-            onClick={onPurchase}
-            disabled={isPurchasing}
-          >
-            {isPurchasing ? <div className="spinner" style={{ width: '14px', height: '14px' }} /> : <ShoppingCart size={13} />}
-            {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add to Library Again' : `Buy Again · ${t.price} cr`) : (t.price === 0 ? 'Add to Library' : `Buy · ${t.price} cr`)}
-          </button>
+          {isOwnTemplate ? (
+            <button
+              className="btn btn-secondary"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center', cursor: 'default', opacity: 0.8 }}
+              disabled
+            >
+              <CheckCircle size={13} color="#10b981" />
+              Your Template
+            </button>
+          ) : (
+            <button
+              className="btn btn-primary"
+              style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center' }}
+              onClick={onPurchase}
+              disabled={isPurchasing}
+            >
+              {isPurchasing ? <div className="spinner" style={{ width: '14px', height: '14px' }} /> : <ShoppingCart size={13} />}
+              {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add to Library Again' : `Buy Again · ${t.price} cr`) : (t.price === 0 ? 'Add to Library' : `Buy · ${t.price} cr`)}
+            </button>
+          )}
 
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
@@ -609,6 +629,7 @@ function TemplateDetailModal({
   isLiking,
   isLiked = false,
   isReported = false,
+  isOwnTemplate = false,
   onClose,
   onPurchase,
   onLike,
@@ -621,6 +642,7 @@ function TemplateDetailModal({
   isLiking: boolean;
   isLiked?: boolean;
   isReported?: boolean;
+  isOwnTemplate?: boolean;
   onClose: () => void;
   onPurchase: () => void;
   onLike: () => void;
@@ -683,6 +705,9 @@ function TemplateDetailModal({
               <h2 style={{ fontSize: '1.3rem', fontWeight: '700', margin: 0 }}>{t.name}</h2>
               {t.isOfficial && (
                 <span style={{ background: '#6366f1', color: '#fff', padding: '2px 8px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '700' }}>OFFICIAL</span>
+              )}
+              {isOwnTemplate && (
+                <span style={{ background: '#10b981', color: '#fff', padding: '2px 8px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: '700' }}>YOUR LISTING</span>
               )}
             </div>
             <p style={{ color: 'var(--muted)', fontSize: '0.82rem', margin: '4px 0 0 0' }}>
@@ -948,15 +973,26 @@ function TemplateDetailModal({
                 )}
               </div>
             )}
-            <button
-              className="btn btn-primary"
-              style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px' }}
-              onClick={onPurchase}
-              disabled={isPurchasing}
-            >
-              {isPurchasing ? <div className="spinner" style={{ width: '16px', height: '16px' }} /> : <ShoppingCart size={16} />}
-              {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add Again' : `Buy Again · ${t.price} Credits`) : (t.price === 0 ? 'Add to Library' : `Buy Template · ${t.price} Credits`)}
-            </button>
+            {isOwnTemplate ? (
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px', cursor: 'default', opacity: 0.8 }}
+                disabled
+              >
+                <CheckCircle size={16} color="#10b981" />
+                Your Template
+              </button>
+            ) : (
+              <button
+                className="btn btn-primary"
+                style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px' }}
+                onClick={onPurchase}
+                disabled={isPurchasing}
+              >
+                {isPurchasing ? <div className="spinner" style={{ width: '16px', height: '16px' }} /> : <ShoppingCart size={16} />}
+                {isPurchasing ? 'Processing...' : isPurchased ? (t.price === 0 ? 'Add Again' : `Buy Again · ${t.price} Credits`) : (t.price === 0 ? 'Add to Library' : `Buy Template · ${t.price} Credits`)}
+              </button>
+            )}
           </div>
         </div>
 
