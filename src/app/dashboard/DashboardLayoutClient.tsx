@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import PlatformTour, { resetTour } from '@/components/ui/PlatformTour';
 import { 
   LayoutDashboard, 
   Users, 
@@ -17,6 +18,7 @@ import {
   Menu,
   X,
   Store,
+  HelpCircle,
 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/toast';
 
@@ -133,9 +135,12 @@ export default function DashboardLayoutClient({
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
         {menuItems.map((item) => {
           const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
+          // derive a stable id from the path segment
+          const navId = `nav-${item.path.split('/').pop() || 'overview'}`;
           return (
             <a
               key={item.path}
+              id={navId}
               href={item.path}
               onClick={() => {
                 if (isMobile) setSidebarOpen(false);
@@ -213,7 +218,7 @@ export default function DashboardLayoutClient({
         }}>
           <CreditCard size={12} color="var(--warning)" />
           <span style={{ color: 'var(--muted)' }}>Print Credits:</span>
-          <span style={{ color: 'var(--warning)', fontWeight: '600', marginLeft: 'auto' }}>
+          <span id="tour-credits" style={{ color: 'var(--warning)', fontWeight: '600', marginLeft: 'auto' }}>
             {profile?.press?.credits ?? 0}
           </span>
         </div>
@@ -255,6 +260,31 @@ export default function DashboardLayoutClient({
       >
         <LogOut size={18} />
         <span>Exit Portal</span>
+      </button>
+      {/* Restart Tour button */}
+      <button
+        onClick={resetTour}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.06)',
+          color: 'rgba(255,255,255,0.3)',
+          cursor: 'pointer',
+          fontSize: '0.75rem',
+          marginBottom: '8px',
+          transition: 'all 0.15s',
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.15)'; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.06)'; }}
+        title="Replay the platform onboarding tour"
+      >
+        <HelpCircle size={14} />
+        <span>Restart Tour</span>
       </button>
     </>
   );
@@ -362,6 +392,7 @@ export default function DashboardLayoutClient({
           {children}
         </main>
         <ProductionDaemon />
+        <PlatformTour />
       </div>
     </ToastProvider>
   );
