@@ -329,14 +329,6 @@ export function getResolvedFieldValue(
     return cardholder.name;
   }
 
-  // Fallback for image fields: Check if field definition has explicit imageUrl, sampleValue, src, url, or defaultValue
-  if (fieldType === 'image' || (f && typeof f === 'object' && f.type === 'image')) {
-    const staticImg = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
-    if (staticImg && typeof staticImg === 'string' && staticImg.trim() !== '') {
-      return staticImg.trim();
-    }
-  }
-
   return undefined;
 }
 
@@ -476,7 +468,7 @@ export function resolveFieldRawValue(
 ): any {
   if (!f || !f.field) return undefined;
 
-  const staticImg = f.staticValue || (f as any).imageUrl || (f as any).src || (f as any).url;
+  const staticImg = f.staticValue || (f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue;
 
   // 1. Try dynamic cardholder resolution first
   let resolved = getResolvedFieldValue(f.field, data, cardholder || {}, f.type);
@@ -502,8 +494,8 @@ export function resolveFieldRawValue(
     if (!isValidImageUrl(resolved) && isPrimaryPhotoField(f.field)) {
       resolved = resolveCardholderPhotoUrl(cardholder, data) || cardholder?.photoUrl || resolved;
     }
-    // If still not valid, try staticImg if provided and not a placeholder
-    if (!isValidImageUrl(resolved) && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
+    // If still not valid, try staticImg if provided
+    if (!isValidImageUrl(resolved) && staticImg) {
       resolved = staticImg;
     }
   } else {
