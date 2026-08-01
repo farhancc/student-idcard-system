@@ -25,8 +25,10 @@ import {
   Type,
   Upload,
   FileType,
-  CreditCard
+  CreditCard,
+  PlayCircle
 } from 'lucide-react';
+import { resetTour } from '@/components/ui/PlatformTour';
 
 interface ApiKey {
   id: number;
@@ -583,9 +585,29 @@ export default function SettingsPage() {
       </div>
 
       <div className="dashboard-grid-2col">
-        {/* Left Column: API keys & Cleanup */}
+        {/* Left Column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          
+
+          {/* ── Restart Platform Tour ───────────────────────────────────────── */}
+          <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '20px 24px' }}>
+            <div>
+              <h4 style={{ margin: 0, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <PlayCircle size={16} color="var(--primary)" /> Platform Tour
+              </h4>
+              <p style={{ margin: '4px 0 0', fontSize: '0.8rem', color: 'var(--muted)' }}>
+                Replay the guided walkthrough that appears on first login.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ whiteSpace: 'nowrap', flexShrink: 0 }}
+              onClick={resetTour}
+            >
+              🎯 Restart Tour
+            </button>
+          </div>
+
           {/* Press Profile settings */}
           <div className="glass-panel">
             <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
