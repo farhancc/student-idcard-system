@@ -1483,7 +1483,7 @@ export default function TemplatesPage() {
           } : {
             top: `${y + h + 8}px`,
           }),
-          width: '320px',
+          width: '360px',
           background: 'rgba(15, 23, 42, 0.96)',
           backdropFilter: 'blur(12px)',
           border: '1px solid rgba(255, 255, 255, 0.15)',
@@ -1608,6 +1608,7 @@ export default function TemplatesPage() {
               }}
             >
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="text">Text</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="date">Date</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="image">Image</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="qr">QR Code</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="barcode">Barcode</option>
@@ -1906,7 +1907,36 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            {/* Alignment & Color */}
+            {/* Date Format (only for date type) */}
+            {f.type === 'date' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Date Format</label>
+                <select
+                  value={f.dateFormat || 'DD/MM/YYYY'}
+                  onChange={(e) => updateField({ dateFormat: e.target.value })}
+                  style={{
+                    background: '#1e293b',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '4px',
+                    color: '#ffffff',
+                    padding: '4px 6px',
+                    fontSize: '0.75rem',
+                    width: '100%'
+                  }}
+                >
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD/MM/YYYY">DD/MM/YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MM/DD/YYYY">MM/DD/YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="D MMM YYYY">D MMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD-MM-YYYY">DD-MM-YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMM YYYY">MMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMMM YYYY">MMMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="YYYY">YYYY (Year only)</option>
+                </select>
+              </div>
+            )}
+
+            {/* Color & Background Color row */}
             <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Color</label>
@@ -1979,7 +2009,10 @@ export default function TemplatesPage() {
                   </button>
                 </div>
               </div>
+            </div>
 
+            {/* H Align & V Align row */}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>H Align</label>
                 <div style={{ display: 'flex', background: '#1e293b', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.1)', padding: '2px' }}>
