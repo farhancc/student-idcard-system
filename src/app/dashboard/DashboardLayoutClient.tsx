@@ -135,8 +135,8 @@ export default function DashboardLayoutClient({
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
         {menuItems.map((item) => {
           const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
-          // derive a stable id from the path segment
-          const navId = `nav-${item.path.split('/').pop() || 'overview'}`;
+          // Use label-based id so tour spotlight targets match (e.g. nav-overview, nav-pdf-jobs)
+          const navId = `nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`;
           return (
             <a
               key={item.path}

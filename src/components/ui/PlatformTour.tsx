@@ -5,8 +5,8 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 const TOUR_STORAGE_KEY = 'idexo_tour_v1_done';
 
 interface TourStep {
-  targetId?: string;          // element id to spotlight (undefined = centered modal, no spotlight)
-  position?: 'right' | 'left' | 'bottom' | 'top'; // tooltip placement relative to target
+  targetId?: string;
+  position?: 'right' | 'left' | 'bottom' | 'top';
   icon: string;
   title: string;
   body: string;
@@ -77,7 +77,7 @@ const STEPS: TourStep[] = [
   {
     icon: '🚀',
     title: "You're all set!",
-    body: "That covers the essentials. Click a section from the sidebar to get started. You can reopen this tour anytime from Settings.",
+    body: "That covers the essentials. Click a section from the sidebar to get started. You can reopen this tour anytime from the sidebar.",
   },
 ];
 
@@ -93,25 +93,32 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const [visible, setVisible] = useState(false);
   const [spotlight, setSpotlight] = useState<SpotlightRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
-  const [animating, setAnimating] = useState(false);
+  // If targetId is set but element not found, fall back to centered display
+  const [fallbackCentered, setFallbackCentered] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   const currentStep = STEPS[step];
   const isLast = step === STEPS.length - 1;
   const isFirst = step === 0;
+  // Centered when: no targetId defined OR element not found in DOM
+  const isCentered = !currentStep.targetId || fallbackCentered;
 
   const computePositions = useCallback((s: TourStep) => {
     if (!s.targetId) {
       setSpotlight(null);
       setTooltipPos(null);
+      setFallbackCentered(false);
       return;
     }
     const el = document.getElementById(s.targetId);
     if (!el) {
+      // Graceful fallback: show tooltip centered, no spotlight
       setSpotlight(null);
       setTooltipPos(null);
+      setFallbackCentered(true);
       return;
     }
+    setFallbackCentered(false);
     const rect = el.getBoundingClientRect();
     const PADDING = 8;
     setSpotlight({
@@ -121,7 +128,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       height: rect.height + PADDING * 2,
     });
 
-    // Position tooltip relative to target
     const TOOLTIP_W = 320;
     const TOOLTIP_GAP = 16;
     const pos = s.position || 'right';
@@ -140,7 +146,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       top = rect.top - TOOLTIP_GAP - 160;
       left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
     }
-    // Clamp to viewport
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     left = Math.max(12, Math.min(left, vw - TOOLTIP_W - 12));
@@ -148,7 +153,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     setTooltipPos({ top, left });
   }, []);
 
-  // Recompute on step change and window resize
+  // Recompute when step or visibility changes
   useEffect(() => {
     if (visible) computePositions(currentStep);
   }, [step, visible, currentStep, computePositions]);
@@ -159,33 +164,24 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     return () => window.removeEventListener('resize', handler);
   }, [visible, currentStep, computePositions]);
 
-  // Initial mount check
+  // Show tour on first visit
   useEffect(() => {
     if (!localStorage.getItem(TOUR_STORAGE_KEY)) {
-      // Small delay so DOM is fully laid out
       setTimeout(() => setVisible(true), 800);
     }
   }, []);
 
-  const advance = (nextStep: number) => {
-    if (animating) return;
-    setAnimating(true);
-    setTimeout(() => {
-      setStep(nextStep);
-      setAnimating(false);
-    }, 200);
-  };
-
+  // No animating guard — direct state update so buttons always respond
   const handleNext = () => {
     if (isLast) {
       dismiss(true);
     } else {
-      advance(step + 1);
+      setStep(s => s + 1);
     }
   };
 
   const handleBack = () => {
-    if (!isFirst) advance(step - 1);
+    if (!isFirst) setStep(s => s - 1);
   };
 
   const dismiss = (completed: boolean) => {
@@ -196,26 +192,22 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
   if (!visible) return null;
 
-  const isCentered = !currentStep.targetId;
-
   return (
     <>
-      {/* Full-screen overlay */}
+      {/* Dark overlay — pointer-events only when no spotlight so backdrop blocks page interaction */}
       <div
         style={{
           position: 'fixed',
           inset: 0,
           zIndex: 9998,
-          transition: 'background 0.3s ease',
-          background: spotlight
-            ? 'transparent'
-            : 'rgba(0,0,0,0.72)',
+          background: spotlight ? 'transparent' : 'rgba(0,0,0,0.72)',
           backdropFilter: spotlight ? 'none' : 'blur(2px)',
           pointerEvents: spotlight ? 'none' : 'auto',
+          transition: 'background 0.3s ease',
         }}
       />
 
-      {/* SVG Spotlight mask */}
+      {/* SVG spotlight cutout */}
       {spotlight && (
         <svg
           style={{
@@ -225,7 +217,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             height: '100vh',
             zIndex: 9999,
             pointerEvents: 'none',
-            transition: 'all 0.35s cubic-bezier(0.4,0,0.2,1)',
           }}
         >
           <defs>
@@ -247,7 +238,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             fill="rgba(0,0,0,0.72)"
             mask="url(#tour-spotlight-mask)"
           />
-          {/* Spotlight border glow */}
+          {/* Indigo glow ring around spotlight */}
           <rect
             x={spotlight.left - 1}
             y={spotlight.top - 1}
@@ -255,13 +246,13 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             height={spotlight.height + 2}
             rx={11}
             fill="none"
-            stroke="rgba(99,102,241,0.8)"
+            stroke="rgba(99,102,241,0.85)"
             strokeWidth="2"
           />
         </svg>
       )}
 
-      {/* Tooltip / Card */}
+      {/* Tooltip card */}
       <div
         ref={tooltipRef}
         style={{
@@ -280,8 +271,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                 left: `${tooltipPos.left}px`,
               }
             : { display: 'none' }),
-          opacity: animating ? 0 : 1,
-          transition: 'opacity 0.2s ease, top 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
+          transition: 'top 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
           background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
           border: '1px solid rgba(99,102,241,0.4)',
           borderRadius: '16px',
@@ -290,7 +280,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           backdropFilter: 'blur(20px)',
         }}
       >
-        {/* Step indicator dots */}
+        {/* Step progress dots */}
         <div style={{ display: 'flex', gap: '5px', marginBottom: '16px', justifyContent: isCentered ? 'center' : 'flex-start' }}>
           {STEPS.map((_, i) => (
             <div
@@ -310,13 +300,8 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           ))}
         </div>
 
-        {/* Icon */}
-        <div style={{
-          fontSize: isCentered ? '3rem' : '2rem',
-          marginBottom: '12px',
-          textAlign: isCentered ? 'center' : 'left',
-          lineHeight: 1,
-        }}>
+        {/* Emoji icon */}
+        <div style={{ fontSize: isCentered ? '3rem' : '2rem', marginBottom: '12px', textAlign: isCentered ? 'center' : 'left', lineHeight: 1 }}>
           {currentStep.icon}
         </div>
 
@@ -325,7 +310,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           fontSize: isCentered ? '1.4rem' : '1.1rem',
           fontWeight: 700,
           margin: '0 0 10px',
-          color: '#ffffff',
           textAlign: isCentered ? 'center' : 'left',
           background: 'linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%)',
           WebkitBackgroundClip: 'text',
@@ -335,82 +319,38 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
         </h3>
 
         {/* Body */}
-        <p style={{
-          fontSize: '0.875rem',
-          lineHeight: 1.6,
-          color: '#94a3b8',
-          margin: '0 0 20px',
-          textAlign: isCentered ? 'center' : 'left',
-        }}>
+        <p style={{ fontSize: '0.875rem', lineHeight: 1.6, color: '#94a3b8', margin: '0 0 20px', textAlign: isCentered ? 'center' : 'left' }}>
           {currentStep.body}
         </p>
 
         {/* Step counter */}
-        <div style={{
-          fontSize: '0.7rem',
-          color: 'rgba(255,255,255,0.3)',
-          marginBottom: '16px',
-          textAlign: isCentered ? 'center' : 'left',
-        }}>
+        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.3)', marginBottom: '16px', textAlign: isCentered ? 'center' : 'left' }}>
           Step {step + 1} of {STEPS.length}
         </div>
 
-        {/* Buttons */}
+        {/* Action buttons */}
         <div style={{ display: 'flex', gap: '8px', justifyContent: isCentered ? 'center' : 'space-between', alignItems: 'center' }}>
-          {/* Skip */}
           {!isLast && (
             <button
               onClick={() => dismiss(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'rgba(255,255,255,0.3)',
-                fontSize: '0.75rem',
-                cursor: 'pointer',
-                padding: '4px 0',
-                textDecoration: 'underline',
-                flexShrink: 0,
-              }}
+              style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.3)', fontSize: '0.75rem', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', flexShrink: 0 }}
             >
               Skip tour
             </button>
           )}
 
           <div style={{ display: 'flex', gap: '8px', marginLeft: isLast ? 'auto' : undefined }}>
-            {/* Back */}
             {!isFirst && (
               <button
                 onClick={handleBack}
-                style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '8px',
-                  color: '#fff',
-                  fontSize: '0.8rem',
-                  padding: '8px 16px',
-                  cursor: 'pointer',
-                  transition: 'all 0.15s',
-                }}
+                style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', padding: '8px 16px', cursor: 'pointer' }}
               >
                 ← Back
               </button>
             )}
-
-            {/* Next / Finish */}
             <button
               onClick={handleNext}
-              style={{
-                background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                border: 'none',
-                borderRadius: '8px',
-                color: '#fff',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                padding: '8px 20px',
-                cursor: 'pointer',
-                boxShadow: '0 4px 15px rgba(99,102,241,0.4)',
-                transition: 'all 0.15s',
-              }}
+              style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', fontWeight: 600, padding: '8px 20px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99,102,241,0.4)' }}
             >
               {isLast ? '🎉 Get Started' : 'Next →'}
             </button>
@@ -418,7 +358,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
         </div>
       </div>
 
-      {/* Close (X) button */}
+      {/* Close button */}
       <button
         onClick={() => dismiss(false)}
         title="Close tour"
@@ -447,7 +387,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   );
 }
 
-// Helper to re-trigger tour (call from Settings page)
+// Call this to reset the tour so it shows on next load
 export function resetTour() {
   localStorage.removeItem(TOUR_STORAGE_KEY);
   window.location.reload();
