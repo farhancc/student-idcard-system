@@ -329,6 +329,14 @@ export function getResolvedFieldValue(
     return cardholder.name;
   }
 
+  // Fallback for image fields: Check if field definition has explicit imageUrl, sampleValue, src, url, or defaultValue
+  if (fieldType === 'image' || (f && typeof f === 'object' && f.type === 'image')) {
+    const staticImg = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+    if (staticImg && typeof staticImg === 'string' && staticImg.trim() !== '') {
+      return staticImg.trim();
+    }
+  }
+
   return undefined;
 }
 

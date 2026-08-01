@@ -545,7 +545,10 @@ export async function renderCardSideClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
-    const rawValue = resolveFieldRawValue(f, data, cardholder);
+    let rawValue = resolveFieldRawValue(f, data, cardholder);
+    if ((rawValue === undefined || rawValue === null || rawValue === '') && f.type === 'image') {
+      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+    }
     if (rawValue === undefined || rawValue === null) continue;
 
     const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
@@ -668,9 +671,10 @@ export async function renderCardSideClient(
       }
 
       case 'image': {
-        if (!rawValue) continue;
+        const imageSrc = rawValue ? String(rawValue) : (f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue);
+        if (!imageSrc) continue;
         try {
-          const img = await loadImageClient(String(rawValue));
+          const img = await loadImageClient(String(imageSrc));
           ctx.save();
           const radius = Math.min(f.borderRadius || 0, f.width / 2, f.height / 2);
           ctx.beginPath();
@@ -1263,6 +1267,9 @@ export async function renderCardSideToPdfBytesClient(
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue = resolveFieldRawValue(f, data, cardholder);
+    if ((rawValue === undefined || rawValue === null || rawValue === '') && f.type === 'image') {
+      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+    }
     const safePrefix = (f.prefix && f.prefix !== 'undefined') ? f.prefix : '';
     const safeSuffix = (f.suffix && f.suffix !== 'undefined') ? f.suffix : '';
     const hasPrefixOrSuffix = Boolean((safePrefix && safePrefix.trim()) || (safeSuffix && safeSuffix.trim()));
@@ -1488,9 +1495,10 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       case 'image': {
-        if (!rawValue) continue;
+        const imageSrc = rawValue || f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+        if (!imageSrc) continue;
         try {
-          const rawUrl = String(rawValue).trim();
+          const rawUrl = String(imageSrc).trim();
           let imgArrayBuffer: ArrayBuffer | null = null;
           try {
             imgArrayBuffer = await fetchArrayBuffer(rawUrl);
