@@ -27,88 +27,88 @@ const STEPS: TourStep[] = [
   // ─── PHASE 1: Platform Overview ────────────────────────────────────────────
   {
     icon: '👋',
-    title: 'Welcome to IDexo Press!',
-    body: "You're now inside the IDexo printing management platform. This quick tour will show you around so you can get up and running in minutes.",
-    nextLabel: "Let's go →",
+    title: 'IDexo പ്രസ്സിലേക്ക് സ്വാഗതം!',
+    body: "നിങ്ങൾ ഇപ്പോൾ IDexo പ്രിന്റിംഗ് മാനേജ്‌മെന്റ് പ്ലാറ്റ്‌ഫോമിലാണ്. കുറച്ച് മിനിറ്റുകൾക്കുള്ളിൽ ഇത് എങ്ങനെ ഉപയോഗിക്കാമെന്ന് ഈ ടൂർ കാണിച്ചുതരും.",
+    nextLabel: "തുടങ്ങാം →",
   },
   {
     targetId: 'nav-overview',
     position: 'right',
     icon: '📊',
-    title: 'Overview Dashboard',
-    body: 'Your command center. See real-time metrics — active orders, completed jobs, revenue, and recent activity at a glance.',
+    title: 'ഡാഷ്‌ബോർഡ് അവലോകനം',
+    body: 'നിങ്ങളുടെ പ്രധാന കമാൻഡ് സെന്റർ. സജീവ ഓർഡറുകൾ, പൂർത്തിയായ പ്രിന്റുകൾ, വരുമാനം, സമീപകാല പ്രവർത്തനങ്ങൾ എന്നിവ ഇവിടെ കാണാം.',
   },
   {
     targetId: 'nav-clients',
     position: 'right',
     icon: '🏫',
-    title: 'Client Registries',
-    body: 'Register schools, companies, and organizations you print cards for. Each client gets their own directory of cardholders.',
+    title: 'ക്ലയന്റ് രജിസ്ട്രികൾ',
+    body: 'നിങ്ങൾ ഐഡി കാർഡുകൾ പ്രിന്റ് ചെയ്യുന്ന സ്കൂളുകൾ, കമ്പനികൾ, സ്ഥാപനങ്ങൾ എന്നിവ ഇവിടെ രജിസ്റ്റർ ചെയ്യാം.',
   },
   {
     targetId: 'nav-templates',
     position: 'right',
     icon: '🎨',
-    title: 'Card Templates',
-    body: 'Design ID card layouts with the visual editor. Upload your background design, then map fields like name, photo, and QR codes.',
+    title: 'കാർഡ് ടെംപ്ലേറ്റുകൾ',
+    body: 'ഐഡി കാർഡ് ലേഔട്ടുകൾ ഡിസൈൻ ചെയ്യുക. പശ്ചാത്തല ഡിസൈൻ അപ്‌ലോഡ് ചെയ്ത് പേര്, ഫോട്ടോ, QR കോഡ് എന്നിവ ക്രമീകരിക്കാം.',
   },
   {
     targetId: 'nav-orders',
     position: 'right',
     icon: '📋',
-    title: 'Orders',
-    body: 'Create card printing orders for your clients. Import cardholder data via CSV, assign a template, and queue the job.',
+    title: 'ഓർഡറുകൾ',
+    body: 'ക്ലയന്റുകൾക്കായി കാർഡ് പ്രിന്റിംഗ് ഓർഡറുകൾ ഉണ്ടാക്കുക. CSV വഴി വിവരങ്ങൾ നൽകി ടെംപ്ലേറ്റ് തെരഞ്ഞെടുത്ത് ജോബ് ആരംഭിക്കുക.',
   },
   {
     targetId: 'nav-pdf-jobs',
     position: 'right',
     icon: '🖨️',
-    title: 'PDF Production Queue',
-    body: "Monitor live print jobs from the desktop client. Cards are rendered as PDFs here, ready for the physical printer.",
+    title: 'PDF പ്രൊഡക്ഷൻ ക്യൂ',
+    body: "ഡെസ്ക്ടോപ്പ് ആപ്പിൽ നിന്നുള്ള പ്രിന്റ് ജോബുകൾ നിരീക്ഷിക്കുക. കാർഡുകൾ PDF ആയി ഇവിടെ തയ്യാറാകുന്നു.",
   },
   {
     targetId: 'nav-marketplace',
     position: 'right',
     icon: '🛒',
-    title: 'Template Marketplace',
-    body: 'Browse and purchase professional ID card templates. Sell your own designs and earn credits.',
+    title: 'ടെംപ്ലേറ്റ് മാർക്കറ്റ് പ്ലേസ്',
+    body: 'പ്രൊഫഷണൽ ഐഡി കാർഡ് ടെംപ്ലേറ്റുകൾ ബ്രൗസ് ചെയ്യാനും വാങ്ങാനും നിങ്ങളുടെ സ്വന്തം ഡിസൈനുകൾ വിറ്റ് ക്രെഡിറ്റ് നേടാനും സാധിക്കും.',
   },
   {
     targetId: 'tour-credits',
     position: 'right',
     icon: '💳',
-    title: 'Print Credits',
-    body: 'Credits are consumed when producing card PDFs. Keep an eye on your balance here and top up via your admin.',
+    title: 'പ്രിന്റ് ക്രെഡിറ്റുകൾ',
+    body: 'PDF നിർമ്മിക്കുമ്പോൾ ക്രെഡിറ്റുകൾ ഉപയോഗിക്കപ്പെടും. നിങ്ങളുടെ ബാലൻസ് ഇവിടെ പരിശോധിക്കാം.',
   },
   {
     targetId: 'nav-settings',
     position: 'right',
     icon: '⚙️',
-    title: 'Settings',
-    body: "Configure your press profile, manage team members, update billing details, and customise notifications.",
+    title: 'സെറ്റിംഗ്സ്',
+    body: "പ്രൊഫൈൽ ക്രമീകരണങ്ങൾ, ടീം അംഗങ്ങളുടെ മാനേജ്മെന്റ്, ബില്ലിംഗ് വിവരങ്ങൾ, നോട്ടിഫിക്കേഷനുകൾ എന്നിവ മാറ്റാം.",
   },
 
   // ─── PHASE 2: Create your first Client ─────────────────────────────────────
   {
     icon: '🚀',
-    title: "Now let's get you set up!",
-    body: "Great — you know the layout. Next we'll walk you through creating your first client, designing a template, and sharing the enrollment link. About 3 minutes.",
-    nextLabel: "Start setup →",
+    title: "ഇനി നിങ്ങളുടെ ആദ്യ ക്ലയന്റ് സൃഷ്ടിക്കാം!",
+    body: "ഇനി നിങ്ങളുടെ ആദ്യത്തെ ക്ലയന്റിനെ ഉണ്ടാക്കി, ടെംപ്ലേറ്റ് ഡിസൈൻ ചെയ്ത് പോർട്ടൽ ലിങ്ക് പങ്കിടുന്നത് കാണിച്ചുതരാം. വെറും 3 മിനിറ്റ് മാത്രം.",
+    nextLabel: "ആരംഭിക്കാം →",
   },
   {
     navigateTo: '/dashboard/clients',
     icon: '🏫',
-    title: 'Step 1 — Register a Client',
-    body: "A client is the organization you are printing cards for (e.g. a school or company). Click the button below to open the registration form.",
-    nextLabel: 'Show me →',
+    title: 'ഘട്ടം 1 — ക്ലയന്റിനെ രജിസ്റ്റർ ചെയ്യുക',
+    body: "നിങ്ങൾ കാർഡ് പ്രിന്റ് ചെയ്യുന്ന സ്ഥാപനമാണ് ക്ലയന്റ് (ഉദാഹരണത്തിന് സ്കൂൾ അല്ലെങ്കിൽ കമ്പനി). ഫോം തുറക്കാൻ താഴെയുള്ള ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.",
+    nextLabel: 'കാണിക്കുക →',
   },
   {
     navigateTo: '/dashboard/clients',
     targetId: 'btn-register-client',
     position: 'bottom',
     icon: '➕',
-    title: 'Click "Register Client"',
-    body: 'Click the highlighted button to open the registration form.',
+    title: '"രജിസ്റ്റർ ക്ലയന്റ്" ക്ലിക്ക് ചെയ്യുക',
+    body: 'രജിസ്ട്രേഷൻ ഫോം തുറക്കാൻ ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
@@ -116,33 +116,33 @@ const STEPS: TourStep[] = [
     targetId: 'btn-save-client',
     position: 'bottom',
     icon: '📝',
-    title: 'Fill form & click "Save Organization"',
-    body: 'Fill in the organization name and contact details, then click the highlighted "Save Organization" button below.',
+    title: 'വിവരങ്ങൾ നൽകി "Save Organization" ക്ലിക്ക് ചെയ്യുക',
+    body: 'സ്ഥാപനത്തിന്റെ പേരും വിവരങ്ങളും നൽകിയ ശേഷം താഴെയുള്ള "Save Organization" ബട്ടൺ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
     navigateTo: '/dashboard/clients',
     icon: '✅',
-    title: 'Client saved!',
-    body: "Your client is registered! Now let's head to Templates to design their ID card layout.",
-    nextLabel: 'Next: Design a Template →',
+    title: 'ക്ലയന്റ് സേവ് ചെയ്തു!',
+    body: "നിങ്ങളുടെ ക്ലയന്റ് രജിസ്റ്റർ ആയിക്കഴിഞ്ഞു! ഇനി ഐഡി കാർഡ് ലേഔട്ട് ഡിസൈൻ ചെയ്യാനായി ടെംപ്ലേറ്റുകളിലേക്ക് പോകാം.",
+    nextLabel: 'അടുത്തത്: ടെംപ്ലേറ്റ് ഡിസൈൻ ചെയ്യുക →',
   },
 
   // ─── PHASE 3: Create your first Template ────────────────────────────────────
   {
     navigateTo: '/dashboard/templates',
     icon: '🎨',
-    title: 'Step 2 — Create a Template',
-    body: "A template defines the visual layout of the ID card — fields, fonts, and background design. You need at least one before you can generate a portal link.",
-    nextLabel: 'Show me →',
+    title: 'ഘട്ടം 2 — ടെംപ്ലേറ്റ് ഉണ്ടാക്കുക',
+    body: "ഐഡി കാർഡിന്റെ ഡിസൈൻ, ഫോണ്ടുകൾ, ബാക്ക്ഗ്രൗണ്ട് എന്നിവ ക്രമീകരിക്കുന്നതാണ് ടെംപ്ലേറ്റ്. പോർട്ടൽ ലിങ്ക് ഉണ്ടാക്കുന്നതിന് മുൻപ് ഒരു ടെംപ്ലേറ്റ് വേണം.",
+    nextLabel: 'കാണിക്കുക →',
   },
   {
     navigateTo: '/dashboard/templates',
     targetId: 'btn-create-template',
     position: 'bottom',
     icon: '➕',
-    title: 'Click "+ Create Template"',
-    body: 'Click the highlighted button to open the template designer setup.',
+    title: '"+ Create Template" ക്ലിക്ക് ചെയ്യുക',
+    body: 'ടെംപ്ലേറ്റ് ഡിസൈനർ തുറക്കാൻ ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
@@ -150,55 +150,55 @@ const STEPS: TourStep[] = [
     targetId: 'btn-save-template',
     position: 'top',
     icon: '🛠️',
-    title: 'Design & click "Save Template"',
-    body: 'Name your template, upload front/back background images, map coordinate fields, then click "Save Template".',
+    title: 'ഡിസൈൻ ചെയ്ത് "Save Template" ക്ലിക്ക് ചെയ്യുക',
+    body: 'ടെംപ്ലേറ്റിന് പേര് നൽകി, ഫ്രണ്ട്/ബാക്ക് പശ്ചാത്തല ചിത്രങ്ങൾ അപ്‌ലോഡ് ചെയ്ത് വിവരങ്ങൾ ക്രമീകരിച്ച ശേഷം "Save Template" ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
     navigateTo: '/dashboard/templates',
     icon: '🎨',
-    title: 'Template saved!',
-    body: "Awesome! Template created. Now let's head back to Clients to generate and share the portal link.",
-    nextLabel: 'Next: Share Portal Link →',
+    title: 'ടെംപ്ലേറ്റ് സേവ് ചെയ്തു!',
+    body: "മികച്ച വിജയം! ടെംപ്ലേറ്റ് പൂർത്തിയായി. ഇനി പോർട്ടൽ ലിങ്ക് ഉണ്ടാക്കി ഷെയർ ചെയ്യാനായി ക്ലയന്റ് പേജിലേക്ക് മടങ്ങാം.",
+    nextLabel: 'അടുത്തത്: പോർട്ടൽ ലിങ്ക് ഷെയർ ചെയ്യുക →',
   },
 
   // ─── PHASE 4: Share the Client Portal Link ───────────────────────────────────
   {
     icon: '🔗',
-    title: 'Step 3 — Share the Client Portal',
-    body: "Every client gets a secure portal link. Send it to the organization head — they enroll members, manage departments, and collect photos without needing a press account.",
-    nextLabel: 'Show me →',
+    title: 'ഘട്ടം 3 — ക്ലയന്റ് പോർട്ടൽ ഷെയർ ചെയ്യുക',
+    body: "ഓരോ ക്ലയന്റിനും ഒരു പോർട്ടൽ ലിങ്ക് ലഭിക്കും. ഇത് സ്ഥാപന മേധാവിക്ക് അയച്ചു കൊടുക്കുക — അവർക്ക് വിവരങ്ങളും ഫോട്ടോകളും ശേഖരിക്കാം.",
+    nextLabel: 'കാണിക്കുക →',
   },
   {
     navigateTo: '/dashboard/clients',
     targetId: 'btn-open-client',
     position: 'bottom',
     icon: '📂',
-    title: 'Open your Client Directory',
-    body: 'Click on your client card to open its directory dashboard where portal links live.',
+    title: 'ക്ലയന്റ് ഡയറക്ടറി തുറക്കുക',
+    body: 'പോർട്ടൽ ലിങ്ക് കാണാനായി നിങ്ങളുടെ ക്ലയന്റ് കാർഡിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
     targetId: 'btn-portal-tab',
     position: 'bottom',
     icon: '🔗',
-    title: 'Click "Client Portal Links" tab',
-    body: 'Click the highlighted tab to switch to the Portal Links section.',
+    title: '"Client Portal Links" ടാബിൽ ക്ലിക്ക് ചെയ്യുക',
+    body: 'പോർട്ടൽ ലിങ്ക് വിഭാഗത്തിലേക്ക് മാറുവാൻ ഹൈലൈറ്റ് ചെയ്ത ടാബിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
     targetId: 'btn-generate-links',
     position: 'top',
     icon: '⚡',
-    title: 'Select template & click "Generate Links"',
-    body: 'Select the template you just created from the dropdown, then click "Generate Links" to create the Organization Head and Enrollment links.',
+    title: 'ടെംപ്ലേറ്റ് തെരഞ്ഞെടുത്ത് "Generate Links" ക്ലിക്ക് ചെയ്യുക',
+    body: 'നിങ്ങൾ ഉണ്ടാക്കിയ ടെംപ്ലേറ്റ് തെരഞ്ഞെടുത്ത ശേഷം "Generate Links" ബട്ടൺ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
     icon: '📩',
-    title: 'Send to Organization',
-    body: 'Your portal links are ready! Copy the Organization Head link and send it to your client contact. They can now log in, assign department heads, and collect member photo enrollments.',
-    nextLabel: 'Finish Tour 🎉',
+    title: 'സ്ഥാപനത്തിലേക്ക് അയക്കുക',
+    body: 'നിങ്ങളുടെ പോർട്ടൽ ലിങ്കുകൾ തയ്യാറായി! ലിങ്ക് കോപ്പി ചെയ്ത് ക്ലയന്റിലേക്ക് അയക്കുക. അവർക്ക് ലോഗിൻ ചെയ്ത് അംഗങ്ങളുടെ വിവരങ്ങളും ഫോട്ടോകളും നൽകാം.',
+    nextLabel: 'ടൂർ പൂർത്തിയാക്കുക 🎉',
   },
 ];
 
@@ -225,9 +225,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const isCentered = !currentStep.targetId || fallbackCentered;
   const isWaitingForClick = !!(currentStep.waitForClick && currentStep.targetId && spotlight && !fallbackCentered);
 
-  // Phase labels
+  // Phase labels in Malayalam
   const PHASE_BOUNDARIES = [0, 9, 13, 16, 21]; // Overview, Client, Template, Portal, Done
-  const PHASE_NAMES = ['Overview', 'Client', 'Template', 'Portal', 'Done'];
+  const PHASE_NAMES = ['അവലോകനം', 'ക്ലയന്റ്', 'ടെംപ്ലേറ്റ്', 'പോർട്ടൽ', 'പൂർത്തിയായി'];
   const phaseOf = (i: number) => PHASE_BOUNDARIES.findLastIndex((b) => i >= b);
   const currentPhase = phaseOf(step);
 
@@ -541,7 +541,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             borderTop: '3px solid #6366f1', borderRadius: '50%',
             animation: 'tour-spin 0.8s linear infinite',
           }} />
-          Navigating…
+          നാവിഗേറ്റ് ചെയ്യുന്നു…
         </div>
       )}
 
@@ -597,7 +597,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
           {/* Step counter */}
           <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '14px', textAlign: isCentered ? 'center' : 'left' }}>
-            Step {step + 1} of {STEPS.length}
+            {step + 1} / {STEPS.length} ഘട്ടം
           </div>
 
           {/* Buttons */}
@@ -607,7 +607,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                 onClick={() => dismiss(false)}
                 style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: '0.72rem', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', flexShrink: 0 }}
               >
-                Skip tour
+                ടൂർ ഒഴിവാക്കുക
               </button>
             )}
             <div style={{ display: 'flex', gap: '8px', marginLeft: (isLast || isWaitingForClick) ? 'auto' : undefined }}>
@@ -616,7 +616,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                   onClick={handleBack}
                   style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', color: '#cbd5e1', fontSize: '0.78rem', padding: '6px 12px', cursor: 'pointer' }}
                 >
-                  ← Back
+                  ← പുറകോട്ട്
                 </button>
               )}
               {!isWaitingForClick && (
@@ -624,7 +624,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                   onClick={handleNext}
                   style={{ background: '#4f46e5', border: 'none', borderRadius: '6px', color: '#ffffff', fontSize: '0.78rem', fontWeight: 600, padding: '6px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
-                  {currentStep.nextLabel ?? (isLast ? '🎉 Finish' : 'Next →')}
+                  {currentStep.nextLabel ?? (isLast ? '🎉 പൂർത്തിയാക്കുക' : 'അടുത്തത് →')}
                 </button>
               )}
             </div>
@@ -636,7 +636,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       {!navigating && (
         <button
           onClick={() => dismiss(false)}
-          title="Close tour"
+          title="ടൂർ അടയ്ക്കുക"
           style={{
             position: 'fixed', top: '20px', right: '20px', zIndex: 10001,
             width: '36px', height: '36px', borderRadius: '50%',
