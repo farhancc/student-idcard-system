@@ -427,20 +427,22 @@ export default function MarketplacePage() {
 
       {/* Template Detail Modal */}
       {selectedTemplate && (
-        <TemplateDetailModal
-          template={selectedTemplate}
-          isPurchased={purchased.has(selectedTemplate.id)}
-          isPurchasing={purchasing === selectedTemplate.id}
-          isLiking={liking === selectedTemplate.id}
-          isLiked={likedSet.has(selectedTemplate.id)}
-          isReported={reportedSet.has(selectedTemplate.id)}
-          isOwnTemplate={selectedTemplate.pressId !== null && selectedTemplate.pressId === currentPressId}
-          onClose={() => setSelectedTemplate(null)}
-          onPurchase={() => handlePurchase(selectedTemplate)}
-          onLike={() => handleLike(selectedTemplate)}
-          onReport={() => handleReport(selectedTemplate)}
-          onDownload={(fmt) => handleDownload(selectedTemplate.id, fmt)}
-        />
+        <ModalErrorBoundary onClose={() => setSelectedTemplate(null)}>
+          <TemplateDetailModal
+            template={selectedTemplate}
+            isPurchased={purchased.has(selectedTemplate.id)}
+            isPurchasing={purchasing === selectedTemplate.id}
+            isLiking={liking === selectedTemplate.id}
+            isLiked={likedSet.has(selectedTemplate.id)}
+            isReported={reportedSet.has(selectedTemplate.id)}
+            isOwnTemplate={selectedTemplate.pressId !== null && selectedTemplate.pressId === currentPressId}
+            onClose={() => setSelectedTemplate(null)}
+            onPurchase={() => handlePurchase(selectedTemplate)}
+            onLike={() => handleLike(selectedTemplate)}
+            onReport={() => handleReport(selectedTemplate)}
+            onDownload={(fmt) => handleDownload(selectedTemplate.id, fmt)}
+          />
+        </ModalErrorBoundary>
       )}
 
     </div>
@@ -653,6 +655,69 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
       </div>
     </div>
   );
+}
+
+class ModalErrorBoundary extends React.Component<
+  { children: React.ReactNode; onClose: () => void },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('ModalErrorBoundary caught error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={this.props.onClose}
+        >
+          <div
+            style={{
+              background: 'var(--card-bg, #18181b)',
+              border: '1px solid var(--glass-border, rgba(255,255,255,0.12))',
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '480px',
+              width: '100%',
+              textAlign: 'center',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <AlertTriangle size={48} color="#ef4444" style={{ marginBottom: '16px' }} />
+            <h3 style={{ fontSize: '1.1rem', fontWeight: '600', marginBottom: '8px' }}>Unable to preview template</h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--muted)', marginBottom: '24px' }}>
+              An error occurred while loading this template&apos;s preview assets.
+            </p>
+            <button className="btn btn-secondary" onClick={this.props.onClose}>
+              Close Preview
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function TemplateDetailModal({
@@ -1035,12 +1100,14 @@ function TemplateDetailModal({
                 </span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
-                {editableFields.map((f: any) => {
-                  const key = f.field;
-                  const label = f.label || (key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'));
-                  const val = sampleCardholderData[key] !== undefined ? sampleCardholderData[key] : '';
+                {editableFields.map((f: any, idx: number) => {
+                  if (!f || typeof f !== 'object') return null;
+                  const key = String(f.field || f.name || f.key || `field_${idx}`);
+                  if (!key) return null;
+                  const label = f.label || (key.length > 0 ? (key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')) : `Field ${idx + 1}`);
+                  const val = sampleCardholderData[key] !== undefined ? String(sampleCardholderData[key]) : '';
                   return (
-                    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div key={`${key}_${idx}`} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <label style={{ fontSize: '0.72rem', fontWeight: '500', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         {label} {f.prefix ? <span style={{ opacity: 0.65 }}>({f.prefix})</span> : null}
                       </label>
