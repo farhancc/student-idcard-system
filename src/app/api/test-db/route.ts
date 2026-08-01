@@ -37,9 +37,19 @@ export async function GET() {
       const samples = await prisma.cardTemplate.findMany({
         where: { isPublic: true },
         select: { id: true, name: true, pressId: true, isModerated: true, price: true },
-        take: 10,
+        take: 20,
       });
       publicTemplates = samples;
+
+      // Show ALL templates grouped with status — to understand why some don't appear
+      const allTemplates: any[] = await prisma.$queryRaw`
+        SELECT t.id, t.name, t.press_id, t.is_public, t.is_moderated, t.price, p.name as press_name
+        FROM card_templates t
+        LEFT JOIN press p ON p.id = t.press_id
+        ORDER BY t.press_id, t.id
+        LIMIT 50
+      `;
+      (publicTemplates as any).__all = allTemplates;
     } catch (e: any) {
       queryError = e.message || String(e);
     }
