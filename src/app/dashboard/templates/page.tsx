@@ -5331,6 +5331,7 @@ export default function TemplatesPage() {
                     template={tmpl}
                     side={previewSide}
                     pressFonts={pressFonts}
+                    forceWeb={true}
                     style={{ maxWidth: '100%', maxHeight: isFullView ? '75vh' : '520px', objectFit: 'contain', borderRadius: '8px' }}
                   />
                 </div>

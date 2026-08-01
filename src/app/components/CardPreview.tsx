@@ -7,10 +7,10 @@ interface CardTemplate {
   id?: number;
   cardWidth: number;
   cardHeight: number;
-  frontImageUrl: string;
-  backImageUrl: string | null;
-  frontFields: string;
-  backFields: string;
+  frontImageUrl?: string | null;
+  backImageUrl?: string | null;
+  frontFields?: string | null;
+  backFields?: string | null;
 }
 
 interface Cardholder {
@@ -56,8 +56,10 @@ export default function CardPreview({
   }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const imgUrl = side === 'front' ? template.frontImageUrl : (template.backImageUrl || template.frontImageUrl);
 
   // Construct default preview dummy cardholder data if none provided
   const targetCardholder: Cardholder = cardholder || {
@@ -83,8 +85,10 @@ export default function CardPreview({
         return d;
       })();
 
+  const renderOnCanvas = (!imgUrl || forceWeb || cardholder) && (isElectron || forceWeb);
+
   useEffect(() => {
-    if (!isElectron && !forceWeb) return;
+    if (!renderOnCanvas) return;
     let isMounted = true;
 
     async function draw() {
@@ -94,7 +98,7 @@ export default function CardPreview({
         setError(null);
         await renderCardSideClient(
           canvasRef.current,
-          template,
+          template as any,
           targetCardholder,
           side,
           parsedValidTill,
@@ -117,81 +121,120 @@ export default function CardPreview({
     return () => {
       isMounted = false;
     };
-  }, [template, cardholder, side, pressFonts, validTill, isElectron, forceWeb]);
+  }, [template, cardholder, side, pressFonts, validTill, isElectron, forceWeb, renderOnCanvas]);
 
-  if (!isElectron && !forceWeb) {
-    return (
-      <div 
-        className={`relative flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 p-6 rounded-lg text-center bg-muted/20 ${className}`} 
-        style={{ 
-          width: `${template.cardWidth}px`, 
-          height: `${template.cardHeight}px`, 
-          maxWidth: '100%',
-          aspectRatio: `${template.cardWidth} / ${template.cardHeight}`,
-          maxHeight: '380px',
-          ...style 
-        }}
-      >
-        <div className="flex flex-col items-center justify-center gap-2 p-4">
-          <p className="text-sm font-semibold text-foreground/80">{side.toUpperCase()} SIDE PREVIEW</p>
-          <p className="text-xs text-muted-foreground leading-snug max-w-[200px]">
-            Real-time preview and graphics rendering is offloaded to the IDexo Desktop Client.
-          </p>
-          <div className="mt-2 text-xs px-2 py-1 bg-[#102650] text-white rounded font-medium shadow-sm">
-            Desktop Client Only
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Use CSS scale or sizing to make it fit nicely
   const wrapperStyle: React.CSSProperties = {
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    maxWidth: '100%',
+    maxHeight: style.maxHeight || '100%',
     width: '100%',
     height: '100%',
-    minHeight: '100px',
-    maxHeight: style.maxHeight || '100%',
-    maxWidth: style.maxWidth || '100%',
     ...style,
   };
 
-  const displayStyle: React.CSSProperties = {
-    maxWidth: '100%',
-    maxHeight: '100%',
-    width: 'auto',
-    height: 'auto',
-    objectFit: 'contain',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-    border: '1px solid var(--border)',
-    display: loading && !canvasRef.current ? 'none' : 'block',
-  };
+  // 1. If we have a direct static preview image URL (and not rendering live dynamic cardholder data on canvas), render high-res image
+  if (imgUrl && !cardholder && !renderOnCanvas) {
+    return (
+      <div className={`relative flex items-center justify-center ${className}`} style={wrapperStyle}>
+        <img
+          src={imgUrl}
+          alt={`${side.toUpperCase()} Preview`}
+          style={{
+            maxWidth: '100%',
+            maxHeight: style.maxHeight || '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            borderRadius: '8px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
+            border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
+            display: 'block',
+          }}
+        />
+      </div>
+    );
+  }
 
+  // 2. If rendering live on Canvas
+  if (renderOnCanvas) {
+    return (
+      <div className={`relative flex items-center justify-center ${className}`} style={wrapperStyle}>
+        {loading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 rounded-lg">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        )}
+        
+        {error && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-destructive/10 text-destructive text-center rounded-lg z-10 border border-destructive/20">
+            <span className="font-semibold text-sm">Preview Error</span>
+            <span className="text-xs mt-1">{error}</span>
+          </div>
+        )}
+
+        <canvas
+          ref={canvasRef}
+          style={{
+            maxWidth: '100%',
+            maxHeight: style.maxHeight || '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            borderRadius: '8px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
+            border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
+            display: loading && !canvasRef.current ? 'none' : 'block',
+          }}
+          width={template.cardWidth || 1013}
+          height={template.cardHeight || 638}
+        />
+      </div>
+    );
+  }
+
+  // 3. Fallback if static image exists
+  if (imgUrl) {
+    return (
+      <div className={`relative flex items-center justify-center ${className}`} style={wrapperStyle}>
+        <img
+          src={imgUrl}
+          alt={`${side.toUpperCase()} Preview`}
+          style={{
+            maxWidth: '100%',
+            maxHeight: style.maxHeight || '100%',
+            width: 'auto',
+            height: 'auto',
+            objectFit: 'contain',
+            borderRadius: '8px',
+            boxShadow: '0 8px 30px rgba(0, 0, 0, 0.4)',
+            border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
+            display: 'block',
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 4. Default empty state placeholder
   return (
-    <div className={className} style={wrapperStyle}>
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background/50 backdrop-blur-sm z-10 rounded-lg">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
-      )}
-      
-      {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 bg-destructive/10 text-destructive text-center rounded-lg z-10 border border-destructive/20">
-          <span className="font-semibold text-sm">Preview Error</span>
-          <span className="text-xs mt-1">{error}</span>
-        </div>
-      )}
-
-      <canvas
-        ref={canvasRef}
-        style={displayStyle}
-        width={template.cardWidth}
-        height={template.cardHeight}
-      />
+    <div 
+      className={`relative flex flex-col items-center justify-center border border-dashed border-muted-foreground/30 p-6 rounded-lg text-center bg-muted/20 ${className}`} 
+      style={{ 
+        maxWidth: '100%',
+        maxHeight: style.maxHeight || '380px',
+        aspectRatio: `${template.cardWidth || 1013} / ${template.cardHeight || 638}`,
+        ...style 
+      }}
+    >
+      <div className="flex flex-col items-center justify-center gap-2 p-4">
+        <p className="text-sm font-semibold text-foreground/80">{side.toUpperCase()} SIDE PREVIEW</p>
+        <p className="text-xs text-muted-foreground leading-snug max-w-[200px]">
+          No preview image available yet.
+        </p>
+      </div>
     </div>
   );
 }
