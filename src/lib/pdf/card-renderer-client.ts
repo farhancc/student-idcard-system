@@ -543,13 +543,16 @@ export async function renderCardSideClient(
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
+    const isImgField = isImageField(f) || f.type === 'image';
     let rawValue = resolveFieldRawValue(f, data, cardholder);
-    if ((rawValue === undefined || rawValue === null || rawValue === '') && (isImageField(f) || f.type === 'image')) {
-      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+    if ((rawValue === undefined || rawValue === null || rawValue === '') && isImgField) {
+      // Try all possible static image sources on the field definition
+      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue || null;
     }
-    if (rawValue === undefined || rawValue === null) continue;
+    // For non-image fields: skip if no value. For image fields: always proceed (may draw placeholder)
+    if (!isImgField && (rawValue === undefined || rawValue === null)) continue;
 
-    const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
+    const valueStr = `${f.prefix || ''}${rawValue || ''}${f.suffix || ''}`;
     const effectiveY = f.y + yOffset;
 
     switch (f.type) {

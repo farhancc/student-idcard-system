@@ -813,15 +813,47 @@ function TemplateDetailModal({
       });
     }
 
+    // Parse all fields from both sides and inject sample image URLs for every image field
+    const SAMPLE_PHOTO = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80';
+    const SAMPLE_SIGNATURE = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/37/John_Doe_Signature.svg/320px-John_Doe_Signature.svg.png';
+    const SAMPLE_LOGO = 'https://upload.wikimedia.org/wikipedia/commons/thumb/2/2f/Culinary_Arts_School_logo.svg/240px-Culinary_Arts_School_logo.svg.png';
+
+    try {
+      let allFields: any[] = [];
+      for (const src of [t.frontFields, t.backFields]) {
+        if (!src) continue;
+        const parsed = typeof src === 'string' ? JSON.parse(src || '[]') : src;
+        if (Array.isArray(parsed)) allFields = allFields.concat(parsed);
+      }
+      allFields.forEach((f: any) => {
+        if (!f || !f.field) return;
+        const fType = (f.type || '').toLowerCase();
+        const fKey = f.field.toLowerCase();
+        const isImg = fType === 'image' || fType === 'photo' || fType === 'signature' || fType === 'sig' ||
+          fType === 'logo' || fType === 'stamp' || fType === 'img' || fType === 'picture' ||
+          fType === 'static_image' || fType === 'static_img';
+        if (!isImg) return;
+        if (custom[f.field]) return; // already set by user
+        // Pick a contextual sample image
+        if (fKey.includes('sign') || fKey === 'sig') {
+          custom[f.field] = SAMPLE_SIGNATURE;
+        } else if (fKey.includes('logo') || fKey.includes('school') || fKey.includes('org') || fKey.includes('institute')) {
+          custom[f.field] = SAMPLE_LOGO;
+        } else {
+          custom[f.field] = SAMPLE_PHOTO;
+        }
+      });
+    } catch (_) {}
+
     return {
       id: 99,
       name: sampleCardholderData?.name || 'John Doe',
       designation: sampleCardholderData?.designation || 'Student / Employee',
-      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+      photoUrl: SAMPLE_PHOTO,
       cardSerial: sampleCardholderData?.cardSerial || 'STU-2026-001',
       customFields: JSON.stringify(custom),
     };
-  }, [sampleCardholderData]);
+  }, [sampleCardholderData, t.frontFields, t.backFields]);
 
   const formats = [
     { key: 'cdr', label: 'CDR', available: t.hasCdr },
