@@ -195,18 +195,10 @@ const STEPS: TourStep[] = [
     waitForClick: true,
   },
   {
-    icon: '📤',
-    title: 'Copy & share the link',
-    body: "Click Copy next to the Organization Head Portal Link and send it to your client contact. They log in, set up department heads, and distribute enrollment forms — no press account needed!",
-    nextLabel: "All done →",
-  },
-
-  // ─── PHASE 5: Done ───────────────────────────────────────────────────────────
-  {
-    icon: '🎉',
-    title: "You're all set!",
-    body: "Client ✓  Template ✓  Portal link ✓  You're ready to create your first order. Go to Orders, pick a client and template, import your cardholder CSV, and produce cards!",
-    nextLabel: "🎉 Let's go!",
+    icon: '📩',
+    title: 'Send to Organization',
+    body: 'Your portal links are ready! Copy the Organization Head link and send it to your client contact. They can now log in, assign department heads, and collect member photo enrollments.',
+    nextLabel: 'Finish Tour 🎉',
   },
 ];
 
