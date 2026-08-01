@@ -206,8 +206,8 @@ export async function GET(request: Request) {
 
       return {
         ...t,
-        frontFields: undefined, // don't expose coordinates in marketplace
-        backFields: undefined,
+        frontFields: t.frontFields,
+        backFields: t.backFields,
         fieldsSummary,
         sellerName: t.pressId ? t.press?.name : 'IDexo Official',
         isOfficial: !t.pressId,

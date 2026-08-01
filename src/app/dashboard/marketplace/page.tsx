@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import CardPreview from '@/app/components/CardPreview';
 import { useToast } from '@/components/ui/toast';
 import {
   Store, Search, Heart, Flag, Download, ShoppingCart,
@@ -31,6 +32,7 @@ interface Template {
   id: number; name: string; category: string; sides: number;
   price: number; likes: number; reports: number;
   frontImageUrl: string; backImageUrl?: string | null;
+  frontFields?: string | null; backFields?: string | null;
   sellerName: string; isOfficial: boolean;
   hasPhoto: boolean; hasQr: boolean; hasBarcode: boolean;
   hasCdr: boolean; hasAi: boolean; hasPsd: boolean; hasPdf: boolean;
@@ -684,6 +686,7 @@ function TemplateDetailModal({
     t.backImageUrl || t.sides === 2 ? 'both' : 'front'
   );
   const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<'mapped_data' | 'raw_design'>('mapped_data');
 
   const formats = [
     { key: 'cdr', label: 'CDR', available: t.hasCdr },
@@ -755,64 +758,128 @@ function TemplateDetailModal({
         </div>
 
         {/* Modal Scrollable Body */}
-        <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-          {/* Side Toggle Control (if 2-sided) */}
-          {(t.backImageUrl || t.sides === 2) && (
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+          {/* Mode & Side Controls */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '12px 16px', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+            {/* Live Data vs Raw Asset Switcher */}
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
                 type="button"
-                onClick={() => setActiveSide('both')}
-                className={`btn ${activeSide === 'both' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ fontSize: '0.78rem', padding: '6px 14px', gap: '6px' }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  border: '1px solid var(--glass-border)',
+                  background: previewMode === 'mapped_data' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                  color: previewMode === 'mapped_data' ? '#fff' : 'var(--muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                }}
+                onClick={() => setPreviewMode('mapped_data')}
               >
-                <Layers size={14} /> Both Sides
+                <Zap size={14} /> Mapped Sample Data Preview
               </button>
               <button
                 type="button"
-                onClick={() => setActiveSide('front')}
-                className={`btn ${activeSide === 'front' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.78rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  border: '1px solid var(--glass-border)',
+                  background: previewMode === 'raw_design' ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                  color: previewMode === 'raw_design' ? '#fff' : 'var(--muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s ease',
+                }}
+                onClick={() => setPreviewMode('raw_design')}
               >
-                Front Side
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSide('back')}
-                className={`btn ${activeSide === 'back' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ fontSize: '0.78rem', padding: '6px 14px' }}
-              >
-                Back Side
+                <ImageIcon size={14} /> Blank Design Asset
               </button>
             </div>
-          )}
+
+            {/* Side Toggle Control (if 2-sided) */}
+            {(t.backImageUrl || t.sides === 2) && (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setActiveSide('both')}
+                  className={`btn ${activeSide === 'both' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.78rem', padding: '6px 14px', gap: '6px' }}
+                >
+                  <Layers size={14} /> Both Sides
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSide('front')}
+                  className={`btn ${activeSide === 'front' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+                >
+                  Front Side
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveSide('back')}
+                  className={`btn ${activeSide === 'back' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.78rem', padding: '6px 14px' }}
+                >
+                  Back Side
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Previews Display */}
-          <div style={{ display: 'grid', gridTemplateColumns: activeSide === 'both' && t.backImageUrl ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: '20px', justifyContent: 'center' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: activeSide === 'both' && (t.backImageUrl || t.sides === 2) ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: '20px', justifyContent: 'center' }}>
             {(activeSide === 'both' || activeSide === 'front') && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CreditCard size={14} color="var(--primary)" /> Front Side Preview (Click for Fullscreen)
+                  <CreditCard size={14} color="var(--primary)" />
+                  Front Side {previewMode === 'mapped_data' ? '(Sample Test Data Mapped)' : 'Design Asset'}
                 </div>
                 <div
                   style={{ position: 'relative', cursor: 'zoom-in', borderRadius: '12px', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}
                   onClick={() => setFullscreenImg(t.frontImageUrl)}
                   title="Click to view full screen"
                 >
-                  <img
-                    src={t.frontImageUrl}
-                    alt={`${t.name} Front`}
-                    style={{
-                      display: 'block',
-                      maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
-                      width: '100%',
-                      height: 'auto',
-                      borderRadius: '12px',
-                      border: '1px solid var(--glass-border)',
-                      boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                      transition: 'transform 0.2s',
-                    }}
-                  />
+                  {previewMode === 'mapped_data' ? (
+                    <CardPreview
+                      template={{
+                        cardWidth: t.cardWidth || 1013,
+                        cardHeight: t.cardHeight || 638,
+                        frontImageUrl: t.frontImageUrl,
+                        backImageUrl: t.backImageUrl,
+                        frontFields: t.frontFields || '[]',
+                        backFields: t.backFields || '[]',
+                      }}
+                      side="front"
+                      forceWeb={true}
+                      style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <img
+                      src={t.frontImageUrl}
+                      alt={`${t.name} Front`}
+                      style={{
+                        display: 'block',
+                        maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
+                        width: '100%',
+                        height: 'auto',
+                        borderRadius: '12px',
+                        border: '1px solid var(--glass-border)',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                  )}
                   <div style={{
                     position: 'absolute', bottom: '10px', right: '10px',
                     background: 'rgba(0,0,0,0.75)', color: '#fff',
@@ -828,28 +895,45 @@ function TemplateDetailModal({
             {(activeSide === 'both' || activeSide === 'back') && (t.backImageUrl || t.sides === 2) && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CreditCard size={14} color="#818cf8" /> Back Side Preview (Click for Fullscreen)
+                  <CreditCard size={14} color="#818cf8" />
+                  Back Side {previewMode === 'mapped_data' ? '(Sample Test Data Mapped)' : 'Design Asset'}
                 </div>
-                {t.backImageUrl ? (
+                {t.backImageUrl || t.backFields ? (
                   <div
                     style={{ position: 'relative', cursor: 'zoom-in', borderRadius: '12px', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}
-                    onClick={() => setFullscreenImg(t.backImageUrl!)}
+                    onClick={() => setFullscreenImg(t.backImageUrl || t.frontImageUrl)}
                     title="Click to view full screen"
                   >
-                    <img
-                      src={t.backImageUrl}
-                      alt={`${t.name} Back`}
-                      style={{
-                        display: 'block',
-                        maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
-                        width: '100%',
-                        height: 'auto',
-                        borderRadius: '12px',
-                        border: '1px solid var(--glass-border)',
-                        boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                        transition: 'transform 0.2s',
-                      }}
-                    />
+                    {previewMode === 'mapped_data' ? (
+                      <CardPreview
+                        template={{
+                          cardWidth: t.cardWidth || 1013,
+                          cardHeight: t.cardHeight || 638,
+                          frontImageUrl: t.frontImageUrl,
+                          backImageUrl: t.backImageUrl,
+                          frontFields: t.frontFields || '[]',
+                          backFields: t.backFields || '[]',
+                        }}
+                        side="back"
+                        forceWeb={true}
+                        style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <img
+                        src={t.backImageUrl || t.frontImageUrl}
+                        alt={`${t.name} Back`}
+                        style={{
+                          display: 'block',
+                          maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
+                          width: '100%',
+                          height: 'auto',
+                          borderRadius: '12px',
+                          border: '1px solid var(--glass-border)',
+                          boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                          transition: 'transform 0.2s',
+                        }}
+                      />
+                    )}
                     <div style={{
                       position: 'absolute', bottom: '10px', right: '10px',
                       background: 'rgba(0,0,0,0.75)', color: '#fff',
