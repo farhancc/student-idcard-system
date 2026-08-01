@@ -22,6 +22,9 @@ interface TemplateField {
   label: string;
   type: string;
   side: 'Front' | 'Back';
+  prefix?: string;
+  suffix?: string;
+  sampleValue?: string;
 }
 
 interface Template {
@@ -932,30 +935,51 @@ function TemplateDetailModal({
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} />
-                      Front Side Fields ({frontFields.length})
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
+                      Front Side Fields ({frontField                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
                       {frontFields.map((f, i) => {
                         const badge = getFieldTypeBadge(f.type);
                         const fieldName = f.name || f.label || f.key || 'Field';
+                        const samplePreview = `${f.prefix || ''}${f.sampleValue || ''}${f.suffix || ''}`.trim();
                         return (
                           <div key={i} style={{
-                            padding: '10px 14px', borderRadius: '10px',
+                            padding: '12px 14px', borderRadius: '12px',
                             background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
-                            display: 'flex', alignItems: 'center', gap: '12px'
+                            display: 'flex', flexDirection: 'column', gap: '8px'
                           }}>
-                            <span style={{ color: badge.color, display: 'flex', padding: '8px', borderRadius: '8px', background: badge.color + '18' }}>
-                              {badge.icon}
-                            </span>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {fieldName}
-                              </div>
-                              <div style={{ fontSize: '0.72rem', color: badge.color, fontWeight: '500', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span style={{ opacity: 0.7 }}>Type:</span>
-                                <span>{badge.label}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ color: badge.color, display: 'flex', padding: '6px', borderRadius: '8px', background: badge.color + '18' }}>
+                                {badge.icon}
+                              </span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {fieldName}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: badge.color, fontWeight: '500', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ opacity: 0.7 }}>Type:</span>
+                                  <span>{badge.label}</span>
+                                </div>
                               </div>
                             </div>
+
+                            {samplePreview && (
+                              <div style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--text)',
+                                background: 'rgba(99,102,241,0.08)',
+                                border: '1px solid rgba(99,102,241,0.2)',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--muted)', fontWeight: '600', textTransform: 'uppercase' }}>Preview:</span>
+                                <span style={{ fontWeight: '500', color: '#a5b4fc', textOverflow: 'ellipsis', overflow: 'hidden' }}>{samplePreview}</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -969,33 +993,57 @@ function TemplateDetailModal({
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#818cf8' }} />
                       Back Side Fields ({backFields.length})
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: '10px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
                       {backFields.map((f, i) => {
                         const badge = getFieldTypeBadge(f.type);
                         const fieldName = f.name || f.label || f.key || 'Field';
+                        const samplePreview = `${f.prefix || ''}${f.sampleValue || ''}${f.suffix || ''}`.trim();
                         return (
                           <div key={i} style={{
-                            padding: '10px 14px', borderRadius: '10px',
+                            padding: '12px 14px', borderRadius: '12px',
                             background: 'rgba(255,255,255,0.03)', border: '1px solid var(--glass-border)',
-                            display: 'flex', alignItems: 'center', gap: '12px'
+                            display: 'flex', flexDirection: 'column', gap: '8px'
                           }}>
-                            <span style={{ color: badge.color, display: 'flex', padding: '8px', borderRadius: '8px', background: badge.color + '18' }}>
-                              {badge.icon}
-                            </span>
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {fieldName}
-                              </div>
-                              <div style={{ fontSize: '0.72rem', color: badge.color, fontWeight: '500', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <span style={{ opacity: 0.7 }}>Type:</span>
-                                <span>{badge.label}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <span style={{ color: badge.color, display: 'flex', padding: '6px', borderRadius: '8px', background: badge.color + '18' }}>
+                                {badge.icon}
+                              </span>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: '0.88rem', fontWeight: '600', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {fieldName}
+                                </div>
+                                <div style={{ fontSize: '0.7rem', color: badge.color, fontWeight: '500', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{ opacity: 0.7 }}>Type:</span>
+                                  <span>{badge.label}</span>
+                                </div>
                               </div>
                             </div>
+
+                            {samplePreview && (
+                              <div style={{
+                                fontSize: '0.75rem',
+                                color: 'var(--text)',
+                                background: 'rgba(99,102,241,0.08)',
+                                border: '1px solid rgba(99,102,241,0.2)',
+                                padding: '4px 10px',
+                                borderRadius: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                <span style={{ fontSize: '0.68rem', color: 'var(--muted)', fontWeight: '600', textTransform: 'uppercase' }}>Preview:</span>
+                                <span style={{ fontWeight: '500', color: '#a5b4fc', textOverflow: 'ellipsis', overflow: 'hidden' }}>{samplePreview}</span>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
                     </div>
                   </div>
+                )}             </div>
                 )}
               </div>
             )}

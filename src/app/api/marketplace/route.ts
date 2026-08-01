@@ -149,12 +149,29 @@ export async function GET(request: Request) {
     // Enrich: detect field types & fields summary without exposing exact X/Y coordinates
     const enriched = templates.map(t => {
       let fieldTypes: string[] = [];
-      let fieldsSummary: { key: string; name: string; label: string; type: string; side: 'Front' | 'Back' }[] = [];
+      let fieldsSummary: { key: string; name: string; label: string; type: string; side: 'Front' | 'Back'; prefix?: string; suffix?: string; sampleValue?: string }[] = [];
       try {
         const front = JSON.parse(t.frontFields || '[]');
         const back = JSON.parse(t.backFields || '[]');
         fieldTypes = [...new Set([...front, ...back].map((f: any) => f.type))];
         
+        const getSampleVal = (f: any) => {
+          if (f.sampleValue || f.defaultValue || f.value) return f.sampleValue || f.defaultValue || f.value;
+          if (f.type === 'static_text' || f.type === 'static') return f.text || f.label || 'Static Label';
+          const key = (f.key || f.field || '').toLowerCase();
+          if (key.includes('name')) return 'John Doe';
+          if (key.includes('desig') || key.includes('role')) return 'Student / Staff';
+          if (key.includes('roll') || key.includes('id') || key.includes('serial')) return 'STU-2026-09';
+          if (key.includes('valid') || key.includes('date') || key.includes('exp')) return '31/12/2027';
+          if (key.includes('blood')) return 'B+';
+          if (key.includes('phone') || key.includes('mobile')) return '+1 555 0192';
+          if (key.includes('school') || key.includes('org')) return 'Greenwood Academy';
+          if (f.type === 'image' || f.type === 'photo') return '[Cardholder Photo]';
+          if (f.type === 'qr') return '[QR Code Data]';
+          if (f.type === 'barcode') return '[Barcode Data]';
+          return 'Sample Data';
+        };
+
         fieldsSummary = [
           ...front.map((f: any) => {
             const resolvedName = formatFieldLabel(f);
@@ -164,6 +181,9 @@ export async function GET(request: Request) {
               label: resolvedName,
               type: f.type || 'text',
               side: 'Front' as const,
+              prefix: f.prefix || '',
+              suffix: f.suffix || '',
+              sampleValue: getSampleVal(f),
             };
           }),
           ...back.map((f: any) => {
@@ -174,6 +194,9 @@ export async function GET(request: Request) {
               label: resolvedName,
               type: f.type || 'text',
               side: 'Back' as const,
+              prefix: f.prefix || '',
+              suffix: f.suffix || '',
+              sampleValue: getSampleVal(f),
             };
           }),
         ];
