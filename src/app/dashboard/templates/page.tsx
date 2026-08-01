@@ -109,6 +109,7 @@ interface FieldCoordinate {
   fontWeight?: string;
   fontStyle?: string;
   color?: string;
+  backgroundColor?: string;  // hex fill behind the text field, e.g. '#ffffff'. Empty/'transparent' = none.
   align?: 'left' | 'center' | 'right';
   verticalAlign?: 'top' | 'center' | 'bottom';
   prefix?: string;
@@ -1926,6 +1927,44 @@ export default function TemplatesPage() {
                       textTransform: 'uppercase'
                     }}
                   />
+                </div>
+              </div>
+
+              {/* Background Color */}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Bg Color</label>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <input
+                    type="color"
+                    value={f.backgroundColor && f.backgroundColor !== 'transparent' ? f.backgroundColor : '#ffffff'}
+                    onChange={(e) => updateField({ backgroundColor: e.target.value })}
+                    style={{
+                      width: '28px',
+                      height: '24px',
+                      border: 'none',
+                      padding: 0,
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      opacity: (f.backgroundColor && f.backgroundColor !== 'transparent') ? 1 : 0.3,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    title={f.backgroundColor && f.backgroundColor !== 'transparent' ? 'Clear background' : 'No background set'}
+                    onClick={() => updateField({ backgroundColor: f.backgroundColor && f.backgroundColor !== 'transparent' ? 'transparent' : '#ffffff' })}
+                    style={{
+                      background: f.backgroundColor && f.backgroundColor !== 'transparent' ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      color: f.backgroundColor && f.backgroundColor !== 'transparent' ? '#ef4444' : '#64748b',
+                      padding: '2px 5px',
+                      fontSize: '0.65rem',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {f.backgroundColor && f.backgroundColor !== 'transparent' ? '✕ Clear' : 'None'}
+                  </button>
                 </div>
               </div>
 

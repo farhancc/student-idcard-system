@@ -13,7 +13,8 @@ export interface FieldCoordinate {
   fontWeight?: string; // normal | bold
   fontStyle?: string;  // normal | italic
   fontFamily?: string; // Arial | Georgia | Verdana | custom press font name
-  color?: string;      // hex color code e.g. #000000
+  color?: string;           // hex text color e.g. #000000
+  backgroundColor?: string; // hex background fill e.g. #ffffff (empty = transparent)
   align?: 'left' | 'center' | 'right';
   verticalAlign?: 'top' | 'center' | 'bottom';
   borderRadius?: number; // px — for image fields
@@ -84,8 +85,21 @@ export async function ensureFontLoadedClient(fontName: string, fontUrl: string):
     return familyName;
   }
 
+  let finalFontUrl = fontUrl.trim();
+  if (finalFontUrl.startsWith('local://')) {
+    const urlParts = finalFontUrl.split('?');
+    let pathPart = urlParts[0].substring(8);
+    const queryPart = urlParts.length > 1 ? '?' + urlParts.slice(1).join('?') : '';
+
+    if (pathPart.startsWith('/')) {
+      pathPart = pathPart.substring(1);
+    }
+    const encodedSegments = pathPart.split('/').map(segment => encodeURIComponent(segment));
+    finalFontUrl = `local:///${encodedSegments.join('/')}${queryPart}`;
+  }
+
   try {
-    const font = new FontFace(familyName, `url(${fontUrl})`);
+    const font = new FontFace(familyName, `url(${finalFontUrl})`);
     const loaded = await font.load();
     document.fonts.add(loaded);
     loadedFonts.add(familyName);
@@ -108,10 +122,15 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
     }
     let srcUrl = url.trim();
     if (srcUrl.startsWith('local://')) {
-      const withoutScheme = srcUrl.substring(8);
-      if (/^[a-zA-Z]:/.test(withoutScheme)) {
-        srcUrl = `local:///${withoutScheme}`;
+      const urlParts = srcUrl.split('?');
+      let pathPart = urlParts[0].substring(8);
+      const queryPart = urlParts.length > 1 ? '?' + urlParts.slice(1).join('?') : '';
+
+      if (pathPart.startsWith('/')) {
+        pathPart = pathPart.substring(1);
       }
+      const encodedSegments = pathPart.split('/').map(segment => encodeURIComponent(segment));
+      srcUrl = `local:///${encodedSegments.join('/')}${queryPart}`;
     }
     if (typeof window !== 'undefined') {
       if (srcUrl.startsWith('/')) {
@@ -742,12 +761,17 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
-  // Check local:// on Windows: ensure triple-slash local:///C:/...
+  // Check local:// on Windows: ensure triple-slash local:///C:/... and URL-encode path
   if (targetUrl.startsWith('local://')) {
-    const withoutScheme = targetUrl.substring(8);
-    if (/^[a-zA-Z]:/.test(withoutScheme)) {
-      targetUrl = `local:///${withoutScheme}`;
+    const urlParts = targetUrl.split('?');
+    let pathPart = urlParts[0].substring(8);
+    const queryPart = urlParts.length > 1 ? '?' + urlParts.slice(1).join('?') : '';
+
+    if (pathPart.startsWith('/')) {
+      pathPart = pathPart.substring(1);
     }
+    const encodedSegments = pathPart.split('/').map(segment => encodeURIComponent(segment));
+    targetUrl = `local:///${encodedSegments.join('/')}${queryPart}`;
   }
 
   // Relative path resolution
@@ -1141,6 +1165,13 @@ export async function renderCardSideToPdfBytesClient(
       }
 
       if (match) {
+        // Load custom font in browser document.fonts for tempCtx text measurements
+        try {
+          await ensureFontLoadedClient(match.name, match.fileUrl);
+        } catch (e) {
+          console.warn('[PDF client] ensureFontLoadedClient failed for:', match.name, e);
+        }
+
         const cacheKey = match.fileUrl;
         if (!fontCache.has(cacheKey)) {
           try {
@@ -1280,6 +1311,13 @@ export async function renderCardSideToPdfBytesClient(
               const fontWeight = f.fontWeight && f.fontWeight !== 'normal' ? f.fontWeight : 'normal';
               
               textCtx.font = `${fontStyle} ${fontWeight} ${f.fontSize || 20}px "${fontName}"`;
+              // Background fill (drawn before text so text renders on top)
+              if (f.backgroundColor && f.backgroundColor !== 'transparent') {
+                textCtx.save();
+                textCtx.fillStyle = f.backgroundColor;
+                textCtx.fillRect(0, 0, f.width, f.height);
+                textCtx.restore();
+              }
               textCtx.fillStyle = f.color || '#000000';
               textCtx.textAlign = f.align || 'left';
               textCtx.textBaseline = 'top';
@@ -1394,6 +1432,12 @@ export async function renderCardSideToPdfBytesClient(
           }
 
           let currentYPt = startYPt;
+
+          // Draw background fill rectangle behind text (drawn first so text appears on top)
+          if (f.backgroundColor && f.backgroundColor !== 'transparent') {
+            const bgRgb = hexToRgbClient(f.backgroundColor);
+            page.drawRectangle({ x: xPt, y: yPt, width: wPt, height: hPt, color: bgRgb, opacity });
+          }
 
           for (const lineText of lines) {
             if (currentYPt < yPt - lineHeightPt * 1.5 && lines.length > 1) break;
