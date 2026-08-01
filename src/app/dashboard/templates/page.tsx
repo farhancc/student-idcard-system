@@ -4455,7 +4455,7 @@ export default function TemplatesPage() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '0.95rem' }}>Front Side Coordinates mapping</h4>
-                    <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('front')}>
+                    <button id="btn-add-field-mapping" type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('front')}>
                       + Add Field Mapping
                     </button>
                   </div>

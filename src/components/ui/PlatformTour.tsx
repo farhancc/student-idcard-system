@@ -147,6 +147,15 @@ const STEPS: TourStep[] = [
   },
   {
     navigateTo: '/dashboard/templates',
+    targetId: 'btn-add-field-mapping',
+    position: 'top',
+    icon: '📍',
+    title: '"+ Add Field Mapping" ക്ലിക്ക് ചെയ്യുക',
+    body: 'കാർഡിൽ പേര്, ഫോട്ടോ, റോൾ നമ്പർ തുടങ്ങിയ വിവരങ്ങൾ ക്രമീകരിക്കാൻ ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
+    waitForClick: true,
+  },
+  {
+    navigateTo: '/dashboard/templates',
     targetId: 'btn-save-template',
     position: 'top',
     icon: '🛠️',
@@ -226,7 +235,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const isWaitingForClick = !!(currentStep.waitForClick && currentStep.targetId && spotlight && !fallbackCentered);
 
   // Phase labels in Malayalam
-  const PHASE_BOUNDARIES = [0, 9, 13, 16, 21]; // Overview, Client, Template, Portal, Done
+  const PHASE_BOUNDARIES = [0, 9, 13, 18, 23]; // Overview, Client, Template, Portal, Done
   const PHASE_NAMES = ['അവലോകനം', 'ക്ലയന്റ്', 'ടെംപ്ലേറ്റ്', 'പോർട്ടൽ', 'പൂർത്തിയായി'];
   const phaseOf = (i: number) => PHASE_BOUNDARIES.findLastIndex((b) => i >= b);
   const currentPhase = phaseOf(step);
