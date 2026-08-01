@@ -1,23 +1,25 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET /api/superadmin/marketplace — list all public templates, sorted by reports desc
+// GET /api/superadmin/marketplace — list templates for moderation
+// filter: 'all' | 'reported' | 'moderated' | 'all_including_private'
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get('page') || '1'));
     const limit = 30;
     const skip = (page - 1) * limit;
-    const filter = searchParams.get('filter') || 'all'; // 'all' | 'reported' | 'moderated'
+    const filter = searchParams.get('filter') || 'all';
 
-    const where: any = { isPublic: true };
+    // 'all_including_private' — superadmin sees ALL templates for any press
+    const where: any = filter === 'all_including_private' ? {} : { isPublic: true };
     if (filter === 'reported') where.reports = { gt: 0 };
     if (filter === 'moderated') where.isModerated = true;
 
     const [templates, total] = await Promise.all([
       prisma.cardTemplate.findMany({
         where,
-        orderBy: { reports: 'desc' },
+        orderBy: [{ isPublic: 'desc' }, { reports: 'desc' }, { id: 'asc' }],
         skip,
         take: limit,
         select: {
@@ -38,11 +40,11 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/superadmin/marketplace — moderate (hide/unhide) or delete a template
-// Body: { templateId, action: 'hide' | 'unhide' | 'delete' }
+// POST /api/superadmin/marketplace — moderate or publish/unpublish a template
+// Body: { templateId, action: 'hide' | 'unhide' | 'delete' | 'publish' | 'unpublish' }
 export async function POST(request: Request) {
   try {
-    const { templateId, action } = await request.json();
+    const { templateId, action, price } = await request.json();
     if (!templateId || !action) return NextResponse.json({ error: 'templateId and action required' }, { status: 400 });
 
     const template = await prisma.cardTemplate.findUnique({ where: { id: Number(templateId) } });
@@ -50,11 +52,37 @@ export async function POST(request: Request) {
 
     const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
 
-    if (action === 'hide') {
+    if (action === 'publish') {
+      // Force-publish any template (even from other presses)
       await prisma.cardTemplate.update({
         where: { id: Number(templateId) },
-        data: { isModerated: true },
+        data: {
+          isPublic: true,
+          isModerated: false,
+          ...(price != null ? { price: Number(price) } : {}),
+        },
       });
+      await prisma.systemAuditLog.create({
+        data: {
+          actorType: 'SUPER_ADMIN', actorName: 'Super Admin',
+          action: 'MARKETPLACE_TEMPLATE_PUBLISHED', category: 'CONTENT',
+          description: `Force-published template "${template.name}" (id=${templateId}) by press ${template.pressId} to marketplace`,
+          ipAddress: ip, severity: 'INFO',
+        },
+      });
+      return NextResponse.json({ success: true, message: `Template "${template.name}" published to marketplace` });
+    }
+
+    if (action === 'unpublish') {
+      await prisma.cardTemplate.update({
+        where: { id: Number(templateId) },
+        data: { isPublic: false },
+      });
+      return NextResponse.json({ success: true, message: `Template "${template.name}" unpublished from marketplace` });
+    }
+
+    if (action === 'hide') {
+      await prisma.cardTemplate.update({ where: { id: Number(templateId) }, data: { isModerated: true } });
       await prisma.systemAuditLog.create({
         data: {
           actorType: 'SUPER_ADMIN', actorName: 'Super Admin',
@@ -67,10 +95,7 @@ export async function POST(request: Request) {
     }
 
     if (action === 'unhide') {
-      await prisma.cardTemplate.update({
-        where: { id: Number(templateId) },
-        data: { isModerated: false },
-      });
+      await prisma.cardTemplate.update({ where: { id: Number(templateId) }, data: { isModerated: false } });
       return NextResponse.json({ success: true, message: 'Template restored to marketplace' });
     }
 

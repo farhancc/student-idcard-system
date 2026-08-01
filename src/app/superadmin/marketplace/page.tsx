@@ -2,8 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  Store, Shield, Eye, EyeOff, Trash2, AlertTriangle,
-  Search, Filter, RefreshCw, Heart, Flag, Tag,
+  Store, Shield, Eye, EyeOff, Trash2,
+  Search, RefreshCw, Heart, Flag, Tag, Upload, CheckCircle,
 } from 'lucide-react';
 
 interface MktTemplate {
@@ -15,15 +15,18 @@ interface MktTemplate {
   createdAt: string;
 }
 
+type FilterType = 'all' | 'all_including_private' | 'reported' | 'moderated';
+
 export default function SuperAdminMarketplacePage() {
   const [templates, setTemplates] = useState<MktTemplate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'reported' | 'moderated'>('all');
+  const [filter, setFilter] = useState<FilterType>('all_including_private');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(1);
   const [acting, setActing] = useState<number | null>(null);
+  const [publishPrice, setPublishPrice] = useState<Record<number, string>>({});
 
   // Settings
   const [listingFee, setListingFee] = useState('0');
@@ -56,15 +59,17 @@ export default function SuperAdminMarketplacePage() {
   useEffect(() => { fetchTemplates(); }, [filter, page]);
   useEffect(() => { fetchSettings(); }, []);
 
-  const handleAction = async (id: number, action: 'hide' | 'unhide' | 'delete') => {
-    if (action === 'delete' && !confirm('Permanently delete this template from the marketplace?')) return;
+  const handleAction = async (id: number, action: 'hide' | 'unhide' | 'delete' | 'publish' | 'unpublish', price?: number) => {
+    if (action === 'delete' && !confirm('Permanently delete this template?')) return;
     setActing(id);
     try {
       const res = await fetch('/api/superadmin/marketplace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ templateId: id, action }),
+        body: JSON.stringify({ templateId: id, action, ...(price != null ? { price } : {}) }),
       });
+      const data = await res.json();
+      if (data.message) alert(data.message);
       if (res.ok) fetchTemplates();
     } finally {
       setActing(null);
@@ -87,6 +92,13 @@ export default function SuperAdminMarketplacePage() {
   };
 
   const CAT_LABELS: Record<string, string> = { ID_CARD: 'ID Card', BADGE: 'Badge', CERTIFICATE: 'Cert', LABEL: 'Label', OTHER: 'Other' };
+
+  const FILTERS: { val: FilterType; label: string }[] = [
+    { val: 'all_including_private', label: '🗂 All Templates' },
+    { val: 'all',                   label: `✅ Published (${filter === 'all' ? total : '?'})` },
+    { val: 'reported',              label: '🚩 Reported' },
+    { val: 'moderated',             label: '🚫 Hidden' },
+  ];
 
   return (
     <div style={{ padding: '32px 24px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -112,15 +124,15 @@ export default function SuperAdminMarketplacePage() {
       </div>
 
       {/* Filter tabs + search */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
-        {(['all', 'reported', 'moderated'] as const).map(f => (
-          <button key={f} onClick={() => { setFilter(f); setPage(1); }} style={{
-            padding: '6px 16px', borderRadius: '8px', fontSize: '0.82rem', cursor: 'pointer',
-            border: '1px solid ' + (filter === f ? 'var(--primary)' : 'var(--glass-border)'),
-            background: filter === f ? 'rgba(99,102,241,0.15)' : 'transparent',
-            color: filter === f ? 'var(--primary)' : 'var(--muted)',
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+        {FILTERS.map(f => (
+          <button key={f.val} onClick={() => { setFilter(f.val); setPage(1); }} style={{
+            padding: '6px 14px', borderRadius: '8px', fontSize: '0.82rem', cursor: 'pointer',
+            border: '1px solid ' + (filter === f.val ? 'var(--primary)' : 'var(--glass-border)'),
+            background: filter === f.val ? 'rgba(99,102,241,0.15)' : 'transparent',
+            color: filter === f.val ? 'var(--primary)' : 'var(--muted)',
           }}>
-            {f === 'all' ? `All (${total})` : f === 'reported' ? '🚩 Reported' : '🚫 Hidden'}
+            {f.label}
           </button>
         ))}
         <input
@@ -133,6 +145,10 @@ export default function SuperAdminMarketplacePage() {
         <button className="btn btn-secondary" style={{ padding: '8px', minWidth: 'auto' }} onClick={fetchTemplates}>
           <RefreshCw size={14} />
         </button>
+      </div>
+
+      <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '16px' }}>
+        {total} template{total !== 1 ? 's' : ''} · Use <strong>Publish</strong> to force-list any private template in the marketplace
       </div>
 
       {/* Table */}
@@ -149,11 +165,27 @@ export default function SuperAdminMarketplacePage() {
               opacity: t.isModerated ? 0.6 : 1,
               border: t.reports > 5 ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--glass-border)',
             }}>
-              <img src={t.frontImageUrl} alt={t.name} style={{ width: '56px', height: '40px', objectFit: 'cover', borderRadius: '6px', flexShrink: 0 }} />
+              {t.frontImageUrl && (
+                <img src={t.frontImageUrl} alt={t.name} style={{ width: '48px', height: '64px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0, background: '#111' }} />
+              )}
               <div style={{ flex: 1, minWidth: '160px' }}>
                 <div style={{ fontWeight: '600', fontSize: '0.88rem' }}>{t.name}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px' }}>
                   {CAT_LABELS[t.category] || t.category} · {t.sides}-sided · by {t.press?.name ?? 'IDexo Official'}
+                </div>
+                <div style={{ marginTop: '4px', display: 'flex', gap: '6px' }}>
+                  {t.isPublic ? (
+                    <span style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '4px', padding: '1px 8px', fontSize: '0.68rem', fontWeight: '700' }}>
+                      PUBLISHED
+                    </span>
+                  ) : (
+                    <span style={{ background: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: '1px solid rgba(100,116,139,0.3)', borderRadius: '4px', padding: '1px 8px', fontSize: '0.68rem', fontWeight: '700' }}>
+                      PRIVATE
+                    </span>
+                  )}
+                  {t.isModerated && (
+                    <span style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '4px', padding: '1px 8px', fontSize: '0.68rem', fontWeight: '700' }}>HIDDEN</span>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem', color: 'var(--muted)', flexShrink: 0 }}>
@@ -163,24 +195,50 @@ export default function SuperAdminMarketplacePage() {
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Tag size={13} /> {t.price === 0 ? 'Free' : `${t.price} cr`}</span>
               </div>
-              {t.isModerated && (
-                <span style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '6px', padding: '2px 10px', fontSize: '0.72rem', fontWeight: '600' }}>HIDDEN</span>
-              )}
-              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                {t.isModerated ? (
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px' }}
+              <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Publish / Unpublish */}
+                {!t.isPublic ? (
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <input
+                      type="number" min="0" placeholder="Price cr"
+                      value={publishPrice[t.id] ?? '0'}
+                      onChange={e => setPublishPrice(p => ({ ...p, [t.id]: e.target.value }))}
+                      style={{ width: '70px', padding: '5px 6px', borderRadius: '6px', border: '1px solid var(--glass-border)', background: '#1e293b', color: '#fff', fontSize: '0.75rem' }}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      style={{ fontSize: '0.75rem', padding: '6px 10px', gap: '5px', background: 'rgba(16,185,129,0.9)', borderColor: 'transparent' }}
+                      disabled={acting === t.id}
+                      onClick={() => handleAction(t.id, 'publish', Number(publishPrice[t.id] ?? 0))}
+                    >
+                      <Upload size={12} /> Publish
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '6px 10px', gap: '5px', color: '#f59e0b', borderColor: 'rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.08)' }}
+                    disabled={acting === t.id}
+                    onClick={() => handleAction(t.id, 'unpublish')}
+                  >
+                    <CheckCircle size={12} /> Unpublish
+                  </button>
+                )}
+                {/* Hide / Unhide */}
+                {t.isPublic && (t.isModerated ? (
+                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 10px', gap: '5px' }}
                     disabled={acting === t.id} onClick={() => handleAction(t.id, 'unhide')}>
                     <Eye size={13} /> Unhide
                   </button>
                 ) : (
-                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}
+                  <button className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 10px', gap: '5px', background: 'rgba(245,158,11,0.1)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.3)' }}
                     disabled={acting === t.id} onClick={() => handleAction(t.id, 'hide')}>
                     <EyeOff size={13} /> Hide
                   </button>
-                )}
-                <button className="btn btn-danger" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px' }}
+                ))}
+                <button className="btn btn-danger" style={{ fontSize: '0.75rem', padding: '6px 10px', gap: '5px' }}
                   disabled={acting === t.id} onClick={() => handleAction(t.id, 'delete')}>
-                  <Trash2 size={13} /> Delete
+                  <Trash2 size={13} />
                 </button>
               </div>
             </div>
