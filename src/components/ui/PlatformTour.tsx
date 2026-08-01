@@ -112,7 +112,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     }
     const el = document.getElementById(s.targetId);
     if (!el) {
-      // Graceful fallback: show tooltip centered, no spotlight
       setSpotlight(null);
       setTooltipPos(null);
       setFallbackCentered(true);
@@ -148,14 +147,23 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     }
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    left = Math.max(12, Math.min(left, vw - TOOLTIP_W - 12));
-    top = Math.max(12, Math.min(top, vh - 200));
+    // Use measured tooltip height if available, else conservative estimate of 340px
+    const tooltipH = tooltipRef.current ? tooltipRef.current.offsetHeight : 340;
+    const MARGIN = 16;
+    left = Math.max(MARGIN, Math.min(left, vw - TOOLTIP_W - MARGIN));
+    top = Math.max(MARGIN, Math.min(top, vh - tooltipH - MARGIN));
     setTooltipPos({ top, left });
   }, []);
 
   // Recompute when step or visibility changes
+  // Also do a second pass after render so we have real tooltip height for clamping
   useEffect(() => {
-    if (visible) computePositions(currentStep);
+    if (visible) {
+      computePositions(currentStep);
+      // Re-clamp after tooltip has rendered with actual height
+      const raf = requestAnimationFrame(() => computePositions(currentStep));
+      return () => cancelAnimationFrame(raf);
+    }
   }, [step, visible, currentStep, computePositions]);
 
   useEffect(() => {
@@ -259,6 +267,8 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           position: 'fixed',
           zIndex: 10000,
           width: '320px',
+          maxHeight: 'calc(100vh - 32px)',
+          overflowY: 'auto',
           ...(isCentered
             ? {
                 top: '50%',
