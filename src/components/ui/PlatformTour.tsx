@@ -552,7 +552,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           style={{
             position: 'fixed',
             zIndex: 10000,
-            width: isWaitingForClick ? '310px' : '340px',
+            width: isWaitingForClick ? '300px' : '330px',
             maxHeight: 'calc(100vh - 32px)',
             overflowY: 'auto',
             ...(isCentered
@@ -562,76 +562,50 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
               : { display: 'none' }),
             transition: 'top 0.15s ease-out, left 0.15s ease-out',
             animation: 'tour-fade-in 0.18s ease-out',
-            background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
-            border: isWaitingForClick
-              ? '1px solid rgba(251,191,36,0.4)'
-              : '1px solid rgba(99,102,241,0.4)',
-            borderRadius: '16px',
-            padding: isWaitingForClick ? '18px 20px' : '24px',
-            boxShadow: isWaitingForClick
-              ? '0 20px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.1)'
-              : '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)',
-            backdropFilter: 'blur(20px)',
+            background: '#1e293b',
+            border: isWaitingForClick ? '1px solid #f59e0b' : '1px solid #475569',
+            borderRadius: '12px',
+            padding: '18px 20px',
+            boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
           }}
         >
-          {/* Phase progress bars */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
-            {PHASE_NAMES.map((name, i) => (
-              <div key={i} style={{
-                flex: 1,
-                height: '3px',
-                borderRadius: '2px',
-                background: i < currentPhase
-                  ? 'rgba(99,102,241,0.5)'
-                  : i === currentPhase
-                  ? 'linear-gradient(90deg, #6366f1, #a855f7)'
-                  : 'rgba(255,255,255,0.08)',
-                transition: 'all 0.3s ease',
-              }} title={name} />
-            ))}
-          </div>
-
           {/* Phase label */}
-          <div style={{ fontSize: '0.65rem', color: isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
+          <div style={{ fontSize: '0.65rem', color: isWaitingForClick ? '#fbbf24' : '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
             {PHASE_NAMES[currentPhase]}
           </div>
 
           {/* Icon */}
-          <div style={{ fontSize: isCentered ? '2.5rem' : '1.6rem', marginBottom: '8px', textAlign: isCentered ? 'center' : 'left', lineHeight: 1 }}>
+          <div style={{ fontSize: isCentered ? '2.2rem' : '1.5rem', marginBottom: '8px', textAlign: isCentered ? 'center' : 'left', lineHeight: 1 }}>
             {currentStep.icon}
           </div>
 
           {/* Title */}
           <h3 style={{
-            fontSize: isCentered ? '1.3rem' : '1rem',
-            fontWeight: 700,
+            fontSize: isCentered ? '1.15rem' : '0.95rem',
+            fontWeight: 600,
             margin: '0 0 6px',
             textAlign: isCentered ? 'center' : 'left',
-            background: isWaitingForClick
-              ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%)'
-              : 'linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+            color: isWaitingForClick ? '#fef08a' : '#ffffff',
           }}>
             {currentStep.title}
           </h3>
 
           {/* Body */}
-          <p style={{ fontSize: '0.83rem', lineHeight: 1.55, color: '#94a3b8', margin: '0 0 12px', textAlign: isCentered ? 'center' : 'left' }}>
+          <p style={{ fontSize: '0.82rem', lineHeight: 1.5, color: '#cbd5e1', margin: '0 0 12px', textAlign: isCentered ? 'center' : 'left' }}>
             {currentStep.body}
           </p>
 
           {/* Step counter */}
-          <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.25)', marginBottom: '14px', textAlign: isCentered ? 'center' : 'left' }}>
+          <div style={{ fontSize: '0.68rem', color: '#64748b', marginBottom: '14px', textAlign: isCentered ? 'center' : 'left' }}>
             Step {step + 1} of {STEPS.length}
           </div>
 
-          {/* Buttons — Next is hidden when waitForClick is active */}
+          {/* Buttons */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: isCentered ? 'center' : 'space-between', alignItems: 'center' }}>
             {!isLast && (
               <button
                 onClick={() => dismiss(false)}
-                style={{ background: 'transparent', border: 'none', color: 'rgba(255,255,255,0.28)', fontSize: '0.72rem', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', flexShrink: 0 }}
+                style={{ background: 'transparent', border: 'none', color: '#64748b', fontSize: '0.72rem', cursor: 'pointer', padding: '4px 0', textDecoration: 'underline', flexShrink: 0 }}
               >
                 Skip tour
               </button>
@@ -640,16 +614,15 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
               {!isFirst && (
                 <button
                   onClick={handleBack}
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', padding: '8px 14px', cursor: 'pointer' }}
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px', color: '#cbd5e1', fontSize: '0.78rem', padding: '6px 12px', cursor: 'pointer' }}
                 >
                   ← Back
                 </button>
               )}
-              {/* Hide Next when waiting for the user to click the real element */}
               {!isWaitingForClick && (
                 <button
                   onClick={handleNext}
-                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', fontWeight: 600, padding: '8px 20px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99,102,241,0.4)', whiteSpace: 'nowrap' }}
+                  style={{ background: '#4f46e5', border: 'none', borderRadius: '6px', color: '#ffffff', fontSize: '0.78rem', fontWeight: 600, padding: '6px 16px', cursor: 'pointer', whiteSpace: 'nowrap' }}
                 >
                   {currentStep.nextLabel ?? (isLast ? '🎉 Finish' : 'Next →')}
                 </button>
