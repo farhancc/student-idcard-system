@@ -2106,6 +2106,7 @@ export default function ClientDetailsPage() {
         </button>
 
         <button 
+          id="btn-portal-tab"
           onClick={() => setActiveTab('portal')}
           style={{
             padding: '12px 20px',
@@ -4290,7 +4291,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                   })}
                 </select>
               </div>
-              <button type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
+              <button id="btn-generate-links" type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
                 {creating ? 'Generating...' : 'Generate Links'}
               </button>
             </form>
