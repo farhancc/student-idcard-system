@@ -405,9 +405,10 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     const el = document.getElementById(currentStep.targetId);
     if (!el) return;
 
+    const formEl = el.closest('form');
+
     const handleClick = () => {
       // 1. Validate HTML form fields if button is inside a form
-      const formEl = el.closest('form');
       if (formEl && typeof formEl.checkValidity === 'function') {
         if (!formEl.checkValidity()) {
           // Form fields incomplete or invalid — trigger native browser popups & DO NOT advance tour!
@@ -436,7 +437,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           }
         }, 100);
       } else {
-        // Navigation or tab buttons advance after short delay
+        // Navigation, tab, or generate buttons advance after short delay
         setTimeout(() => {
           if (!isLast) goToStep(step + 1);
           else dismiss(true);
@@ -444,8 +445,18 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       }
     };
 
-    el.addEventListener('click', handleClick);
-    return () => el.removeEventListener('click', handleClick);
+    // Use capture phase (true) so event listeners run even if stopPropagation is used
+    el.addEventListener('click', handleClick, true);
+    if (formEl) {
+      formEl.addEventListener('submit', handleClick, true);
+    }
+
+    return () => {
+      el.removeEventListener('click', handleClick, true);
+      if (formEl) {
+        formEl.removeEventListener('submit', handleClick, true);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, step, currentStep]);
 
