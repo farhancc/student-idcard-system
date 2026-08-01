@@ -3944,21 +3944,43 @@ export default function TemplatesPage() {
                         );
                       })()
                     ) : (
-                      <div style={{
-                        width: `${480 * zoom}px`,
-                        height: `${303 * zoom}px`,
-                        border: '1.5px dashed var(--glass-border)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--muted)',
-                        gap: '10px',
-                        background: 'rgba(255,255,255,0.01)'
-                      }}>
-                        <ImageIcon size={32} />
-                        <p style={{ fontSize: '0.85rem' }}>Upload front background image to enable designer.</p>
+                      <div
+                        onClick={() => document.getElementById('front-image-file')?.click()}
+                        style={{
+                          width: `${480 * zoom}px`,
+                          height: `${303 * zoom}px`,
+                          border: '2px dashed var(--primary, #6366f1)',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--primary, #6366f1)',
+                          gap: '12px',
+                          background: 'rgba(99,102,241,0.04)',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s, border-color 0.15s',
+                          userSelect: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(99,102,241,0.1)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(99,102,241,0.04)'; }}
+                        title="Click to upload front background PDF/image"
+                      >
+                        {uploadingFront ? (
+                          <>
+                            <div style={{ width: 36, height: 36, border: '3px solid var(--primary,#6366f1)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            <p style={{ fontSize: '0.85rem', fontWeight: 500 }}>Uploading front background…</p>
+                          </>
+                        ) : (
+                          <>
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="3" />
+                              <path d="M12 16V8M8 12l4-4 4 4" />
+                            </svg>
+                            <p style={{ fontSize: '0.85rem', fontWeight: 500, margin: 0 }}>Click to upload front background</p>
+                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 10 MB</p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -4373,21 +4395,43 @@ export default function TemplatesPage() {
                         );
                       })()
                     ) : (
-                      <div style={{
-                        width: `${480 * zoom}px`,
-                        height: `${303 * zoom}px`,
-                        border: '1.5px dashed var(--glass-border)',
-                        borderRadius: '8px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--muted)',
-                        gap: '10px',
-                        background: 'rgba(255,255,255,0.01)'
-                      }}>
-                        <ImageIcon size={32} />
-                        <p style={{ fontSize: '0.85rem' }}>Upload back background image to enable designer.</p>
+                      <div
+                        onClick={() => document.getElementById('back-image-file')?.click()}
+                        style={{
+                          width: `${480 * zoom}px`,
+                          height: `${303 * zoom}px`,
+                          border: '2px dashed var(--primary, #6366f1)',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--primary, #6366f1)',
+                          gap: '12px',
+                          background: 'rgba(99,102,241,0.04)',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s, border-color 0.15s',
+                          userSelect: 'none',
+                        }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(99,102,241,0.1)'; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(99,102,241,0.04)'; }}
+                        title="Click to upload back background PDF/image"
+                      >
+                        {uploadingBack ? (
+                          <>
+                            <div style={{ width: 36, height: 36, border: '3px solid var(--primary,#6366f1)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                            <p style={{ fontSize: '0.85rem', fontWeight: 500 }}>Uploading back background…</p>
+                          </>
+                        ) : (
+                          <>
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="3" width="18" height="18" rx="3" />
+                              <path d="M12 16V8M8 12l4-4 4 4" />
+                            </svg>
+                            <p style={{ fontSize: '0.85rem', fontWeight: 500, margin: 0 }}>Click to upload back background</p>
+                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 10 MB</p>
+                          </>
+                        )}
                       </div>
                     )}
                     </div>
