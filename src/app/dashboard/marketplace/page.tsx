@@ -322,6 +322,22 @@ export default function MarketplacePage() {
             </span>
           </div>
 
+          {/* Info banner: all visible templates are own listings */}
+          {!loading && templates.length > 0 && templates.every(t => t.pressId === currentPressId) && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: '12px', padding: '14px 18px',
+              background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)',
+              borderRadius: '10px', marginBottom: '20px',
+            }}>
+              <Store size={18} color="#818cf8" style={{ flexShrink: 0, marginTop: '1px' }} />
+              <div style={{ fontSize: '0.83rem', color: 'var(--muted)', lineHeight: '1.5' }}>
+                <span style={{ color: '#c7d2fe', fontWeight: '600' }}>All current listings are yours.</span>
+                {' '}You can click <strong style={{ color: '#10b981' }}>View in My Library</strong> to edit or use them.
+                {' '}Once other presses publish templates, the <strong style={{ color: '#818cf8' }}>Buy</strong> button will be available for templates from other sellers.
+              </div>
+            </div>
+          )}
+
           {/* Grid */}
           {loading ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' }}>
@@ -551,14 +567,17 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
             </div>
           )}
           {isOwnTemplate ? (
-            <button
-              className="btn btn-secondary"
-              style={{ width: '100%', fontSize: '0.82rem', padding: '8px', gap: '6px', justifyContent: 'center', cursor: 'default', opacity: 0.8 }}
-              disabled
+            <a
+              href={`/dashboard/templates?highlight=${t.id}`}
+              style={{
+                width: '100%', fontSize: '0.82rem', padding: '8px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)',
+                borderRadius: '8px', color: '#10b981', textDecoration: 'none', fontWeight: '600',
+              }}
             >
-              <CheckCircle size={13} color="#10b981" />
-              Your Template
-            </button>
+              <CheckCircle size={13} /> View in My Library
+            </a>
           ) : (
             <button
               className="btn btn-primary"
@@ -988,14 +1007,17 @@ function TemplateDetailModal({
               </div>
             )}
             {isOwnTemplate ? (
-              <button
-                className="btn btn-secondary"
-                style={{ fontSize: '0.88rem', padding: '10px 24px', gap: '8px', cursor: 'default', opacity: 0.8 }}
-                disabled
+              <a
+                href={`/dashboard/templates?highlight=${t.id}`}
+                style={{
+                  fontSize: '0.88rem', padding: '10px 24px',
+                  display: 'inline-flex', alignItems: 'center', gap: '8px',
+                  background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)',
+                  borderRadius: '8px', color: '#10b981', textDecoration: 'none', fontWeight: '600',
+                }}
               >
-                <CheckCircle size={16} color="#10b981" />
-                Your Template
-              </button>
+                <CheckCircle size={16} /> View in My Library
+              </a>
             ) : (
               <button
                 className="btn btn-primary"
