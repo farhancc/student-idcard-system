@@ -935,7 +935,9 @@ function TemplateDetailModal({
                   <div>
                     <div style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} />
-                      Front Side Fields ({frontField                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
+                      Front Side Fields ({frontFields.length})
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' }}>
                       {frontFields.map((f, i) => {
                         const badge = getFieldTypeBadge(f.type);
                         const fieldName = f.name || f.label || f.key || 'Field';
@@ -1043,7 +1045,6 @@ function TemplateDetailModal({
                       })}
                     </div>
                   </div>
-                )}             </div>
                 )}
               </div>
             )}
