@@ -65,6 +65,10 @@ export async function PUT(
 
     const { name, cardWidth, cardHeight, frontImageUrl, backImageUrl, frontOriginalUrl, backOriginalUrl, frontFields, backFields, clientId, category, sides, clientIds, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = result.data;
 
+    if (clientIds !== undefined && clientIds.length === 0) {
+      return NextResponse.json({ error: 'Please assign this template to at least one client before saving.' }, { status: 400 });
+    }
+
     // Check if the template name is being changed and is already taken
     if (name && name.trim().toLowerCase() !== oldTemplate.name.trim().toLowerCase()) {
       const existing = await prisma.cardTemplate.findFirst({

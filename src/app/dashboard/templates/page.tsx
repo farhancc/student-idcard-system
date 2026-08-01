@@ -2383,6 +2383,10 @@ export default function TemplatesPage() {
         setTimeout(() => scrollAndFocus('template-name'), 50);
         throw new Error(`A template with the name "${name.trim()}" already exists.`);
       }
+      if (!selectedClientIds || selectedClientIds.length === 0) {
+        setTimeout(() => scrollAndFocus('client-assignment-section'), 50);
+        throw new Error('Please assign this template to at least one client before saving.');
+      }
       if (!cardWidth || cardWidth <= 0) {
         setTimeout(() => scrollAndFocus('card-width-px'), 50);
         throw new Error('Card Width is required and must be greater than 0.');
@@ -2793,7 +2797,7 @@ export default function TemplatesPage() {
 
             {/* Assign to Clients */}
             {clients.length > 0 && (
-              <div className="form-group" ref={clientDropdownRef} style={{ position: 'relative' }}>
+              <div id="client-assignment-section" className="form-group" ref={clientDropdownRef} style={{ position: 'relative' }}>
                 <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Assign to Clients <span style={{ color: 'var(--muted)', fontWeight: 'normal' }}>(multi-select)</span></span>
                   {selectedClientIds.length > 0 && (

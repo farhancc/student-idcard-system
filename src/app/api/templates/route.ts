@@ -65,6 +65,10 @@ export async function POST(request: Request) {
       category, sides, clientIds,
     } = result.data;
 
+    if (!clientIds || clientIds.length === 0) {
+      return NextResponse.json({ error: 'Please assign this template to at least one client before saving.' }, { status: 400 });
+    }
+
     // Check if a template with this name already exists for this press
     const existing = await prisma.cardTemplate.findFirst({
       where: {
