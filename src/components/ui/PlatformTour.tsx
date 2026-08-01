@@ -374,22 +374,53 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     }
   }, [router]);
 
-  // ── waitForClick: attach a native click listener to the target element ──────
+  // ── waitForClick: attach click listener with form validation & success verification ──
   useEffect(() => {
     if (!visible || !currentStep.waitForClick || !currentStep.targetId) return;
     const el = document.getElementById(currentStep.targetId);
     if (!el) return;
 
-    const advance = () => {
-      // Let the element's own click handler fire first, then move the tour
-      setTimeout(() => {
-        if (!isLast) goToStep(step + 1);
-        else dismiss(true);
-      }, 120);
+    const handleClick = () => {
+      // 1. Validate HTML form fields if button is inside a form
+      const formEl = el.closest('form');
+      if (formEl && typeof formEl.checkValidity === 'function') {
+        if (!formEl.checkValidity()) {
+          // Form fields incomplete or invalid — trigger native browser popups & DO NOT advance tour!
+          formEl.reportValidity();
+          return;
+        }
+      }
+
+      // 2. For save buttons, verify that the save actually succeeds before advancing
+      const isSaveStep = currentStep.targetId === 'btn-save-client' || currentStep.targetId === 'btn-save-template';
+
+      if (isSaveStep) {
+        let attempts = 0;
+        const checkInterval = setInterval(() => {
+          attempts++;
+          const targetStillExists = document.getElementById(currentStep.targetId!);
+
+          // When client/template creation succeeds, the form modal closes and the save button unmounts
+          if (!targetStillExists) {
+            clearInterval(checkInterval);
+            if (!isLast) goToStep(step + 1);
+            else dismiss(true);
+          } else if (attempts >= 50) {
+            // Timeout (5 seconds) — save failed or errored out; keep tour on current step
+            clearInterval(checkInterval);
+          }
+        }, 100);
+      } else {
+        // Navigation or tab buttons advance after short delay
+        setTimeout(() => {
+          if (!isLast) goToStep(step + 1);
+          else dismiss(true);
+        }, 150);
+      }
     };
 
-    el.addEventListener('click', advance);
-    return () => el.removeEventListener('click', advance);
+    el.addEventListener('click', handleClick);
+    return () => el.removeEventListener('click', handleClick);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, step, currentStep]);
 
