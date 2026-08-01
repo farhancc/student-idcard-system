@@ -523,44 +523,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
         </svg>
       )}
 
-      {/* Pulsing "Click here" badge — rendered above the spotlit element */}
-      {isWaitingForClick && spotlight && (
-        <div
-          style={{
-            position: 'fixed',
-            zIndex: 10001,
-            left: spotlight.left + spotlight.width / 2,
-            top: spotlight.top - 36,
-            transform: 'translateX(-50%)',
-            pointerEvents: 'none',
-          }}
-        >
-          {/* Expanding ring */}
-          <div style={{
-            position: 'absolute',
-            top: '50%', left: '50%',
-            width: '32px', height: '32px',
-            borderRadius: '50%',
-            border: '2px solid rgba(251,191,36,0.7)',
-            animation: 'tour-ring 1.2s ease-out infinite',
-          }} />
-          {/* Badge */}
-          <div style={{
-            background: 'rgba(251,191,36,0.95)',
-            color: '#1a1a1a',
-            fontSize: '0.72rem',
-            fontWeight: 700,
-            padding: '4px 10px',
-            borderRadius: '20px',
-            whiteSpace: 'nowrap',
-            boxShadow: '0 4px 16px rgba(251,191,36,0.5)',
-            animation: 'tour-bounce 1s ease-in-out infinite',
-          }}>
-            👆 Click here
-          </div>
-        </div>
-      )}
-
       {/* Loading indicator during navigation */}
       {navigating && (
         <div style={{
@@ -592,7 +554,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           style={{
             position: 'fixed',
             zIndex: 10000,
-            width: '340px',
+            width: isWaitingForClick ? '310px' : '340px',
             maxHeight: 'calc(100vh - 32px)',
             overflowY: 'auto',
             ...(isCentered
@@ -603,18 +565,18 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             transition: 'top 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
             background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
             border: isWaitingForClick
-              ? '1px solid rgba(251,191,36,0.5)'
+              ? '1px solid rgba(251,191,36,0.4)'
               : '1px solid rgba(99,102,241,0.4)',
             borderRadius: '16px',
-            padding: '24px',
+            padding: isWaitingForClick ? '18px 20px' : '24px',
             boxShadow: isWaitingForClick
-              ? '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.15)'
+              ? '0 20px 50px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.1)'
               : '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)',
             backdropFilter: 'blur(20px)',
           }}
         >
           {/* Phase progress bars */}
-          <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', gap: '6px', marginBottom: '14px' }}>
             {PHASE_NAMES.map((name, i) => (
               <div key={i} style={{
                 flex: 1,
@@ -631,20 +593,20 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           </div>
 
           {/* Phase label */}
-          <div style={{ fontSize: '0.65rem', color: isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+          <div style={{ fontSize: '0.65rem', color: isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>
             {PHASE_NAMES[currentPhase]}
           </div>
 
           {/* Icon */}
-          <div style={{ fontSize: isCentered ? '2.5rem' : '1.8rem', marginBottom: '10px', textAlign: isCentered ? 'center' : 'left', lineHeight: 1 }}>
+          <div style={{ fontSize: isCentered ? '2.5rem' : '1.6rem', marginBottom: '8px', textAlign: isCentered ? 'center' : 'left', lineHeight: 1 }}>
             {currentStep.icon}
           </div>
 
           {/* Title */}
           <h3 style={{
-            fontSize: isCentered ? '1.3rem' : '1.05rem',
+            fontSize: isCentered ? '1.3rem' : '1rem',
             fontWeight: 700,
-            margin: '0 0 8px',
+            margin: '0 0 6px',
             textAlign: isCentered ? 'center' : 'left',
             background: isWaitingForClick
               ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%)'
@@ -656,28 +618,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           </h3>
 
           {/* Body */}
-          <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: '#94a3b8', margin: '0 0 12px', textAlign: isCentered ? 'center' : 'left' }}>
+          <p style={{ fontSize: '0.83rem', lineHeight: 1.55, color: '#94a3b8', margin: '0 0 12px', textAlign: isCentered ? 'center' : 'left' }}>
             {currentStep.body}
           </p>
-
-          {/* waitForClick hint */}
-          {isWaitingForClick && (
-            <div style={{
-              background: 'rgba(251,191,36,0.1)',
-              border: '1px solid rgba(251,191,36,0.3)',
-              borderRadius: '8px',
-              padding: '8px 12px',
-              fontSize: '0.75rem',
-              color: 'rgba(251,191,36,0.9)',
-              marginBottom: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}>
-              <span style={{ animation: 'tour-bounce 1s ease-in-out infinite', display: 'inline-block' }}>👆</span>
-              Click the highlighted element to continue
-            </div>
-          )}
 
           {/* Step counter */}
           <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.25)', marginBottom: '14px', textAlign: isCentered ? 'center' : 'left' }}>
