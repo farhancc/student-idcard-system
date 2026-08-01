@@ -7,7 +7,7 @@ import {
   Store, Search, Heart, Flag, Download, ShoppingCart,
   Star, Filter, X, ChevronLeft, ChevronRight,
   CreditCard, CheckCircle, Tag, Zap, Package, AlertTriangle,
-  Eye, Layers, FileText, QrCode, Barcode, Image as ImageIcon, Maximize2,
+  Eye, Layers, FileText, QrCode, Barcode, Image as ImageIcon, Maximize2, Edit3,
 } from 'lucide-react';
 
 const CATEGORIES = ['', 'ID_CARD', 'BADGE', 'CERTIFICATE', 'LABEL', 'TICKET', 'VISITOR_PASS', 'LETTER', 'CARD', 'TAG', 'STICKER', 'OTHER'];
@@ -688,6 +688,57 @@ function TemplateDetailModal({
   const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<'mapped_data' | 'raw_design'>('mapped_data');
 
+  // Interactive sample cardholder data state for buyers to type test values
+  const [sampleCardholderData, setSampleCardholderData] = useState<Record<string, string>>({
+    name: 'John Doe',
+    designation: 'Student / Employee',
+    cardSerial: 'STU-2026-001',
+    bloodGroup: 'B+',
+    rollNumber: '2026-99',
+    schoolName: 'Greenwood High School',
+    class: 'Class X-A',
+    fatherName: 'Robert Doe',
+    phone: '+1 555-0192',
+    dob: '2008-05-14',
+    address: '123 Academic Way',
+  });
+
+  const editableFields = useMemo(() => {
+    try {
+      const parsedFront = JSON.parse(t.frontFields || '[]');
+      const parsedBack = JSON.parse(t.backFields || '[]');
+      const allParsed = [...parsedFront, ...parsedBack];
+      const nonImageFields = allParsed.filter((f: any) => f.type !== 'image' && f.field !== 'photo');
+      const fieldMap = new Map<string, any>();
+      nonImageFields.forEach((f: any) => {
+        if (!fieldMap.has(f.field)) {
+          fieldMap.set(f.field, f);
+        }
+      });
+      return Array.from(fieldMap.values());
+    } catch (e) {
+      return [];
+    }
+  }, [t.frontFields, t.backFields]);
+
+  const liveCardholder = useMemo(() => {
+    const custom: Record<string, string> = {};
+    Object.keys(sampleCardholderData).forEach(k => {
+      if (k !== 'name' && k !== 'designation' && k !== 'cardSerial') {
+        custom[k] = sampleCardholderData[k] || '';
+      }
+    });
+
+    return {
+      id: 99,
+      name: sampleCardholderData.name || 'John Doe',
+      designation: sampleCardholderData.designation || 'Student / Employee',
+      photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+      cardSerial: sampleCardholderData.cardSerial || 'STU-2026-001',
+      customFields: JSON.stringify(custom),
+    };
+  }, [sampleCardholderData]);
+
   const formats = [
     { key: 'cdr', label: 'CDR', available: t.hasCdr },
     { key: 'ai', label: 'AI', available: t.hasAi },
@@ -862,14 +913,8 @@ function TemplateDetailModal({
                 >
                   {previewMode === 'mapped_data' ? (
                     <CardPreview
-                      template={{
-                        cardWidth: t.cardWidth || 1013,
-                        cardHeight: t.cardHeight || 638,
-                        frontImageUrl: t.frontImageUrl,
-                        backImageUrl: t.backImageUrl,
-                        frontFields: t.frontFields || '[]',
-                        backFields: t.backFields || '[]',
-                      }}
+                      template={previewTemplate}
+                      cardholder={liveCardholder}
                       side="front"
                       forceWeb={true}
                       style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
@@ -917,6 +962,7 @@ function TemplateDetailModal({
                     {previewMode === 'mapped_data' ? (
                       <CardPreview
                         template={previewTemplate}
+                        cardholder={liveCardholder}
                         side="back"
                         forceWeb={true}
                         style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
@@ -956,6 +1002,57 @@ function TemplateDetailModal({
               </div>
             )}
           </div>
+
+          {/* Interactive Text Field Input Panel (Live Testing for Buyers) */}
+          {previewMode === 'mapped_data' && editableFields.length > 0 && (
+            <div className="glass-panel" style={{ padding: '16px 20px', borderRadius: '12px', background: 'rgba(99,102,241,0.04)', border: '1px solid rgba(99,102,241,0.2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Edit3 size={15} color="var(--primary)" />
+                  Test Live Card Text (Type below to preview live changes)
+                </div>
+                <span style={{ fontSize: '0.72rem', color: 'var(--muted)', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: '10px' }}>
+                  Image & photo fields locked
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                {editableFields.map((f: any) => {
+                  const key = f.field;
+                  const label = f.label || (key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'));
+                  const val = sampleCardholderData[key] !== undefined ? sampleCardholderData[key] : '';
+                  return (
+                    <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <label style={{ fontSize: '0.72rem', fontWeight: '500', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {label} {f.prefix ? <span style={{ opacity: 0.65 }}>({f.prefix})</span> : null}
+                      </label>
+                      <input
+                        type="text"
+                        value={val}
+                        placeholder={`Type sample ${label}...`}
+                        onChange={(e) => {
+                          const newText = e.target.value;
+                          setSampleCardholderData(prev => ({
+                            ...prev,
+                            [key]: newText,
+                          }));
+                        }}
+                        style={{
+                          width: '100%',
+                          fontSize: '0.8rem',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          background: 'var(--background)',
+                          border: '1px solid var(--glass-border)',
+                          color: 'var(--foreground)',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Full Screen Image Lightbox Overlay */}
           {fullscreenImg && (
