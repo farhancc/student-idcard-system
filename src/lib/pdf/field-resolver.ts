@@ -453,6 +453,28 @@ export function formatDate(dateVal: any, formatStr?: string): string {
     .replace(/\bM\b/g, String(m + 1));
 }
 
+export function isImageField(f: any): boolean {
+  if (!f) return false;
+  const t = (f.type || '').toLowerCase();
+  const k = (f.field || f.key || '').toLowerCase();
+  return (
+    t === 'image' ||
+    t === 'photo' ||
+    t === 'signature' ||
+    t === 'sig' ||
+    t === 'logo' ||
+    t === 'stamp' ||
+    t === 'img' ||
+    t === 'picture' ||
+    t === 'static_image' ||
+    t === 'static_img' ||
+    k === 'photo' ||
+    k === 'signature' ||
+    k === 'logo' ||
+    k === 'stamp'
+  );
+}
+
 export function resolveFieldRawValue(
   f: { field: string; type?: string; staticValue?: string | null; prefix?: string; suffix?: string; dateFormat?: string; [key: string]: any },
   data: Record<string, any>,
@@ -489,7 +511,7 @@ export function resolveFieldRawValue(
   }
 
   // 3. Image type vs Text/Other type handling
-  if (f.type === 'image') {
+  if (isImageField(f)) {
     // If not a valid image URL yet, try photoUrl fallback for primary photo fields
     if (!isValidImageUrl(resolved) && isPrimaryPhotoField(f.field)) {
       resolved = resolveCardholderPhotoUrl(cardholder, data) || cardholder?.photoUrl || resolved;

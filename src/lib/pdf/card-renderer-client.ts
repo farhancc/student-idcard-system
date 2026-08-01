@@ -72,7 +72,7 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel } from './field-resolver';
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField } from './field-resolver';
 export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel };
 
 /**
@@ -544,7 +544,7 @@ export async function renderCardSideClient(
     const f = fields[fi];
     const yOffset = yOffsets.get(fi) ?? 0;
     let rawValue = resolveFieldRawValue(f, data, cardholder);
-    if ((rawValue === undefined || rawValue === null || rawValue === '') && f.type === 'image') {
+    if ((rawValue === undefined || rawValue === null || rawValue === '') && (isImageField(f) || f.type === 'image')) {
       rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
     }
     if (rawValue === undefined || rawValue === null) continue;
@@ -555,7 +555,10 @@ export async function renderCardSideClient(
     switch (f.type) {
       case 'id':
       case 'text':
-      case 'date': {
+      case 'date':
+      case 'static_text':
+      case 'static':
+      case 'label': {
         ctx.save();
 
         let processedValue = valueStr;
@@ -668,55 +671,97 @@ export async function renderCardSideClient(
         break;
       }
 
-      case 'image': {
+      case 'image':
+      case 'photo':
+      case 'signature':
+      case 'sig':
+      case 'logo':
+      case 'stamp':
+      case 'img':
+      case 'picture':
+      case 'static_image':
+      case 'static_img': {
         const imageSrc = rawValue ? String(rawValue) : (f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue);
-        if (!imageSrc) continue;
-        try {
-          const img = await loadImageClient(String(imageSrc));
-          ctx.save();
-          const radius = Math.min(f.borderRadius || 0, f.width / 2, f.height / 2);
-          ctx.beginPath();
-          if (radius > 0) {
-            const x = f.x, y = effectiveY, w = f.width, h = f.height, r = radius;
-            ctx.moveTo(x + r, y);
-            ctx.lineTo(x + w - r, y);
-            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-            ctx.lineTo(x + w, y + h - r);
-            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-            ctx.lineTo(x + r, y + h);
-            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-            ctx.lineTo(x, y + r);
-            ctx.quadraticCurveTo(x, y, x + r, y);
-            ctx.closePath();
-          } else {
-            ctx.rect(f.x, effectiveY, f.width, f.height);
+        
+        if (imageSrc && isValidImageUrl(imageSrc)) {
+          try {
+            const img = await loadImageClient(String(imageSrc));
+            ctx.save();
+            const radius = Math.min(f.borderRadius || 0, f.width / 2, f.height / 2);
+            ctx.beginPath();
+            if (radius > 0) {
+              const x = f.x, y = effectiveY, w = f.width, h = f.height, r = radius;
+              ctx.moveTo(x + r, y);
+              ctx.lineTo(x + w - r, y);
+              ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+              ctx.lineTo(x + w, y + h - r);
+              ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+              ctx.lineTo(x + r, y + h);
+              ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+              ctx.lineTo(x, y + r);
+              ctx.quadraticCurveTo(x, y, x + r, y);
+              ctx.closePath();
+            } else {
+              ctx.rect(f.x, effectiveY, f.width, f.height);
+            }
+            ctx.clip();
+
+            const imgRatio = img.width / img.height;
+            const boxRatio = f.width / f.height;
+
+            let drawWidth = f.width;
+            let drawHeight = f.height;
+            let drawX = f.x;
+            let drawY = effectiveY;
+
+            if (imgRatio > boxRatio) {
+              drawWidth = f.height * imgRatio;
+              drawX = f.x - (drawWidth - f.width) / 2;
+            } else {
+              drawHeight = f.width / imgRatio;
+              drawY = effectiveY - (drawHeight - f.height) / 2;
+            }
+
+            ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+            ctx.restore();
+            break;
+          } catch (err) {
+            console.error(`Error loading browser image field ${f.field}:`, err);
           }
-          ctx.clip();
-
-          const imgRatio = img.width / img.height;
-          const boxRatio = f.width / f.height;
-
-          let drawWidth = f.width;
-          let drawHeight = f.height;
-          let drawX = f.x;
-          let drawY = effectiveY;
-
-          if (imgRatio > boxRatio) {
-            drawWidth = f.height * imgRatio;
-            drawX = f.x - (drawWidth - f.width) / 2;
-          } else {
-            drawHeight = f.width / imgRatio;
-            drawY = effectiveY - (drawHeight - f.height) / 2;
-          }
-
-          ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
-          ctx.restore();
-        } catch (err) {
-          console.error(`Error loading browser image field ${f.field}:`, err);
-          ctx.strokeStyle = '#ff0000';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(f.x, effectiveY, f.width, f.height);
         }
+
+        // Clean placeholder fallback box when dynamic image file or URL is absent/placeholder
+        ctx.save();
+        const radius = Math.min(f.borderRadius || 0, f.width / 2, f.height / 2);
+        ctx.beginPath();
+        if (radius > 0) {
+          const x = f.x, y = effectiveY, w = f.width, h = f.height, r = radius;
+          ctx.moveTo(x + r, y);
+          ctx.lineTo(x + w - r, y);
+          ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+          ctx.lineTo(x + w, y + h - r);
+          ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+          ctx.lineTo(x + r, y + h);
+          ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+          ctx.lineTo(x, y + r);
+          ctx.quadraticCurveTo(x, y, x + r, y);
+          ctx.closePath();
+        } else {
+          ctx.rect(f.x, effectiveY, f.width, f.height);
+        }
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+        ctx.fill();
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = '#475569';
+        ctx.font = `600 ${Math.max(10, Math.min(14, f.height * 0.25))}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const labelText = f.label || f.name || f.field || 'Image Field';
+        ctx.fillText(labelText, f.x + f.width / 2, effectiveY + f.height / 2);
+        ctx.restore();
         break;
       }
 
@@ -1492,7 +1537,16 @@ export async function renderCardSideToPdfBytesClient(
         break;
       }
 
-      case 'image': {
+      case 'image':
+      case 'photo':
+      case 'signature':
+      case 'sig':
+      case 'logo':
+      case 'stamp':
+      case 'img':
+      case 'picture':
+      case 'static_image':
+      case 'static_img': {
         const imageSrc = rawValue || f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
         if (!imageSrc) continue;
         try {
