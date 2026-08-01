@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, basePrisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +14,8 @@ export async function POST(request: Request) {
     const { templateId } = await request.json();
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
-    // Fetch the template
-    const template = await prisma.cardTemplate.findFirst({
+    // Fetch the template — use basePrisma to bypass tenant isolation and see all presses
+    const template = await basePrisma.cardTemplate.findFirst({
       where: {
         id: Number(templateId),
         isModerated: false,

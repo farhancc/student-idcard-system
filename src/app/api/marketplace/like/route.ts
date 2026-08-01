@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, basePrisma } from '@/lib/prisma';
 
 // POST /api/marketplace/like?templateId=X → toggle like for current press
 export async function POST(request: Request) {
@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const templateId = Number(searchParams.get('templateId'));
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
-    const template = await prisma.cardTemplate.findFirst({
+    const template = await basePrisma.cardTemplate.findFirst({
       where: {
         id: templateId,
         OR: [

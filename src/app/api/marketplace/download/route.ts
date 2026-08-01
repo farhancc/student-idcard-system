@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, basePrisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,8 +20,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid format. Use: cdr, ai, pdf, psd' }, { status: 400 });
     }
 
-    // Fetch the template
-    const template = await prisma.cardTemplate.findUnique({
+    // Fetch the template — use basePrisma to see templates from any press
+    const template = await basePrisma.cardTemplate.findUnique({
       where: { id: templateId },
       select: {
         id: true, pressId: true, isPublic: true,
