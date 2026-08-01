@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Search, Building2, MapPin, Phone, Mail, FolderOpen } from 'lucide-react';
 
 export default function ClientsPage() {
+  const router = useRouter();
   const [clients, setClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -188,7 +190,18 @@ export default function ClientsPage() {
           gap: '24px'
         }}>
           {filteredClients.map((client) => (
-            <div key={client.id} className="glass-panel glass-panel-hover" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: '220px' }}>
+            <div
+              key={client.id}
+              className="glass-panel glass-panel-hover"
+              onClick={() => router.push(`/dashboard/clients/${client.id}`)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                minHeight: '220px',
+                cursor: 'pointer',
+              }}
+            >
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '1.15rem' }}>{client.name}</h3>
@@ -220,9 +233,9 @@ export default function ClientsPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <a href={`/dashboard/clients/${client.id}`} className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
+                <span className="btn btn-secondary" style={{ padding: '8px 14px', fontSize: '0.8rem' }}>
                   <FolderOpen size={14} /> Open Directory
-                </a>
+                </span>
               </div>
             </div>
           ))}
