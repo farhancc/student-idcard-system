@@ -308,27 +308,35 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     setTooltipPos({ top, left });
   }, []);
 
-  // Recompute spotlight on step/visibility change & scroll target into view
+  // Continuous real-time target tracking — spotlight & badge lock onto button as it moves/scrolls
   useEffect(() => {
-    if (visible) {
-      if (currentStep.targetId) {
-        const el = document.getElementById(currentStep.targetId);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
-      }
-      computePositions(currentStep);
-      const raf = requestAnimationFrame(() => computePositions(currentStep));
-      return () => cancelAnimationFrame(raf);
-    }
-  }, [step, visible, currentStep, computePositions]);
+    if (!visible) return;
 
-  // Recompute on resize
-  useEffect(() => {
-    const handler = () => { if (visible) computePositions(currentStep); };
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, [visible, currentStep, computePositions]);
+    if (currentStep.targetId) {
+      const el = document.getElementById(currentStep.targetId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
+    let animFrameId: number;
+    const trackTarget = () => {
+      computePositions(currentStep);
+      animFrameId = requestAnimationFrame(trackTarget);
+    };
+
+    trackTarget();
+
+    const handleScrollOrResize = () => computePositions(currentStep);
+    window.addEventListener('scroll', handleScrollOrResize, { capture: true, passive: true });
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(animFrameId);
+      window.removeEventListener('scroll', handleScrollOrResize, { capture: true });
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [step, visible, currentStep, computePositions]);
 
   // Persist step on every change so full-page reloads can resume
   useEffect(() => {
