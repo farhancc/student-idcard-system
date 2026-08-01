@@ -142,16 +142,40 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '➕',
     title: '"+ Create Template" ക്ലിക്ക് ചെയ്യുക',
-    body: 'ടെംപ്ലേറ്റ് ഡിസൈനർ ഓപ്പൺ ചെയ്യാൻ ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
+    body: 'ടെംപ്ലേറ്റ് ഡിസൈനർ ഫോം ഓപ്പൺ ചെയ്യാൻ ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
+  },
+  {
+    navigateTo: '/dashboard/templates',
+    targetId: 'template-name',
+    position: 'bottom',
+    icon: '✏️',
+    title: '1. Template Name നൽകുക',
+    body: 'നിങ്ങളുടെ ടെംപ്ലേറ്റിന് അനുയോജ്യമായ ഒരു പേര് (ഉദാഹരണത്തിന് "School ID 2026") ഇവിടെ നൽകുക.',
+  },
+  {
+    navigateTo: '/dashboard/templates',
+    targetId: 'client-assignment-section',
+    position: 'bottom',
+    icon: '🏫',
+    title: '2. Client-ലേക്ക് Assign ചെയ്യുക',
+    body: 'ഈ ടെംപ്ലേറ്റ് ഏത് Client-നാണ് ഉപയോഗിക്കേണ്ടതെന്ന് ഡ്രോപ്‌ഡൗണിൽ നിന്ന് സെലക്ട് ചെയ്യുക.',
+  },
+  {
+    navigateTo: '/dashboard/templates',
+    targetId: 'template-image-section',
+    position: 'bottom',
+    icon: '🖼️',
+    title: '3. Card Background Image അപ്‌ലോഡ് ചെയ്യുക',
+    body: 'ഐഡി കാർഡിന്റെ ഫ്രണ്ട് / ബാക്ക് ബാക്ക്ഗ്രൗണ്ട് ഇമേജ് (PNG, SVG, PDF) ഇവിടെ അപ്‌ലോഡ് ചെയ്യുക.',
   },
   {
     navigateTo: '/dashboard/templates',
     targetId: 'btn-add-field-mapping',
     position: 'top',
     icon: '📍',
-    title: '"+ Add Field Mapping" ക്ലിക്ക് ചെയ്യുക',
-    body: 'കാർഡിൽ നെയിം, ഫോട്ടോ, റോൾ നമ്പർ തുടങ്ങിയ ഫീൽഡുകൾ ആഡ് ചെയ്യാൻ ഈ ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
+    title: '4. Fields ആഡ് ചെയ്ത് മാപ്പ് ചെയ്യുക',
+    body: 'നെയിം, ഫോട്ടോ, റോൾ നമ്പർ തുടങ്ങിയ വിവരങ്ങൾ കാർഡിൽ ചേർക്കാനും ഡ്രാഗ് ചെയ്ത് പൊസിഷൻ സെറ്റ് ചെയ്യാനും ഹൈലൈറ്റ് ചെയ്ത ബട്ടണിൽ ക്ലിക്ക് ചെയ്യുക.',
     waitForClick: true,
   },
   {
@@ -159,8 +183,8 @@ const STEPS: TourStep[] = [
     targetId: 'btn-save-template',
     position: 'top',
     icon: '🛠️',
-    title: 'ഡിസൈൻ ചെയ്ത് "Save Template" ക്ലിക്ക് ചെയ്യുക',
-    body: 'ടെംപ്ലേറ്റ് നെയിം നൽകി, ഫ്രണ്ട്/ബാക്ക് ചിത്രങ്ങൾ അപ്‌ലോഡ് ചെയ്ത് ഫീൽഡുകൾ സെറ്റ് ചെയ്ത ശേഷം "Save Template" ക്ലിക്ക് ചെയ്യുക.',
+    title: '5. "Save Template" ക്ലിക്ക് ചെയ്യുക',
+    body: 'എല്ലാ വിവരങ്ങളും ഫീൽഡുകളും സെറ്റ് ചെയ്ത ശേഷം "Save Template" ക്ലിക്ക് ചെയ്ത് സേവ് ചെയ്യുക.',
     waitForClick: true,
   },
   {
@@ -235,7 +259,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const isWaitingForClick = !!(currentStep.waitForClick && currentStep.targetId && spotlight && !fallbackCentered);
 
   // Phase labels in Malayalam
-  const PHASE_BOUNDARIES = [0, 9, 13, 18, 23]; // Overview, Client, Template, Portal, Done
+  const PHASE_BOUNDARIES = [0, 9, 13, 21, 26]; // Overview, Client, Template, Portal, Done
   const PHASE_NAMES = ['അവലോകനം', 'ക്ലയന്റ്', 'ടെംപ്ലേറ്റ്', 'പോർട്ടൽ', 'പൂർത്തിയായി'];
   const phaseOf = (i: number) => PHASE_BOUNDARIES.findLastIndex((b) => i >= b);
   const currentPhase = phaseOf(step);

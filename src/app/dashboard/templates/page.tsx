@@ -3114,7 +3114,7 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div id="template-image-section" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <div className="form-group">
                 <label className="form-label" style={{ fontWeight: '500' }}>Front Background Design Image</label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
