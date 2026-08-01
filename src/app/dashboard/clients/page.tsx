@@ -90,7 +90,7 @@ export default function ClientsPage() {
           <h1>Client Registries</h1>
           <p style={{ marginTop: '4px' }}>Manage directory folders for schools, companies, and organizations.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
+        <button id="btn-register-client" className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
           <Plus size={18} /> {showForm ? 'Hide Form' : 'Register Client'}
         </button>
       </div>

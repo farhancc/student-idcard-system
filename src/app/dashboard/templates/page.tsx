@@ -2666,7 +2666,7 @@ export default function TemplatesPage() {
           <h1>Card Templates</h1>
           <p style={{ marginTop: '4px' }}>Upload design layouts and configure placement coordinate fields.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => {
+        <button id="btn-create-template" className="btn btn-primary" onClick={() => {
           if (showForm) {
             setEditingTemplateId(null);
             setName('');
