@@ -18,6 +18,7 @@ export async function GET() {
     let pressCount = -1;
     let queryError = null;
 
+    let allTemplates: any[] = [];
     let publicTemplateCount = -1;
     let publicTemplates: any[] = [];
     let isLatestColExists = false;
@@ -25,31 +26,27 @@ export async function GET() {
       userCount = await prisma.pressUser.count();
       pressCount = await prisma.press.count();
 
-      // Check if is_latest column exists
       const colCheck: any[] = await prisma.$queryRaw`
         SELECT column_name FROM information_schema.columns
         WHERE table_name = 'card_templates' AND column_name = 'is_latest'
       `;
       isLatestColExists = colCheck.length > 0;
 
-      // Count & sample public templates
       publicTemplateCount = await prisma.cardTemplate.count({ where: { isPublic: true } });
-      const samples = await prisma.cardTemplate.findMany({
+      publicTemplates = await prisma.cardTemplate.findMany({
         where: { isPublic: true },
         select: { id: true, name: true, pressId: true, isModerated: true, price: true },
         take: 20,
       });
-      publicTemplates = samples;
 
-      // Show ALL templates grouped with status — to understand why some don't appear
-      const allTemplates: any[] = await prisma.$queryRaw`
+      // Full table: all templates with press name, to debug visibility
+      allTemplates = await prisma.$queryRaw`
         SELECT t.id, t.name, t.press_id, t.is_public, t.is_moderated, t.price, p.name as press_name
         FROM card_templates t
         LEFT JOIN press p ON p.id = t.press_id
         ORDER BY t.press_id, t.id
         LIMIT 50
       `;
-      (publicTemplates as any).__all = allTemplates;
     } catch (e: any) {
       queryError = e.message || String(e);
     }
@@ -63,6 +60,7 @@ export async function GET() {
       isLatestColExists,
       publicTemplateCount,
       publicTemplates,
+      allTemplates,
       queryError,
     });
   } catch (error: any) {
