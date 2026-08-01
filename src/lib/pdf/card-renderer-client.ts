@@ -620,6 +620,30 @@ export async function renderCardSideClient(
           startY = effectiveY + f.height - renderedHeight + halfLeading;
         }
 
+        // Draw background fill if set
+        if (f.backgroundColor && f.backgroundColor !== 'transparent') {
+          ctx.save();
+          ctx.fillStyle = f.backgroundColor;
+          if (f.borderRadius && f.borderRadius > 0) {
+            const r = Math.min(f.borderRadius, f.width / 2, f.height / 2);
+            ctx.beginPath();
+            ctx.moveTo(f.x + r, effectiveY);
+            ctx.lineTo(f.x + f.width - r, effectiveY);
+            ctx.quadraticCurveTo(f.x + f.width, effectiveY, f.x + f.width, effectiveY + r);
+            ctx.lineTo(f.x + f.width, effectiveY + f.height - r);
+            ctx.quadraticCurveTo(f.x + f.width, effectiveY + f.height, f.x + f.width - r, effectiveY + f.height);
+            ctx.lineTo(f.x + r, effectiveY + f.height);
+            ctx.quadraticCurveTo(f.x, effectiveY + f.height, f.x, effectiveY + f.height - r);
+            ctx.lineTo(f.x, effectiveY + r);
+            ctx.quadraticCurveTo(f.x, effectiveY, f.x + r, effectiveY);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            ctx.fillRect(f.x, effectiveY, f.width, f.height);
+          }
+          ctx.restore();
+        }
+
         ctx.beginPath();
         ctx.rect(f.x, effectiveY, f.width, f.height);
         ctx.clip();

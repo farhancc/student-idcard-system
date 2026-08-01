@@ -1403,21 +1403,23 @@ export default function TemplatesPage() {
     if (showTestData) {
       return {
         border: isSelected ? '1.5px dashed var(--primary)' : '1px dashed rgba(255,255,255,0.15)',
-        background: isSelected ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+        background: (f.backgroundColor && f.backgroundColor !== 'transparent')
+          ? f.backgroundColor
+          : isSelected ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
         boxShadow: 'none',
         zIndex: isSelected ? 100 : 10,
-        borderRadius: type === 'image' && f.borderRadius ? `${f.borderRadius * scale}px` : undefined,
+        borderRadius: type === 'image' && f.borderRadius ? `${f.borderRadius * scale}px` : (f.borderRadius ? `${f.borderRadius * scale}px` : undefined),
       };
     }
 
     return {
       border: isSelected ? '2.5px solid #ffffff' : `1.5px solid rgb(${color})`,
-      background: `rgba(${color}, ${isSelected ? '0.35' : '0.15'})`,
+      background: (f.backgroundColor && f.backgroundColor !== 'transparent')
+        ? f.backgroundColor
+        : `rgba(${color}, ${isSelected ? '0.35' : '0.15'})`,
       boxShadow: isSelected ? '0 0 10px rgba(255,255,255,0.6)' : 'none',
       zIndex: isSelected ? 100 : 10,
-      // Apply border radius for image fields so the overlay matches the rendered output
-      borderRadius: type === 'image' && f.borderRadius ? `${f.borderRadius * scale}px` : undefined,
-      // Reflect font styling on text labels inside the overlay
+      borderRadius: (f.borderRadius && (type === 'image' || f.backgroundColor)) ? `${f.borderRadius * scale}px` : undefined,
       fontStyle: isTextLike && f.fontStyle === 'italic' ? 'italic' : 'normal',
       fontWeight: isTextLike && f.fontWeight ? f.fontWeight : 'normal',
       fontFamily: isTextLike && f.fontFamily ? f.fontFamily : undefined,
