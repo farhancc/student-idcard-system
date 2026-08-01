@@ -465,12 +465,12 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
       onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-3px)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 12px 40px rgba(0,0,0,0.3)'; }}
       onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = ''; (e.currentTarget as HTMLElement).style.boxShadow = ''; }}>
 
-      {/* Preview */}
-      <div style={{ position: 'relative', aspectRatio: '3/2', background: '#111', overflow: 'hidden' }}>
+      {/* Preview — use real card aspect ratio so portrait cards aren't cropped */}
+      <div style={{ position: 'relative', aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`, background: '#111', overflow: 'hidden' }}>
         <img
           src={showBack && t.backImageUrl ? t.backImageUrl : t.frontImageUrl}
           alt={t.name}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />
         {/* Badges */}
         <div style={{ position: 'absolute', top: '8px', left: '8px', display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -772,14 +772,15 @@ function TemplateDetailModal({
                   <CreditCard size={14} color="var(--primary)" /> Front Side Preview
                 </div>
                 <div style={{
-                  position: 'relative', width: '100%', maxWidth: '440px', aspectRatio: '3/2',
+                  position: 'relative', width: '100%', maxWidth: t.cardWidth > t.cardHeight ? '440px' : '320px',
+                  aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`,
                   borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)',
                   background: '#09090b', boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
                 }}>
                   <img
                     src={t.frontImageUrl}
                     alt={`${t.name} Front`}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                   />
                 </div>
               </div>
@@ -791,7 +792,8 @@ function TemplateDetailModal({
                   <CreditCard size={14} color="#818cf8" /> Back Side Preview
                 </div>
                 <div style={{
-                  position: 'relative', width: '100%', maxWidth: '440px', aspectRatio: '3/2',
+                  position: 'relative', width: '100%', maxWidth: t.cardWidth > t.cardHeight ? '440px' : '320px',
+                  aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`,
                   borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)',
                   background: '#09090b', boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
@@ -800,7 +802,7 @@ function TemplateDetailModal({
                     <img
                       src={t.backImageUrl}
                       alt={`${t.name} Back`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                     />
                   ) : (
                     <div style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)', fontSize: '0.85rem' }}>
