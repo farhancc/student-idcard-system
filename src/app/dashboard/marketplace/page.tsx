@@ -840,9 +840,12 @@ function TemplateDetailModal({
     cardHeight: t.cardHeight || 638,
     frontImageUrl: t.frontImageUrl,
     backImageUrl: t.backImageUrl,
+    frontOriginalUrl: (t as any).frontOriginalUrl,
+    backOriginalUrl: (t as any).backOriginalUrl,
+    sides: t.sides,
     frontFields: typeof t.frontFields === 'string' ? t.frontFields : JSON.stringify(t.frontFields || []),
     backFields: typeof t.backFields === 'string' ? t.backFields : JSON.stringify(t.backFields || []),
-  }), [t.id, t.cardWidth, t.cardHeight, t.frontImageUrl, t.backImageUrl, t.frontFields, t.backFields]);
+  }), [t.id, t.cardWidth, t.cardHeight, t.frontImageUrl, t.backImageUrl, (t as any).frontOriginalUrl, (t as any).backOriginalUrl, t.sides, t.frontFields, t.backFields]);
 
   return (
     <div
@@ -1053,7 +1056,7 @@ function TemplateDetailModal({
                       />
                     ) : (
                       <img
-                        src={t.backImageUrl || t.frontImageUrl}
+                        src={t.backImageUrl || (t as any).backOriginalUrl || t.frontImageUrl}
                         alt={`${t.name} Back`}
                         style={{
                           display: 'block',

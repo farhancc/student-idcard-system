@@ -103,6 +103,8 @@ export async function GET(request: Request) {
           cardHeight: true,
           frontImageUrl: true,
           backImageUrl: true,
+          frontOriginalUrl: true,
+          backOriginalUrl: true,
           price: true,
           likes: true,
           reports: true,

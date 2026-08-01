@@ -408,14 +408,12 @@ export async function renderCardSideClient(
     fields = [];
   }
   
-  let bgUrl = side === 'front' ? template.frontImageUrl : (template.backImageUrl || template.frontImageUrl);
-  // For Electron: prefer the locally-cached original file (highest quality)
-  // Fallback 1: Cloudinary original URL (PDF/SVG uploaded at full resolution)
-  // Fallback 2: Cloudinary display/preview URL (low-res WebP)
+  const primaryUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
   const originalUrl = side === 'front' ? template.frontOriginalUrl : template.backOriginalUrl;
+  let bgUrl = primaryUrl || originalUrl;
 
   // Try to resolve a local cached file first (Electron)
-  if (bgUrl && typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
+  if (typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
     try {
       const localPath = await (window as any).electronAPI.getLocalTemplatePath({
         templateId: template.id,
