@@ -103,7 +103,14 @@ export default function MarketplacePage() {
       });
       const res = await fetch(`/api/marketplace?${params}`);
       const data = await res.json();
+      if (!res.ok) {
+        console.error('[Marketplace] API error:', res.status, data);
+        toast(`Marketplace error (${res.status}): ${data?.error || 'Unknown error'}`, 'error');
+        setTemplates([]);
+        return;
+      }
       const fetched: Template[] = data.templates || [];
+      console.log('[Marketplace] Loaded', fetched.length, 'templates, total:', data.pagination?.total);
       setTemplates(fetched);
       setTotal(data.pagination?.total || 0);
       setPages(data.pagination?.pages || 1);
@@ -111,12 +118,14 @@ export default function MarketplacePage() {
       setLikedSet(new Set(fetched.filter(t => t.isLiked).map(t => t.id)));
       setReportedSet(new Set(fetched.filter(t => t.isReported).map(t => t.id)));
       setPurchased(new Set(fetched.filter(t => t.isPurchased).map(t => t.id)));
-    } catch {
-      toast('Failed to load marketplace', 'error');
+    } catch (err: any) {
+      console.error('[Marketplace] Fetch exception:', err);
+      toast('Failed to load marketplace: ' + (err?.message || 'Network error'), 'error');
     } finally {
       setLoading(false);
     }
   }, [page, sort, search, category, priceFilter, hasCdr, hasAi, hasPhoto, hasQr]);
+
 
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
   useEffect(() => { fetchCredits(); }, []);
