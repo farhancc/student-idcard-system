@@ -18,9 +18,28 @@ export async function GET() {
     let pressCount = -1;
     let queryError = null;
 
+    let publicTemplateCount = -1;
+    let publicTemplates: any[] = [];
+    let isLatestColExists = false;
     try {
       userCount = await prisma.pressUser.count();
       pressCount = await prisma.press.count();
+
+      // Check if is_latest column exists
+      const colCheck: any[] = await prisma.$queryRaw`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'card_templates' AND column_name = 'is_latest'
+      `;
+      isLatestColExists = colCheck.length > 0;
+
+      // Count & sample public templates
+      publicTemplateCount = await prisma.cardTemplate.count({ where: { isPublic: true } });
+      const samples = await prisma.cardTemplate.findMany({
+        where: { isPublic: true },
+        select: { id: true, name: true, pressId: true, isModerated: true, price: true },
+        take: 10,
+      });
+      publicTemplates = samples;
     } catch (e: any) {
       queryError = e.message || String(e);
     }
@@ -31,6 +50,9 @@ export async function GET() {
       tableNames,
       userCount,
       pressCount,
+      isLatestColExists,
+      publicTemplateCount,
+      publicTemplates,
       queryError,
     });
   } catch (error: any) {
