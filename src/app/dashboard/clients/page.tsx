@@ -152,7 +152,7 @@ export default function ClientsPage() {
 
             <div style={{ gridColumn: 'span 2', display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
               <button type="button" className="btn btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={submitting}>
+              <button id="btn-save-client" type="submit" className="btn btn-primary" disabled={submitting}>
                 {submitting ? 'Registering...' : 'Save Organization'}
               </button>
             </div>
@@ -189,9 +189,10 @@ export default function ClientsPage() {
           gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
           gap: '24px'
         }}>
-          {filteredClients.map((client) => (
+          {filteredClients.map((client, index) => (
             <div
               key={client.id}
+              id={index === 0 ? 'btn-open-client' : undefined}
               className="glass-panel glass-panel-hover"
               onClick={() => router.push(`/dashboard/clients/${client.id}`)}
               style={{

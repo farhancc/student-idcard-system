@@ -89,7 +89,6 @@ const STEPS: TourStep[] = [
   },
 
   // ─── PHASE 2: Create your first Client ─────────────────────────────────────
-  // indices 9–12
   {
     icon: '🚀',
     title: "Now let's get you set up!",
@@ -109,19 +108,27 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '➕',
     title: 'Click "Register Client"',
-    body: 'Click the highlighted button to open the registration form. Fill in the organization name and details, then hit Save.',
+    body: 'Click the highlighted button to open the registration form.',
+    waitForClick: true,
+  },
+  {
+    navigateTo: '/dashboard/clients',
+    targetId: 'btn-save-client',
+    position: 'top',
+    icon: '📝',
+    title: 'Fill form & click "Save Organization"',
+    body: 'Fill in the organization name and contact details, then click the highlighted "Save Organization" button.',
     waitForClick: true,
   },
   {
     navigateTo: '/dashboard/clients',
     icon: '✅',
     title: 'Client saved!',
-    body: "Your client is registered. Now let's head to Templates to design the ID card layout — we'll come back here afterwards to generate and share the portal link.",
+    body: "Your client is registered! Now let's head to Templates to design their ID card layout.",
     nextLabel: 'Next: Design a Template →',
   },
 
   // ─── PHASE 3: Create your first Template ────────────────────────────────────
-  // indices 13–15
   {
     navigateTo: '/dashboard/templates',
     icon: '🎨',
@@ -135,19 +142,27 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '➕',
     title: 'Click "+ Create Template"',
-    body: 'Click the highlighted button to open the template builder. Name your template, upload a background, and start mapping fields.',
+    body: 'Click the highlighted button to open the template designer setup.',
     waitForClick: true,
   },
   {
     navigateTo: '/dashboard/templates',
-    icon: '🗺️',
-    title: 'Map your fields',
-    body: "Use the visual designer to place fields on your card — Name, Photo, Designation, QR Code, and more. Once saved, your template will be available for the portal link generator.",
-    nextLabel: "Now let's share the link →",
+    targetId: 'btn-save-template',
+    position: 'top',
+    icon: '🛠️',
+    title: 'Design & click "Save Template"',
+    body: 'Name your template, upload front/back background images, map coordinate fields, then click "Save Template".',
+    waitForClick: true,
+  },
+  {
+    navigateTo: '/dashboard/templates',
+    icon: '🎨',
+    title: 'Template saved!',
+    body: "Awesome! Template created. Now let's head back to Clients to generate and share the portal link.",
+    nextLabel: 'Next: Share Portal Link →',
   },
 
   // ─── PHASE 4: Share the Client Portal Link ───────────────────────────────────
-  // indices 16–20
   {
     icon: '🔗',
     title: 'Step 3 — Share the Client Portal',
@@ -156,24 +171,26 @@ const STEPS: TourStep[] = [
   },
   {
     navigateTo: '/dashboard/clients',
+    targetId: 'btn-open-client',
+    position: 'bottom',
     icon: '📂',
-    title: 'Back to the client directory',
-    body: "We're heading back to Clients. Click on your client card to open its full directory where the Portal Links tab lives.",
-    nextLabel: 'Got it →',
+    title: 'Open your Client Directory',
+    body: 'Click on your client card to open its directory dashboard where portal links live.',
+    waitForClick: true,
   },
   {
     targetId: 'btn-portal-tab',
     position: 'bottom',
     icon: '🔗',
     title: 'Click "Client Portal Links" tab',
-    body: 'Click the highlighted tab to switch to the Portal Links section, where you generate secure enrollment links.',
+    body: 'Click the highlighted tab to switch to the Portal Links section.',
     waitForClick: true,
   },
   {
     targetId: 'btn-generate-links',
     position: 'top',
     icon: '⚡',
-    title: 'Generate the portal link',
+    title: 'Select template & click "Generate Links"',
     body: 'Select the template you just created from the dropdown, then click "Generate Links" to create the Organization Head and Enrollment links.',
     waitForClick: true,
   },
@@ -185,7 +202,6 @@ const STEPS: TourStep[] = [
   },
 
   // ─── PHASE 5: Done ───────────────────────────────────────────────────────────
-  // index 21
   {
     icon: '🎉',
     title: "You're all set!",

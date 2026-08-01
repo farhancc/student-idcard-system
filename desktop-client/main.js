@@ -42,34 +42,41 @@ function setupApplicationMenu() {
 
 function getSystemPathFromLocalUrl(localUrl) {
   if (!localUrl) return '';
-  let urlPath = localUrl.replace(/^local:\/\//i, '');
-  urlPath = urlPath.split('?')[0];
+  // Strip query string and hash before parsing the path
+  let urlPath = localUrl.replace(/^local:\/\//i, '').split('?')[0].split('#')[0];
+  // Decode percent-encoding (handles spaces etc. in Windows user profile paths)
+  try { urlPath = decodeURIComponent(urlPath); } catch (e) { /* leave as-is if malformed */ }
   if (process.platform === 'win32') {
-    if (urlPath.startsWith('/')) {
-      urlPath = urlPath.slice(1);
-    }
+    // On Windows, path arrives as /C:/Users/... — strip the leading slash
+    if (urlPath.startsWith('/')) urlPath = urlPath.slice(1);
   } else {
-    if (!urlPath.startsWith('/')) {
-      urlPath = '/' + urlPath;
-    }
+    if (!urlPath.startsWith('/')) urlPath = '/' + urlPath;
   }
-  return decodeURIComponent(urlPath);
+  return urlPath;
 }
 
 
 function getLocalUrlFromSystemPath(systemPath) {
   if (!systemPath) return '';
-  let formattedPath = systemPath.replace(/\\/g, '/');
-  if (process.platform === 'win32' && !formattedPath.startsWith('/')) {
-    formattedPath = '/' + formattedPath;
-  }
-  return `local://${formattedPath}`;
+  // Normalise Windows back-slashes to forward-slashes
+  const forwardPath = systemPath.replace(/\\/g, '/');
+  // Percent-encode each path segment so spaces and special chars survive the
+  // round-trip through Chromium's URL parser
+  const segments = forwardPath.split('/');
+  const encodedSegments = segments.map(seg => encodeURIComponent(seg).replace(/%3A/g, ':'));
+  const encodedPath = encodedSegments.join('/');
+  // Ensure the path starts with / so we get local:///C:/... on Windows
+  const finalPath = encodedPath.startsWith('/') ? encodedPath : '/' + encodedPath;
+  return `local://${finalPath}`;
 }
 
 
-// Register local:// protocol scheme as privileged to avoid CORS/Fetch errors
+// Register local:// as a privileged but NON-standard scheme.
+// Using 'standard: true' causes Chromium to apply full URL normalization
+// (authority parsing, path encoding) which corrupts Windows drive-letter paths.
+// Without 'standard', request.url preserves the raw URL we constructed.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local', privileges: { secure: true, standard: true, corsEnabled: true, supportFetchAPI: true } }
+  { scheme: 'local', privileges: { secure: true, standard: false, corsEnabled: true, supportFetchAPI: true, bypassCSP: true } }
 ]);
 
 // ── Offline Print Queue ────────────────────────────────────────────────────
@@ -188,18 +195,25 @@ async function flushQueueToServer(portalUrl, authToken) {
 let mainWindow;
 
 function getPortalUrl() {
+  // Explicit override always wins (useful for testing against staging)
   if (process.env.PORTAL_URL) {
     return process.env.PORTAL_URL;
   }
-  // Check if we are running within the local development workspace folder
-  const isDevFolder = (process.cwd() && process.cwd().includes('student-id-pdf-system')) || 
-                      (process.env.APPIMAGE && process.env.APPIMAGE.includes('student-id-pdf-system')) ||
+  // Packaged builds (AppImage / .exe / .dmg) always hit production.
+  // Never fall back to localhost based on the launch directory — the app
+  // could be run from anywhere, including the developer's project folder.
+  if (app.isPackaged) {
+    return 'https://idexocards.vercel.app';
+  }
+  // Unpackaged (electron . / npm start) — check if we're in the dev workspace
+  // so that running `electron .` inside the repo still hits localhost.
+  const isDevFolder = (process.cwd() && process.cwd().includes('student-id-pdf-system')) ||
                       (app.getAppPath() && app.getAppPath().includes('student-id-pdf-system'));
   if (isDevFolder) {
-    console.log('Detected running in local development folder context. Using http://localhost:3000');
+    console.log('Detected development workspace. Using http://localhost:3000');
     return 'http://localhost:3000';
   }
-  return app.isPackaged ? 'https://idexocards.vercel.app' : 'http://localhost:3000';
+  return 'http://localhost:3000';
 }
 
 // Configure Auto-Updater targeting secure CDN release path
@@ -344,10 +358,21 @@ function createWindow() {
 
 app.whenReady().then(() => {
   setupApplicationMenu();
-  // Register local:// protocol to serve template images stored on disk with CORS headers
+  // Register local:// protocol to serve template images/PDFs stored on disk
   protocol.handle('local', async (request) => {
-    const decodedPath = getSystemPathFromLocalUrl(request.url);
+    const rawUrl = request.url;
+    const decodedPath = getSystemPathFromLocalUrl(rawUrl);
+    console.log(`[local://] Request: ${rawUrl}`);
+    console.log(`[local://] Resolved system path: ${decodedPath}`);
     try {
+      if (!decodedPath) {
+        console.error('[local://] Empty system path resolved from URL:', rawUrl);
+        return new Response('Bad path', { status: 400 });
+      }
+      if (!fs.existsSync(decodedPath)) {
+        console.error(`[local://] File does not exist: ${decodedPath}`);
+        return new Response('File not found', { status: 404 });
+      }
       const fileBuffer = await fs.promises.readFile(decodedPath);
       // Determine content type based on extension
       const ext = path.extname(decodedPath).toLowerCase();
@@ -357,18 +382,23 @@ app.whenReady().then(() => {
       else if (ext === '.svg') contentType = 'image/svg+xml';
       else if (ext === '.webp') contentType = 'image/webp';
       else if (ext === '.pdf') contentType = 'application/pdf';
+      else if (ext === '.ttf' || ext === '.otf') contentType = 'font/sfnt';
+      else if (ext === '.woff') contentType = 'font/woff';
+      else if (ext === '.woff2') contentType = 'font/woff2';
 
+      console.log(`[local://] Serving ${decodedPath} as ${contentType} (${fileBuffer.length} bytes)`);
       return new Response(fileBuffer, {
         status: 200,
         headers: {
           'Content-Type': contentType,
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': '*'
+          'Access-Control-Allow-Headers': '*',
+          'Cache-Control': 'no-store'
         }
       });
     } catch (err) {
-      console.error('local:// protocol error:', err);
+      console.error(`[local://] Protocol error for path "${decodedPath}":`, err.message);
       return new Response('File not found', { status: 404 });
     }
   });
@@ -452,7 +482,8 @@ ipcMain.handle('is-desktop', () => {
 // IPC handler to save template image to local disk and return a local:// URL
 ipcMain.handle('save-template-image', async (event, { pressId, fileName, base64Data, mimeType }) => {
   try {
-    const ext = fileName.split('.').pop().toLowerCase();
+    const cleanFileName = (fileName || '').split('?')[0].split('#')[0];
+    const ext = cleanFileName.split('.').pop().toLowerCase();
     const safeExt = ['png', 'svg', 'pdf', 'jpg', 'jpeg'].includes(ext) ? ext : 'png';
     const uniqueName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`;
     const dir = path.join(app.getPath('userData'), 'templates', String(pressId));
@@ -695,7 +726,8 @@ ipcMain.handle('finalize-template-originals', async (event, { templateId, frontL
 // IPC handler to save original template file directly to permanent templates directory
 ipcMain.handle('save-template-original', async (event, { templateId, side, base64Data, fileName }) => {
   try {
-    const ext = path.extname(fileName).toLowerCase() || '.pdf';
+    const cleanFileName = (fileName || '').split('?')[0].split('#')[0];
+    const ext = path.extname(cleanFileName).toLowerCase() || '.pdf';
     const dir = path.join(app.getPath('userData'), 'templates');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 

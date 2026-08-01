@@ -3442,6 +3442,7 @@ export default function TemplatesPage() {
                   </div>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                     <button 
+                      id="btn-save-template"
                       type="button" 
                       onClick={() => handleSave()} 
                       className="btn btn-primary"
@@ -4874,7 +4875,7 @@ export default function TemplatesPage() {
                 setSides(1);
                 setSelectedClientIds([]);
               }}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={submitting}>
+              <button id="btn-save-template" type="submit" className="btn btn-primary" disabled={submitting}>
                 <Save size={16} /> {submitting ? 'Saving Layout...' : (editingTemplateId ? 'Update Template' : 'Save Template')}
               </button>
             </div>

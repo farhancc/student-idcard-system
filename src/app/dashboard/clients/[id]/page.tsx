@@ -2090,6 +2090,7 @@ export default function ClientDetailsPage() {
         marginBottom: '32px'
       }}>
         <button 
+          id="btn-list-tab"
           onClick={() => setActiveTab('list')}
           style={{
             padding: '12px 20px',
