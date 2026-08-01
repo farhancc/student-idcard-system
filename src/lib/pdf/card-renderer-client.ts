@@ -398,7 +398,7 @@ export async function renderCardSideClient(
   const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
   const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
   
-  let bgUrl = side === 'front' ? template.frontImageUrl : template.backImageUrl;
+  let bgUrl = side === 'front' ? template.frontImageUrl : (template.backImageUrl || template.frontImageUrl);
   // For Electron: prefer the locally-cached original file (highest quality)
   // Fallback 1: Cloudinary original URL (PDF/SVG uploaded at full resolution)
   // Fallback 2: Cloudinary display/preview URL (low-res WebP)

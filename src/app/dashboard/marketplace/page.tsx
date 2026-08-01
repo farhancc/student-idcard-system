@@ -509,7 +509,7 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
           )}
         </div>
         {/* Flip button for 2-sided */}
-        {t.backImageUrl && (
+        {(t.backImageUrl || t.sides === 2 || (t.backFields && t.backFields !== '[]')) && (
           <button onClick={(e) => { e.stopPropagation(); setShowBack(s => !s); }} style={{
             position: 'absolute', bottom: '8px', right: '8px',
             background: 'rgba(0,0,0,0.7)', border: 'none', color: '#fff',
@@ -892,13 +892,13 @@ function TemplateDetailModal({
               </div>
             )}
 
-            {(activeSide === 'both' || activeSide === 'back') && (t.backImageUrl || t.sides === 2) && (
+            {(activeSide === 'both' || activeSide === 'back') && (t.backImageUrl || t.sides === 2 || backFields.length > 0) && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CreditCard size={14} color="#818cf8" />
                   Back Side {previewMode === 'mapped_data' ? '(Sample Test Data Mapped)' : 'Design Asset'}
                 </div>
-                {t.backImageUrl || t.backFields ? (
+                {t.backImageUrl || t.backFields || t.sides === 2 || backFields.length > 0 ? (
                   <div
                     style={{ position: 'relative', cursor: 'zoom-in', borderRadius: '12px', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}
                     onClick={() => setFullscreenImg(t.backImageUrl || t.frontImageUrl)}

@@ -66,12 +66,17 @@ export default function CardPreview({
     id: 99,
     name: 'John Doe',
     designation: 'Student / Employee',
-    photoUrl: null,
-    cardSerial: 'STU-1234',
+    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+    cardSerial: 'STU-2026-001',
     customFields: JSON.stringify({
       bloodGroup: 'B+',
       rollNumber: '2026-99',
       schoolName: 'Greenwood High School',
+      class: 'Class X-A',
+      fatherName: 'Robert Doe',
+      phone: '+1 555-0192',
+      dob: '2008-05-14',
+      address: '123 Academic Way, Education City',
     }),
   };
 
