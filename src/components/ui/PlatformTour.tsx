@@ -441,16 +441,14 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
   return (
     <>
-      {/* CSS keyframes injected once */}
+      {/* CSS keyframes injected once — simple & minimalist */}
       <style>{`
-        @keyframes tour-spin   { to { transform: rotate(360deg); } }
-        @keyframes tour-pulse  { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(1.12); } }
-        @keyframes tour-ring   { 0% { transform: translate(-50%,-50%) scale(0.92); opacity: 0.9; }
-                                  100% { transform: translate(-50%,-50%) scale(1.55); opacity: 0; } }
-        @keyframes tour-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+        @keyframes tour-spin       { to { transform: rotate(360deg); } }
+        @keyframes tour-fade-in    { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes tour-pulse-soft { 0%,100% { opacity: 0.7; } 50% { opacity: 0.25; } }
       `}</style>
 
-      {/* Dark overlay — transparent when spotlight active so target is clickable */}
+      {/* Dark overlay */}
       <div
         style={{
           position: 'fixed',
@@ -459,7 +457,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           background: (spotlight && !navigating) ? 'transparent' : 'rgba(0,0,0,0.50)',
           backdropFilter: (spotlight && !navigating) ? 'none' : 'blur(2px)',
           pointerEvents: 'none',
-          transition: 'background 0.3s ease',
+          transition: 'background 0.2s ease',
         }}
       />
 
@@ -493,7 +491,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             height="100%"
             fill={isWaitingForClick ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.55)"}
             mask="url(#tour-spotlight-mask)"
-            style={{ transition: 'fill 0.3s ease' }}
+            style={{ transition: 'fill 0.2s ease' }}
           />
           {/* Static border */}
           <rect
@@ -506,7 +504,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             stroke={isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.85)'}
             strokeWidth={isWaitingForClick ? 2.5 : 2}
           />
-          {/* Animated pulsing border for waitForClick steps */}
+          {/* Subtle soft pulse for interactive steps */}
           {isWaitingForClick && (
             <rect
               x={spotlight.left - 1}
@@ -516,8 +514,8 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
               rx={11}
               fill="none"
               stroke="rgba(251,191,36,0.5)"
-              strokeWidth="6"
-              style={{ animation: 'tour-pulse 1.2s ease-in-out infinite' }}
+              strokeWidth="4"
+              style={{ animation: 'tour-pulse-soft 2s ease-in-out infinite' }}
             />
           )}
         </svg>
@@ -562,7 +560,8 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
               : tooltipPos
               ? { top: `${tooltipPos.top}px`, left: `${tooltipPos.left}px` }
               : { display: 'none' }),
-            transition: 'top 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
+            transition: 'top 0.15s ease-out, left 0.15s ease-out',
+            animation: 'tour-fade-in 0.18s ease-out',
             background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
             border: isWaitingForClick
               ? '1px solid rgba(251,191,36,0.4)'
