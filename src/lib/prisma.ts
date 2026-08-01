@@ -11,6 +11,9 @@ const basePrisma =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
 
+// Export the raw client for cross-tenant reads (e.g. marketplace — shows ALL presses)
+export { basePrisma };
+
 async function getCurrentPressId(): Promise<number | null> {
   try {
     // In Next.js 15+, headers() is asynchronous and must be awaited

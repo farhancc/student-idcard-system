@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+// Use basePrisma (raw client without tenant middleware) so that all presses'
+// public templates are visible in the marketplace, not just the current press's.
+import { basePrisma as prisma } from '@/lib/prisma';
 import { formatFieldLabel as formatFieldLabelCentral } from '@/lib/pdf/field-resolver';
 
 export const dynamic = 'force-dynamic';

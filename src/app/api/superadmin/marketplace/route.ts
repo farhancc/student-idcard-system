@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { basePrisma as prisma } from '@/lib/prisma';
 
 // GET /api/superadmin/marketplace — list templates for moderation
 // filter: 'all' | 'reported' | 'moderated' | 'all_including_private'
