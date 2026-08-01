@@ -15,6 +15,11 @@ interface TourStep {
   navigateTo?: string;
   /** Label shown on the primary action button (defaults to "Next →") */
   nextLabel?: string;
+  /**
+   * When true the "Next" button is hidden and the tour advances only
+   * when the user physically clicks the spotlit element.
+   */
+  waitForClick?: boolean;
 }
 
 const STEPS: TourStep[] = [
@@ -83,6 +88,7 @@ const STEPS: TourStep[] = [
   },
 
   // ─── PHASE 2: Create your first Client ─────────────────────────────────────
+  // indices 9–12
   {
     icon: '🚀',
     title: "Now let's get you set up!",
@@ -93,7 +99,7 @@ const STEPS: TourStep[] = [
     navigateTo: '/dashboard/clients',
     icon: '🏫',
     title: 'Step 1 — Register a Client',
-    body: "A client is the organization you are printing cards for (e.g. a school or company). Let's create your first one now.",
+    body: "A client is the organization you are printing cards for (e.g. a school or company). Click the button below to open the registration form.",
     nextLabel: 'Show me →',
   },
   {
@@ -102,8 +108,8 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '➕',
     title: 'Click "Register Client"',
-    body: 'Click this button to open the registration form. Fill in the organization name, contact details, and address, then hit Save.',
-    nextLabel: 'Got it →',
+    body: 'Click the highlighted button to open the registration form. Fill in the organization name and details, then hit Save.',
+    waitForClick: true,
   },
   {
     navigateTo: '/dashboard/clients',
@@ -114,11 +120,12 @@ const STEPS: TourStep[] = [
   },
 
   // ─── PHASE 3: Create your first Template ────────────────────────────────────
+  // indices 13–15
   {
     navigateTo: '/dashboard/templates',
     icon: '🎨',
     title: 'Step 2 — Create a Template',
-    body: "A template defines the visual layout of the ID card — fields, fonts, and background design. You need at least one template assigned to your client before generating a portal link.",
+    body: "A template defines the visual layout of the ID card — fields, fonts, and background design. You need at least one before you can generate a portal link.",
     nextLabel: 'Show me →',
   },
   {
@@ -127,29 +134,30 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '➕',
     title: 'Click "+ Create Template"',
-    body: "Click here to open the template builder. Name your template, upload your PDF/SVG background, and start mapping fields like Name, Photo, and QR Code.",
-    nextLabel: 'Got it →',
+    body: 'Click the highlighted button to open the template builder. Name your template, upload a background, and start mapping fields.',
+    waitForClick: true,
   },
   {
     navigateTo: '/dashboard/templates',
     icon: '🗺️',
     title: 'Map your fields',
-    body: "Drag and position fields on the card canvas — Name, Photo, Designation, QR Code, and more. Once saved, assign the template to your client so it appears in the portal link generator.",
+    body: "Use the visual designer to place fields on your card — Name, Photo, Designation, QR Code, and more. Once saved, your template will be available for the portal link generator.",
     nextLabel: "Now let's share the link →",
   },
 
   // ─── PHASE 4: Share the Client Portal Link ───────────────────────────────────
+  // indices 16–20
   {
     icon: '🔗',
     title: 'Step 3 — Share the Client Portal',
-    body: "Every client gets a secure portal link. You send it to the organization head — they enroll members, manage departments, and collect photos without needing a press account.",
+    body: "Every client gets a secure portal link. Send it to the organization head — they enroll members, manage departments, and collect photos without needing a press account.",
     nextLabel: 'Show me →',
   },
   {
     navigateTo: '/dashboard/clients',
     icon: '📂',
     title: 'Back to the client directory',
-    body: "We're heading back to Clients now. Click on your client card to open its full directory where the Portal Links tab lives.",
+    body: "We're heading back to Clients. Click on your client card to open its full directory where the Portal Links tab lives.",
     nextLabel: 'Got it →',
   },
   {
@@ -157,16 +165,16 @@ const STEPS: TourStep[] = [
     position: 'bottom',
     icon: '🔗',
     title: 'Click "Client Portal Links" tab',
-    body: 'Inside the client directory, switch to the Portal Links tab. This is where you generate and manage secure enrollment links for the organization.',
-    nextLabel: 'Got it →',
+    body: 'Click the highlighted tab to switch to the Portal Links section, where you generate secure enrollment links.',
+    waitForClick: true,
   },
   {
     targetId: 'btn-generate-links',
     position: 'top',
     icon: '⚡',
     title: 'Generate the portal link',
-    body: 'Select the template you just created from the dropdown, then click "Generate Links". The Organization Head link and the Enrollment link will appear below.',
-    nextLabel: 'Got it →',
+    body: 'Select the template you just created from the dropdown, then click "Generate Links" to create the Organization Head and Enrollment links.',
+    waitForClick: true,
   },
   {
     icon: '📤',
@@ -176,11 +184,12 @@ const STEPS: TourStep[] = [
   },
 
   // ─── PHASE 5: Done ───────────────────────────────────────────────────────────
+  // index 21
   {
     icon: '🎉',
     title: "You're all set!",
     body: "Client ✓  Template ✓  Portal link ✓  You're ready to create your first order. Go to Orders, pick a client and template, import your cardholder CSV, and produce cards!",
-    nextLabel: '🎉 Let\'s go!',
+    nextLabel: "🎉 Let's go!",
   },
 ];
 
@@ -205,10 +214,13 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const isLast = step === STEPS.length - 1;
   const isFirst = step === 0;
   const isCentered = !currentStep.targetId || fallbackCentered;
+  const isWaitingForClick = !!(currentStep.waitForClick && currentStep.targetId && spotlight && !fallbackCentered);
 
-  // Phase labels for the divider dots
+  // Phase labels
   const PHASE_BOUNDARIES = [0, 9, 13, 16, 21]; // Overview, Client, Template, Portal, Done
+  const PHASE_NAMES = ['Overview', 'Client', 'Template', 'Portal', 'Done'];
   const phaseOf = (i: number) => PHASE_BOUNDARIES.findLastIndex((b) => i >= b);
+  const currentPhase = phaseOf(step);
 
   const computePositions = useCallback((s: TourStep) => {
     if (!s.targetId) {
@@ -234,8 +246,8 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       height: rect.height + PADDING * 2,
     });
 
-    const TOOLTIP_W = 320;
-    const TOOLTIP_GAP = 16;
+    const TOOLTIP_W = 340;
+    const TOOLTIP_GAP = 18;
     const pos = s.position || 'right';
     let top = 0;
     let left = 0;
@@ -261,6 +273,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     setTooltipPos({ top, left });
   }, []);
 
+  // Recompute spotlight on step/visibility change
   useEffect(() => {
     if (visible) {
       computePositions(currentStep);
@@ -269,12 +282,14 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     }
   }, [step, visible, currentStep, computePositions]);
 
+  // Recompute on resize
   useEffect(() => {
     const handler = () => { if (visible) computePositions(currentStep); };
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, [visible, currentStep, computePositions]);
 
+  // Auto-show on first visit
   useEffect(() => {
     if (!localStorage.getItem(TOUR_STORAGE_KEY)) {
       setTimeout(() => setVisible(true), 800);
@@ -288,7 +303,6 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       setSpotlight(null);
       setTooltipPos(null);
       router.push(target.navigateTo);
-      // Wait for page transition then advance
       setTimeout(() => {
         setStep(nextStep);
         setNavigating(false);
@@ -297,6 +311,25 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
       setStep(nextStep);
     }
   }, [router]);
+
+  // ── waitForClick: attach a native click listener to the target element ──────
+  useEffect(() => {
+    if (!visible || !currentStep.waitForClick || !currentStep.targetId) return;
+    const el = document.getElementById(currentStep.targetId);
+    if (!el) return;
+
+    const advance = () => {
+      // Let the element's own click handler fire first, then move the tour
+      setTimeout(() => {
+        if (!isLast) goToStep(step + 1);
+        else dismiss(true);
+      }, 120);
+    };
+
+    el.addEventListener('click', advance);
+    return () => el.removeEventListener('click', advance);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, step, currentStep]);
 
   const handleNext = () => {
     if (isLast) {
@@ -318,13 +351,18 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
   if (!visible) return null;
 
-  // Phase indicator (5 phases)
-  const PHASE_NAMES = ['Overview', 'Client', 'Template', 'Portal', 'Done'];
-  const currentPhase = phaseOf(step);
-
   return (
     <>
-      {/* Dark overlay */}
+      {/* CSS keyframes injected once */}
+      <style>{`
+        @keyframes tour-spin   { to { transform: rotate(360deg); } }
+        @keyframes tour-pulse  { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.55; transform: scale(1.12); } }
+        @keyframes tour-ring   { 0% { transform: translate(-50%,-50%) scale(0.92); opacity: 0.9; }
+                                  100% { transform: translate(-50%,-50%) scale(1.55); opacity: 0; } }
+        @keyframes tour-bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+      `}</style>
+
+      {/* Dark overlay — transparent when spotlight active so target is clickable */}
       <div
         style={{
           position: 'fixed',
@@ -368,6 +406,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             fill="rgba(0,0,0,0.72)"
             mask="url(#tour-spotlight-mask)"
           />
+          {/* Static border */}
           <rect
             x={spotlight.left - 1}
             y={spotlight.top - 1}
@@ -375,10 +414,62 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             height={spotlight.height + 2}
             rx={11}
             fill="none"
-            stroke="rgba(99,102,241,0.85)"
-            strokeWidth="2"
+            stroke={isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.85)'}
+            strokeWidth={isWaitingForClick ? 2.5 : 2}
           />
+          {/* Animated pulsing border for waitForClick steps */}
+          {isWaitingForClick && (
+            <rect
+              x={spotlight.left - 1}
+              y={spotlight.top - 1}
+              width={spotlight.width + 2}
+              height={spotlight.height + 2}
+              rx={11}
+              fill="none"
+              stroke="rgba(251,191,36,0.5)"
+              strokeWidth="6"
+              style={{ animation: 'tour-pulse 1.2s ease-in-out infinite' }}
+            />
+          )}
         </svg>
+      )}
+
+      {/* Pulsing "Click here" badge — rendered above the spotlit element */}
+      {isWaitingForClick && spotlight && (
+        <div
+          style={{
+            position: 'fixed',
+            zIndex: 10001,
+            left: spotlight.left + spotlight.width / 2,
+            top: spotlight.top - 36,
+            transform: 'translateX(-50%)',
+            pointerEvents: 'none',
+          }}
+        >
+          {/* Expanding ring */}
+          <div style={{
+            position: 'absolute',
+            top: '50%', left: '50%',
+            width: '32px', height: '32px',
+            borderRadius: '50%',
+            border: '2px solid rgba(251,191,36,0.7)',
+            animation: 'tour-ring 1.2s ease-out infinite',
+          }} />
+          {/* Badge */}
+          <div style={{
+            background: 'rgba(251,191,36,0.95)',
+            color: '#1a1a1a',
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            padding: '4px 10px',
+            borderRadius: '20px',
+            whiteSpace: 'nowrap',
+            boxShadow: '0 4px 16px rgba(251,191,36,0.5)',
+            animation: 'tour-bounce 1s ease-in-out infinite',
+          }}>
+            👆 Click here
+          </div>
+        </div>
       )}
 
       {/* Loading indicator during navigation */}
@@ -399,10 +490,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           <div style={{
             width: '36px', height: '36px', border: '3px solid rgba(99,102,241,0.3)',
             borderTop: '3px solid #6366f1', borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
+            animation: 'tour-spin 0.8s linear infinite',
           }} />
           Navigating…
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       )}
 
@@ -423,14 +513,18 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
               : { display: 'none' }),
             transition: 'top 0.35s cubic-bezier(0.4,0,0.2,1), left 0.35s cubic-bezier(0.4,0,0.2,1)',
             background: 'linear-gradient(135deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)',
-            border: '1px solid rgba(99,102,241,0.4)',
+            border: isWaitingForClick
+              ? '1px solid rgba(251,191,36,0.5)'
+              : '1px solid rgba(99,102,241,0.4)',
             borderRadius: '16px',
             padding: '24px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)',
+            boxShadow: isWaitingForClick
+              ? '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(251,191,36,0.15)'
+              : '0 25px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(99,102,241,0.1)',
             backdropFilter: 'blur(20px)',
           }}
         >
-          {/* Phase tabs */}
+          {/* Phase progress bars */}
           <div style={{ display: 'flex', gap: '6px', marginBottom: '16px' }}>
             {PHASE_NAMES.map((name, i) => (
               <div key={i} style={{
@@ -448,7 +542,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           </div>
 
           {/* Phase label */}
-          <div style={{ fontSize: '0.65rem', color: 'rgba(99,102,241,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+          <div style={{ fontSize: '0.65rem', color: isWaitingForClick ? 'rgba(251,191,36,0.9)' : 'rgba(99,102,241,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
             {PHASE_NAMES[currentPhase]}
           </div>
 
@@ -463,7 +557,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
             fontWeight: 700,
             margin: '0 0 8px',
             textAlign: isCentered ? 'center' : 'left',
-            background: 'linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%)',
+            background: isWaitingForClick
+              ? 'linear-gradient(135deg, #fef3c7 0%, #fbbf24 100%)'
+              : 'linear-gradient(135deg, #ffffff 0%, #c7d2fe 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
           }}>
@@ -471,16 +567,35 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           </h3>
 
           {/* Body */}
-          <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: '#94a3b8', margin: '0 0 16px', textAlign: isCentered ? 'center' : 'left' }}>
+          <p style={{ fontSize: '0.85rem', lineHeight: 1.6, color: '#94a3b8', margin: '0 0 12px', textAlign: isCentered ? 'center' : 'left' }}>
             {currentStep.body}
           </p>
+
+          {/* waitForClick hint */}
+          {isWaitingForClick && (
+            <div style={{
+              background: 'rgba(251,191,36,0.1)',
+              border: '1px solid rgba(251,191,36,0.3)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              fontSize: '0.75rem',
+              color: 'rgba(251,191,36,0.9)',
+              marginBottom: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <span style={{ animation: 'tour-bounce 1s ease-in-out infinite', display: 'inline-block' }}>👆</span>
+              Click the highlighted element to continue
+            </div>
+          )}
 
           {/* Step counter */}
           <div style={{ fontSize: '0.68rem', color: 'rgba(255,255,255,0.25)', marginBottom: '14px', textAlign: isCentered ? 'center' : 'left' }}>
             Step {step + 1} of {STEPS.length}
           </div>
 
-          {/* Buttons */}
+          {/* Buttons — Next is hidden when waitForClick is active */}
           <div style={{ display: 'flex', gap: '8px', justifyContent: isCentered ? 'center' : 'space-between', alignItems: 'center' }}>
             {!isLast && (
               <button
@@ -490,7 +605,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                 Skip tour
               </button>
             )}
-            <div style={{ display: 'flex', gap: '8px', marginLeft: isLast ? 'auto' : undefined }}>
+            <div style={{ display: 'flex', gap: '8px', marginLeft: (isLast || isWaitingForClick) ? 'auto' : undefined }}>
               {!isFirst && (
                 <button
                   onClick={handleBack}
@@ -499,12 +614,15 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
                   ← Back
                 </button>
               )}
-              <button
-                onClick={handleNext}
-                style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', fontWeight: 600, padding: '8px 20px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99,102,241,0.4)', whiteSpace: 'nowrap' }}
-              >
-                {currentStep.nextLabel ?? (isLast ? '🎉 Finish' : 'Next →')}
-              </button>
+              {/* Hide Next when waiting for the user to click the real element */}
+              {!isWaitingForClick && (
+                <button
+                  onClick={handleNext}
+                  style={{ background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)', border: 'none', borderRadius: '8px', color: '#fff', fontSize: '0.8rem', fontWeight: 600, padding: '8px 20px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(99,102,241,0.4)', whiteSpace: 'nowrap' }}
+                >
+                  {currentStep.nextLabel ?? (isLast ? '🎉 Finish' : 'Next →')}
+                </button>
+              )}
             </div>
           </div>
         </div>
