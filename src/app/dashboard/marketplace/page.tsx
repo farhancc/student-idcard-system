@@ -771,18 +771,19 @@ function TemplateDetailModal({
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CreditCard size={14} color="var(--primary)" /> Front Side Preview
                 </div>
-                <div style={{
-                  position: 'relative', width: '100%', maxWidth: t.cardWidth > t.cardHeight ? '440px' : '320px',
-                  aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`,
-                  borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)',
-                  background: '#09090b', boxShadow: '0 8px 30px rgba(0,0,0,0.5)'
-                }}>
-                  <img
-                    src={t.frontImageUrl}
-                    alt={`${t.name} Front`}
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  />
-                </div>
+                <img
+                  src={t.frontImageUrl}
+                  alt={`${t.name} Front`}
+                  style={{
+                    display: 'block',
+                    maxWidth: t.cardWidth > t.cardHeight ? '440px' : '300px',
+                    width: '100%',
+                    height: 'auto',
+                    borderRadius: '12px',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                  }}
+                />
               </div>
             )}
 
@@ -791,25 +792,27 @@ function TemplateDetailModal({
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <CreditCard size={14} color="#818cf8" /> Back Side Preview
                 </div>
-                <div style={{
-                  position: 'relative', width: '100%', maxWidth: t.cardWidth > t.cardHeight ? '440px' : '320px',
-                  aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`,
-                  borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--glass-border)',
-                  background: '#09090b', boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  {t.backImageUrl ? (
-                    <img
-                      src={t.backImageUrl}
-                      alt={`${t.name} Back`}
-                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    />
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                      Back Side Image Not Generated Yet
-                    </div>
-                  )}
-                </div>
+                {t.backImageUrl ? (
+                  <img
+                    src={t.backImageUrl}
+                    alt={`${t.name} Back`}
+                    style={{
+                      display: 'block',
+                      maxWidth: t.cardWidth > t.cardHeight ? '440px' : '300px',
+                      width: '100%',
+                      height: 'auto',
+                      borderRadius: '12px',
+                      border: '1px solid var(--glass-border)',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                    }}
+                  />
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)', fontSize: '0.85rem',
+                    border: '1px dashed var(--glass-border)', borderRadius: '12px', minHeight: '160px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    Back Side Image Not Generated Yet
+                  </div>
+                )}
               </div>
             )}
           </div>
