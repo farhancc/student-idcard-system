@@ -6,7 +6,7 @@ import {
   Store, Search, Heart, Flag, Download, ShoppingCart,
   Star, Filter, X, ChevronLeft, ChevronRight,
   CreditCard, CheckCircle, Tag, Zap, Package, AlertTriangle,
-  Eye, Layers, FileText, QrCode, Barcode, Image as ImageIcon,
+  Eye, Layers, FileText, QrCode, Barcode, Image as ImageIcon, Maximize2,
 } from 'lucide-react';
 
 const CATEGORIES = ['', 'ID_CARD', 'BADGE', 'CERTIFICATE', 'LABEL', 'TICKET', 'VISITOR_PASS', 'LETTER', 'CARD', 'TAG', 'STICKER', 'OTHER'];
@@ -680,6 +680,7 @@ function TemplateDetailModal({
   const [activeSide, setActiveSide] = useState<'both' | 'front' | 'back'>(
     t.backImageUrl || t.sides === 2 ? 'both' : 'front'
   );
+  const [fullscreenImg, setFullscreenImg] = useState<string | null>(null);
 
   const formats = [
     { key: 'cdr', label: 'CDR', available: t.hasCdr },
@@ -700,9 +701,9 @@ function TemplateDetailModal({
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0,0,0,0.8)',
+        background: 'rgba(0,0,0,0.85)',
         backdropFilter: 'blur(10px)',
-        zIndex: 1000,
+        zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -717,8 +718,8 @@ function TemplateDetailModal({
           border: '1px solid var(--glass-border, rgba(255,255,255,0.12))',
           borderRadius: '16px',
           width: '100%',
-          maxWidth: '920px',
-          maxHeight: '90vh',
+          maxWidth: '980px',
+          maxHeight: '92vh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -788,43 +789,73 @@ function TemplateDetailModal({
             {(activeSide === 'both' || activeSide === 'front') && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CreditCard size={14} color="var(--primary)" /> Front Side Preview
+                  <CreditCard size={14} color="var(--primary)" /> Front Side Preview (Click for Fullscreen)
                 </div>
-                <img
-                  src={t.frontImageUrl}
-                  alt={`${t.name} Front`}
-                  style={{
-                    display: 'block',
-                    maxWidth: t.cardWidth > t.cardHeight ? '440px' : '300px',
-                    width: '100%',
-                    height: 'auto',
-                    borderRadius: '12px',
-                    border: '1px solid var(--glass-border)',
-                    boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                  }}
-                />
+                <div
+                  style={{ position: 'relative', cursor: 'zoom-in', borderRadius: '12px', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}
+                  onClick={() => setFullscreenImg(t.frontImageUrl)}
+                  title="Click to view full screen"
+                >
+                  <img
+                    src={t.frontImageUrl}
+                    alt={`${t.name} Front`}
+                    style={{
+                      display: 'block',
+                      maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
+                      width: '100%',
+                      height: 'auto',
+                      borderRadius: '12px',
+                      border: '1px solid var(--glass-border)',
+                      boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                      transition: 'transform 0.2s',
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute', bottom: '10px', right: '10px',
+                    background: 'rgba(0,0,0,0.75)', color: '#fff',
+                    padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem',
+                    display: 'flex', alignItems: 'center', gap: '5px', backdropFilter: 'blur(4px)'
+                  }}>
+                    <Maximize2 size={12} /> Fullscreen
+                  </div>
+                </div>
               </div>
             )}
 
             {(activeSide === 'both' || activeSide === 'back') && (t.backImageUrl || t.sides === 2) && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
                 <div style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <CreditCard size={14} color="#818cf8" /> Back Side Preview
+                  <CreditCard size={14} color="#818cf8" /> Back Side Preview (Click for Fullscreen)
                 </div>
                 {t.backImageUrl ? (
-                  <img
-                    src={t.backImageUrl}
-                    alt={`${t.name} Back`}
-                    style={{
-                      display: 'block',
-                      maxWidth: t.cardWidth > t.cardHeight ? '440px' : '300px',
-                      width: '100%',
-                      height: 'auto',
-                      borderRadius: '12px',
-                      border: '1px solid var(--glass-border)',
-                      boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-                    }}
-                  />
+                  <div
+                    style={{ position: 'relative', cursor: 'zoom-in', borderRadius: '12px', overflow: 'hidden', width: '100%', display: 'flex', justifyContent: 'center' }}
+                    onClick={() => setFullscreenImg(t.backImageUrl!)}
+                    title="Click to view full screen"
+                  >
+                    <img
+                      src={t.backImageUrl}
+                      alt={`${t.name} Back`}
+                      style={{
+                        display: 'block',
+                        maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
+                        width: '100%',
+                        height: 'auto',
+                        borderRadius: '12px',
+                        border: '1px solid var(--glass-border)',
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+                        transition: 'transform 0.2s',
+                      }}
+                    />
+                    <div style={{
+                      position: 'absolute', bottom: '10px', right: '10px',
+                      background: 'rgba(0,0,0,0.75)', color: '#fff',
+                      padding: '4px 10px', borderRadius: '20px', fontSize: '0.72rem',
+                      display: 'flex', alignItems: 'center', gap: '5px', backdropFilter: 'blur(4px)'
+                    }}>
+                      <Maximize2 size={12} /> Fullscreen
+                    </div>
+                  </div>
                 ) : (
                   <div style={{ textAlign: 'center', padding: '20px', color: 'var(--muted)', fontSize: '0.85rem',
                     border: '1px dashed var(--glass-border)', borderRadius: '12px', minHeight: '160px',
@@ -835,6 +866,50 @@ function TemplateDetailModal({
               </div>
             )}
           </div>
+
+          {/* Full Screen Image Lightbox Overlay */}
+          {fullscreenImg && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.92)',
+                backdropFilter: 'blur(12px)',
+                zIndex: 999999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '24px',
+                cursor: 'zoom-out',
+              }}
+              onClick={() => setFullscreenImg(null)}
+            >
+              <button
+                onClick={() => setFullscreenImg(null)}
+                style={{
+                  position: 'absolute', top: '24px', right: '24px',
+                  background: 'rgba(255,255,255,0.15)', border: 'none', color: '#fff',
+                  padding: '10px', borderRadius: '50%', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
+                }}
+                title="Close Full Screen (Esc)"
+              >
+                <X size={24} />
+              </button>
+              <img
+                src={fullscreenImg}
+                alt="Full Screen Preview"
+                style={{
+                  maxWidth: '96vw',
+                  maxHeight: '94vh',
+                  objectFit: 'contain',
+                  borderRadius: '12px',
+                  boxShadow: '0 25px 80px rgba(0,0,0,0.9)',
+                }}
+              />
+            </div>
+          )}
 
           {/* Fields Summary Section */}
           <div className="glass-panel" style={{ padding: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>

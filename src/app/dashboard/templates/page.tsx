@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search, Upload, FileText } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -225,6 +225,7 @@ export default function TemplatesPage() {
   // Preview State
   const [previewId, setPreviewId] = useState<number | null>(null);
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
+  const [isFullView, setIsFullView] = useState(false);
   const [showTestData, setShowTestData] = useState(false);
   const [testData, setTestData] = useState<Record<string, string>>({});
 
@@ -5243,7 +5244,7 @@ export default function TemplatesPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.8)',
+            background: 'rgba(0,0,0,0.85)',
             backdropFilter: 'blur(8px)',
             display: 'flex',
             alignItems: 'center',
@@ -5256,34 +5257,55 @@ export default function TemplatesPage() {
           <div
             className="glass-panel"
             style={{
-              width: '90%',
-              maxWidth: '700px',
+              width: isFullView ? '96vw' : '90%',
+              maxWidth: isFullView ? '1350px' : '780px',
+              maxHeight: isFullView ? '95vh' : '90vh',
               textAlign: 'center',
               position: 'relative',
               padding: '24px',
               borderRadius: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              transition: 'all 0.25s ease-in-out',
+              overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              className="btn btn-secondary"
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                padding: '6px',
-                minWidth: 'auto',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-              }}
-              onClick={() => setPreviewId(null)}
-              title="Close Preview (Esc)"
-            >
-              <X size={18} />
-            </button>
+            <div style={{ position: 'absolute', top: '16px', right: '16px', display: 'flex', gap: '8px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setIsFullView(v => !v)}
+                title={isFullView ? "Exit Fullscreen" : "Fullscreen View"}
+              >
+                {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                {isFullView ? 'Normal' : 'Fullscreen'}
+              </button>
+              <button
+                className="btn btn-secondary"
+                style={{
+                  padding: '6px',
+                  minWidth: 'auto',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+                onClick={() => setPreviewId(null)}
+                title="Close Preview (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
             <h3 style={{ marginBottom: '16px', marginTop: '4px', fontSize: '1.2rem', fontWeight: '600' }}>
               Template Visual Preview ({previewSide.toUpperCase()})
@@ -5294,19 +5316,22 @@ export default function TemplatesPage() {
               if (!tmpl) return <p style={{ color: 'var(--muted)' }}>Template not found</p>;
               return (
                 <div style={{
+                  flex: 1,
                   display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.4)',
-                  padding: '16px',
+                  background: 'rgba(0,0,0,0.5)',
+                  padding: '20px',
                   borderRadius: '12px',
                   marginBottom: '20px',
-                  border: '1px solid var(--glass-border)'
+                  border: '1px solid var(--glass-border)',
+                  overflow: 'hidden'
                 }}>
                   <CardPreview
                     template={tmpl}
                     side={previewSide}
                     pressFonts={pressFonts}
-                    style={{ maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', borderRadius: '8px' }}
+                    style={{ maxWidth: '100%', maxHeight: isFullView ? '75vh' : '520px', objectFit: 'contain', borderRadius: '8px' }}
                   />
                 </div>
               );
