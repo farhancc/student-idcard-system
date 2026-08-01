@@ -228,6 +228,17 @@ export default function TemplatesPage() {
   const [showTestData, setShowTestData] = useState(false);
   const [testData, setTestData] = useState<Record<string, string>>({});
 
+  // Close preview on ESC key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewId !== null) {
+        setPreviewId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [previewId]);
+
   // Visual mapping state variables
   const [selectedFieldIndex, setSelectedFieldIndex] = useState<number | null>(null);
   const [selectedSide, setSelectedSide] = useState<'front' | 'back'>('front');
@@ -5228,25 +5239,59 @@ export default function TemplatesPage() {
 
       {/* Preview Overlay Modal */}
       {previewId && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          background: 'rgba(0,0,0,0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 999
-        }}>
-          <div className="glass-panel" style={{ width: '90%', maxWidth: '700px', textAlign: 'center' }}>
-            <h3 style={{ marginBottom: '16px' }}>Template Visual Preview ({previewSide.toUpperCase()})</h3>
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.8)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 99999,
+            padding: '20px',
+          }}
+          onClick={() => setPreviewId(null)}
+        >
+          <div
+            className="glass-panel"
+            style={{
+              width: '90%',
+              maxWidth: '700px',
+              textAlign: 'center',
+              position: 'relative',
+              padding: '24px',
+              borderRadius: '16px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="btn btn-secondary"
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                padding: '6px',
+                minWidth: 'auto',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+              }}
+              onClick={() => setPreviewId(null)}
+              title="Close Preview (Esc)"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 style={{ marginBottom: '16px', marginTop: '4px', fontSize: '1.2rem', fontWeight: '600' }}>
+              Template Visual Preview ({previewSide.toUpperCase()})
+            </h3>
             
             {(() => {
               const tmpl = templates.find((t) => t.id === previewId) || globalTemplates.find((t) => t.id === previewId);
-              if (!tmpl) return <p>Template not found</p>;
+              if (!tmpl) return <p style={{ color: 'var(--muted)' }}>Template not found</p>;
               return (
                 <div style={{
                   display: 'flex',
