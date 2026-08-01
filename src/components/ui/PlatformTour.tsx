@@ -114,10 +114,10 @@ const STEPS: TourStep[] = [
   {
     navigateTo: '/dashboard/clients',
     targetId: 'btn-save-client',
-    position: 'top',
+    position: 'bottom',
     icon: '📝',
     title: 'Fill form & click "Save Organization"',
-    body: 'Fill in the organization name and contact details, then click the highlighted "Save Organization" button.',
+    body: 'Fill in the organization name and contact details, then click the highlighted "Save Organization" button below.',
     waitForClick: true,
   },
   {
@@ -265,34 +265,58 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
     const TOOLTIP_W = 340;
     const TOOLTIP_GAP = 18;
-    const pos = s.position || 'right';
-    let top = 0;
-    let left = 0;
-    if (pos === 'right') {
-      top = rect.top + rect.height / 2 - 80;
-      left = rect.right + TOOLTIP_GAP;
-    } else if (pos === 'left') {
-      top = rect.top + rect.height / 2 - 80;
-      left = rect.left - TOOLTIP_W - TOOLTIP_GAP;
-    } else if (pos === 'bottom') {
-      top = rect.bottom + TOOLTIP_GAP;
-      left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
-    } else if (pos === 'top') {
-      top = rect.top - TOOLTIP_GAP - 160;
-      left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
-    }
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const tooltipH = tooltipRef.current ? tooltipRef.current.offsetHeight : 340;
+    const tooltipH = tooltipRef.current ? tooltipRef.current.offsetHeight : 320;
+
+    let preferredPos = s.position || 'bottom';
+
+    // Auto-flip position if preferred pos would clip offscreen or cover target
+    if (preferredPos === 'top' && rect.top - TOOLTIP_GAP - tooltipH < 16) {
+      if (rect.bottom + TOOLTIP_GAP + tooltipH <= vh - 16) {
+        preferredPos = 'bottom';
+      } else if (rect.left - TOOLTIP_W - TOOLTIP_GAP >= 16) {
+        preferredPos = 'left';
+      }
+    } else if (preferredPos === 'bottom' && rect.bottom + TOOLTIP_GAP + tooltipH > vh - 16) {
+      if (rect.top - TOOLTIP_GAP - tooltipH >= 16) {
+        preferredPos = 'top';
+      } else if (rect.left - TOOLTIP_W - TOOLTIP_GAP >= 16) {
+        preferredPos = 'left';
+      }
+    }
+
+    let top = 0;
+    let left = 0;
+    if (preferredPos === 'right') {
+      top = rect.top + rect.height / 2 - tooltipH / 2;
+      left = rect.right + TOOLTIP_GAP + PADDING;
+    } else if (preferredPos === 'left') {
+      top = rect.top + rect.height / 2 - tooltipH / 2;
+      left = rect.left - TOOLTIP_W - TOOLTIP_GAP - PADDING;
+    } else if (preferredPos === 'bottom') {
+      top = rect.bottom + TOOLTIP_GAP + PADDING;
+      left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
+    } else if (preferredPos === 'top') {
+      top = rect.top - TOOLTIP_GAP - tooltipH - PADDING;
+      left = rect.left + rect.width / 2 - TOOLTIP_W / 2;
+    }
+
     const MARGIN = 16;
     left = Math.max(MARGIN, Math.min(left, vw - TOOLTIP_W - MARGIN));
     top = Math.max(MARGIN, Math.min(top, vh - tooltipH - MARGIN));
     setTooltipPos({ top, left });
   }, []);
 
-  // Recompute spotlight on step/visibility change
+  // Recompute spotlight on step/visibility change & scroll target into view
   useEffect(() => {
     if (visible) {
+      if (currentStep.targetId) {
+        const el = document.getElementById(currentStep.targetId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
       computePositions(currentStep);
       const raf = requestAnimationFrame(() => computePositions(currentStep));
       return () => cancelAnimationFrame(raf);
@@ -401,9 +425,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           position: 'fixed',
           inset: 0,
           zIndex: 9998,
-          background: (spotlight && !navigating) ? 'transparent' : 'rgba(0,0,0,0.72)',
+          background: (spotlight && !navigating) ? 'transparent' : 'rgba(0,0,0,0.50)',
           backdropFilter: (spotlight && !navigating) ? 'none' : 'blur(2px)',
-          pointerEvents: (spotlight && !navigating) ? 'none' : 'auto',
+          pointerEvents: 'none',
           transition: 'background 0.3s ease',
         }}
       />
@@ -436,8 +460,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
           <rect
             width="100%"
             height="100%"
-            fill="rgba(0,0,0,0.72)"
+            fill={isWaitingForClick ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0.55)"}
             mask="url(#tour-spotlight-mask)"
+            style={{ transition: 'fill 0.3s ease' }}
           />
           {/* Static border */}
           <rect
