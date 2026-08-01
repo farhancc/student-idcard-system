@@ -30,10 +30,12 @@ export async function GET(request: Request) {
 
     // All marketplace listings must be explicitly published (isPublic: true).
     // Official/global templates (pressId: null) are also subject to this requirement.
+    // NOTE: isLatest is intentionally omitted — templates are versioned in-place
+    // (same row ID), so every published row is always the latest version.
+    // The is_latest column may not exist in all production DB environments.
     const where: any = {
       isPublic: true,
       isModerated: false,
-      isLatest: true,
     };
 
     if (category) where.category = category;
