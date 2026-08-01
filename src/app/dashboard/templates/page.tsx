@@ -4952,7 +4952,23 @@ export default function TemplatesPage() {
             const cat = (tmpl.category || 'OTHER') as TemplateCategory;
             const catColors = CATEGORY_COLORS[cat];
             return (
-            <div key={tmpl.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div 
+              key={tmpl.id} 
+              className="glass-panel glass-panel-hover" 
+              onClick={() => {
+                if (viewTab === 'starter') {
+                  handleCloneTemplate(tmpl);
+                } else {
+                  handleEditClick(tmpl);
+                }
+              }}
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                justifyContent: 'space-between',
+                cursor: 'pointer'
+              }}
+            >
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -4986,21 +5002,22 @@ export default function TemplatesPage() {
                         <button 
                           className="btn btn-secondary" 
                           style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                          onClick={() => handleEditClick(tmpl)}
+                          onClick={(e) => { e.stopPropagation(); handleEditClick(tmpl); }}
                         >
                           Edit
                         </button>
                         <button 
                           className="btn btn-danger" 
                           style={{ padding: '4px 8px', fontSize: '0.7rem' }}
-                          onClick={() => handleDeleteTemplate(tmpl.id)}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTemplate(tmpl.id); }}
                         >
                           Delete
                         </button>
                         <button
                           className="btn btn-secondary"
                           style={{ padding: '4px 8px', fontSize: '0.7rem', background: tmpl.isPublic ? 'rgba(16,185,129,0.1)' : 'transparent', border: tmpl.isPublic ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--glass-border)', color: tmpl.isPublic ? '#10b981' : undefined }}
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setPublishingTemplate(tmpl);
                             setPublishPrice(String(tmpl.price || 0));
                             setPublishCdrUrl(tmpl.cdrFileUrl || null);
@@ -5046,16 +5063,16 @@ export default function TemplatesPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('front'); }}>
+                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('front'); }}>
                   <Eye size={14} /> Preview Front
                 </button>
                 {tmpl.backImageUrl && (
-                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={() => { setPreviewId(tmpl.id); setPreviewSide('back'); }}>
+                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('back'); }}>
                     <Eye size={14} /> Preview Back
                   </button>
                 )}
                 {viewTab === 'starter' && (
-                  <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: tmpl.backImageUrl ? '33%' : '66%' }} onClick={() => handleCloneTemplate(tmpl)}>
+                  <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: tmpl.backImageUrl ? '33%' : '66%' }} onClick={(e) => { e.stopPropagation(); handleCloneTemplate(tmpl); }}>
                     Use Template
                   </button>
                 )}
