@@ -705,36 +705,55 @@ function TemplateDetailModal({
 
   const editableFields = useMemo(() => {
     try {
-      const parsedFront = JSON.parse(t.frontFields || '[]');
-      const parsedBack = JSON.parse(t.backFields || '[]');
-      const allParsed = [...parsedFront, ...parsedBack];
-      const nonImageFields = allParsed.filter((f: any) => f.type !== 'image' && f.field !== 'photo');
+      let parsedFront: any[] = [];
+      if (typeof t.frontFields === 'string') {
+        parsedFront = JSON.parse(t.frontFields || '[]');
+      } else if (Array.isArray(t.frontFields)) {
+        parsedFront = t.frontFields;
+      }
+
+      let parsedBack: any[] = [];
+      if (typeof t.backFields === 'string') {
+        parsedBack = JSON.parse(t.backFields || '[]');
+      } else if (Array.isArray(t.backFields)) {
+        parsedBack = t.backFields;
+      }
+
+      const allParsed = [
+        ...(Array.isArray(parsedFront) ? parsedFront : []),
+        ...(Array.isArray(parsedBack) ? parsedBack : [])
+      ];
+
+      const nonImageFields = allParsed.filter((f: any) => f && typeof f === 'object' && f.type !== 'image' && f.field !== 'photo');
       const fieldMap = new Map<string, any>();
       nonImageFields.forEach((f: any) => {
-        if (!fieldMap.has(f.field)) {
+        if (f && f.field && !fieldMap.has(f.field)) {
           fieldMap.set(f.field, f);
         }
       });
       return Array.from(fieldMap.values());
     } catch (e) {
+      console.warn('Error parsing editable fields for template:', e);
       return [];
     }
   }, [t.frontFields, t.backFields]);
 
   const liveCardholder = useMemo(() => {
     const custom: Record<string, string> = {};
-    Object.keys(sampleCardholderData).forEach(k => {
-      if (k !== 'name' && k !== 'designation' && k !== 'cardSerial') {
-        custom[k] = sampleCardholderData[k] || '';
-      }
-    });
+    if (sampleCardholderData && typeof sampleCardholderData === 'object') {
+      Object.keys(sampleCardholderData).forEach(k => {
+        if (k !== 'name' && k !== 'designation' && k !== 'cardSerial') {
+          custom[k] = String(sampleCardholderData[k] || '');
+        }
+      });
+    }
 
     return {
       id: 99,
-      name: sampleCardholderData.name || 'John Doe',
-      designation: sampleCardholderData.designation || 'Student / Employee',
+      name: sampleCardholderData?.name || 'John Doe',
+      designation: sampleCardholderData?.designation || 'Student / Employee',
       photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-      cardSerial: sampleCardholderData.cardSerial || 'STU-2026-001',
+      cardSerial: sampleCardholderData?.cardSerial || 'STU-2026-001',
       customFields: JSON.stringify(custom),
     };
   }, [sampleCardholderData]);
@@ -756,8 +775,8 @@ function TemplateDetailModal({
     cardHeight: t.cardHeight || 638,
     frontImageUrl: t.frontImageUrl,
     backImageUrl: t.backImageUrl,
-    frontFields: t.frontFields || '[]',
-    backFields: t.backFields || '[]',
+    frontFields: typeof t.frontFields === 'string' ? t.frontFields : JSON.stringify(t.frontFields || []),
+    backFields: typeof t.backFields === 'string' ? t.backFields : JSON.stringify(t.backFields || []),
   }), [t.id, t.cardWidth, t.cardHeight, t.frontImageUrl, t.backImageUrl, t.frontFields, t.backFields]);
 
   return (

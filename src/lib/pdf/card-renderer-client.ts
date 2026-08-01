@@ -396,7 +396,17 @@ export async function renderCardSideClient(
   ctx.fillRect(0, 0, width, height);
 
   const fieldsJson = side === 'front' ? template.frontFields : template.backFields;
-  const fields: FieldCoordinate[] = JSON.parse(fieldsJson || '[]');
+  let fields: FieldCoordinate[] = [];
+  try {
+    if (typeof fieldsJson === 'string') {
+      fields = JSON.parse(fieldsJson || '[]');
+    } else if (Array.isArray(fieldsJson)) {
+      fields = fieldsJson;
+    }
+  } catch (e) {
+    console.warn(`[renderCardSideClient] Failed to parse ${side} template fields:`, e);
+    fields = [];
+  }
   
   let bgUrl = side === 'front' ? template.frontImageUrl : (template.backImageUrl || template.frontImageUrl);
   // For Electron: prefer the locally-cached original file (highest quality)
