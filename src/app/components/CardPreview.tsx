@@ -92,6 +92,27 @@ export default function CardPreview({
 
   const renderOnCanvas = (!imgUrl || forceWeb || cardholder) && (isElectron || forceWeb);
 
+  const hasRenderedRef = useRef(false);
+
+  // Compute a stable signature key to prevent re-drawing on identical data object reference changes
+  const drawSignature = [
+    template?.id,
+    template?.cardWidth,
+    template?.cardHeight,
+    template?.frontImageUrl,
+    template?.backImageUrl,
+    template?.frontFields,
+    template?.backFields,
+    targetCardholder?.id,
+    targetCardholder?.name,
+    targetCardholder?.photoUrl,
+    targetCardholder?.cardSerial,
+    side,
+    isElectron,
+    forceWeb,
+    renderOnCanvas,
+  ].join('|');
+
   useEffect(() => {
     if (!renderOnCanvas) return;
     let isMounted = true;
@@ -99,7 +120,9 @@ export default function CardPreview({
     async function draw() {
       if (!canvasRef.current) return;
       try {
-        setLoading(true);
+        if (!hasRenderedRef.current) {
+          setLoading(true);
+        }
         setError(null);
         await renderCardSideClient(
           canvasRef.current,
@@ -109,6 +132,9 @@ export default function CardPreview({
           parsedValidTill,
           pressFonts
         );
+        if (isMounted) {
+          hasRenderedRef.current = true;
+        }
       } catch (err: any) {
         console.error('Failed to render client preview:', err);
         if (isMounted) {
@@ -126,7 +152,7 @@ export default function CardPreview({
     return () => {
       isMounted = false;
     };
-  }, [template, cardholder, side, pressFonts, validTill, isElectron, forceWeb, renderOnCanvas]);
+  }, [drawSignature]);
 
   const wrapperStyle: React.CSSProperties = {
     position: 'relative',

@@ -699,6 +699,16 @@ function TemplateDetailModal({
   const frontFields = fields.filter(f => f.side === 'Front');
   const backFields = fields.filter(f => f.side === 'Back');
 
+  const previewTemplate = useMemo(() => ({
+    id: t.id,
+    cardWidth: t.cardWidth || 1013,
+    cardHeight: t.cardHeight || 638,
+    frontImageUrl: t.frontImageUrl,
+    backImageUrl: t.backImageUrl,
+    frontFields: t.frontFields || '[]',
+    backFields: t.backFields || '[]',
+  }), [t.id, t.cardWidth, t.cardHeight, t.frontImageUrl, t.backImageUrl, t.frontFields, t.backFields]);
+
   return (
     <div
       style={{
@@ -906,14 +916,7 @@ function TemplateDetailModal({
                   >
                     {previewMode === 'mapped_data' ? (
                       <CardPreview
-                        template={{
-                          cardWidth: t.cardWidth || 1013,
-                          cardHeight: t.cardHeight || 638,
-                          frontImageUrl: t.frontImageUrl,
-                          backImageUrl: t.backImageUrl,
-                          frontFields: t.frontFields || '[]',
-                          backFields: t.backFields || '[]',
-                        }}
+                        template={previewTemplate}
                         side="back"
                         forceWeb={true}
                         style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
