@@ -358,8 +358,10 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   };
 
   const dismiss = (completed: boolean) => {
-    if (completed) localStorage.setItem(TOUR_STORAGE_KEY, '1');
-    sessionStorage.removeItem(TOUR_STEP_KEY); // clear saved step on finish or skip
+    // Always mark as done — whether completed OR skipped/closed.
+    // The only way to see the tour again is via Settings → Restart Tour.
+    localStorage.setItem(TOUR_STORAGE_KEY, completed ? 'completed' : 'dismissed');
+    sessionStorage.removeItem(TOUR_STEP_KEY); // clear saved step
     setVisible(false);
     onComplete?.();
   };
