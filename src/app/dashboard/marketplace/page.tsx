@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import CardPreview from '@/app/components/CardPreview';
 import { useToast } from '@/components/ui/toast';
 import {
