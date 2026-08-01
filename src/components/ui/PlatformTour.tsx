@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 const TOUR_STORAGE_KEY = 'idexo_tour_v1_done';
+const TOUR_STEP_KEY   = 'idexo_tour_v1_step';
 
 interface TourStep {
   targetId?: string;
@@ -289,10 +290,23 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
     return () => window.removeEventListener('resize', handler);
   }, [visible, currentStep, computePositions]);
 
-  // Auto-show on first visit
+  // Persist step on every change so full-page reloads can resume
+  useEffect(() => {
+    if (visible) sessionStorage.setItem(TOUR_STEP_KEY, String(step));
+  }, [step, visible]);
+
+  // Auto-show on first visit; resume from saved step if mid-tour
   useEffect(() => {
     if (!localStorage.getItem(TOUR_STORAGE_KEY)) {
-      setTimeout(() => setVisible(true), 800);
+      const saved = sessionStorage.getItem(TOUR_STEP_KEY);
+      const resumeAt = saved ? Math.min(parseInt(saved, 10), STEPS.length - 1) : 0;
+      if (resumeAt > 0) {
+        // Resume immediately (no delay) at the saved step
+        setStep(resumeAt);
+        setVisible(true);
+      } else {
+        setTimeout(() => setVisible(true), 800);
+      }
     }
   }, []);
 
@@ -345,6 +359,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
 
   const dismiss = (completed: boolean) => {
     if (completed) localStorage.setItem(TOUR_STORAGE_KEY, '1');
+    sessionStorage.removeItem(TOUR_STEP_KEY); // clear saved step on finish or skip
     setVisible(false);
     onComplete?.();
   };
@@ -649,8 +664,9 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   );
 }
 
-// Call this to reset the tour so it shows on next load
+// Call this to reset the tour so it shows on next load from step 0
 export function resetTour() {
   localStorage.removeItem(TOUR_STORAGE_KEY);
+  sessionStorage.removeItem('idexo_tour_v1_step');
   window.location.reload();
 }
