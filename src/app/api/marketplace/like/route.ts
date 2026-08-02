@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, basePrisma } from '@/lib/prisma';
+import { basePrisma } from '@/lib/prisma';
 
 // POST /api/marketplace/like?templateId=X → toggle like for current press
 export async function POST(request: Request) {
@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     const templateId = Number(searchParams.get('templateId'));
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
+    // Use basePrisma throughout — the template may belong to a different press
+    // or be an official template (pressId: null); tenant-scoped prisma cannot see those.
     const template = await basePrisma.cardTemplate.findFirst({
       where: {
         id: templateId,
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
     // Check if already liked by this press
-    const existingLike = await prisma.templateLike.findUnique({
+    const existingLike = await basePrisma.templateLike.findUnique({
       where: {
         pressId_templateId: { pressId, templateId },
       },
@@ -36,11 +38,11 @@ export async function POST(request: Request) {
 
     if (existingLike) {
       // Unlike
-      await prisma.$transaction([
-        prisma.templateLike.delete({
+      await basePrisma.$transaction([
+        basePrisma.templateLike.delete({
           where: { id: existingLike.id },
         }),
-        prisma.cardTemplate.update({
+        basePrisma.cardTemplate.update({
           where: { id: templateId },
           data: { likes: { decrement: 1 } },
         }),
@@ -49,11 +51,11 @@ export async function POST(request: Request) {
       newLikesCount = Math.max(0, template.likes - 1);
     } else {
       // Like
-      await prisma.$transaction([
-        prisma.templateLike.create({
+      await basePrisma.$transaction([
+        basePrisma.templateLike.create({
           data: { pressId, templateId },
         }),
-        prisma.cardTemplate.update({
+        basePrisma.cardTemplate.update({
           where: { id: templateId },
           data: { likes: { increment: 1 } },
         }),
