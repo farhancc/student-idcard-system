@@ -297,10 +297,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         if (prev) {
           return chData.cardholders.find((c: any) => c.id === prev.id) || null;
         }
-        if (!hasInitialSelected) {
-          setHasInitialSelected(true);
-          return chData.cardholders[0] || null;
-        }
         return null;
       });
 
