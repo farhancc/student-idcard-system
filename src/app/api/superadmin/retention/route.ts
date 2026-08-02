@@ -17,29 +17,57 @@ export async function GET() {
     const now = new Date();
 
     // ── 1. Fetch all presses with full activity data ──────────────────────────
-    const presses = await prisma.press.findMany({
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        plan: true,
-        isActive: true,
-        createdAt: true,
-        users: {
-          select: { lastLoginAt: true },
-          orderBy: { lastLoginAt: 'desc' },
-          take: 1,
+    let presses: any[] = [];
+    try {
+      presses = await prisma.press.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          plan: true,
+          isActive: true,
+          createdAt: true,
+          users: {
+            select: { lastLoginAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          orders: {
+            select: { createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          },
+          _count: {
+            select: { clients: true, orders: true, jobs: true },
+          },
         },
-        orders: {
-          select: { createdAt: true },
-          orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' },
+      });
+    } catch (innerErr) {
+      console.warn('Retention query with lastLoginAt failed, falling back:', innerErr);
+      presses = await prisma.press.findMany({
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          plan: true,
+          isActive: true,
+          createdAt: true,
+          users: {
+            select: { createdAt: true },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          orders: {
+            select: { createdAt: true },
+            orderBy: { createdAt: 'desc' },
+          },
+          _count: {
+            select: { clients: true, orders: true, jobs: true },
+          },
         },
-        _count: {
-          select: { clients: true, orders: true, jobs: true },
-        },
-      },
-      orderBy: { createdAt: 'asc' },
-    });
+        orderBy: { createdAt: 'asc' },
+      });
+    }
 
     // ── 2. Per-press engagement & churn risk ─────────────────────────────────
     const CHURN_DAYS = 30; // no order / login in 30 days = at-risk

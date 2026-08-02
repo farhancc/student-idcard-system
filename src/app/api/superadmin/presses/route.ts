@@ -76,51 +76,100 @@ export async function POST(request: Request) {
 
 export async function GET() {
   try {
-    const presses = await prisma.press.findMany({
-      include: {
-        users: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            role: true,
-            active: true,
-            lastLoginAt: true,
-            createdAt: true,
+    let presses;
+    try {
+      presses = await prisma.press.findMany({
+        include: {
+          users: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              active: true,
+              lastLoginAt: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
           },
-          orderBy: { createdAt: 'asc' },
-        },
-        _count: {
-          select: {
-            users: true,
-            clients: true,
-            orders: true,
-            jobs: true,
+          _count: {
+            select: {
+              users: true,
+              clients: true,
+              orders: true,
+              jobs: true,
+            },
           },
-        },
-        clients: {
-          select: {
-            id: true,
-            name: true,
-            type: true,
-            contactName: true,
-            contactEmail: true,
-            contactPhone: true,
-            createdAt: true,
-            orders: {
-              select: {
-                id: true,
-                status: true,
-                createdAt: true,
-                invoice: { select: { totalAmount: true } },
-                _count: { select: { cardholders: true } },
+          clients: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              contactName: true,
+              contactEmail: true,
+              contactPhone: true,
+              createdAt: true,
+              orders: {
+                select: {
+                  id: true,
+                  status: true,
+                  createdAt: true,
+                  invoice: { select: { totalAmount: true } },
+                  _count: { select: { cardholders: true } },
+                },
               },
             },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (innerError) {
+      console.warn('Query with lastLoginAt failed, falling back to basic user fields:', innerError);
+      presses = await prisma.press.findMany({
+        include: {
+          users: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              active: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: 'asc' },
+          },
+          _count: {
+            select: {
+              users: true,
+              clients: true,
+              orders: true,
+              jobs: true,
+            },
+          },
+          clients: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              contactName: true,
+              contactEmail: true,
+              contactPhone: true,
+              createdAt: true,
+              orders: {
+                select: {
+                  id: true,
+                  status: true,
+                  createdAt: true,
+                  invoice: { select: { totalAmount: true } },
+                  _count: { select: { cardholders: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     // Aggregate per-press stats
     const pressesWithStats = presses.map(press => {

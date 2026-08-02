@@ -63,10 +63,14 @@ export async function POST(request: Request) {
     }
 
     // Update last signed in timestamp
-    await prisma.pressUser.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
+    try {
+      await prisma.pressUser.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      });
+    } catch (err) {
+      console.warn('Could not update lastLoginAt for user:', err);
+    }
 
     // Generate JWT
     const token = await signUserToken({
