@@ -47,12 +47,22 @@ export async function POST(request: Request) {
     // Execute purchase in a transaction
     const result = await prisma.$transaction(async (tx) => {
       if (price > 0) {
-        // Only paid credits accepted (not promo credits)
+        // Only paid credits accepted for purchasing templates (not signup bonus / promo credits)
         const buyer = await tx.$queryRaw<any[]>`
-          SELECT id, credits FROM "press" WHERE id = ${buyerPressId} FOR UPDATE
+          SELECT id, credits, promo_credits FROM "press" WHERE id = ${buyerPressId} FOR UPDATE
         `;
-        if (!buyer[0] || buyer[0].credits < price) {
-          throw new Error(`Insufficient credits. Required: ${price}, Available: ${buyer[0]?.credits ?? 0}`);
+        const buyerPress = buyer[0];
+        if (!buyerPress) {
+          throw new Error('Buyer press tenant not found');
+        }
+        const paidCredits = Number(buyerPress.credits || 0);
+        const promoCredits = Number(buyerPress.promo_credits || 0);
+
+        if (paidCredits < price) {
+          if (promoCredits > 0) {
+            throw new Error(`Marketplace templates cannot be purchased using signup bonus or promotional credits. Required paid credits: ${price}, Available paid credits: ${paidCredits}.`);
+          }
+          throw new Error(`Insufficient paid credits. Required: ${price}, Available: ${paidCredits}.`);
         }
         // Deduct from buyer
         await tx.press.update({

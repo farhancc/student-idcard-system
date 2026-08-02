@@ -79,7 +79,8 @@ export default function MarketplacePage() {
   const [myPurchasesLoading, setMyPurchasesLoading] = useState(false);
 
   // Credits display
-  const [credits, setCredits] = useState<number | null>(null);
+  const [paidCredits, setPaidCredits] = useState<number | null>(null);
+  const [promoCredits, setPromoCredits] = useState<number | null>(null);
   const [currentPressId, setCurrentPressId] = useState<number | null>(null);
 
   const fetchCredits = async () => {
@@ -87,7 +88,8 @@ export default function MarketplacePage() {
       const res = await fetch('/api/press/profile');
       if (res.ok) {
         const d = await res.json();
-        setCredits((d.press?.credits ?? 0) + (d.press?.promoCredits ?? 0));
+        setPaidCredits(d.press?.credits ?? 0);
+        setPromoCredits(d.press?.promoCredits ?? 0);
         setCurrentPressId(d.press?.id ? Number(d.press.id) : null);
       }
     } catch {}
@@ -152,6 +154,12 @@ export default function MarketplacePage() {
 
   const handlePurchase = async (t: Template) => {
     if (purchasing) return;
+    if (t.price > 0 && (paidCredits ?? 0) < t.price) {
+      if ((promoCredits ?? 0) > 0) {
+        toast(`Signup bonus & promo credits cannot be used to buy marketplace templates. You need ${t.price} paid credits (Available: ${paidCredits ?? 0}).`, 'error');
+        return;
+      }
+    }
     setPurchasing(t.id);
     try {
       const res = await fetch('/api/marketplace/purchase', {
@@ -243,11 +251,20 @@ export default function MarketplacePage() {
             Browse, preview front/back sides, check fields, and purchase premium templates
           </p>
         </div>
-        {credits !== null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', padding: '10px 16px' }}>
-            <CreditCard size={16} color="#818cf8" />
-            <span style={{ fontWeight: '600', color: '#818cf8' }}>{credits.toLocaleString()}</span>
-            <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>credits available</span>
+        {paidCredits !== null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', borderRadius: '10px', padding: '10px 16px' }}>
+              <CreditCard size={16} color="#818cf8" />
+              <span style={{ fontWeight: '600', color: '#818cf8' }}>{paidCredits.toLocaleString()}</span>
+              <span style={{ color: 'var(--muted)', fontSize: '0.82rem' }}>paid credits</span>
+            </div>
+            {(promoCredits ?? 0) > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '10px', padding: '10px 14px' }}>
+                <Zap size={14} color="#10b981" />
+                <span style={{ fontWeight: '600', color: '#34d399' }}>{promoCredits?.toLocaleString()}</span>
+                <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>bonus credits (print only)</span>
+              </div>
+            )}
           </div>
         )}
       </div>

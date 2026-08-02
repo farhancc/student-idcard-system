@@ -45,6 +45,7 @@ export async function GET(request: Request) {
         city: press.city,
         plan: press.plan,
         credits: press.credits,
+        promoCredits: press.promoCredits,
         lockedCredits,
         trialEndsAt: press.trialEndsAt,
         isActive: press.isActive,

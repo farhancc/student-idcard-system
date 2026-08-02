@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // Use a transaction to safely check and decrement credits
     const updatedPress = await prisma.$transaction(async (tx) => {
       const presses = await tx.$queryRaw<any[]>`
-        SELECT id, credits FROM "press" WHERE id = ${pressId} FOR UPDATE
+        SELECT id, credits, promo_credits FROM "press" WHERE id = ${pressId} FOR UPDATE
       `;
       const press = presses[0];
 
@@ -27,16 +27,22 @@ export async function POST(request: Request) {
         throw new Error('Press tenant not found');
       }
 
-      if (press.credits < amount) {
-        throw new Error(`Insufficient credits. Required: ${amount}, Available: ${press.credits}`);
+      const paidCredits = Number(press.credits || 0);
+      const promoCredits = Number(press.promo_credits || 0);
+      const totalAvailable = paidCredits + promoCredits;
+
+      if (totalAvailable < amount) {
+        throw new Error(`Insufficient credits. Required: ${amount}, Available: ${totalAvailable}`);
       }
+
+      const promoDeduct = Math.min(promoCredits, amount);
+      const paidDeduct = amount - promoDeduct;
 
       return tx.press.update({
         where: { id: pressId },
         data: {
-          credits: {
-            decrement: amount,
-          },
+          ...(promoDeduct > 0 ? { promoCredits: { decrement: promoDeduct } } : {}),
+          ...(paidDeduct > 0 ? { credits: { decrement: paidDeduct } } : {}),
         },
       });
     });

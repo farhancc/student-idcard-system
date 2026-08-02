@@ -198,19 +198,22 @@ export async function POST(request: Request) {
     if (!press) {
       return NextResponse.json({ error: 'Press tenant not found' }, { status: 404 });
     }
-    if (press.credits < totalCreditsNeeded) {
+    const totalAvail = (press.credits || 0) + (press.promoCredits || 0);
+    if (totalAvail < totalCreditsNeeded) {
       return NextResponse.json({
-        error: `Insufficient credits to queue production. Required: ${totalCreditsNeeded} (${productionCreditsNeeded} for production, ${approvalCreditsNeeded} for approval), Available: ${press.credits}`
+        error: `Insufficient credits to queue production. Required: ${totalCreditsNeeded} (${productionCreditsNeeded} for production, ${approvalCreditsNeeded} for approval), Available: ${totalAvail}`
       }, { status: 403 });
     }
 
-    // Deduct credits for both jobs
+    // Deduct promoCredits first, then paid credits
+    const promoDeduct = Math.min(press.promoCredits || 0, totalCreditsNeeded);
+    const paidDeduct = totalCreditsNeeded - promoDeduct;
+
     await prisma.press.update({
       where: { id: pressId },
       data: {
-        credits: {
-          decrement: totalCreditsNeeded,
-        },
+        ...(promoDeduct > 0 ? { promoCredits: { decrement: promoDeduct } } : {}),
+        ...(paidDeduct > 0 ? { credits: { decrement: paidDeduct } } : {}),
       },
     });
 
