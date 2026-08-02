@@ -100,14 +100,25 @@ export async function POST(
       }
     }
 
-    // Generate unique card serial number if needed
-    const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-
-    // Fold uniqueKey into customFields if provided
+    // Fold uniqueKey into customFields if provided and sync uniqueKey column
     const custom = customFields || {};
-    if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
-      custom.uniqueKey = uniqueKey;
+    let extractedUniqueKey = uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
+    if (!extractedUniqueKey) {
+      for (const [ck, cv] of Object.entries(custom)) {
+        const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
+          extractedUniqueKey = cv;
+          break;
+        }
+      }
     }
+
+    if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
+      custom.uniqueKey = String(extractedUniqueKey);
+    }
+
+    // Always generate an internal cardSerial
+    const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const cardholder = await prisma.cardholder.create({
       data: {
@@ -117,6 +128,7 @@ export async function POST(
         designation: designation ?? null,
         photoUrl: photoUrl ?? null,
         customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
+        uniqueKey: (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) ? String(extractedUniqueKey) : null,
         cardSerial,
         enrollToken, // Stores either the global enrollToken or the department enrollToken
       },

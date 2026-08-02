@@ -213,15 +213,15 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       setFieldTypeMap(typeMap);
       setFieldCoordsMap(coordsMap);
 
-      // Identify fields that are mapped to 'qr', 'barcode', 'id' or static fields to exclude from user forms
+      // Identify fields that are mapped to 'qr', 'barcode' or static fields to exclude from user forms
       const restrictedFields = new Set(
         allFields
-          .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'id' || (f as any).staticValue !== undefined)
+          .filter(f => f.type === 'qr' || f.type === 'barcode' || (f as any).staticValue !== undefined)
           .map(f => f.field)
       );
 
-      // Include user-fillable text, date, and number fields (excluding restricted and ID types)
-      const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || !f.type) && f.type !== 'id' && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
+      // Include user-fillable text, date, number, and ID fields
+      const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || f.type === 'id' || !f.type) && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
       const filteredKeys = keys.filter(k => {
@@ -231,7 +231,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           clean !== 'avatar' &&
           clean !== 'cardserial' &&
           !clean.includes('serial') &&
-          meta?.type !== 'id' &&
           (meta as any)?.staticValue === undefined;
       });
       setFormFields(filteredKeys);

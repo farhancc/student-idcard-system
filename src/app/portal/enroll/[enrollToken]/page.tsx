@@ -147,20 +147,20 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setFieldTypeMap(typeMap);
         setFieldCoordsMap(coordsMap);
 
-        // Identify fields that are mapped to 'qr', 'barcode', 'id' or static fields to restrict editing on enrollment page
+        // Identify fields that are mapped to 'qr', 'barcode' or static fields to restrict editing on enrollment page
         const restrictedFields = new Set(
           allFields
-            .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'id' || (f as any).staticValue !== undefined)
+            .filter(f => f.type === 'qr' || f.type === 'barcode' || (f as any).staticValue !== undefined)
             .map(f => f.field)
         );
 
-        // Unique text, date & number fields (excluding restricted, ID, and serial field types)
-        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || !f.type) && f.type !== 'id' && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
+        // Unique text, date, number & ID fields
+        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || f.type === 'id' || !f.type) && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textAndDateFields.map(f => f.field)));
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
-        // Remove standard system photo & serial attributes from form fields (allow date fields like dob, doj, valid till, etc.)
+        // Remove standard system photo & serial attributes from form fields (allow date & ID fields)
         const filteredKeys = keys.filter(k => {
           const clean = cleanFieldKey(k);
           const f = coordsMap[k];
@@ -168,7 +168,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             clean !== 'avatar' &&
             clean !== 'cardserial' &&
             !clean.includes('serial') &&
-            f?.type !== 'id' &&
             (f as any)?.staticValue === undefined;
         });
         setFormFields(filteredKeys);
