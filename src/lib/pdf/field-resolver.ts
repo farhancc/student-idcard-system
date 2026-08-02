@@ -396,7 +396,7 @@ export function isValidImageUrl(val: any): boolean {
 
 export function formatDate(dateVal: any, formatStr?: string): string {
   if (dateVal === undefined || dateVal === null || String(dateVal).trim() === '') return '';
-  let date: Date;
+  let date: Date | null = null;
   if (dateVal instanceof Date) {
     date = dateVal;
   } else if (typeof dateVal === 'number') {
@@ -404,43 +404,41 @@ export function formatDate(dateVal: any, formatStr?: string): string {
   } else {
     // String - try parsing
     const str = String(dateVal).trim();
-    const parsed = Date.parse(str);
-    if (!isNaN(parsed)) {
-      date = new Date(parsed);
+    
+    // Check if it's in YYYY-MM-DD format (e.g. from input type="date" or ISO string)
+    const matchYMD = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})/);
+    // Check if it's DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
+    const matchDMY = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})/);
+    // Check if it's DD/MM/YY, DD-MM-YY, DD.MM.YY
+    const matchShort = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+
+    if (matchYMD) {
+      const y = parseInt(matchYMD[1], 10);
+      const m = parseInt(matchYMD[2], 10) - 1;
+      const d = parseInt(matchYMD[3], 10);
+      date = new Date(y, m, d);
+    } else if (matchDMY) {
+      const d = parseInt(matchDMY[1], 10);
+      const m = parseInt(matchDMY[2], 10) - 1;
+      const y = parseInt(matchDMY[3], 10);
+      date = new Date(y, m, d);
+    } else if (matchShort) {
+      const d = parseInt(matchShort[1], 10);
+      const m = parseInt(matchShort[2], 10) - 1;
+      let y = parseInt(matchShort[3], 10);
+      y += y < 50 ? 2000 : 1900;
+      date = new Date(y, m, d);
     } else {
-      // Try parsing DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY manually
-      const matchDMY = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
-      if (matchDMY) {
-        const d = parseInt(matchDMY[1], 10);
-        const m = parseInt(matchDMY[2], 10) - 1;
-        const y = parseInt(matchDMY[3], 10);
-        date = new Date(y, m, d);
+      const parsed = Date.parse(str);
+      if (!isNaN(parsed)) {
+        date = new Date(parsed);
       } else {
-        // Try parsing YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD
-        const matchYMD = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
-        if (matchYMD) {
-          const y = parseInt(matchYMD[1], 10);
-          const m = parseInt(matchYMD[2], 10) - 1;
-          const d = parseInt(matchYMD[3], 10);
-          date = new Date(y, m, d);
-        } else {
-          // Try parsing DD/MM/YY, DD-MM-YY, DD.MM.YY
-          const matchShort = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
-          if (matchShort) {
-            const d = parseInt(matchShort[1], 10);
-            const m = parseInt(matchShort[2], 10) - 1;
-            let y = parseInt(matchShort[3], 10);
-            y += y < 50 ? 2000 : 1900;
-            date = new Date(y, m, d);
-          } else {
-            return String(dateVal); // return original if not parsable
-          }
-        }
+        return String(dateVal); // return original if not parsable
       }
     }
   }
 
-  if (isNaN(date.getTime())) {
+  if (!date || isNaN(date.getTime())) {
     return String(dateVal);
   }
 
@@ -490,6 +488,30 @@ export function isImageField(f: any): boolean {
     k === 'signature' ||
     k === 'logo' ||
     k === 'stamp'
+  );
+}
+
+export function isDateField(fieldKey?: string, fieldType?: string): boolean {
+  if (fieldType && fieldType.toLowerCase() === 'date') return true;
+  if (!fieldKey) return false;
+  const clean = fieldKey.toLowerCase().replace(/[^a-z]/g, '');
+  if (
+    clean.includes('no') ||
+    clean.includes('num') ||
+    clean.includes('id') ||
+    clean.includes('place') ||
+    clean.includes('branch') ||
+    clean.includes('cert')
+  ) {
+    return false;
+  }
+  return (
+    clean.includes('date') ||
+    clean.includes('dob') ||
+    clean.includes('doj') ||
+    clean.includes('expiry') ||
+    clean.includes('valid') ||
+    clean.includes('issue')
   );
 }
 
@@ -545,9 +567,34 @@ export function resolveFieldRawValue(
     }
   }
 
+  const fType = (f.type || '').toLowerCase();
+
   // 4. Date formatting fallback
-  if (f.type === 'date' && resolved !== undefined && resolved !== null) {
+  if ((fType === 'date' || isDateField(f.field, f.type)) && resolved !== undefined && resolved !== null) {
     resolved = formatDate(resolved, f.dateFormat);
+  }
+
+  // 5. Number field min/max cap fallback
+  if (fType === 'number' && resolved !== undefined && resolved !== null && String(resolved).trim() !== '') {
+    let num = parseFloat(String(resolved).replace(/[^0-9.-]/g, ''));
+    if (!isNaN(num)) {
+      if (f.min !== undefined && f.min !== null && !isNaN(Number(f.min)) && num < Number(f.min)) {
+        num = Number(f.min);
+      }
+      if (f.max !== undefined && f.max !== null && !isNaN(Number(f.max)) && num > Number(f.max)) {
+        num = Number(f.max);
+      }
+      resolved = String(num);
+    }
+  }
+
+  // 6. Text field min/max character cap fallback
+  if ((fType === 'text' || !fType) && resolved !== undefined && resolved !== null) {
+    let str = String(resolved);
+    if (f.max !== undefined && f.max !== null && !isNaN(Number(f.max)) && Number(f.max) > 0 && str.length > Number(f.max)) {
+      str = str.substring(0, Number(f.max));
+    }
+    resolved = str;
   }
 
   return resolved;

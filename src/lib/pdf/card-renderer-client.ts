@@ -4,7 +4,9 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date' | 'number';
+  min?: number;
+  max?: number;
   x: number;
   y: number;
   width: number;
@@ -319,7 +321,7 @@ export function computeYOffsets(
 
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number')
     .sort((a, b) => a.f.y - b.f.y);
 
   const effectiveY = fields.map((f) => f.y);
@@ -559,6 +561,7 @@ export async function renderCardSideClient(
       case 'id':
       case 'text':
       case 'date':
+      case 'number':
       case 'static_text':
       case 'static':
       case 'label': {
@@ -708,7 +711,7 @@ export async function renderCardSideClient(
       case 'picture':
       case 'static_image':
       case 'static_img': {
-        const imageSrc = rawValue ? String(rawValue) : (f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue);
+        const imageSrc = rawValue ? String(rawValue) : ((f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue);
         
         if (imageSrc && isValidImageUrl(imageSrc)) {
           try {
@@ -1292,9 +1295,9 @@ export async function renderCardSideToPdfBytesClient(
     return fontCache.get(stdFont);
   };
 
-  // Embed all unique fonts used by text/id fields beforehand so computeYOffsets is fast and synchronous
+  // Embed all unique fonts used by text/id/date/number fields beforehand so computeYOffsets is fast and synchronous
   for (const f of fields) {
-    if (f.type !== 'text' && f.type !== 'id') continue;
+    if (f.type !== 'text' && f.type !== 'id' && f.type !== 'date' && f.type !== 'number') continue;
     await getEmbeddedFont(f);
   }
 
@@ -1337,25 +1340,32 @@ export async function renderCardSideToPdfBytesClient(
     const f = fields[fi];
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue = resolveFieldRawValue(f, data, cardholder);
-    if ((rawValue === undefined || rawValue === null || rawValue === '') && f.type === 'image') {
-      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+    const isImgField = isImageField(f) || (f.type || '').toLowerCase() === 'image';
+    if ((rawValue === undefined || rawValue === null || rawValue === '') && isImgField) {
+      rawValue = (f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue;
     }
     const safePrefix = (f.prefix && f.prefix !== 'undefined') ? f.prefix : '';
     const safeSuffix = (f.suffix && f.suffix !== 'undefined') ? f.suffix : '';
     const hasPrefixOrSuffix = Boolean((safePrefix && safePrefix.trim()) || (safeSuffix && safeSuffix.trim()));
-    if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && f.type !== 'image') continue;
+    if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && !isImgField) continue;
     if (rawValue === undefined || rawValue === null) rawValue = '';
 
     const valueStr = `${safePrefix}${rawValue}${safeSuffix}`;
-    if (!valueStr.trim() && f.type !== 'image') continue;
+    if (!valueStr.trim() && !isImgField) continue;
     const xPt = f.x * PX_TO_PT;
     const yPt = (heightPx - f.y - f.height) * PX_TO_PT - yOffsetPx * PX_TO_PT;
     const wPt = f.width  * PX_TO_PT;
     const hPt = f.height * PX_TO_PT;
 
-    switch (f.type) {
+    const fieldTypeLower = (f.type || 'text').toLowerCase();
+    switch (fieldTypeLower) {
       case 'id':
-      case 'text': {
+      case 'text':
+      case 'date':
+      case 'number':
+      case 'static_text':
+      case 'static':
+      case 'label': {
         try {
           const embeddedFont = await getEmbeddedFont(f);
           const fontSizePt = (f.fontSize || 20) * PX_TO_PT;
@@ -1574,7 +1584,7 @@ export async function renderCardSideToPdfBytesClient(
       case 'picture':
       case 'static_image':
       case 'static_img': {
-        const imageSrc = rawValue || f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue;
+        const imageSrc = rawValue || (f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue;
         if (!imageSrc) continue;
         try {
           const rawUrl = String(imageSrc).trim();

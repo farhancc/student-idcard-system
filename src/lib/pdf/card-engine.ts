@@ -185,7 +185,9 @@ async function embedImageBuffer(pdfDoc: any, buffer: Buffer | ArrayBuffer | Uint
 // Coordinate layout field mapping format
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date' | 'number';
+  min?: number;
+  max?: number;
   x: number;
   y: number;
   width: number;
@@ -356,7 +358,7 @@ function computeYOffsets(
   // Process fields in top-to-bottom order of their *original* Y
   const sorted = fields
     .map((f, i) => ({ f, i }))
-    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date')
+    .filter(({ f }) => f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number')
     .sort((a, b) => a.f.y - b.f.y);
 
   // Track overflow added by each field so we can shift later fields
@@ -493,7 +495,7 @@ export async function renderCardSide(
   // 3. Pre-compute Y offsets to reflow fields that wrap beyond their declared height
   // Pre-register fonts first to ensure accurate text width measurements
   for (const f of fields) {
-    if (f.type !== 'text' && f.type !== 'id') continue;
+    if (f.type !== 'text' && f.type !== 'id' && f.type !== 'date' && f.type !== 'number') continue;
     if (f.fontFamily && f.fontFamily !== 'sans-serif') {
       const matchingFont = pressFonts.find(pf => pf.name.toLowerCase() === f.fontFamily?.toLowerCase());
       if (matchingFont) {
@@ -553,10 +555,15 @@ export async function renderCardSide(
     const valueStr = `${f.prefix || ''}${rawValue}${f.suffix || ''}`;
     const effectiveY = f.y + yOffset;
 
-    switch (f.type) {
+    const fieldTypeLower = (f.type || 'text').toLowerCase();
+    switch (fieldTypeLower) {
       case 'id':
       case 'text':
-      case 'date': {
+      case 'date':
+      case 'number':
+      case 'static_text':
+      case 'static':
+      case 'label': {
         ctx.save();
 
         // Apply text transform
@@ -1069,9 +1076,9 @@ export async function renderCardSideToPdfBytes(
   };
 
 
-  // Pre-load all unique fonts used by text/id fields beforehand
+  // Pre-load all unique fonts used by text/id/date fields beforehand
   for (const f of fields) {
-    if (f.type !== 'text' && f.type !== 'id') continue;
+    if (f.type !== 'text' && f.type !== 'id' && f.type !== 'date' && f.type !== 'number') continue;
     await getEmbeddedFont(f);
   }
 
@@ -1198,10 +1205,15 @@ export async function renderCardSideToPdfBytes(
     const wPt = f.width * 0.24;
     const hPt = f.height * 0.24;
 
-    switch (f.type) {
+    const fieldTypeLower = (f.type || 'text').toLowerCase();
+    switch (fieldTypeLower) {
       case 'id':
       case 'text':
-      case 'date': {
+      case 'date':
+      case 'number':
+      case 'static_text':
+      case 'static':
+      case 'label': {
         try {
           const embeddedFont = await getEmbeddedFont(f);
 

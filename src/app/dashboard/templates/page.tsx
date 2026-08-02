@@ -100,7 +100,9 @@ const getOptimizedImageUrl = (url: string) => {
 
 interface FieldCoordinate {
   field: string;
-  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date';
+  type: 'text' | 'image' | 'qr' | 'barcode' | 'id' | 'date' | 'number';
+  min?: number;
+  max?: number;
   x: number;
   y: number;
   width: number;
@@ -393,7 +395,7 @@ export default function TemplatesPage() {
     }
   };
 
-  const handleAddPresetField = (side: 'front' | 'back', fieldName: string, type: 'text' | 'date' | 'image' | 'qr' | 'barcode' | 'id' = 'date') => {
+  const handleAddPresetField = (side: 'front' | 'back', fieldName: string, type: 'text' | 'date' | 'number' | 'image' | 'qr' | 'barcode' | 'id' = 'date') => {
     const currentFields = side === 'front' ? frontFields : backFields;
     const newField: FieldCoordinate = {
       field: fieldName,
@@ -1423,7 +1425,7 @@ export default function TemplatesPage() {
     if (type === 'barcode') color = '245, 158, 11';
     if (type === 'id') color = '219, 39, 119'; // Pink/Magenta for ID Field
 
-    const isTextLike = type === 'text' || type === 'id' || type === 'date';
+    const isTextLike = type === 'text' || type === 'id' || type === 'date' || type === 'number';
 
     if (showTestData) {
       return {
@@ -1457,7 +1459,7 @@ export default function TemplatesPage() {
   };
 
   const renderFieldTooltip = (side: 'front' | 'back', index: number, f: FieldCoordinate, scale: number) => {
-    const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
+    const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
     const fields = side === 'front' ? frontFields : backFields;
     const setFields = side === 'front' ? setFrontFields : setBackFields;
 
@@ -1933,6 +1935,48 @@ export default function TemplatesPage() {
                 </select>
               </div>
             </div>
+
+            {/* Min / Max Cap (only for number type) */}
+            {f.type === 'number' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Min Cap</label>
+                  <input
+                    type="number"
+                    value={f.min !== undefined && f.min !== null ? f.min : ''}
+                    placeholder="Min"
+                    onChange={(e) => updateField({ min: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    style={{
+                      background: '#1e293b',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      color: '#ffffff',
+                      padding: '4px 6px',
+                      fontSize: '0.75rem',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.65rem', color: '#94a3b8' }}>Max Cap</label>
+                  <input
+                    type="number"
+                    value={f.max !== undefined && f.max !== null ? f.max : ''}
+                    placeholder="Max"
+                    onChange={(e) => updateField({ max: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    style={{
+                      background: '#1e293b',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '4px',
+                      color: '#ffffff',
+                      padding: '4px 6px',
+                      fontSize: '0.75rem',
+                      width: '100%'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {/* Date Format (only for date type) */}
             {f.type === 'date' && (
@@ -3753,7 +3797,7 @@ export default function TemplatesPage() {
                               const isSelected = selectedFieldIndex === i && selectedSide === 'front';
                               const style = getBoxStyle(f, isSelected, scale);
 
-                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
+                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
@@ -4204,7 +4248,7 @@ export default function TemplatesPage() {
                               const isSelected = selectedFieldIndex === i && selectedSide === 'back';
                               const style = getBoxStyle(f, isSelected, scale);
 
-                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date';
+                              const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
                                 fontSize: `${(f.fontSize || 18) * scale}px`,
                                 color: f.color || '#000000',
@@ -4542,6 +4586,7 @@ export default function TemplatesPage() {
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('front', i, 'type', e.target.value)}>
                                   <option value="text">Text Field</option>
+                                  <option value="number">Number Field</option>
                                   <option value="date">Date Field</option>
                                   <option value="image">Photo / Image</option>
                                   <option value="qr">QR Code</option>
@@ -4554,7 +4599,7 @@ export default function TemplatesPage() {
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.width} onChange={e => handleFieldChange('front', i, 'width', Number(e.target.value))} /></td>
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.height} onChange={e => handleFieldChange('front', i, 'height', Number(e.target.value))} /></td>
                               <td>
-                                {(f.type === 'text' || f.type === 'id' || f.type === 'date') ? (
+                                {(f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4637,6 +4682,18 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      {(f.type === 'number' || f.type === 'text' || f.type === 'id' || !f.type) && (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Min Cap</span>
+                                            <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} placeholder="Min" value={f.min ?? ''} onChange={e => handleFieldChange('front', i, 'min', e.target.value === '' ? undefined : Number(e.target.value))} />
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Max Cap</span>
+                                            <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} placeholder="Max" value={f.max ?? ''} onChange={e => handleFieldChange('front', i, 'max', e.target.value === '' ? undefined : Number(e.target.value))} />
+                                          </div>
+                                        </div>
+                                      )}
                                       {f.type === 'date' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                                           <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Date Format</span>
@@ -4773,6 +4830,7 @@ export default function TemplatesPage() {
                               <td>
                                 <select className="form-select" style={{ padding: '6px 10px', fontSize: '0.8rem' }} value={f.type} onChange={e => handleFieldChange('back', i, 'type', e.target.value)}>
                                   <option value="text">Text Field</option>
+                                  <option value="number">Number Field</option>
                                   <option value="date">Date Field</option>
                                   <option value="image">Photo / Image</option>
                                   <option value="qr">QR Code</option>
@@ -4785,7 +4843,7 @@ export default function TemplatesPage() {
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.width} onChange={e => handleFieldChange('back', i, 'width', Number(e.target.value))} /></td>
                               <td><input type="number" className="form-input" style={{ padding: '6px 10px', fontSize: '0.8rem', width: '70px' }} value={f.height} onChange={e => handleFieldChange('back', i, 'height', Number(e.target.value))} /></td>
                               <td>
-                                {(f.type === 'text' || f.type === 'id' || f.type === 'date') ? (
+                                {(f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number') ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                                     {/* Row 1: Size · Color · Align */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4868,6 +4926,18 @@ export default function TemplatesPage() {
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      {(f.type === 'number' || f.type === 'text' || f.type === 'id' || !f.type) && (
+                                        <div style={{ display: 'flex', gap: '4px' }}>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Min Cap</span>
+                                            <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} placeholder="Min" value={f.min ?? ''} onChange={e => handleFieldChange('back', i, 'min', e.target.value === '' ? undefined : Number(e.target.value))} />
+                                          </div>
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                                            <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Max Cap</span>
+                                            <input type="number" className="form-input" style={{ padding: '4px', fontSize: '0.75rem', width: '55px' }} placeholder="Max" value={f.max ?? ''} onChange={e => handleFieldChange('back', i, 'max', e.target.value === '' ? undefined : Number(e.target.value))} />
+                                          </div>
+                                        </div>
+                                      )}
                                       {f.type === 'date' && (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
                                           <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>Date Format</span>

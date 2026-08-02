@@ -1,7 +1,7 @@
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFString, PDFDict, degrees } from 'pdf-lib';
 import { getOrRenderCard } from './cache-manager';
 import { FieldCoordinate } from './card-engine';
-import { getResolvedFieldValue, formatFieldLabel } from './field-resolver';
+import { getResolvedFieldValue, resolveFieldRawValue, formatFieldLabel } from './field-resolver';
 import { prisma } from '../prisma';
 import fs from 'fs';
 import path from 'path';
@@ -361,7 +361,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
         for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
           const kClean = fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '');
           if (kClean === 'name' || kClean.includes('name')) continue;
-          const val = getResolvedFieldValue(fieldKey, cardholderData, cardholder);
+          const val = resolveFieldRawValue(fieldConfig, cardholderData, cardholder);
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
             if (!label) {

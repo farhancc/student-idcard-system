@@ -205,8 +205,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         if (f.field) typeMap[f.field] = f.type || 'text';
       });
       setFieldTypeMap(typeMap);
-      // Include user-fillable text, id, and date fields
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || !f.type);
+      // Include user-fillable text, id, date, and number fields
+      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number' || !f.type);
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
       const filteredKeys = keys.filter(k => {

@@ -80,6 +80,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [departmentName, setDepartmentName] = useState<string | null>(null);
   const [formFields, setFormFields] = useState<string[]>([]);
   const [fieldTypeMap, setFieldTypeMap] = useState<Record<string, string>>({});
+  const [fieldCoordsMap, setFieldCoordsMap] = useState<Record<string, FieldCoordinate>>({});
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [pressFonts, setPressFonts] = useState<any[]>([]);
 
@@ -136,10 +137,15 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         const allFields: FieldCoordinate[] = [...front, ...back];
 
         const typeMap: Record<string, string> = {};
+        const coordsMap: Record<string, FieldCoordinate> = {};
         allFields.forEach(f => {
-          if (f.field) typeMap[f.field] = f.type || 'text';
+          if (f.field) {
+            typeMap[f.field] = f.type || 'text';
+            coordsMap[f.field] = f;
+          }
         });
         setFieldTypeMap(typeMap);
+        setFieldCoordsMap(coordsMap);
 
         // Identify fields that are mapped to 'qr' or 'barcode' types to restrict editing on enrollment page
         const restrictedFields = new Set(
@@ -148,8 +154,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             .map(f => f.field)
         );
 
-        // Unique text & date fields (excluding restricted, ID, and serial field types)
-        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || !f.type) && !restrictedFields.has(f.field));
+        // Unique text, date & number fields (excluding restricted, ID, and serial field types)
+        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || !f.type) && !restrictedFields.has(f.field));
         const keys = Array.from(new Set(textAndDateFields.map(f => f.field)));
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
@@ -632,17 +638,27 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
             const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
             const isDate = isDateField(field, fieldTypeMap[field]);
+            const isNumber = fieldTypeMap[field] === 'number';
+            const coord = fieldCoordsMap[field];
+            const maxCap = coord?.max;
+            const minCap = coord?.min;
 
             return (
               <div className="form-group" key={field}>
                 <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
                 <input
-                  type={isDate ? "date" : "text"}
+                  type={isDate ? "date" : isNumber ? "number" : "text"}
+                  maxLength={!isNumber && !isDate && maxCap !== undefined && maxCap > 0 ? maxCap : undefined}
+                  min={isNumber && minCap !== undefined ? minCap : undefined}
+                  max={isNumber && maxCap !== undefined ? maxCap : undefined}
                   className="form-input"
                   required={isNameLike}
                   value={customFields[field] || ''}
                   onChange={e => {
-                    const val = e.target.value;
+                    let val = e.target.value;
+                    if (!isNumber && !isDate && maxCap !== undefined && maxCap > 0 && val.length > maxCap) {
+                      val = val.substring(0, maxCap);
+                    }
                     setCustomFields(prev => ({ ...prev, [field]: val }));
                     if (isNameLike) {
                       setName(val);
@@ -657,7 +673,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                       } catch {}
                     }
                   }}
-                  placeholder={isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`}
+                  placeholder={isDate ? 'YYYY-MM-DD' : isNumber ? `Enter number` : `Enter ${label.toLowerCase()}`}
                   style={{ cursor: isDate ? 'pointer' : 'text' }}
                 />
               </div>

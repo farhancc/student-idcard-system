@@ -219,8 +219,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         if (f.field) typeMap[f.field] = f.type || 'text';
       });
       setFieldTypeMap(typeMap);
-      // Include user-fillable text, id, and date fields
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || !f.type);
+      // Include user-fillable text, id, date, and number fields
+      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number' || !f.type);
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 

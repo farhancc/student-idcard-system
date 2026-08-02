@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, FieldCoordinate, clearTemplateBgCache } from './card-renderer-client';
-import { getResolvedFieldValue, formatFieldLabel } from './field-resolver';
+import { getResolvedFieldValue, resolveFieldRawValue, formatFieldLabel } from './field-resolver';
 
 async function safeDrawText(
   page: any,
@@ -314,7 +314,7 @@ export async function generateApprovalPdfClient(
         for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
           const kClean = fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '');
           if (kClean === 'name' || kClean.includes('name')) continue;
-          const val = getResolvedFieldValue(fieldKey, cardholderData, cardholder);
+          const val = resolveFieldRawValue(fieldConfig, cardholderData, cardholder);
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';
             if (!label) {
