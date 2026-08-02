@@ -467,13 +467,24 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     const finalCustom: Record<string, string> = {};
     formFields.forEach(k => {
       let val = getCustomFieldValueCaseInsensitive(parsedCustom, k) || '';
+      const clean = cleanFieldKey(k);
+      const fieldMeta = fieldCoordsMap[k];
+      const fieldType = fieldMeta?.type || fieldTypeMap[k];
+      const isIdType = (fieldType === 'id') || ['id', 'uniquekey', 'studentid', 'employeeid', 'empid', 'rollnumber', 'rollno', 'admno', 'admissionnumber'].includes(clean) || clean.includes('id');
+
       if (!val) {
-        const clean = cleanFieldKey(k);
         if (['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean)) {
           val = resolvedName;
         } else if (['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean)) {
           val = resolvedDesignation;
+        } else if (isIdType) {
+          const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key || parsedCustom.studentid || parsedCustom.employeeid || parsedCustom.empid;
+          if (rawId && !String(rawId).startsWith('C-')) {
+            val = String(rawId);
+          }
         }
+      } else if (isIdType && String(val).startsWith('C-')) {
+        val = '';
       }
       finalCustom[k] = val;
     });

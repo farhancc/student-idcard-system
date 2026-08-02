@@ -31,12 +31,24 @@ export async function PUT(
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
-    // Fold uniqueKey into customFields if provided
+    // Fold uniqueKey into customFields if provided and sync uniqueKey column
     const custom = typeof customFields === 'string' 
       ? (customFields ? JSON.parse(customFields) : {}) 
       : (customFields || {});
-    if (uniqueKey && !custom.uniqueKey && !custom.id && !custom.unique_key) {
-      custom.uniqueKey = uniqueKey;
+
+    let extractedUniqueKey = uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
+    if (!extractedUniqueKey) {
+      for (const [ck, cv] of Object.entries(custom)) {
+        const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
+          extractedUniqueKey = cv;
+          break;
+        }
+      }
+    }
+
+    if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
+      custom.uniqueKey = String(extractedUniqueKey);
     }
 
     // Check unique constraint if changed (name + designation, excluding this cardholder)
@@ -66,6 +78,7 @@ export async function PUT(
         designation,
         photoUrl,
         customFields: JSON.stringify(custom),
+        uniqueKey: (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) ? String(extractedUniqueKey) : null,
         cardSerial: cardholder.cardSerial,
       },
     });
