@@ -224,8 +224,8 @@ const STEPS: TourStep[] = [
     position: 'top',
     icon: '⚡',
     title: 'Template സെലക്ട് ചെയ്ത് "Generate Links" ക്ലിക്ക് ചെയ്യുക',
-    body: 'നിങ്ങൾ ഉണ്ടാക്കിയ ടെംപ്ലേറ്റ് സെലക്ട് ചെയ്ത ശേഷം "Generate Links" ബട്ടൺ ക്ലിക്ക് ചെയ്യുക.',
-    waitForClick: true,
+    body: 'നിങ്ങൾ ഉണ്ടാക്കിയ ടെംപ്ലേറ്റ് സെലക്ട് ചെയ്ത ശേഷം "Generate Links" ബട്ടൺ ക്ലിക്ക് ചെയ്ത് ലിങ്ക് ജനറേറ്റ് ആകുന്നത് കാത്തിരിക്കുക. തയ്യാറായ ശേഷം "അടുത്തത്" ക്ലിക്ക് ചെയ്യുക.',
+    nextLabel: 'ലിങ്ക് ജനറേറ്റ് ആയി, അടുത്തത് →',
   },
   {
     icon: '📩',
@@ -259,7 +259,7 @@ export default function PlatformTour({ onComplete }: { onComplete?: () => void }
   const isWaitingForClick = !!(currentStep.waitForClick && currentStep.targetId && spotlight && !fallbackCentered);
 
   // Phase labels in Malayalam
-  const PHASE_BOUNDARIES = [0, 9, 13, 21, 26]; // Overview, Client, Template, Portal, Done
+  const PHASE_BOUNDARIES = [0, 9, 13, 21, 25]; // Overview, Client, Template, Portal, Done
   const PHASE_NAMES = ['അവലോകനം', 'ക്ലയന്റ്', 'ടെംപ്ലേറ്റ്', 'പോർട്ടൽ', 'പൂർത്തിയായി'];
   const phaseOf = (i: number) => PHASE_BOUNDARIES.findLastIndex((b) => i >= b);
   const currentPhase = phaseOf(step);
