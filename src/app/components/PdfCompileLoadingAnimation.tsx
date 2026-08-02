@@ -96,7 +96,7 @@ export default function PdfCompileLoadingAnimation({
           }
           .compact-progress-bar {
             height: 100%;
-            background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1);
+            background: linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #38bdf8, #4f46e5);
             background-size: 200% 100%;
             animation: gradientShimmer 2s linear infinite;
             transition: width 0.3s ease;
@@ -104,7 +104,7 @@ export default function PdfCompileLoadingAnimation({
           .compact-percent {
             font-size: 0.72rem;
             font-weight: 700;
-            color: #a855f7;
+            color: #818cf8;
             font-family: monospace;
           }
           @keyframes spinRing {
@@ -380,10 +380,10 @@ export default function PdfCompileLoadingAnimation({
 
         .progress-fill-glow {
           height: 100%;
-          background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1);
+          background: linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #38bdf8, #4f46e5);
           background-size: 200% 100%;
           border-radius: 4px;
-          box-shadow: 0 0 12px rgba(168, 85, 247, 0.6);
+          box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
           animation: gradientShimmer 2s linear infinite;
           transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
@@ -401,7 +401,7 @@ export default function PdfCompileLoadingAnimation({
         }
 
         .percentage-badge {
-          color: #a855f7;
+          color: #818cf8;
           font-weight: 700;
           font-family: monospace;
         }
