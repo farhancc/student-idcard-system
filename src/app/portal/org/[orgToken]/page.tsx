@@ -1442,7 +1442,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                             fontWeight: 600,
                             cursor: 'pointer',
                             background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
-                            color: previewSide === 'front' ? '#000' : 'var(--muted)',
+                            color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
                             transition: 'all 0.2s'
                           }}
                         >
@@ -1458,7 +1458,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                             fontWeight: 600,
                             cursor: 'pointer',
                             background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
-                            color: previewSide === 'back' ? '#000' : 'var(--muted)',
+                            color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
                             transition: 'all 0.2s'
                           }}
                         >

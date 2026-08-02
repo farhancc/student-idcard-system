@@ -1,0 +1,160 @@
+/* ── Portal Reversed Light & Royal Blue Design System ── */
+
+:root {
+  --page-bg: #f4f7fc;
+  --card-bg: #ffffff;
+  --foreground: #0f172a;
+  --heading-color: #1e3a8a;
+  --muted: #475569;
+  --glass-bg: #ffffff;
+  --glass-border: #dbeafe;
+  --glass-highlight: #eff6ff;
+  
+  --primary: #2563eb;
+  --primary-glow: rgba(37, 99, 235, 0.2);
+  --primary-hover: #1d4ed8;
+  --primary-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  
+  --secondary: #eff6ff;
+  --secondary-hover: #dbeafe;
+  --secondary-text: #1d4ed8;
+  
+  --border: #cbd5e1;
+  --shadow-sm: 0 2px 8px rgba(37, 99, 235, 0.05);
+  --shadow-md: 0 8px 24px -4px rgba(37, 99, 235, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03);
+}
+
+.portal-root {
+  min-height: 100vh;
+  background-color: #f4f7fc !important;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(219, 234, 254, 0.7) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(224, 231, 255, 0.6) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(238, 242, 255, 0.4) 0px, transparent 50%) !important;
+  background-attachment: fixed;
+  color: #0f172a !important;
+}
+
+/* Headings Override */
+.portal-root h1, 
+.portal-root h2, 
+.portal-root h3, 
+.portal-root h4, 
+.portal-root h5, 
+.portal-root h6 {
+  color: #1e3a8a !important;
+  font-weight: 700;
+}
+
+/* Cards and Panels */
+.portal-root .card, 
+.portal-root .glass-panel {
+  background: #ffffff !important;
+  border: 1px solid #dbeafe !important;
+  box-shadow: 0 8px 24px -4px rgba(37, 99, 235, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.03) !important;
+  color: #0f172a !important;
+}
+
+/* Buttons */
+.portal-root .btn-primary {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25) !important;
+  border: 1px solid #2563eb !important;
+}
+
+.portal-root .btn-primary:hover {
+  background: #1d4ed8 !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35) !important;
+}
+
+.portal-root .btn-secondary {
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+
+.portal-root .btn-secondary:hover {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1e40af !important;
+}
+
+/* Inputs & Form Controls */
+.portal-root .form-label {
+  color: #1e40af !important;
+  font-weight: 600 !important;
+}
+
+.portal-root .form-input, 
+.portal-root .form-select, 
+.portal-root .form-textarea {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.portal-root .form-input:focus, 
+.portal-root .form-select:focus, 
+.portal-root .form-textarea:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+  background: #ffffff !important;
+}
+
+.portal-root .form-input::placeholder,
+.portal-root .form-select::placeholder,
+.portal-root .form-textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Table Styling */
+.portal-root .table-container {
+  border: 1px solid #dbeafe !important;
+  background: #ffffff !important;
+}
+
+.portal-root .custom-table {
+  background: #ffffff !important;
+}
+
+.portal-root .custom-table th {
+  background: #eff6ff !important;
+  color: #1e40af !important;
+  font-weight: 700 !important;
+  border-bottom: 1px solid #dbeafe !important;
+}
+
+.portal-root .custom-table td {
+  color: #1e293b !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.portal-root .custom-table tr:hover td {
+  background: #f8fafc !important;
+}
+
+/* Sticky Action Column Overrides */
+.portal-root .sticky-actions-head,
+.portal-root .custom-table th.sticky-actions {
+  background: #eff6ff !important;
+  box-shadow: -4px 0 8px rgba(37, 99, 235, 0.05) !important;
+}
+
+.portal-root .sticky-actions-cell,
+.portal-root .custom-table td.sticky-actions {
+  background: #ffffff !important;
+  box-shadow: -4px 0 8px rgba(37, 99, 235, 0.05) !important;
+}
+
+.portal-root .custom-table tr:hover .sticky-actions-cell,
+.portal-root .custom-table tr:hover td.sticky-actions {
+  background: #f8fafc !important;
+}
+
+/* Modals */
+.portal-root .modal-card {
+  background: #ffffff !important;
+  border: 1px solid #dbeafe !important;
+  color: #0f172a !important;
+}
