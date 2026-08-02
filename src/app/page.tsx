@@ -7,9 +7,9 @@ import {
   Monitor, Terminal, Download, Activity, Settings, MessageSquare,
   RefreshCw, FileSpreadsheet, CircleX, ClipboardList, MonitorPlay,
   Zap, Sparkles, ShieldCheck, Layers, Cpu, CheckCircle2, ChevronRight,
-  FileCode2, UserCheck, Sliders, Smartphone, Check
+  FileCode2, UserCheck, Sliders, Smartphone, Check, Award, CreditCard,
+  Ticket, IdCard, Mail, Stamp, FileCheck
 } from 'lucide-react';
-import TimelineContainer from './components/TimelineContainer';
 import FaqAccordion from './components/FaqAccordion';
 
 export default function LandingPage() {
@@ -247,6 +247,33 @@ export default function LandingPage() {
           box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
         }
 
+        /* VDP Card Badge Grid */
+        .vdp-grid {
+          display: grid;
+          grid-template-columns: repeat(6, 1fr);
+          gap: 16px;
+          max-width: 1240px;
+          margin: 0 auto;
+        }
+
+        .vdp-card {
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid var(--border-glass);
+          border-radius: 16px;
+          padding: 20px 16px;
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 10px;
+          transition: all 0.3s ease;
+        }
+        .vdp-card:hover {
+          border-color: rgba(99, 102, 241, 0.4);
+          background: rgba(99, 102, 241, 0.08);
+          transform: translateY(-4px);
+        }
+
         /* Responsive Grids */
         .hero-layout {
           max-width: 1240px;
@@ -291,6 +318,9 @@ export default function LandingPage() {
         }
 
         @media (max-width: 1024px) {
+          .vdp-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
           .hero-layout {
             grid-template-columns: 1fr;
             text-align: center;
@@ -311,6 +341,12 @@ export default function LandingPage() {
           }
           .os-downloads-grid {
             grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .vdp-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
         }
       `}} />
@@ -346,14 +382,14 @@ export default function LandingPage() {
               />
             </div>
             <span style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.5px', color: '#ffffff' }}>
-              IDexo<span style={{ color: '#818cf8', fontSize: '0.8rem', marginLeft: '4px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>PRESS</span>
+              IDexo<span style={{ color: '#818cf8', fontSize: '0.8rem', marginLeft: '4px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>VDP ENGINE</span>
             </span>
           </Link>
 
           <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+            <a href="#vdp-types" className="nav-link">Supported VDP</a>
             <a href="#features" className="nav-link">Features</a>
             <a href="#comparison" className="nav-link">Why IDexo</a>
-            <a href="#pipeline" className="nav-link">Workflow</a>
             <a href="#faq" className="nav-link">FAQ</a>
             <a href="#download" className="btn-primary" style={{ padding: '8px 18px', fontSize: '0.875rem' }}>
               <Download size={15} /> Download Desktop App
@@ -368,20 +404,20 @@ export default function LandingPage() {
           
           <div className="hero-badge">
             <Zap size={14} className="text-indigo-400" />
-            <span>Next-Gen ID Card Production Engine</span>
+            <span>Universal Variable Data Printing (VDP) OS</span>
           </div>
 
           <h1 className="display-hero">
-            The Complete <span className="gradient-text">Operating System</span> for ID Card Printing Presses
+            The Next-Gen <span className="gradient-text">Variable Data Printing</span> Engine for Commercial Press
           </h1>
 
           <p style={{ fontSize: '1.15rem', color: '#cbd5e1', lineHeight: '1.7', maxWidth: '640px' }}>
-            Eliminate manual CorelDRAW copying, WhatsApp photo chasing, and Excel typos. Intake student rosters directly from clients, auto-synthesize cards, and compile 100% vector print-ready A3/A4 PDFs in seconds.
+            Automate high-volume variable data workflows for ID cards, event credentials, certificates, membership badges, and personalized mailers. Intake client rosters directly, auto-map variable fields, and compile 100% vector print-ready A3/A4 PDFs in seconds.
           </p>
 
           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '4px' }}>
             <a href="#download" className="btn-primary">
-              <Download size={18} /> Download Free for Desktop
+              <Download size={18} /> Download Free Desktop VDP
             </a>
             <a href="/samples/production_sample.pdf" download="production_sample.pdf" className="btn-secondary">
               <FileCode2 size={18} /> Get Imposed PDF Sample
@@ -395,11 +431,11 @@ export default function LandingPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} style={{ color: '#10b981' }} />
-              <span>Zero-Timeout Local PDF Compiler</span>
+              <span>Zero Server Timeout Local PDF Compiler</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} style={{ color: '#10b981' }} />
-              <span>Tokenized Client Intake Link</span>
+              <span>Tokenized Self-Serve Data Intake</span>
             </div>
           </div>
         </div>
@@ -426,8 +462,8 @@ export default function LandingPage() {
           }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Production Status</div>
-              <div style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>500 Cards Compiled (3.2s)</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>VDP Batch Status</div>
+              <div style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>1,200 VDP Records Imposed (4.1s)</div>
             </div>
           </div>
         </div>
@@ -435,20 +471,57 @@ export default function LandingPage() {
 
       <div className="divider-line" />
 
+      {/* Supported VDP Product Types Showcase */}
+      <section id="vdp-types" style={{ padding: '60px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto', marginBottom: '32px', textAlign: 'center' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#818cf8', textTransform: 'uppercase', letterSpacing: '1px' }}>
+            Supported Variable Data Printing Applications
+          </span>
+        </div>
+        <div className="vdp-grid">
+          <div className="vdp-card">
+            <IdCard size={28} style={{ color: '#818cf8' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Student & Employee ID Cards</span>
+          </div>
+          <div className="vdp-card">
+            <Ticket size={28} style={{ color: '#38bdf8' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Event Passes & Tickets</span>
+          </div>
+          <div className="vdp-card">
+            <Award size={28} style={{ color: '#fbbf24' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Certificates & Diplomas</span>
+          </div>
+          <div className="vdp-card">
+            <CreditCard size={28} style={{ color: '#34d399' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Membership & Club Cards</span>
+          </div>
+          <div className="vdp-card">
+            <Mail size={28} style={{ color: '#f472b6' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Personalized Direct Mail</span>
+          </div>
+          <div className="vdp-card">
+            <Stamp size={28} style={{ color: '#c084fc' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#ffffff' }}>Serial Badges & Luggage Tags</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="divider-line" />
+
       {/* Metrics / Stats Strip */}
-      <section style={{ padding: '60px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
+      <section style={{ padding: '60px 24px', position: 'relative', zIndex: 10 }}>
         <div className="stats-grid">
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#818cf8', lineHeight: 1.1 }}>10x</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Faster Batch PDF Rendering</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Faster VDP Batch Rendering</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#34d399', lineHeight: 1.1 }}>0%</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Human Copy-Paste Errors</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Variable Data Copy-Paste Errors</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#38bdf8', lineHeight: 1.1 }}>100%</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>CMYK Vector Print Quality</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>CMYK Vector PDF Output</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#c084fc', lineHeight: 1.1 }}>A3 / A4</div>
@@ -464,26 +537,26 @@ export default function LandingPage() {
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 60px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="hero-badge" style={{ alignSelf: 'center' }}>Built for Modern Print Operations</div>
-            <h2 className="headline-section">Everything You Need to Streamline Your Press</h2>
+            <div className="hero-badge" style={{ alignSelf: 'center' }}>Engineered for Commercial VDP Printing</div>
+            <h2 className="headline-section">Everything You Need to Scale Variable Printing</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Four core pillars designed to eliminate print shop friction, compress delivery cycles, and boost profit margins per job.
+              Four core pillars designed to automate variable text, images, barcodes, and serial numbers without manual design merges.
             </p>
           </div>
 
           {/* Tab Selector */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '48px' }}>
             <button className={`tab-btn ${activeTab === 'intake' ? 'active' : ''}`} onClick={() => setActiveTab('intake')}>
-              <Smartphone size={18} /> 1. Tokenized Client Intake
+              <Smartphone size={18} /> 1. Self-Serve VDP Intake
             </button>
             <button className={`tab-btn ${activeTab === 'designer' ? 'active' : ''}`} onClick={() => setActiveTab('designer')}>
-              <Sliders size={18} /> 2. Template Coordinate Designer
+              <Sliders size={18} /> 2. Dynamic VDP Blueprint Canvas
             </button>
             <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
-              <LayoutGrid size={18} /> 3. Duplex Imposition Grid
+              <LayoutGrid size={18} /> 3. Duplex Sheet Imposition Engine
             </button>
             <button className={`tab-btn ${activeTab === 'billing' ? 'active' : ''}`} onClick={() => setActiveTab('billing')}>
-              <ClipboardList size={18} /> 4. Automated GST Invoicing
+              <ClipboardList size={18} /> 4. Instant Billing & Job Tracking
             </button>
           </div>
 
@@ -492,22 +565,22 @@ export default function LandingPage() {
             {activeTab === 'intake' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Self-Serve Data Intake</div>
+                  <div className="hero-badge">Tokenized Data Collection</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Let Your Clients Input Roster Details & Photos Directly
+                    Let Clients Input Rosters, Photos & Custom Fields Directly
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Generate a tokenized form link for schools, colleges, or corporate HR. Employees and students fill their details and crop their headshots on any smartphone or browser.
+                    Send tokenized form links to clients for ID cards, event attendee rosters, or certificate recipient lists. Recipients submit details and crop photos on any mobile or desktop device.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> No more hunting for missing WhatsApp photos
+                      <CheckCircle2 size={16} color="#10b981" /> No more hunting for missing photos or broken Excel spreadsheets
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> ISO standard face cropping guide directly in browser
+                      <CheckCircle2 size={16} color="#10b981" /> In-browser ISO photo alignment and cropping tools
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Departmental sub-link distribution for class teachers
+                      <CheckCircle2 size={16} color="#10b981" /> Departmental sub-links for multi-department data delegation
                     </li>
                   </ul>
                 </div>
@@ -520,22 +593,22 @@ export default function LandingPage() {
             {activeTab === 'designer' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Single-Click Template Engine</div>
+                  <div className="hero-badge">Universal Variable Canvas</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Design Your Card Canvas Once. Synthesize 500 Cards Instantly.
+                    Design Your Template Once. Synthesize Thousands of Personalized Items.
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Position exact field coordinates for photos, employee names, dynamic date fields, barcodes, and QR codes. Once configured, every card in the job compiles automatically.
+                    Map exact coordinates for photos, dynamic names, dates (DOB, DOJ, Issue Date), barcodes, and QR codes. Works for ID cards, badges, certificates, tickets, and membership tags.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Native support for dates (DOB, DOJ, Valid Till) with formats
+                      <CheckCircle2 size={16} color="#10b981" /> Native support for custom date formats and serialized numbering
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Automatic font weight and custom web font mapping
+                      <CheckCircle2 size={16} color="#10b981" /> Font weight mapping and custom Google Fonts support
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Reusable templates across multiple batches and clients
+                      <CheckCircle2 size={16} color="#10b981" /> Reusable VDP layout templates across batches and clients
                     </li>
                   </ul>
                 </div>
@@ -553,14 +626,14 @@ export default function LandingPage() {
                     Print-Ready Sheet Placement with Mirrored Backs & Crop Marks
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Stop spending 2 hours arranging cards in CorelDRAW. IDexo calculates sheet margins, gutters, bleed guidelines, and perfectly aligns front and back sides for duplex printing.
+                    Stop spending hours manually placing variable items in InDesign or CorelDRAW. IDexo calculates sheet margins, gutters, bleed guidelines, and perfectly aligns front and back sides for duplex printing.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Supports A3, A4, and custom PVC sheet dimensions
+                      <CheckCircle2 size={16} color="#10b981" /> Supports A3, A4, and custom substrate dimensions
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Automatic corner registration marks & cutting lines
+                      <CheckCircle2 size={16} color="#10b981" /> Automatic corner registration crop marks & cutting lines
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
                       <CheckCircle2 size={16} color="#10b981" /> Zero server timeouts — rendering completes locally
@@ -578,20 +651,20 @@ export default function LandingPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="hero-badge">Commercial Bookkeeping</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Auto-Calculate Card Yields & Generate GST Invoices
+                    Auto-Calculate Job Yields & Generate Commercial Invoices
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Keep your business accounting effortless. As soon as a print job compiles, IDexo calculates total card yields, unit costs, tax rates, and generates a downloadable PDF invoice for your client.
+                    Keep your commercial printing shop accounting clean. Calculate total VDP item counts, unit prices, tax rates (GST), and export instant client PDF invoices right after compilation.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
                       <CheckCircle2 size={16} color="#10b981" /> Automated tax parameters (GST 18%) & custom currency
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Payment tracking status (UNPAID, PARTIAL, PAID)
+                      <CheckCircle2 size={16} color="#10b981" /> Real-time payment state tracking (UNPAID, PARTIAL, PAID)
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> One-click client export & job history record
+                      <CheckCircle2 size={16} color="#10b981" /> Downloadable invoice PDFs and client record archives
                     </li>
                   </ul>
                 </div>
@@ -615,9 +688,9 @@ export default function LandingPage() {
             <div className="hero-badge" style={{ alignSelf: 'center', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171', background: 'rgba(239, 68, 68, 0.1)' }}>
               Operational ROI
             </div>
-            <h2 className="headline-section">Legacy Manual Chaos vs. IDexo Automation</h2>
+            <h2 className="headline-section">Manual VDP Merges vs. The IDexo Engine</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Compare how traditional print shops operate compared to presses powered by the IDexo engine.
+              Compare traditional print shop VDP merges with automated IDexo variable printing workflows.
             </p>
           </div>
 
@@ -629,29 +702,29 @@ export default function LandingPage() {
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
                   <CircleX size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f87171' }}>Legacy Manual Workflow</h3>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f87171' }}>Legacy Manual VDP Workflow</h3>
               </div>
 
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                   <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
-                  <span>Days spent downloading and renaming individual student photos from WhatsApp chats.</span>
+                  <span>Days spent downloading, organizing, and renaming individual photos from WhatsApp.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                   <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
-                  <span>Cleaning messy Excel files with missing roll numbers and misspelled student names.</span>
+                  <span>Cleaning messy Excel files with broken columns and misspelled names.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                   <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
-                  <span>Manual copy-pasting data into CorelDRAW for every single ID card.</span>
+                  <span>Manual mail-merges or copy-pasting data into CorelDRAW or InDesign per item.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                   <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
-                  <span>Manual alignment of cards on A3 sheets leading to misaligned back-to-back duplex prints.</span>
+                  <span>Manual imposition placement leading to misaligned back-to-back duplex prints.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
                   <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
-                  <span>Costly card reprints due to typos that went undetected until after printing.</span>
+                  <span>Costly reprints due to typos or corrupted field data detected after printing.</span>
                 </li>
               </ul>
             </div>
@@ -662,25 +735,25 @@ export default function LandingPage() {
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
                   <CircleCheckBig size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#34d399' }}>The IDexo Press Engine</h3>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#34d399' }}>The IDexo VDP Engine</h3>
               </div>
 
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Clients upload details and auto-crop photos directly into their assigned intake portal link.</span>
+                  <span>Clients upload roster data and crop photos directly into your encrypted intake link.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Data is validated automatically before submission — 0% field corruption.</span>
+                  <span>Variable data is validated before submission — 0% corrupt records or missing fields.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Single-click synthesis maps cardholder data into your saved template canvas instantly.</span>
+                  <span>Single-click synthesis maps variable records into your template canvas instantly.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Automatic A3/A4 duplex grid imposition with 3mm bleed margins and registration crop marks.</span>
+                  <span>Automated A3/A4 duplex grid imposition with 3mm bleed margins and registration crop marks.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
@@ -696,20 +769,15 @@ export default function LandingPage() {
 
       <div className="divider-line" />
 
-      {/* End-to-End Operational Lifecycle Timeline Component */}
-      <TimelineContainer />
-
-      <div className="divider-line" />
-
       {/* OS Download Center */}
       <section id="download" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 64px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="hero-badge" style={{ alignSelf: 'center' }}>Cross-Platform Native Apps</div>
-            <h2 className="headline-section">Download IDexo for Your Printing Press</h2>
+            <h2 className="headline-section">Download IDexo VDP Engine for Your Press</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Free to download and run on any local workstation. Install the desktop press console and start building cards immediately.
+              Free to download and run on any local workstation. Install the desktop press console and start compiling VDP jobs immediately.
             </p>
           </div>
 
@@ -812,11 +880,11 @@ export default function LandingPage() {
                   />
                 </div>
                 <span style={{ fontSize: '1.3rem', fontWeight: '800', color: '#ffffff' }}>
-                  IDexo<span style={{ color: '#818cf8', fontSize: '0.75rem', marginLeft: '4px', textTransform: 'uppercase' }}>PRESS</span>
+                  IDexo<span style={{ color: '#818cf8', fontSize: '0.75rem', marginLeft: '4px', textTransform: 'uppercase' }}>VDP ENGINE</span>
                 </span>
               </div>
               <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
-                High-performance vector PDF compilation engine and tokenized data intake platform engineered for commercial printing presses.
+                High-performance vector Variable Data Printing (VDP) compilation engine and tokenized data intake platform engineered for commercial printing presses.
               </p>
             </div>
 
@@ -825,9 +893,9 @@ export default function LandingPage() {
                 <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff' }}>
                   Platform
                 </span>
+                <a href="#vdp-types" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Supported VDP</a>
                 <a href="#features" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Features</a>
                 <a href="#comparison" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Why IDexo</a>
-                <a href="#pipeline" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Workflow</a>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
