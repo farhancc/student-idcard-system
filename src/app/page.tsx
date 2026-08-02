@@ -1,140 +1,98 @@
-import React from 'react';
+'use client';
+
+import React, { useState } from 'react';
 import Link from 'next/link';
 import {
   Printer, LayoutGrid, ArrowRight, CircleCheckBig, Apple,
   Monitor, Terminal, Download, Activity, Settings, MessageSquare,
-  RefreshCw, FileSpreadsheet, CircleX, ClipboardList, MonitorPlay
+  RefreshCw, FileSpreadsheet, CircleX, ClipboardList, MonitorPlay,
+  Zap, Sparkles, ShieldCheck, Layers, Cpu, CheckCircle2, ChevronRight,
+  FileCode2, UserCheck, Sliders, Smartphone, Check
 } from 'lucide-react';
 import TimelineContainer from './components/TimelineContainer';
 import FaqAccordion from './components/FaqAccordion';
 
-export const metadata = {
-  title: "IDexo — ID Card Production Software for Printing Presses",
-  description: "Automate your entire ID card workflow from client data collection to print-ready PDF. Stop manually renaming photos or copy-pasting into CorelDRAW."
-};
-
 export default function LandingPage() {
+  const [activeTab, setActiveTab] = useState<'intake' | 'designer' | 'grid' | 'billing'>('intake');
+
   return (
-    <div className="saas-root">
+    <div className="idexo-landing-root">
       <style dangerouslySetInnerHTML={{ __html: `
-        .saas-root {
-          background-color: #102650;
-          color: #f3f4f6;
+        :root {
+          --bg-dark: #070d1e;
+          --bg-card: rgba(15, 23, 42, 0.7);
+          --border-glass: rgba(255, 255, 255, 0.08);
+          --border-glow: rgba(99, 102, 241, 0.35);
+          --accent-indigo: #6366f1;
+          --accent-cyan: #06b6d4;
+          --accent-emerald: #10b981;
+          --text-muted: #94a3b8;
+        }
+
+        .idexo-landing-root {
+          background-color: var(--bg-dark);
+          color: #f8fafc;
           min-height: 100vh;
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
           overflow-x: hidden;
           position: relative;
         }
 
-        .hero-section {
-          padding: 120px 24px 80px 24px;
-        }
-
-        /* Tech Grid Background */
-        .saas-grid {
+        /* Hero Background Effects */
+        .tech-grid-bg {
           position: absolute;
           inset: 0;
           background-image: 
-            linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-          background-size: 40px 40px;
-          mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 70%, transparent 100%);
-          -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 70%, transparent 100%);
+            linear-gradient(to right, rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+          background-size: 48px 48px;
+          mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 70%, transparent 100%);
+          -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 70%, transparent 100%);
           z-index: 1;
           pointer-events: none;
         }
 
-        /* Ambient Glow Blobs */
-        .blob-primary {
-          position: absolute;
-          width: 600px;
-          height: 600px;
-          background: radial-gradient(circle, rgba(255, 255, 255, 0.02) 0%, rgba(16, 38, 80, 0) 70%);
-          top: -150px;
-          left: 5%;
-          z-index: 1;
-          pointer-events: none;
-          animation: float-slow 15s infinite ease-in-out alternate;
-        }
-
-        .blob-secondary {
+        .ambient-glow-1 {
           position: absolute;
           width: 700px;
           height: 700px;
-          background: radial-gradient(circle, rgba(255, 255, 255, 0.015) 0%, rgba(16, 38, 80, 0) 75%);
-          top: 25%;
-          right: 5%;
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, rgba(7, 13, 30, 0) 70%);
+          top: -200px;
+          left: 50%;
+          transform: translateX(-50%);
           z-index: 1;
           pointer-events: none;
-          animation: float-slow 18s infinite ease-in-out alternate-reverse;
+          filter: blur(60px);
         }
 
-        @keyframes float-slow {
-          0% { transform: translateY(0px) scale(1); }
-          50% { transform: translateY(-20px) scale(1.02); }
-          100% { transform: translateY(0px) scale(1); }
+        .ambient-glow-2 {
+          position: absolute;
+          width: 600px;
+          height: 600px;
+          background: radial-gradient(circle, rgba(6, 182, 212, 0.12) 0%, rgba(7, 13, 30, 0) 70%);
+          top: 35%;
+          right: -100px;
+          z-index: 1;
+          pointer-events: none;
+          filter: blur(80px);
         }
 
-        /* Typography & Layout Constraints */
-        .saas-display {
-          font-size: clamp(2.2rem, 5vw, 3.8rem);
-          font-weight: 800;
-          line-height: 1.15;
-          letter-spacing: -0.03em;
-          color: #ffffff;
-        }
-        .saas-display span {
-          color: #ffffff;
-          border-bottom: 3px solid rgba(255, 255, 255, 0.3);
-        }
-
-        .saas-headline-lg {
-          font-size: clamp(1.8rem, 3.5vw, 2.6rem);
-          font-weight: 700;
-          line-height: 1.2;
-          letter-spacing: -0.02em;
-          color: #ffffff;
-        }
-
-        .saas-headline-md {
-          font-size: 20px;
-          font-weight: 600;
-          line-height: 1.35;
-          color: #ffffff;
-          letter-spacing: -0.015em;
-        }
-
-        .saas-body-lg {
-          font-size: 19px;
-          font-weight: 400;
-          line-height: 1.65;
-          color: #cbd5e1;
-        }
-
-        .saas-body-md {
-          font-size: 15px;
-          font-weight: 400;
-          line-height: 1.6;
-          color: #9ca3af;
-        }
-
-        /* Fixed Navigation Header */
-        .saas-header {
+        /* Navigation Header */
+        .idexo-header {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
           z-index: 100;
-          background: rgba(16, 38, 80, 0.85);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-          transition: all 0.3s ease;
+          background: rgba(7, 13, 30, 0.8);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid var(--border-glass);
           height: 76px;
         }
 
-        .saas-header-inner {
-          max-width: 1200px;
+        .idexo-header-inner {
+          max-width: 1240px;
           margin: 0 auto;
           padding: 0 24px;
           display: flex;
@@ -143,406 +101,234 @@ export default function LandingPage() {
           height: 100%;
         }
 
-        .saas-nav {
-          display: flex;
-          align-items: center;
-          gap: 32px;
-        }
-
-        .saas-nav-link {
-          color: #9ca3af;
+        .nav-link {
+          color: var(--text-muted);
           text-decoration: none;
           font-weight: 500;
           font-size: 0.95rem;
           transition: all 0.2s ease;
         }
-        .saas-nav-link:hover {
+        .nav-link:hover {
           color: #ffffff;
         }
 
-        /* Glassmorphic Cards & Layout Grids */
-        .glass-card {
-          background: rgba(255, 255, 255, 0.02);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
+        /* Typography & Headings */
+        .gradient-text {
+          background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #818cf8 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .display-hero {
+          font-size: clamp(2.4rem, 5.5vw, 4.2rem);
+          font-weight: 800;
+          line-height: 1.1;
+          letter-spacing: -0.03em;
+        }
+
+        .headline-section {
+          font-size: clamp(1.8rem, 3.8vw, 2.8rem);
+          font-weight: 800;
+          line-height: 1.15;
+          letter-spacing: -0.025em;
+        }
+
+        /* Glassmorphism Components */
+        .glass-panel {
+          background: var(--bg-card);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid var(--border-glass);
+          border-radius: 20px;
           padding: 32px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
           transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         }
-        .glass-card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(255, 255, 255, 0.2);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        .glass-panel:hover {
+          border-color: rgba(99, 102, 241, 0.3);
+          box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 30px rgba(99, 102, 241, 0.1);
         }
 
-        /* Action Buttons */
-        .glow-btn-primary {
-          background: #ffffff;
-          color: #102650;
-          border-radius: 8px;
-          border: 1px solid #ffffff;
-          font-weight: 600;
-          box-shadow: 0 4px 20px rgba(255, 255, 255, 0.1);
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
-        }
-        .glow-btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 30px rgba(255, 255, 255, 0.2);
-          background: rgba(255, 255, 255, 0.9);
-        }
-
-        .glow-btn-secondary {
-          background: rgba(255, 255, 255, 0.03);
-          color: #ffffff;
-          border-radius: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          font-weight: 500;
-          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          cursor: pointer;
-        }
-        .glow-btn-secondary:hover {
-          background: rgba(255, 255, 255, 0.08);
-          border-color: rgba(255, 255, 255, 0.3);
-          transform: translateY(-2px);
-        }
-
-        .neon-tag {
-          align-self: flex-start;
+        /* Badges */
+        .hero-badge {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 6px 14px;
-          background: rgba(255, 255, 255, 0.04);
-          border: 1px solid rgba(255, 255, 255, 0.15);
+          padding: 6px 16px;
+          background: rgba(99, 102, 241, 0.1);
+          border: 1px solid rgba(99, 102, 241, 0.3);
           border-radius: 99px;
-          color: #ffffff;
-          font-size: 0.8rem;
+          color: #a5b4fc;
+          font-size: 0.825rem;
           font-weight: 600;
           letter-spacing: 0.05em;
           text-transform: uppercase;
         }
 
-        .neon-tag-red {
-          color: #f87171;
-          border-color: rgba(248, 113, 113, 0.3);
-          background: rgba(248, 113, 113, 0.05);
-        }
-
-        .neon-tag-green {
-          color: #34d399;
-          border-color: rgba(52, 211, 153, 0.3);
-          background: rgba(52, 211, 153, 0.05);
-        }
-
-        /* Demo Video Play Button hover */
-        .group:hover .play-btn {
-          transform: scale(1.1) !important;
-          box-shadow: 0 0 50px rgba(255,255,255,0.5) !important;
-          background: #ffffff !important;
-        }
-
-        .group:hover img {
-          transform: scale(1.03);
-        }
-
-        /* Tech Separators */
-        .tech-line {
-          height: 1px;
-          background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.08) 20%, rgba(255, 255, 255, 0.08) 80%, transparent);
-        }
-
-        .feature-icon-box {
-          background: rgba(255, 255, 255, 0.03);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          width: 52px;
-          height: 52px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        /* Buttons */
+        .btn-primary {
+          background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
           color: #ffffff;
-          margin-bottom: 24px;
-        }
-
-        /* Custom Section Layouts */
-        .hero-grid {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          gap: 64px;
+          border-radius: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          font-weight: 600;
+          padding: 14px 28px;
+          font-size: 0.975rem;
+          box-shadow: 0 10px 25px rgba(79, 70, 229, 0.4);
+          transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          cursor: pointer;
+          display: inline-flex;
           align-items: center;
+          gap: 10px;
+          text-decoration: none;
+        }
+        .btn-primary:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 15px 35px rgba(79, 70, 229, 0.5), 0 0 20px rgba(99, 102, 241, 0.4);
+          background: linear-gradient(135deg, #818cf8 0%, #6366f1 100%);
         }
 
-        .problem-grid {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 64px;
-          align-items: flex-start;
-        }
-
-        .feature-showcase-grid {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 80px;
+        .btn-secondary {
+          background: rgba(255, 255, 255, 0.04);
+          color: #f8fafc;
+          border-radius: 12px;
+          border: 1px solid var(--border-glass);
+          font-weight: 500;
+          padding: 14px 26px;
+          font-size: 0.975rem;
+          transition: all 0.3s ease;
+          cursor: pointer;
+          display: inline-flex;
           align-items: center;
-          padding: 80px 0;
+          gap: 10px;
+          text-decoration: none;
+        }
+        .btn-secondary:hover {
+          background: rgba(255, 255, 255, 0.08);
+          border-color: rgba(255, 255, 255, 0.2);
+          transform: translateY(-2px);
         }
 
-        .feature-showcase-grid.reverse {
-          direction: rtl;
-        }
-        .feature-showcase-grid.reverse > * {
-          direction: ltr;
-        }
-
-        .roi-numbers-grid {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 32px;
-          margin-bottom: 64px;
-        }
-
-        .roi-comparison-grid {
-          max-width: 1000px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 32px;
-        }
-
-        .testimonials-grid {
-          max-width: 1200px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 32px;
-        }
-
-        .download-grid {
-          max-width: 1000px;
-          margin: 0 auto;
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 24px;
-          margin-bottom: 48px;
-        }
-
-        /* Mockup Image Container Styling */
-        .mockup-image-frame {
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        /* Mockup Frame */
+        .hero-mockup-frame {
+          border-radius: 20px;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 40px rgba(99, 102, 241, 0.15);
           width: 100%;
           height: auto;
           display: block;
         }
 
-        /* Comparison Lists */
-        .compare-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
+        /* Tech Separator Line */
+        .divider-line {
+          height: 1px;
+          background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.08) 20%, rgba(255, 255, 255, 0.08) 80%, transparent);
         }
 
-        .compare-item {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          font-size: 0.95rem;
-          line-height: 1.5;
-        }
-
-        /* OS Download cards */
-        .os-card {
-          background: rgba(255, 255, 255, 0.02);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          border-radius: 16px;
-          padding: 32px 24px;
-          text-align: center;
-          transition: all 0.3s ease;
-        }
-
-        .os-card:hover {
-          border-color: rgba(255, 255, 255, 0.2);
-          transform: translateY(-4px);
-        }
-
-        .os-icon-wrapper {
-          margin-bottom: 16px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          color: #ffffff;
-        }
-
-        .os-download-btn {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          width: 100%;
-          background: #ffffff;
-          color: #102650;
-          border: none;
-          border-radius: 6px;
-          padding: 12px 20px;
+        /* Feature Tab Button */
+        .tab-btn {
+          padding: 14px 24px;
+          border-radius: 12px;
           font-weight: 600;
-          font-size: 0.9rem;
-          text-align: center;
+          font-size: 0.95rem;
           cursor: pointer;
-          transition: background 0.2s;
-          text-decoration: none;
+          transition: all 0.25s ease;
+          border: 1px solid transparent;
+          background: transparent;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          gap: 10px;
         }
-        .os-download-btn:hover {
-          background: rgba(255, 255, 255, 0.9);
+        .tab-btn.active {
+          background: rgba(99, 102, 241, 0.15);
+          border-color: rgba(99, 102, 241, 0.4);
+          color: #ffffff;
+          box-shadow: 0 4px 20px rgba(99, 102, 241, 0.2);
         }
 
-        /* Download Steps Row */
-        .download-steps-row {
+        /* Responsive Grids */
+        .hero-layout {
+          max-width: 1240px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: 1.15fr 0.85fr;
+          gap: 60px;
+          align-items: center;
+          padding: 130px 24px 80px 24px;
+        }
+
+        .stats-grid {
+          max-width: 1240px;
+          margin: 0 auto;
           display: grid;
           grid-template-columns: repeat(4, 1fr);
-          gap: 20px;
+          gap: 24px;
         }
 
-        .download-step-card {
-          text-align: center;
+        .features-grid {
+          max-width: 1240px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 32px;
         }
 
-        .step-number {
-          width: 36px;
-          height: 36px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-          color: #ffffff;
-          margin: 0 auto 16px auto;
-          font-size: 0.95rem;
+        .vs-comparison-grid {
+          max-width: 1080px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 32px;
         }
 
-        /* Mobile Bottom Sticky Bar */
-        .mobile-bottom-bar {
-          position: fixed;
-          bottom: 0;
-          left: 0;
-          right: 0;
-          z-index: 999;
-          background: rgba(16, 38, 80, 0.95);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border-top: 1px solid rgba(255, 255, 255, 0.1);
-          padding: 12px 20px;
-          display: none;
-          justify-content: space-between;
-          align-items: center;
-          gap: 16px;
-          box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.4);
+        .os-downloads-grid {
+          max-width: 1100px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 28px;
         }
 
-        /* Responsive Breakpoints */
-        @media (max-width: 992px) {
-          .hero-section {
-            padding: 4px 16px 40px 16px !important;
-          }
-          .hero-grid {
+        @media (max-width: 1024px) {
+          .hero-layout {
             grid-template-columns: 1fr;
-            gap: 48px;
             text-align: center;
+            padding-top: 100px;
           }
-          .hero-grid > div {
+          .hero-layout > div {
             align-items: center;
             justify-content: center;
           }
-          .problem-grid {
-            grid-template-columns: 1fr;
-            gap: 40px;
+          .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
           }
-          .feature-showcase-grid {
-            grid-template-columns: 1fr;
-            gap: 48px;
-            padding: 40px 0;
-          }
-          .feature-showcase-grid.reverse {
-            direction: ltr;
-          }
-          .roi-numbers-grid {
-            grid-template-columns: 1fr;
-            gap: 24px;
-          }
-          .roi-comparison-grid {
-            grid-template-columns: 1fr;
-            gap: 24px;
-          }
-          .testimonials-grid {
+          .features-grid {
             grid-template-columns: 1fr;
           }
-          .download-grid {
+          .vs-comparison-grid {
             grid-template-columns: 1fr;
-            max-width: 400px;
           }
-          .download-steps-row {
+          .os-downloads-grid {
             grid-template-columns: 1fr;
-            gap: 24px;
-          }
-          
-          .saas-header {
-            height: auto !important;
-            padding: 6px 0 !important;
-            position: relative !important;
-          }
-          .saas-header-inner {
-            flex-direction: column;
-            gap: 6px !important;
-            padding: 0 16px;
-          }
-          .saas-nav {
-            gap: 16px;
-            flex-wrap: wrap;
-            justify-content: center;
-          }
-
-          /* Show Sticky Footer on Mobile */
-          .mobile-bottom-bar {
-            display: flex;
-          }
-          
-          /* Extra bottom padding to avoid overlapping the sticky footer */
-          footer {
-            padding-bottom: 120px !important;
           }
         }
       `}} />
 
-      <div className="saas-grid" />
-      <div className="blob-primary" />
-      <div className="blob-secondary" />
+      <div className="tech-grid-bg" />
+      <div className="ambient-glow-1" />
+      <div className="ambient-glow-2" />
 
       {/* Navigation Header */}
-      <header className="saas-header">
-        <div className="saas-header-inner">
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
+      <header className="idexo-header">
+        <div className="idexo-header-inner">
+          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none' }}>
             <div style={{
-              width: '38px',
-              height: '38px',
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '10px',
+              width: '40px',
+              height: '40px',
+              background: 'rgba(99, 102, 241, 0.15)',
+              border: '1px solid rgba(99, 102, 241, 0.35)',
+              borderRadius: '12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -559,545 +345,346 @@ export default function LandingPage() {
                 }}
               />
             </div>
-            <span style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.75px', color: '#ffffff' }}>
-              IDexo
+            <span style={{ fontSize: '1.4rem', fontWeight: '800', letterSpacing: '-0.5px', color: '#ffffff' }}>
+              IDexo<span style={{ color: '#818cf8', fontSize: '0.8rem', marginLeft: '4px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '700' }}>PRESS</span>
             </span>
           </Link>
 
-          <nav className="saas-nav">
-            <a href="#howitworks" className="saas-nav-link">How It Works</a>
-            <a href="#features" className="saas-nav-link">Features</a>
-            <a href="#faq" className="saas-nav-link">FAQ</a>
-            <a
-              href="#download"
-              className="glow-btn-primary"
-              style={{ padding: '8px 16px', fontSize: '0.85rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-            >
-              <Download size={14} /> Download Free
+          <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+            <a href="#features" className="nav-link">Features</a>
+            <a href="#comparison" className="nav-link">Why IDexo</a>
+            <a href="#pipeline" className="nav-link">Workflow</a>
+            <a href="#faq" className="nav-link">FAQ</a>
+            <a href="#download" className="btn-primary" style={{ padding: '8px 18px', fontSize: '0.875rem' }}>
+              <Download size={15} /> Download Desktop App
             </a>
           </nav>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="hero-section" style={{ position: 'relative', zIndex: 10 }}>
-        <div className="hero-grid">
+      <section className="hero-layout" style={{ position: 'relative', zIndex: 10 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', alignItems: 'flex-start' }}>
           
-          {/* Left Column: Copy */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <MonitorPlay size={14} /> ID Card Automation Console
-            </div>
-
-            <h1 className="saas-display">
-              Stop Building <span>ID Cards</span> One by One
-            </h1>
-
-            <p className="saas-body-lg">
-              IDexo automates your entire ID card workflow — from client data collection to print-ready PDF — right from your desktop. A 500-card job that used to take two days now takes a morning.
-            </p>
-
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
-              <a
-                href="#download"
-                className="glow-btn-primary"
-                style={{ padding: '16px 32px', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
-              >
-                Download IDexo Free <Download size={16} />
-              </a>
-              <a
-                href="/samples/production_sample.pdf"
-                download="production_sample.pdf"
-                className="glow-btn-secondary"
-                style={{ padding: '16px 28px', fontSize: '1rem', display: 'inline-flex', alignItems: 'center', gap: '8px', textDecoration: 'none' }}
-              >
-                Get Imposed PDF Sample <ArrowRight size={16} />
-              </a>
-            </div>
-
-            <div style={{ display: 'flex', gap: '20px', color: '#9ca3af', fontSize: '0.85rem', flexWrap: 'wrap', marginTop: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <CircleCheckBig size={14} style={{ color: '#34d399' }} />
-                <span>Free to download</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <CircleCheckBig size={14} style={{ color: '#34d399' }} />
-                <span>Automate customer data intake</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <CircleCheckBig size={14} style={{ color: '#34d399' }} />
-                <span>Zero server timeout PDF compiles</span>
-              </div>
-            </div>
+          <div className="hero-badge">
+            <Zap size={14} className="text-indigo-400" />
+            <span>Next-Gen ID Card Production Engine</span>
           </div>
 
-          {/* Right Column: Visual Mockup */}
-          <div>
-            <img
-              src="/hero_dashboard.png"
-              alt="IDexo ID Card Production Dashboard"
-              className="mockup-image-frame"
-            />
+          <h1 className="display-hero">
+            The Complete <span className="gradient-text">Operating System</span> for ID Card Printing Presses
+          </h1>
+
+          <p style={{ fontSize: '1.15rem', color: '#cbd5e1', lineHeight: '1.7', maxWidth: '640px' }}>
+            Eliminate manual CorelDRAW copying, WhatsApp photo chasing, and Excel typos. Intake student rosters directly from clients, auto-synthesize cards, and compile 100% vector print-ready A3/A4 PDFs in seconds.
+          </p>
+
+          <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '4px' }}>
+            <a href="#download" className="btn-primary">
+              <Download size={18} /> Download Free for Desktop
+            </a>
+            <a href="/samples/production_sample.pdf" download="production_sample.pdf" className="btn-secondary">
+              <FileCode2 size={18} /> Get Imposed PDF Sample
+            </a>
           </div>
 
+          <div style={{ display: 'flex', gap: '24px', color: '#94a3b8', fontSize: '0.875rem', flexWrap: 'wrap', marginTop: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={16} style={{ color: '#10b981' }} />
+              <span>Native macOS, Windows & Linux</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={16} style={{ color: '#10b981' }} />
+              <span>Zero-Timeout Local PDF Compiler</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ShieldCheck size={16} style={{ color: '#10b981' }} />
+              <span>Tokenized Client Intake Link</span>
+            </div>
+          </div>
         </div>
-      </section>
 
-      <div className="tech-line" />
-
-      {/* Used By Client Strip */}
-      <section style={{ padding: '40px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Used by presses serving —
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '32px', flexWrap: 'wrap' }}>
-            {['Schools', 'Colleges', 'Corporates', 'Hospitals', 'Events', 'Government'].map((client, idx) => (
-              <span key={idx} style={{
-                fontSize: '0.9rem',
-                fontWeight: '700',
-                letterSpacing: '-0.3px',
-                color: '#64748b',
-                textTransform: 'uppercase'
-              }}>
-                {client}
-              </span>
-            ))}
+        <div style={{ position: 'relative' }}>
+          <img
+            src="/hero_dashboard.png"
+            alt="IDexo Printing Press Console Dashboard"
+            className="hero-mockup-frame"
+          />
+          <div style={{
+            position: 'absolute',
+            bottom: '-20px',
+            left: '-20px',
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(99, 102, 241, 0.4)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: '14px',
+            padding: '14px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)'
+          }}>
+            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
+            <div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Production Status</div>
+              <div style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>500 Cards Compiled (3.2s)</div>
+            </div>
           </div>
         </div>
       </section>
 
-      <div className="tech-line" />
+      <div className="divider-line" />
 
-      {/* How It Works Section */}
-      <section id="howitworks" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          
-          <div style={{ textAlign: 'center', maxWidth: '750px', margin: '0 auto 80px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="neon-tag" style={{ alignSelf: 'center' }}>The Workflow</div>
-            <h2 className="saas-headline-lg">
-              From client data to print-ready PDF — without the manual work
-            </h2>
-            <p className="saas-body-md">
-              IDexo replaces the entire WhatsApp-Excel-CorelDRAW chain with one desktop app. Here's how a job moves through the system.
-            </p>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '32px' }}>
-            
-            <div className="glass-card" style={{ padding: '24px' }}>
-              <div className="feature-icon-box" style={{ width: '40px', height: '40px', marginBottom: '16px' }}>
-                <ClipboardList size={20} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                1. Share Form Link
-              </h3>
-              <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                Send your client a secure link. Their employees fill in their own details and upload photos.
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ padding: '24px' }}>
-              <div className="feature-icon-box" style={{ width: '40px', height: '40px', marginBottom: '16px' }}>
-                <Settings size={20} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                2. Cards Auto-Generate
-              </h3>
-              <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                IDexo pulls the data into your template and generates every card instantly.
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ padding: '24px' }}>
-              <div className="feature-icon-box" style={{ width: '40px', height: '40px', marginBottom: '16px' }}>
-                <LayoutGrid size={20} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                3. Production Grid Ready
-              </h3>
-              <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                Cards are auto-arranged on print sheets with correct spacing and crop marks.
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ padding: '24px' }}>
-              <div className="feature-icon-box" style={{ width: '40px', height: '40px', marginBottom: '16px' }}>
-                <Printer size={20} />
-              </div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: '700', color: '#ffffff', marginBottom: '8px' }}>
-                4. Export PDF & Print
-              </h3>
-              <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                Generate your print-ready PDF in seconds directly from the application.
-              </p>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
-      {/* Problem / Pain Section */}
-      <section id="problem" style={{ padding: '100px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
-        <div className="problem-grid">
-          
-          {/* Left Column: Pain Points */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag neon-tag-red">The Current Reality</div>
-            <h2 className="saas-headline-lg">
-              Your ID card workflow is costing you more than you think
-            </h2>
-            <p className="saas-body-lg" style={{ fontSize: '17px', color: '#cbd5e1' }}>
-              Ask any printing press owner how they handle ID card jobs, and the answer is almost always the same. A lot of WhatsApp messages, a lot of Excel gymnastics, and a lot of late nights trying to match photos to names before the client calls again.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '12px' }}>
-              
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ color: '#ffffff', marginTop: '2px' }}>
-                  <MessageSquare size={20} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-                    Photos arrive on WhatsApp, one by one
-                  </h4>
-                  <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                    You spend hours downloading, renaming, and sorting photos before you can open any design tool. One missing photo and the whole job stalls.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ color: '#ffffff', marginTop: '2px' }}>
-                  <FileSpreadsheet size={20} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-                    Excel sheets full of errors you didn't make
-                  </h4>
-                  <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                    Name misspellings. Missing employee IDs. Departments that don't match. You catch the mistakes halfway through production.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ color: '#ffffff', marginTop: '2px' }}>
-                  <RefreshCw size={20} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-                    Copy-paste from Excel into CorelDRAW — for every single card
-                  </h4>
-                  <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                    500 employee IDs means 500 manual copy-pastes. One typo and you're reprinting at your own cost.
-                  </p>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-                <div style={{ color: '#ffffff', marginTop: '2px' }}>
-                  <Activity size={20} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.95rem', marginBottom: '4px' }}>
-                    A 2-hour job turns into a 2-day job
-                  </h4>
-                  <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-                    Between chasing data, fixing errors, arranging cards for print, and generating PDFs — a 200-card job eats your entire week.
-                  </p>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Right Column: Visual Mockup */}
-          <div>
-            <img
-              src="/problem_chaos.png"
-              alt="Data and Production Chaos Visual Representation"
-              className="mockup-image-frame"
-            />
-          </div>
-
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
-      {/* Feature 01 — Let your clients do the data entry */}
-      <section id="features" style={{ padding: '60px 24px', position: 'relative', zIndex: 10 }}>
-        <div className="feature-showcase-grid">
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag">Feature 01 — Data Collection</div>
-            <h2 className="saas-headline-lg">
-              Let your clients do the data entry. You just print.
-            </h2>
-            <p className="saas-body-lg" style={{ fontSize: '16px' }}>
-              Instead of chasing photos over WhatsApp and cleaning up broken Excel files, you send your client a secure form link from inside IDexo. Their employees or students fill it themselves — name, department, ID number, and photo upload. Everything lands in your dashboard, clean and organized.
-            </p>
-
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>No more hunting for missing photos two days before the deadline</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Photos upload directly — no renaming, no folder sorting</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>See real-time submission progress — know exactly how complete the job is</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Works on any phone browser. No app download needed for your clients.</span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <img
-              src="/feature_data_collection.png"
-              alt="Client Intake Form and Data Collection Portal"
-              className="mockup-image-frame"
-            />
-          </div>
-
-        </div>
-      </section>
-
-      {/* Feature 02 — Design the card once */}
+      {/* Metrics / Stats Strip */}
       <section style={{ padding: '60px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
-        <div className="feature-showcase-grid reverse">
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag">Feature 02 — Template Automation</div>
-            <h2 className="saas-headline-lg">
-              Design the card once. Generate 500 in seconds.
-            </h2>
-            <p className="saas-body-lg" style={{ fontSize: '16px' }}>
-              Build your client's ID card template inside IDexo — set the layout, colors, logo, and field positions. After that, you never touch the design again. Every name, photo, QR code, barcode, and department fills in automatically for every person in the batch.
-            </p>
+        <div className="stats-grid">
+          <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#818cf8', lineHeight: 1.1 }}>10x</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Faster Batch PDF Rendering</div>
+          </div>
+          <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#34d399', lineHeight: 1.1 }}>0%</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Human Copy-Paste Errors</div>
+          </div>
+          <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#38bdf8', lineHeight: 1.1 }}>100%</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>CMYK Vector Print Quality</div>
+          </div>
+          <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
+            <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#c084fc', lineHeight: 1.1 }}>A3 / A4</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Automated Duplex Imposition</div>
+          </div>
+        </div>
+      </section>
 
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Auto-fill names, photos, employee IDs, departments, barcodes, and QR codes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Reuse templates across jobs — same client, new batch, done in minutes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Front and back card design supported</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>No CorelDRAW. No Photoshop. No copy-paste. Ever again.</span>
-              </li>
-            </ul>
+      <div className="divider-line" />
+
+      {/* Interactive Feature Tabs Section */}
+      <section id="features" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
+          
+          <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 60px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="hero-badge" style={{ alignSelf: 'center' }}>Built for Modern Print Operations</div>
+            <h2 className="headline-section">Everything You Need to Streamline Your Press</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
+              Four core pillars designed to eliminate print shop friction, compress delivery cycles, and boost profit margins per job.
+            </p>
           </div>
 
-          <div>
-            <img
-              src="/feature_template_designer.png"
-              alt="Template Designer Canvas"
-              className="mockup-image-frame"
-            />
+          {/* Tab Selector */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '48px' }}>
+            <button className={`tab-btn ${activeTab === 'intake' ? 'active' : ''}`} onClick={() => setActiveTab('intake')}>
+              <Smartphone size={18} /> 1. Tokenized Client Intake
+            </button>
+            <button className={`tab-btn ${activeTab === 'designer' ? 'active' : ''}`} onClick={() => setActiveTab('designer')}>
+              <Sliders size={18} /> 2. Template Coordinate Designer
+            </button>
+            <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
+              <LayoutGrid size={18} /> 3. Duplex Imposition Grid
+            </button>
+            <button className={`tab-btn ${activeTab === 'billing' ? 'active' : ''}`} onClick={() => setActiveTab('billing')}>
+              <ClipboardList size={18} /> 4. Automated GST Invoicing
+            </button>
+          </div>
+
+          {/* Active Tab Showcase Content */}
+          <div className="glass-panel" style={{ padding: '48px' }}>
+            {activeTab === 'intake' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="hero-badge">Self-Serve Data Intake</div>
+                  <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
+                    Let Your Clients Input Roster Details & Photos Directly
+                  </h3>
+                  <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
+                    Generate a tokenized form link for schools, colleges, or corporate HR. Employees and students fill their details and crop their headshots on any smartphone or browser.
+                  </p>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> No more hunting for missing WhatsApp photos
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> ISO standard face cropping guide directly in browser
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Departmental sub-link distribution for class teachers
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <img src="/feature_data_collection.png" alt="Client Intake Portal" className="hero-mockup-frame" />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'designer' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="hero-badge">Single-Click Template Engine</div>
+                  <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
+                    Design Your Card Canvas Once. Synthesize 500 Cards Instantly.
+                  </h3>
+                  <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
+                    Position exact field coordinates for photos, employee names, dynamic date fields, barcodes, and QR codes. Once configured, every card in the job compiles automatically.
+                  </p>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Native support for dates (DOB, DOJ, Valid Till) with formats
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Automatic font weight and custom web font mapping
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Reusable templates across multiple batches and clients
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <img src="/feature_template_designer.png" alt="Template Coordinate Canvas" className="hero-mockup-frame" />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'grid' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="hero-badge">Automated Imposition Grid</div>
+                  <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
+                    Print-Ready Sheet Placement with Mirrored Backs & Crop Marks
+                  </h3>
+                  <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
+                    Stop spending 2 hours arranging cards in CorelDRAW. IDexo calculates sheet margins, gutters, bleed guidelines, and perfectly aligns front and back sides for duplex printing.
+                  </p>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Supports A3, A4, and custom PVC sheet dimensions
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Automatic corner registration marks & cutting lines
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Zero server timeouts — rendering completes locally
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <img src="/feature_production_grid.png" alt="Duplex Imposition Grid" className="hero-mockup-frame" />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'billing' && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                  <div className="hero-badge">Commercial Bookkeeping</div>
+                  <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
+                    Auto-Calculate Card Yields & Generate GST Invoices
+                  </h3>
+                  <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
+                    Keep your business accounting effortless. As soon as a print job compiles, IDexo calculates total card yields, unit costs, tax rates, and generates a downloadable PDF invoice for your client.
+                  </p>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Automated tax parameters (GST 18%) & custom currency
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> Payment tracking status (UNPAID, PARTIAL, PAID)
+                    </li>
+                    <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
+                      <CheckCircle2 size={16} color="#10b981" /> One-click client export & job history record
+                    </li>
+                  </ul>
+                </div>
+                <div>
+                  <img src="/feature_press_console.png" alt="GST Billing & Invoicing Console" className="hero-mockup-frame" />
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
       </section>
 
-      {/* Feature 03 — Print-ready sheets, automatically arranged */}
-      <section style={{ padding: '60px 24px', position: 'relative', zIndex: 10 }}>
-        <div className="feature-showcase-grid">
+      <div className="divider-line" />
+
+      {/* Before vs After ROI Comparison */}
+      <section id="comparison" style={{ padding: '100px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag">Feature 03 — Production Grid</div>
-            <h2 className="saas-headline-lg">
-              Print-ready sheets, automatically arranged. Zero manual layout.
-            </h2>
-            <p className="saas-body-lg" style={{ fontSize: '16px' }}>
-              Every card is placed on the production sheet automatically — perfectly spaced, properly aligned, with crop marks exactly where they need to be. What used to take an hour of arrangement in CorelDRAW is done before you finish your tea.
-            </p>
-
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Cards auto-arrange to fit A3, A4, or custom sheet sizes</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Set bleed, margin, and card spacing once — applied to every job</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>No manual positioning. No alignment headaches.</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Works for 50 cards or 5,000 — same effort either way</span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <img
-              src="/feature_production_grid.png"
-              alt="Auto arranged Production Sheet Grid"
-              className="mockup-image-frame"
-            />
-          </div>
-
-        </div>
-      </section>
-
-      {/* Feature 04 — Every job. Every client. One app. */}
-      <section style={{ padding: '60px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
-        <div className="feature-showcase-grid reverse">
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="neon-tag">Feature 04 — Bulk PDF & Multi-Client</div>
-            <h2 className="saas-headline-lg">
-              Every job. Every client. One app.
-            </h2>
-            <p className="saas-body-lg" style={{ fontSize: '16px' }}>
-              Generate production-ready PDFs for an entire job in one click — directly from your desktop. Manage school batches, corporate jobs, and event credentials from a single dashboard without switching between folders, files, or tools.
-            </p>
-
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Bulk PDF generation — entire batch in seconds, not hours</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Duplex back-to-back alignment templates fully integrated</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Manage schools, colleges, companies, hospitals, and events under one roof</span>
-              </li>
-              <li style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', color: '#cbd5e1' }}>
-                <CircleCheckBig size={16} style={{ color: '#ffffff' }} />
-                <span>Fewer mistakes. Fewer reprints. Lower cost per job.</span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <img
-              src="/feature_press_console.png"
-              alt="Press Console Dashboard Interface"
-              className="mockup-image-frame"
-            />
-          </div>
-
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
-      {/* ROI Section */}
-      <section id="roi" style={{ padding: '100px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          
-          <div style={{ textAlign: 'center', maxWidth: '750px', margin: '0 auto 80px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="neon-tag" style={{ alignSelf: 'center' }}>The Numbers</div>
-            <h2 className="saas-headline-lg">
-              What you get back when the manual work disappears
-            </h2>
-            <p className="saas-body-md">
-              Most printing presses don't realize how much time the manual workflow is burning — not just in production hours, but in reprints, delayed deliveries, and jobs you had to turn down because capacity was full.
+          <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 64px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="hero-badge" style={{ alignSelf: 'center', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171', background: 'rgba(239, 68, 68, 0.1)' }}>
+              Operational ROI
+            </div>
+            <h2 className="headline-section">Legacy Manual Chaos vs. IDexo Automation</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
+              Compare how traditional print shops operate compared to presses powered by the IDexo engine.
             </p>
           </div>
 
-          <div className="roi-numbers-grid">
-            <div className="glass-card" style={{ textAlign: 'center', padding: '32px 24px' }}>
-              <div style={{ fontSize: '3.5rem', fontWeight: '800', color: '#ffffff', lineHeight: 1.1, marginBottom: '12px' }}>80%</div>
-              <p className="saas-body-md" style={{ color: '#cbd5e1' }}>
-                Reduction in production time per ID card job, from data collection to PDF export
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ textAlign: 'center', padding: '32px 24px' }}>
-              <div style={{ fontSize: '3.5rem', fontWeight: '800', color: '#ffffff', lineHeight: 1.1, marginBottom: '12px' }}>0</div>
-              <p className="saas-body-md" style={{ color: '#cbd5e1' }}>
-                Copy-paste errors. Cards generate directly from submitted data — no human in the middle
-              </p>
-            </div>
-
-            <div className="glass-card" style={{ textAlign: 'center', padding: '32px 24px' }}>
-              <div style={{ fontSize: '3.5rem', fontWeight: '800', color: '#ffffff', lineHeight: 1.1, marginBottom: '12px' }}>3×</div>
-              <p className="saas-body-md" style={{ color: '#cbd5e1' }}>
-                More ID card jobs you can take on with the same team, same machine, same working hours
-              </p>
-            </div>
-          </div>
-
-          <div className="roi-comparison-grid">
+          <div className="vs-comparison-grid">
             
-            <div className="glass-card" style={{ borderLeft: '4px solid #ef4444' }}>
-              <h3 className="saas-headline-md" style={{ color: '#ef4444', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CircleX size={20} /> Without IDexo
-              </h3>
-              <ul className="compare-list">
-                <li className="compare-item">
-                  <span style={{ color: '#ef4444' }}>•</span>
-                  <span style={{ color: '#cbd5e1' }}>2–3 days chasing photos and data over WhatsApp and email</span>
+            {/* Legacy Column */}
+            <div className="glass-panel" style={{ borderColor: 'rgba(239, 68, 68, 0.2)', borderLeft: '4px solid #ef4444' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
+                  <CircleX size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f87171' }}>Legacy Manual Workflow</h3>
+              </div>
+
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
+                  <span>Days spent downloading and renaming individual student photos from WhatsApp chats.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#ef4444' }}>•</span>
-                  <span style={{ color: '#cbd5e1' }}>Hours cleaning Excel sheets that arrive wrong every time</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
+                  <span>Cleaning messy Excel files with missing roll numbers and misspelled student names.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#ef4444' }}>•</span>
-                  <span style={{ color: '#cbd5e1' }}>Manual copy-paste into CorelDRAW for every single card</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
+                  <span>Manual copy-pasting data into CorelDRAW for every single ID card.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#ef4444' }}>•</span>
-                  <span style={{ color: '#cbd5e1' }}>Reprints from errors that slipped through after hours of manual work</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
+                  <span>Manual alignment of cards on A3 sheets leading to misaligned back-to-back duplex prints.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#ef4444' }}>•</span>
-                  <span style={{ color: '#cbd5e1' }}>Stressed team, delayed deliveries, clients calling for updates</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.5' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 'bold' }}>✕</span>
+                  <span>Costly card reprints due to typos that went undetected until after printing.</span>
                 </li>
               </ul>
             </div>
 
-            <div className="glass-card" style={{ borderLeft: '4px solid #34d399', background: 'rgba(52, 211, 153, 0.02)' }}>
-              <h3 className="saas-headline-md" style={{ color: '#34d399', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <CircleCheckBig size={20} /> With IDexo
-              </h3>
-              <ul className="compare-list">
-                <li className="compare-item">
-                  <span style={{ color: '#34d399' }}>•</span>
-                  <span style={{ color: '#ffffff', fontWeight: '500' }}>Clients submit their own data — form link generated in 30 seconds</span>
+            {/* IDexo Column */}
+            <div className="glass-panel" style={{ borderColor: 'rgba(16, 185, 129, 0.3)', borderLeft: '4px solid #10b981', background: 'rgba(16, 185, 129, 0.03)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+                  <CircleCheckBig size={20} />
+                </div>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#34d399' }}>The IDexo Press Engine</h3>
+              </div>
+
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                  <span>Clients upload details and auto-crop photos directly into their assigned intake portal link.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#34d399' }}>•</span>
-                  <span style={{ color: '#ffffff', fontWeight: '500' }}>Data arrives clean and structured into your dashboard</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                  <span>Data is validated automatically before submission — 0% field corruption.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#34d399' }}>•</span>
-                  <span style={{ color: '#ffffff', fontWeight: '500' }}>All 500 cards generate automatically from your saved template</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                  <span>Single-click synthesis maps cardholder data into your saved template canvas instantly.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#34d399' }}>•</span>
-                  <span style={{ color: '#ffffff', fontWeight: '500' }}>Production sheets arranged and PDF ready in under a minute</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                  <span>Automatic A3/A4 duplex grid imposition with 3mm bleed margins and registration crop marks.</span>
                 </li>
-                <li className="compare-item">
-                  <span style={{ color: '#34d399' }}>•</span>
-                  <span style={{ color: '#ffffff', fontWeight: '500' }}>Your team focuses on printing and delivering — not admin work</span>
+                <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
+                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
+                  <span>100% vector PDF output compiled locally on your desktop in under 5 seconds.</span>
                 </li>
               </ul>
             </div>
@@ -1107,71 +694,61 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="tech-line" />
+      <div className="divider-line" />
 
-      {/* Testimonials Section */}
-      <section id="testimonials" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      {/* End-to-End Operational Lifecycle Timeline Component */}
+      <TimelineContainer />
+
+      <div className="divider-line" />
+
+      {/* OS Download Center */}
+      <section id="download" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
-          <div style={{ textAlign: 'center', maxWidth: '700px', margin: '0 auto 80px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="neon-tag" style={{ alignSelf: 'center' }}>From the Press Floor</div>
-            <h2 className="saas-headline-lg">What happens when your workflow finally works</h2>
+          <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 64px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="hero-badge" style={{ alignSelf: 'center' }}>Cross-Platform Native Apps</div>
+            <h2 className="headline-section">Download IDexo for Your Printing Press</h2>
+            <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
+              Free to download and run on any local workstation. Install the desktop press console and start building cards immediately.
+            </p>
           </div>
 
-          <div className="testimonials-grid">
+          <div className="os-downloads-grid">
             
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '20px' }}>
-                  {[...Array(5)].map((_, c) => (
-                    <span key={c} style={{ color: '#fbbf24', fontSize: '1.2rem' }}>★</span>
-                  ))}
-                </div>
-                <p className="saas-body-md" style={{ fontSize: '0.95rem', fontStyle: 'italic', lineHeight: '1.7', color: '#e5e7eb', marginBottom: '24px' }}>
-                  "We used to spend two full days on every school ID card job — chasing photos, cleaning spreadsheets, doing everything in CorelDRAW. Now the same job takes half a morning. I don't know why we waited this long."
-                </p>
+            {/* Windows Card */}
+            <div className="glass-panel" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#818cf8', marginBottom: '20px' }}>
+                <Monitor size={32} />
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#102650' }}>
-                  <Printer size={18} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.95rem' }}>Sreedharan P.</h4>
-                  <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>Owner, Printcraft Kerala</span>
-                </div>
-              </div>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#ffffff', marginBottom: '6px' }}>Windows</h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '24px' }}>Windows 10 / 11 (64-bit)</p>
+              <a href="#" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+                <Download size={16} /> Download .exe
+              </a>
             </div>
 
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '20px' }}>
-                  {[...Array(5)].map((_, c) => (
-                    <span key={c} style={{ color: '#fbbf24', fontSize: '1.2rem' }}>★</span>
-                  ))}
-                </div>
-                <p className="saas-body-md" style={{ fontSize: '0.95rem', fontStyle: 'italic', lineHeight: '1.7', color: '#e5e7eb', marginBottom: '24px' }}>
-                  "The production grid alone paid for itself in the first week. We used to manually arrange every card on the print sheet in CorelDRAW. Now it just happens. I can't explain to people how much time this saves until they see it."
-                </p>
+            {/* macOS Card */}
+            <div className="glass-panel" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#38bdf8', marginBottom: '20px' }}>
+                <Apple size={32} />
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', color: '#ffffff' }}>
-                  <ClipboardList size={18} />
-                </div>
-                <div>
-                  <h4 style={{ color: '#ffffff', fontWeight: '600', fontSize: '0.95rem' }}>Anitha R.</h4>
-                  <span style={{ color: '#9ca3af', fontSize: '0.8rem' }}>Manager, Logos Print Studio</span>
-                </div>
-              </div>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#ffffff', marginBottom: '6px' }}>macOS</h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '24px' }}>macOS 12 Monterey or newer</p>
+              <a href="#" className="btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' }}>
+                <Download size={16} /> Download .dmg
+              </a>
             </div>
 
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderStyle: 'dashed', textAlign: 'center', padding: '40px 24px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255, 255, 255, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', marginBottom: '16px' }}>
-                <MessageSquare size={20} />
+            {/* Linux Card */}
+            <div className="glass-panel" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#34d399', marginBottom: '20px' }}>
+                <Terminal size={32} />
               </div>
-              <h4 style={{ color: '#ffffff', fontWeight: '600', fontSize: '1rem', marginBottom: '8px' }}>Your review could be here</h4>
-              <p className="saas-body-md" style={{ fontSize: '0.8rem' }}>Early users get featured in our commercial press directory.</p>
+              <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#ffffff', marginBottom: '6px' }}>Linux</h3>
+              <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '24px' }}>Ubuntu 20.04+ / Debian AppImage</p>
+              <a href="#" className="btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}>
+                <Download size={16} /> Download .AppImage
+              </a>
             </div>
 
           </div>
@@ -1179,15 +756,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="tech-line" />
+      <div className="divider-line" />
 
       {/* FAQ Accordion Section */}
       <section id="faq" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto' }}>
+        <div style={{ maxWidth: '840px', margin: '0 auto' }}>
           
           <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-            <div className="neon-tag" style={{ marginBottom: '16px' }}>FAQ</div>
-            <h2 className="saas-headline-lg">Frequently Asked Questions</h2>
+            <div className="hero-badge" style={{ marginBottom: '16px' }}>Support & Knowledge</div>
+            <h2 className="headline-section">Frequently Asked Questions</h2>
           </div>
 
           <FaqAccordion />
@@ -1195,232 +772,9 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <div className="tech-line" />
-
-      {/* Download Section */}
-      <section id="download" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          
-          <div style={{ textAlign: 'center', maxWidth: '750px', margin: '0 auto 80px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="neon-tag" style={{ alignSelf: 'center' }}>Download IDexo</div>
-            <h2 className="saas-headline-lg">Free to download. Free to set up.</h2>
-            <p className="saas-body-md">
-              Install IDexo on your press computer, create your first client, and run your first job. Get started producing print-ready cards immediately.
-            </p>
-          </div>
-
-          <div className="download-grid">
-            
-            <div className="os-card">
-              <div className="os-icon-wrapper">
-                <Monitor size={36} />
-              </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff', marginBottom: '4px' }}>Windows</h3>
-              <p className="saas-body-md" style={{ fontSize: '0.8rem', marginBottom: '24px' }}>Windows 10 / 11 • 64-bit</p>
-              <a href="#" className="os-download-btn">
-                <Download size={16} /> Download .exe
-              </a>
-            </div>
-
-            <div className="os-card">
-              <div className="os-icon-wrapper">
-                <Apple size={36} />
-              </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff', marginBottom: '4px' }}>macOS</h3>
-              <p className="saas-body-md" style={{ fontSize: '0.8rem', marginBottom: '24px' }}>macOS 12 Monterey and above</p>
-              <a href="#" className="os-download-btn">
-                <Download size={16} /> Download .dmg
-              </a>
-            </div>
-
-            <div className="os-card">
-              <div className="os-icon-wrapper">
-                <Terminal size={36} />
-              </div>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#ffffff', marginBottom: '4px' }}>Linux</h3>
-              <p className="saas-body-md" style={{ fontSize: '0.8rem', marginBottom: '24px' }}>Ubuntu 20.04+ • Debian-based</p>
-              <a href="#" className="os-download-btn">
-                <Download size={16} /> Download .AppImage
-              </a>
-            </div>
-
-          </div>
-
-          <div className="glass-card" style={{ maxWidth: '900px', margin: '0 auto', padding: '40px' }}>
-            <div className="download-steps-row">
-              
-              <div className="download-step-card">
-                <div className="step-number">1</div>
-                <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.85rem', marginBottom: '6px' }}>Install</h4>
-                <p className="saas-body-md" style={{ fontSize: '0.75rem' }}>Download & install IDexo on your computer</p>
-              </div>
-
-              <div className="download-step-card">
-                <div className="step-number">2</div>
-                <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.85rem', marginBottom: '6px' }}>Register</h4>
-                <p className="saas-body-md" style={{ fontSize: '0.75rem' }}>Create your free account inside the app</p>
-              </div>
-
-              <div className="download-step-card">
-                <div className="step-number">3</div>
-                <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.85rem', marginBottom: '6px' }}>Setup</h4>
-                <p className="saas-body-md" style={{ fontSize: '0.75rem' }}>Add a client and build your first template</p>
-              </div>
-
-              <div className="download-step-card">
-                <div className="step-number">4</div>
-                <h4 style={{ color: '#ffffff', fontWeight: '700', fontSize: '0.85rem', marginBottom: '6px' }}>Print</h4>
-                <p className="saas-body-md" style={{ fontSize: '0.75rem' }}>Start producing and exporting print-ready layouts</p>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
-      {/* Final CTA Section */}
-      <section style={{ padding: '120px 24px', position: 'relative', zIndex: 10, textAlign: 'center', background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255, 255, 255, 0.02), transparent 70%)' }}>
-        <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px', alignItems: 'center' }}>
-          <div className="neon-tag">Get Started Today</div>
-          <h2 className="saas-display">Your next ID card job should take hours, not days</h2>
-          <p className="saas-body-lg" style={{ maxWidth: '650px' }}>
-            Download IDexo free, set up your first client, and see the difference immediately. Start generating print-ready ID cards with zero layout delay.
-          </p>
-
-          <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '16px' }}>
-            <a
-              href="#download"
-              className="glow-btn-primary"
-              style={{ padding: '16px 32px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-            >
-              Download for Windows <Download size={16} />
-            </a>
-            <a
-              href="#download"
-              className="glow-btn-secondary"
-              style={{ padding: '16px 32px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-            >
-              Download for macOS <Apple size={16} />
-            </a>
-            <a
-              href="#download"
-              className="glow-btn-secondary"
-              style={{ padding: '16px 32px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
-            >
-              Download for Linux <Terminal size={16} />
-            </a>
-          </div>
-
-          <p className="saas-body-md" style={{ fontSize: '0.8rem', opacity: .6, marginTop: '8px' }}>
-            Free to download · No subscriptions or contract commitments
-          </p>
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
-      {/* End-to-End Operation Lifecycle Section (Relocated to bottom, just above demo & footer) */}
-      <TimelineContainer />
-
-      <div className="tech-line" />
-
-      {/* Demo Video Section */}
-      <section id="demo" style={{
-        padding: '100px 24px',
-        position: 'relative',
-        zIndex: 10,
-        background: 'rgba(12, 28, 60, 0.4)',
-        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.05)'
-      }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', textAlign: 'center' }}>
-          <span className="neon-tag neon-tag-green" style={{ marginBottom: '16px' }}>Video Tour</span>
-          <h2 className="saas-display" style={{ marginBottom: '24px', fontSize: '2.8rem' }}>
-            See IDexo in <span>3 Minutes</span>
-          </h2>
-          <p className="saas-body-lg" style={{ maxWidth: '640px', margin: '0 auto 48px auto' }}>
-            Watch how easy it is to collect data, design template cards, and compile print-ready sheets.
-          </p>
-
-          <div 
-            style={{
-              position: 'relative',
-              borderRadius: '24px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              boxShadow: '0 30px 60px rgba(0, 0, 0, 0.6)',
-              overflow: 'hidden',
-              background: '#070a13',
-              aspectRatio: '16/9',
-              maxWidth: '850px',
-              margin: '0 auto 48px auto',
-              cursor: 'pointer'
-            }}
-            className="group"
-          >
-            <div style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 2,
-              background: 'radial-gradient(circle, rgba(16, 38, 80, 0.4) 0%, rgba(7, 10, 19, 0.8) 100%)',
-              transition: 'background 0.3s ease'
-            }}>
-              <div 
-                style={{
-                  width: '80px',
-                  height: '80px',
-                  borderRadius: '50%',
-                  background: '#ffffff',
-                  color: '#102650',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 0 40px rgba(255,255,255,0.3)',
-                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
-                }}
-                className="play-btn"
-              >
-                <MonitorPlay size={36} fill="#102650" style={{ marginLeft: '4px' }} />
-              </div>
-            </div>
-            <img
-              src="/hero_dashboard.png"
-              alt="IDexo Product Demo Video Thumbnail"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                opacity: .6,
-                transition: 'transform 0.5s ease'
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-            <a
-              href="#download"
-              className="glow-btn-primary"
-              style={{ padding: '16px 40px', fontSize: '1.1rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '10px' }}
-            >
-              <Download size={20} /> Get Started Free Now
-            </a>
-            <p className="saas-body-md" style={{ fontSize: '0.85rem' }}>
-              Instant download · No registration required to test
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <div className="tech-line" />
-
       {/* Footer */}
-      <footer style={{ padding: '80px 24px 48px 24px', backgroundColor: '#0c1b3c', borderTop: '1px solid rgba(255, 255, 255, 0.05)', position: 'relative', zIndex: 10 }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <footer style={{ padding: '80px 24px 48px 24px', backgroundColor: '#040814', borderTop: '1px solid var(--border-glass)', position: 'relative', zIndex: 10 }}>
+        <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           <div style={{
             display: 'flex',
@@ -1433,14 +787,14 @@ export default function LandingPage() {
             marginBottom: '32px'
           }}>
             
-            <div style={{ maxWidth: '320px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ maxWidth: '340px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{
-                  width: '32px',
-                  height: '32px',
-                  background: 'rgba(255, 255, 255, 0.03)',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderRadius: '8px',
+                  width: '36px',
+                  height: '36px',
+                  background: 'rgba(99, 102, 241, 0.15)',
+                  border: '1px solid rgba(99, 102, 241, 0.35)',
+                  borderRadius: '10px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1457,86 +811,46 @@ export default function LandingPage() {
                     }}
                   />
                 </div>
-                <span style={{ fontSize: '1.2rem', fontWeight: '800', letterSpacing: '-0.5px', color: '#ffffff' }}>
-                  IDexo
+                <span style={{ fontSize: '1.3rem', fontWeight: '800', color: '#ffffff' }}>
+                  IDexo<span style={{ color: '#818cf8', fontSize: '0.75rem', marginLeft: '4px', textTransform: 'uppercase' }}>PRESS</span>
                 </span>
               </div>
-              <p className="saas-body-md" style={{ fontSize: '0.875rem' }}>
-                High-performance hybrid PDF engine and database collection portal for printing presses.
+              <p style={{ color: '#94a3b8', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                High-performance vector PDF compilation engine and tokenized data intake platform engineered for commercial printing presses.
               </p>
-              <span className="saas-body-md" style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                © 2025 IDexo. Built for printing presses.
-              </span>
             </div>
 
             <div style={{ display: 'flex', gap: '64px', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff' }}>
-                  Product
+                  Platform
                 </span>
-                <a href="#howitworks" style={{ color: '#9ca3af', textDecoration: 'none', fontSize: '0.875rem' }}>How It Works</a>
-                <a href="#features" style={{ color: '#9ca3af', textDecoration: 'none', fontSize: '0.875rem' }}>Features</a>
+                <a href="#features" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Features</a>
+                <a href="#comparison" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Why IDexo</a>
+                <a href="#pipeline" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Workflow</a>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff' }}>
                   Resources
                 </span>
-                <a href="#faq" style={{ color: '#9ca3af', textDecoration: 'none', fontSize: '0.875rem' }}>FAQ</a>
-                <a href="#download" style={{ color: '#9ca3af', textDecoration: 'none', fontSize: '0.875rem' }}>Download</a>
+                <a href="#faq" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>FAQ</a>
+                <a href="#download" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Desktop Apps</a>
               </div>
             </div>
 
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', fontSize: '0.875rem', color: '#9ca3af' }}>
-            <span>© {new Date().getFullYear()} IDexo Inc. All rights reserved.</span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', fontSize: '0.875rem', color: '#64748b' }}>
+            <span>© {new Date().getFullYear()} IDexo Technologies. Built for printing presses.</span>
             <div style={{ display: 'flex', gap: '24px' }}>
-              <a href="#" style={{ color: '#9ca3af', textDecoration: 'none' }}>Privacy Policy</a>
-              <a href="#" style={{ color: '#9ca3af', textDecoration: 'none' }}>Terms of Service</a>
+              <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</a>
+              <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Terms of Service</a>
             </div>
           </div>
 
         </div>
       </footer>
-
-      {/* Mobile Sticky bottom navigation bar */}
-      <div className="mobile-bottom-bar">
-        <a 
-          href="#demo" 
-          className="glow-btn-secondary" 
-          style={{ 
-            flex: 1, 
-            padding: '12px 16px', 
-            fontSize: '0.9rem', 
-            textDecoration: 'none', 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            gap: '8px',
-            margin: 0
-          }}
-        >
-          <MonitorPlay size={16} /> Watch Demo
-        </a>
-        <a 
-          href="#download" 
-          className="glow-btn-primary" 
-          style={{ 
-            flex: 1, 
-            padding: '12px 16px', 
-            fontSize: '0.9rem', 
-            textDecoration: 'none', 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            gap: '8px',
-            margin: 0
-          }}
-        >
-          <Download size={16} /> Download App
-        </a>
-      </div>
     </div>
   );
 }
