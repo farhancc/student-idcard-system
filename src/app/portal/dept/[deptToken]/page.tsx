@@ -21,7 +21,6 @@ import {
   Eye,
   Building,
   FileText,
-  Download,
   X,
 } from 'lucide-react';
 
@@ -142,14 +141,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     } else {
       setSelectedIds(prev => Array.from(new Set([...prev, ...visibleIds])));
     }
-  };
-
-
-
-  const handleDownloadExcel = () => {
-    if (selectedIds.length === 0) return;
-    const url = `/api/portal/dept/${deptToken}/excel?ids=${selectedIds.join(',')}`;
-    window.open(url, '_blank');
   };
 
   // Confirm dialog state
@@ -836,13 +827,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
           </div>
         </div>
 
-        {/* Notice — department capabilities */}
-        <div className="card" style={{ padding: '16px 20px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.2)', marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <AlertCircle size={18} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-          <p style={{ fontSize: '0.875rem', color: 'var(--muted)', margin: 0 }}>
-            You have <strong style={{ color: 'var(--foreground)' }}>Department Head</strong> access — you can manage cardholders, export their details to Excel, and download approval PDFs for verification.
-          </p>
-        </div>
+
 
         {/* Automatic Review Warning Banner */}
         {(() => {
@@ -961,51 +946,6 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
               <span style={{ fontSize: '0.875rem', color: 'var(--muted)', marginRight: '8px' }}>
                 {selectedIds.length} selected
               </span>
-            )}
-            <button
-              className="btn btn-secondary"
-              onClick={handleDownloadExcel}
-              disabled={selectedIds.length === 0}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                opacity: selectedIds.length === 0 ? 0.5 : 1,
-                cursor: selectedIds.length === 0 ? 'not-allowed' : 'pointer'
-              }}
-            >
-              <Download size={16} /> Export Excel
-            </button>
-            {latestApprovalJob && latestApprovalJob.downloadUrl ? (
-              <a
-                href={latestApprovalJob.downloadUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-primary"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  textDecoration: 'none'
-                }}
-              >
-                <FileText size={16} /> Download Approval PDF
-              </a>
-            ) : (
-              <button
-                className="btn btn-primary"
-                disabled
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  opacity: 0.5,
-                  cursor: 'not-allowed'
-                }}
-                title="Approval PDF has not been compiled by the print provider yet."
-              >
-                <FileText size={16} /> Approval PDF Not Ready
-              </button>
             )}
             <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Plus size={16} /> Add Cardholder
