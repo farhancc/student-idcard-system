@@ -30,10 +30,17 @@ export async function GET(request: Request) {
       },
     });
 
-    // Flatten clientIds for convenience
+    const purchases = await prisma.templatePurchase.findMany({
+      where: { buyerPressId: pressId },
+      select: { clonedTemplateId: true },
+    });
+    const purchasedIds = new Set(purchases.map((p) => p.clonedTemplateId).filter(Boolean));
+
+    // Flatten clientIds for convenience and attach isPurchased flag
     const mapTemplates = (list: any[]) =>
       list.map((t) => ({
         ...t,
+        isPurchased: purchasedIds.has(t.id),
         clientIds: t.clientAssignments.map((a: any) => a.clientId),
       }));
 

@@ -22,6 +22,18 @@ export async function POST(request: Request) {
     });
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
+    // Block reselling of purchased templates
+    const isPurchased = await prisma.templatePurchase.findFirst({
+      where: { clonedTemplateId: Number(templateId) },
+    });
+
+    if (isPurchased) {
+      return NextResponse.json(
+        { error: 'Purchased templates cannot be resold or listed on the marketplace.' },
+        { status: 400 }
+      );
+    }
+
     // Check listing fee from system settings if template is not already public
     if (!template.isPublic) {
       const feeSetting = await prisma.systemSetting.findUnique({

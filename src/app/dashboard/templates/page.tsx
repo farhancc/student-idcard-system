@@ -5083,24 +5083,30 @@ export default function TemplatesPage() {
                         >
                           Delete
                         </button>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: '0.7rem', background: tmpl.isPublic ? 'rgba(16,185,129,0.1)' : 'transparent', border: tmpl.isPublic ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--glass-border)', color: tmpl.isPublic ? '#10b981' : undefined }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPublishingTemplate(tmpl);
-                            setPublishPrice(String(tmpl.price || 0));
-                            setPublishCdrUrl(tmpl.cdrFileUrl || null);
-                            setPublishPsdUrl(tmpl.psdFileUrl || null);
-                            setPublishAiUrl(tmpl.aiFileUrl || null);
-                            setPublishPdfUrl(tmpl.pdfFileUrl || null);
-                            setIncludeSourceFiles(!!(tmpl.cdrFileUrl || tmpl.psdFileUrl || tmpl.aiFileUrl || tmpl.pdfFileUrl));
-                            setPublishMsg('');
-                          }}
-                          title={tmpl.isPublic ? 'Listed on Marketplace' : 'Sell on Marketplace'}
-                        >
-                          <Store size={10} /> {tmpl.isPublic ? 'Listed' : 'Sell'}
-                        </button>
+                        {tmpl.isPurchased ? (
+                          <span className="badge badge-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,0.06)' }}>
+                            Purchased
+                          </span>
+                        ) : (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 8px', fontSize: '0.7rem', background: tmpl.isPublic ? 'rgba(16,185,129,0.1)' : 'transparent', border: tmpl.isPublic ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--glass-border)', color: tmpl.isPublic ? '#10b981' : undefined }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPublishingTemplate(tmpl);
+                              setPublishPrice(String(tmpl.price || 0));
+                              setPublishCdrUrl(tmpl.cdrFileUrl || null);
+                              setPublishPsdUrl(tmpl.psdFileUrl || null);
+                              setPublishAiUrl(tmpl.aiFileUrl || null);
+                              setPublishPdfUrl(tmpl.pdfFileUrl || null);
+                              setIncludeSourceFiles(!!(tmpl.cdrFileUrl || tmpl.psdFileUrl || tmpl.aiFileUrl || tmpl.pdfFileUrl));
+                              setPublishMsg('');
+                            }}
+                            title={tmpl.isPublic ? 'Listed on Marketplace' : 'Sell on Marketplace'}
+                          >
+                            <Store size={10} /> {tmpl.isPublic ? 'Listed' : 'Sell'}
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -5165,6 +5171,12 @@ export default function TemplatesPage() {
             {publishingTemplate.isPublic && (
               <div style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.82rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Store size={14} /> This template is currently listed on the marketplace.
+              </div>
+            )}
+
+            {publishingTemplate.isPurchased && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px', fontSize: '0.82rem', color: '#ef4444' }}>
+                🚫 Purchased templates cannot be resold or listed on the marketplace.
               </div>
             )}
 
@@ -5348,7 +5360,7 @@ export default function TemplatesPage() {
               <button
                 className="btn btn-primary"
                 style={{ flex: 1, gap: '6px' }}
-                disabled={publishLoading || !!uploadingFormat}
+                disabled={publishLoading || !!uploadingFormat || publishingTemplate.isPurchased}
                 onClick={async () => {
                   setPublishLoading(true); setPublishMsg('');
                   try {
