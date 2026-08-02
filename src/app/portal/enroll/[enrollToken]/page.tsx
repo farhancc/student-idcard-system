@@ -40,6 +40,33 @@ interface Template {
 
 const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
+const isDateField = (fieldKey: string, fieldType?: string) => {
+  if (fieldType === 'date') return true;
+  const clean = cleanFieldKey(fieldKey);
+  if (
+    clean.includes('no') ||
+    clean.includes('num') ||
+    clean.includes('id') ||
+    clean.includes('place') ||
+    clean.includes('branch') ||
+    clean.includes('cert')
+  ) {
+    return false;
+  }
+  return (
+    clean.includes('date') ||
+    clean.includes('dob') ||
+    clean.includes('doj') ||
+    clean.includes('expiry') ||
+    clean.includes('validity') ||
+    clean.includes('validtill') ||
+    clean.includes('issue') ||
+    clean.includes('admission') ||
+    clean.includes('birth') ||
+    clean.includes('joining')
+  );
+};
+
 export default function EnrollmentPage({ params }: { params: Promise<{ enrollToken: string }> }) {
   const { enrollToken } = use(params);
   const router = useRouter();
@@ -52,6 +79,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [template, setTemplate] = useState<Template | null>(null);
   const [departmentName, setDepartmentName] = useState<string | null>(null);
   const [formFields, setFormFields] = useState<string[]>([]);
+  const [fieldTypeMap, setFieldTypeMap] = useState<Record<string, string>>({});
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [pressFonts, setPressFonts] = useState<any[]>([]);
 
@@ -107,6 +135,12 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         const back = JSON.parse(data.template.backFields || '[]');
         const allFields: FieldCoordinate[] = [...front, ...back];
 
+        const typeMap: Record<string, string> = {};
+        allFields.forEach(f => {
+          if (f.field) typeMap[f.field] = f.type || 'text';
+        });
+        setFieldTypeMap(typeMap);
+
         // Identify fields that are mapped to 'qr' or 'barcode' types to restrict editing on enrollment page
         const restrictedFields = new Set(
           allFields
@@ -114,19 +148,17 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
             .map(f => f.field)
         );
 
-        // Unique text fields (excluding restricted, ID, and serial field types)
-        const textFields = allFields.filter(f => f.type === 'text' && !restrictedFields.has(f.field));
-        const keys = Array.from(new Set(textFields.map(f => f.field)));
+        // Unique text & date fields (excluding restricted, ID, and serial field types)
+        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || !f.type) && !restrictedFields.has(f.field));
+        const keys = Array.from(new Set(textAndDateFields.map(f => f.field)));
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
-        // Remove standard system attributes (like photos/serials/expiry) from text fields to handle separately
+        // Remove standard system photo & serial attributes from form fields (allow date fields like dob, doj, valid till, etc.)
         const filteredKeys = keys.filter(k => {
           const clean = cleanFieldKey(k);
           return clean !== 'photo' && 
             clean !== 'avatar' &&
-            clean !== 'validtill' &&
-            clean !== 'validtilldate' &&
             clean !== 'cardserial' &&
             !clean.includes('serial');
         });
@@ -150,8 +182,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
         // Detect visibility of standard fields (excluding restricted fields)
         const mappedFields = allFields.map(f => cleanFieldKey(f.field));
-        setHasName((mappedFields.includes('name') || mappedFields.includes('fullname') || mappedFields.includes('studentname')) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
-        setHasDesignation((mappedFields.includes('designation') || mappedFields.includes('role')) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
+        setHasName(mappedFields.some(f => ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(f)) && !restrictedFields.has('name') && !restrictedFields.has('fullName'));
+        setHasDesignation(mappedFields.some(f => ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(f)) && !restrictedFields.has('designation') && !restrictedFields.has('role'));
         setHasPhoto(mainPhoto !== null);
 
         // Detect if back side has any fields
@@ -296,7 +328,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = hasName ? name : 'Cardholder';
+    const finalName = name.trim() || 'Cardholder';
     if (!finalName) {
       setError('Name is required');
       return;
@@ -478,6 +510,55 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
               <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
               {/* Hidden canvas for webcam capture */}
               <canvas ref={webcamCanvasRef} style={{ display: 'none' }} />
+
+              {formFields.length === 0 && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  color: '#fbbf24',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  lineHeight: '1.4'
+                }}>
+                  <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    This enrollment template does not have any input fields configured. A standard Full Name field is provided below as a fallback.
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback Name input if no name-like field was detected in the template fields */}
+              {!hasName && (
+                <div className="form-group">
+                  <label className="form-label">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="form-input"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Enter your full name"
+                  />
+                </div>
+              )}
+
+              {/* Fallback Designation input if no designation-like field was detected in the template fields */}
+              {!hasDesignation && formFields.length === 0 && (
+                <div className="form-group">
+                  <label className="form-label">Designation</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designation}
+                    onChange={e => setDesignation(e.target.value)}
+                    placeholder="Enter designation (optional)"
+                  />
+                </div>
+              )}
           
           {/* Photo upload + Cropper trigger */}
           {hasPhoto && (
@@ -569,12 +650,15 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           {formFields.map(field => {
             const label = formatFieldLabel(field);
             const clean = cleanFieldKey(field);
-            const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
+            const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
+            const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
+            const isDate = isDateField(field, fieldTypeMap[field]);
+
             return (
               <div className="form-group" key={field}>
                 <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
                 <input
-                  type="text"
+                  type={isDate ? "date" : "text"}
                   className="form-input"
                   required={isNameLike}
                   value={customFields[field] || ''}
@@ -583,11 +667,19 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                     setCustomFields(prev => ({ ...prev, [field]: val }));
                     if (isNameLike) {
                       setName(val);
-                    } else if (clean === 'designation' || clean === 'role') {
+                    } else if (isDesignationLike) {
                       setDesignation(val);
                     }
                   }}
-                  placeholder={`Enter ${label.toLowerCase()}`}
+                  onClick={e => {
+                    if (isDate && e.currentTarget && 'showPicker' in e.currentTarget) {
+                      try {
+                        (e.currentTarget as any).showPicker();
+                      } catch {}
+                    }
+                  }}
+                  placeholder={isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`}
+                  style={{ cursor: isDate ? 'pointer' : 'text' }}
                 />
               </div>
             );

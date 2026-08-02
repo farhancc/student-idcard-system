@@ -393,6 +393,31 @@ export default function TemplatesPage() {
     }
   };
 
+  const handleAddPresetField = (side: 'front' | 'back', fieldName: string, type: 'text' | 'date' | 'image' | 'qr' | 'barcode' | 'id' = 'date') => {
+    const currentFields = side === 'front' ? frontFields : backFields;
+    const newField: FieldCoordinate = {
+      field: fieldName,
+      type: type,
+      x: 100,
+      y: Math.min(cardHeight - 30, 80 + currentFields.length * 32),
+      width: 200,
+      height: 30,
+      fontSize: 16,
+      fontWeight: 'normal',
+      color: '#000000',
+      align: 'left',
+      prefix: '',
+      suffix: '',
+      verticalAlign: 'top',
+    };
+
+    if (side === 'front') {
+      setFrontFields([...frontFields, newField]);
+    } else {
+      setBackFields([...backFields, newField]);
+    }
+  };
+
   const handleRemoveField = (side: 'front' | 'back', index: number) => {
     if (side === 'front') {
       setFrontFields(frontFields.filter((_, i) => i !== index));
@@ -4455,9 +4480,24 @@ export default function TemplatesPage() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '0.95rem' }}>Front Side Coordinates mapping</h4>
-                    <button id="btn-add-field-mapping" type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('front')}>
-                      + Add Field Mapping
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Quick Date:</span>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('front', 'Date of Birth', 'date')}>
+                        + DOB
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('front', 'Date of Joining', 'date')}>
+                        + DOJ
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('front', 'Valid Till', 'date')}>
+                        + Valid Till
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('front', 'Date of Issue', 'date')}>
+                        + Issue Date
+                      </button>
+                      <button id="btn-add-field-mapping" type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('front')}>
+                        + Add Field Mapping
+                      </button>
+                    </div>
                   </div>
 
                   {frontFields.length === 0 ? (
@@ -4660,9 +4700,24 @@ export default function TemplatesPage() {
                   <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <h4 style={{ fontSize: '0.95rem' }}>Back Side Coordinates mapping</h4>
-                    <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('back')}>
-                      + Add Field Mapping
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Quick Date:</span>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('back', 'Date of Birth', 'date')}>
+                        + DOB
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('back', 'Date of Joining', 'date')}>
+                        + DOJ
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('back', 'Valid Till', 'date')}>
+                        + Valid Till
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.7rem' }} onClick={() => handleAddPresetField('back', 'Date of Issue', 'date')}>
+                        + Issue Date
+                      </button>
+                      <button type="button" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem' }} onClick={() => handleAddField('back')}>
+                        + Add Field Mapping
+                      </button>
+                    </div>
                   </div>
 
                   {backFields.length === 0 ? (

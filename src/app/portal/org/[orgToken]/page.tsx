@@ -25,6 +25,33 @@ import {
   X
 } from 'lucide-react';
 
+const isDateField = (fieldKey: string, fieldType?: string) => {
+  if (fieldType === 'date') return true;
+  const clean = fieldKey.toLowerCase().replace(/[^a-z]/g, '');
+  if (
+    clean.includes('no') ||
+    clean.includes('num') ||
+    clean.includes('id') ||
+    clean.includes('place') ||
+    clean.includes('branch') ||
+    clean.includes('cert')
+  ) {
+    return false;
+  }
+  return (
+    clean.includes('date') ||
+    clean.includes('dob') ||
+    clean.includes('doj') ||
+    clean.includes('expiry') ||
+    clean.includes('validity') ||
+    clean.includes('validtill') ||
+    clean.includes('issue') ||
+    clean.includes('admission') ||
+    clean.includes('birth') ||
+    clean.includes('joining')
+  );
+};
+
 interface Cardholder {
   id: number;
   name: string;
@@ -160,8 +187,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
       const allFields: FieldCoordinate[] = [...front, ...back];
-      // Include user-fillable text and ID fields
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id');
+      // Include user-fillable text, id, and date fields
+      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || !f.type);
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
       const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
@@ -170,9 +197,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         const clean = cleanFieldKey(k);
         return clean !== 'photo' && 
           clean !== 'avatar' &&
-          clean !== 'validtill' &&
-          clean !== 'validtilldate' &&
-          clean !== 'cardserial';
+          clean !== 'cardserial' &&
+          !clean.includes('serial');
       });
       setFormFields(filteredKeys);
 
@@ -192,8 +218,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
       // Detect visibility of standard fields
       const mappedFields = allFields.map(f => cleanFieldKey(f.field));
-      setHasName(mappedFields.includes('name') || mappedFields.includes('fullname') || mappedFields.includes('studentname'));
-      setHasDesignation(mappedFields.includes('designation') || mappedFields.includes('role'));
+      setHasName(mappedFields.some(f => ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(f)));
+      setHasDesignation(mappedFields.some(f => ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(f)));
       setHasPhoto(mainPhoto !== null);
 
       // 2. Fetch cardholders
@@ -376,9 +402,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       let val = getCustomFieldValueCaseInsensitive(parsedCustom, k) || '';
       if (!val) {
         const clean = cleanFieldKey(k);
-        if (clean === 'name' || clean === 'fullname' || clean === 'studentname') {
+        if (['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean)) {
           val = resolvedName;
-        } else if (clean === 'designation' || clean === 'role') {
+        } else if (['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean)) {
           val = resolvedDesignation;
         }
       }
@@ -453,7 +479,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   // Save Cardholder (Submit handler)
   const handleSaveCardholder = async (e?: React.FormEvent, force: boolean = false) => {
     if (e) e.preventDefault();
-    const finalName = hasName ? name : 'Cardholder';
+    const finalName = name.trim() || 'Cardholder';
     if (!finalName) return;
 
     setLoading(true);
@@ -1385,6 +1411,55 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
             <form onSubmit={handleSaveCardholder} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <input type="file" id="org-modal-photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
               
+              {formFields.length === 0 && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  color: '#fbbf24',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: '8px',
+                  lineHeight: '1.4'
+                }}>
+                  <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    This template does not have any input fields configured. A standard Full Name field is provided below as a fallback.
+                  </div>
+                </div>
+              )}
+
+              {/* Fallback Name input if no name-like field was detected in the template fields */}
+              {!hasName && (
+                <div className="form-group">
+                  <label className="form-label">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="form-input"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Enter full name"
+                  />
+                </div>
+              )}
+
+              {/* Fallback Designation input if no designation-like field was detected in the template fields */}
+              {!hasDesignation && formFields.length === 0 && (
+                <div className="form-group">
+                  <label className="form-label">Designation</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={designation}
+                    onChange={e => setDesignation(e.target.value)}
+                    placeholder="Enter designation (optional)"
+                  />
+                </div>
+              )}
+              
               {/* Photo Input with Crop */}
               {hasPhoto && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
@@ -1465,12 +1540,14 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               {formFields.map(field => {
                 const label = formatFieldLabel(field);
                 const clean = cleanFieldKey(field);
-                const isNameLike = clean === 'name' || clean === 'fullname' || clean === 'studentname';
+                const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
+                const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
+                const isDate = isDateField(field);
                 return (
                   <div className="form-group" key={field}>
                     <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
                     <input
-                      type="text"
+                      type={isDate ? "date" : "text"}
                       required={isNameLike}
                       className="form-input"
                       value={customFields[field] || ''}
@@ -1482,11 +1559,19 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                         });
                         if (isNameLike) {
                           setName(val);
-                        } else if (clean === 'designation' || clean === 'role') {
+                        } else if (isDesignationLike) {
                           setDesignation(val);
                         }
                       }}
-                      placeholder={`Enter ${label.toLowerCase()}`}
+                      onClick={e => {
+                        if (isDate && e.currentTarget && 'showPicker' in e.currentTarget) {
+                          try {
+                            (e.currentTarget as any).showPicker();
+                          } catch {}
+                        }
+                      }}
+                      placeholder={isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`}
+                      style={{ cursor: isDate ? 'pointer' : 'text' }}
                     />
                   </div>
                 );
