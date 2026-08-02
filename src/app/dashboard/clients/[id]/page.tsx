@@ -4183,16 +4183,8 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
   const [batchPricePerCard, setBatchPricePerCard] = useState('50');
   const [batchValidTill, setBatchValidTill] = useState('');
 
-  // Batch layout/PDF options state
-  const [batchBleed, setBatchBleed] = useState(0);
-  const [batchCropMarks, setBatchCropMarks] = useState(true);
-  const [batchFoldLine, setBatchFoldLine] = useState(true);
-  const [batchMarginLeft, setBatchMarginLeft] = useState(40);
-  const [batchMarginTop, setBatchMarginTop] = useState(40);
-  const [batchMarginRight, setBatchMarginRight] = useState(40);
-  const [batchMarginBottom, setBatchMarginBottom] = useState(40);
-  const [batchColGap, setBatchColGap] = useState(15);
-  const [batchRowGap, setBatchRowGap] = useState(15);
+  // Wizard modal state for batch compile
+  const [showBatchWizard, setShowBatchWizard] = useState(false);
 
   // Compilation progress state
   const [batchPdfLoading, setBatchPdfLoading] = useState<string | null>(null);
@@ -4227,63 +4219,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
     fetchShares();
   }, [clientId]);
 
-  // Load config on share selection
-  useEffect(() => {
-    if (!selectedShareForBatch) return;
-    const key = `layout-config-${clientId}-${selectedShareForBatch.templateId}`;
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.bleed !== undefined) setBatchBleed(parsed.bleed);
-        if (parsed.cropMarks !== undefined) setBatchCropMarks(parsed.cropMarks);
-        if (parsed.foldLine !== undefined) setBatchFoldLine(parsed.foldLine);
-        if (parsed.marginLeft !== undefined) setBatchMarginLeft(parsed.marginLeft);
-        if (parsed.marginTop !== undefined) setBatchMarginTop(parsed.marginTop);
-        if (parsed.marginRight !== undefined) setBatchMarginRight(parsed.marginRight);
-        if (parsed.marginBottom !== undefined) setBatchMarginBottom(parsed.marginBottom);
-        if (parsed.colGap !== undefined) setBatchColGap(parsed.colGap);
-        if (parsed.rowGap !== undefined) setBatchRowGap(parsed.rowGap);
-      } else {
-        setBatchBleed(0);
-        setBatchCropMarks(true);
-        setBatchFoldLine(true);
-        setBatchMarginLeft(40);
-        setBatchMarginTop(40);
-        setBatchMarginRight(40);
-        setBatchMarginBottom(40);
-        setBatchColGap(15);
-        setBatchRowGap(15);
-      }
-    } catch (e) {
-      console.error('Error loading config:', e);
-    }
-  }, [selectedShareForBatch, clientId]);
 
-  const handleUpdateConfig = (field: string, value: any) => {
-    if (!selectedShareForBatch) return;
-    const key = `layout-config-${clientId}-${selectedShareForBatch.templateId}`;
-    let current: any = {};
-    try {
-      const saved = localStorage.getItem(key);
-      if (saved) current = JSON.parse(saved);
-    } catch (e) {}
-
-    current[field] = value;
-    try {
-      localStorage.setItem(key, JSON.stringify(current));
-    } catch (e) {}
-
-    if (field === 'bleed') setBatchBleed(value);
-    if (field === 'cropMarks') setBatchCropMarks(value);
-    if (field === 'foldLine') setBatchFoldLine(value);
-    if (field === 'marginLeft') setBatchMarginLeft(value);
-    if (field === 'marginTop') setBatchMarginTop(value);
-    if (field === 'marginRight') setBatchMarginRight(value);
-    if (field === 'marginBottom') setBatchMarginBottom(value);
-    if (field === 'colGap') setBatchColGap(value);
-    if (field === 'rowGap') setBatchRowGap(value);
-  };
 
   // Poll for active batch compile job
   useEffect(() => {
@@ -4392,15 +4328,16 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
     }
   };
 
-  const handleBatchCompile = async (type: 'APPROVAL' | 'PRODUCTION') => {
+  const handleBatchCompile = async (cfg: import('@/app/components/CompileWizardModal').CompileWizardConfig) => {
     if (selectedCardholderIds.length === 0) {
       toast('Please select at least one cardholder to compile.', 'warning');
       return;
     }
+    const type = cfg.compileType;
     setBatchPdfLoading(type);
     setBatchJob(null);
     try {
-      // 1. Create client order from selected batch cards
+      // 1. Create client order from selected batch cardholders
       const orderRes = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4410,7 +4347,7 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
           cardholderIds: selectedCardholderIds,
           pricePerCard: Number(batchPricePerCard) || 0,
           validTill: batchValidTill ? new Date(batchValidTill) : null,
-          status: type === 'PRODUCTION' ? 'APPROVED' : 'DRAFT', // Production PDF demands APPROVED status
+          status: type === 'PRODUCTION' ? 'APPROVED' : 'DRAFT',
         }),
       });
       const orderData = await orderRes.json();
@@ -4418,48 +4355,39 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
 
       const createdOrderId = orderData.order.id;
 
-      const isProduction = type === 'PRODUCTION';
-      const endpoint = '/api/jobs/production-request';
-
-      // 2. Queue background compilation PDF Job
-      const jobRes = await fetch(endpoint, {
+      // 2. Queue background compilation PDF Job using all wizard config
+      const jobRes = await fetch('/api/jobs/production-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           orderId: createdOrderId,
           pdfType: type,
-          paperSize: type === 'PRODUCTION' ? 'A3' : 'A4',
-          orientation: 'PORTRAIT',
-          bleed: batchBleed,
-          cropMarks: batchCropMarks,
-          foldLine: batchFoldLine,
-          marginLeft: batchMarginLeft,
-          marginTop: batchMarginTop,
-          marginRight: batchMarginRight,
-          marginBottom: batchMarginBottom,
-          colGap: batchColGap,
-          rowGap: batchRowGap,
+          paperSize: cfg.paperSize,
+          orientation: cfg.orientation,
+          bleed: cfg.bleed,
+          cropMarks: cfg.cropMarks,
+          foldLine: cfg.foldLine,
+          marginLeft: cfg.marginLeft,
+          marginTop: cfg.marginTop,
+          marginRight: cfg.marginRight,
+          marginBottom: cfg.marginBottom,
+          colGap: cfg.colGap,
+          rowGap: cfg.rowGap,
+          emptySlotStrategy: cfg.emptySlotStrategy,
+          customCardId: cfg.customCardId,
         }),
       });
       const jobData = await jobRes.json();
       if (!jobRes.ok) throw new Error(jobData.error || 'Failed to queue PDF job');
 
-      const jobId = jobData.jobId;
-      const initialStatus = 'PENDING';
-
-      setBatchJob({
-        id: jobId,
-        status: initialStatus,
-        progress: 0,
-        isLocalJob: true,
-      });
-
+      setBatchJob({ id: jobData.jobId, status: 'PENDING', progress: 0, isLocalJob: true });
       window.dispatchEvent(new Event('refresh-profile'));
+      setShowBatchWizard(false);
 
-      if (isProduction) {
-        toast(`Production print job #${jobId} queued successfully!`, 'success');
+      if (type === 'PRODUCTION') {
+        toast(`Production print job #${jobData.jobId} queued successfully!`, 'success');
       } else {
-        toast(`Approval draft job #${jobId} queued successfully!`, 'success');
+        toast(`Approval draft job #${jobData.jobId} queued successfully!`, 'success');
       }
     } catch (e: any) {
       toast(e.message || 'Error occurred during batch compilation', 'error');
@@ -4699,95 +4627,49 @@ function PortalSharesPanel({ clientId }: { clientId: number }) {
                             </table>
                           </div>
 
-                          {/* Compilation parameters form */}
-                          <div style={{ 
-                            display: 'grid', 
-                            gridTemplateColumns: '1fr 1fr', 
-                            gap: '16px',
-                            background: 'rgba(255,255,255,0.01)',
-                            padding: '16px',
-                            borderRadius: '8px',
-                            border: '1px solid var(--glass-border)'
-                          }}>
-                            <div className="form-group" style={{ margin: 0, gridColumn: 'span 2' }}>
-                              <label className="form-label" style={{ fontSize: '0.75rem' }}>Price Per Card (Rs)</label>
-                              <input 
-                                type="number" 
-                                className="form-input" 
+                          {/* Compile button — opens the same wizard used elsewhere */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '160px' }}>
+                              <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>Price Per Card (Rs)</label>
+                              <input
+                                type="number"
+                                className="form-input"
                                 style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-                                value={batchPricePerCard} 
-                                onChange={e => setBatchPricePerCard(e.target.value)} 
+                                value={batchPricePerCard}
+                                onChange={e => setBatchPricePerCard(e.target.value)}
                               />
                             </div>
-
-                            {/* Collapsible layout parameters for Production grid */}
-                            <div style={{ gridColumn: 'span 2', marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '12px' }}>
-                              <strong style={{ fontSize: '0.8rem', color: '#fff', display: 'block', marginBottom: '8px' }}>Layout & Grid Configurations</strong>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
-                                {[
-                                  { label: 'Left (pt)',   value: batchMarginLeft,   field: 'marginLeft' },
-                                  { label: 'Top (pt)',    value: batchMarginTop,    field: 'marginTop' },
-                                  { label: 'Right (pt)',  value: batchMarginRight,  field: 'marginRight' },
-                                  { label: 'Bottom (pt)', value: batchMarginBottom, field: 'marginBottom' },
-                                  { label: 'Col Gap (pt)', value: batchColGap,       field: 'colGap' },
-                                  { label: 'Row Gap (pt)', value: batchRowGap,       field: 'rowGap' },
-                                ].map(({ label, value, field }) => (
-                                  <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                    <label style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>{label}</label>
-                                    <input 
-                                      type="number" 
-                                      className="form-input" 
-                                      style={{ padding: '4px 6px', fontSize: '0.75rem' }}
-                                      value={value} 
-                                      onChange={e => handleUpdateConfig(field, Number(e.target.value))} 
-                                    />
-                                  </div>
-                                ))}
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                  <label style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>Bleed (pt)</label>
-                                  <input 
-                                    type="number" 
-                                    className="form-input" 
-                                    style={{ padding: '4px 6px', fontSize: '0.75rem' }}
-                                    value={batchBleed} 
-                                    onChange={e => handleUpdateConfig('bleed', Number(e.target.value))} 
-                                  />
-                                </div>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '16px' }}>
-                                  <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={batchCropMarks} onChange={e => handleUpdateConfig('cropMarks', e.target.checked)} />
-                                    Crops
-                                  </label>
-                                  <label style={{ fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                                    <input type="checkbox" checked={batchFoldLine} onChange={e => handleUpdateConfig('foldLine', e.target.checked)} />
-                                    Folds
-                                  </label>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action Triggers */}
-                          <div style={{ display: 'flex', gap: '12px' }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ flex: 1, padding: '10px' }}
-                              disabled={batchPdfLoading !== null}
-                              onClick={() => handleBatchCompile('APPROVAL')}
-                            >
-                              {batchPdfLoading === 'APPROVAL' ? 'Queueing Proof...' : 'Compile Proofs (Approval PDF)'}
-                            </button>
                             <button
                               type="button"
                               className="btn btn-primary"
-                              style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', boxShadow: '0 4px 14px rgba(16,185,129,0.2)' }}
-                              disabled={batchPdfLoading !== null}
-                              onClick={() => handleBatchCompile('PRODUCTION')}
+                              style={{
+                                padding: '10px 22px',
+                                background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                                boxShadow: '0 4px 14px rgba(99,102,241,0.3)',
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                fontSize: '0.9rem', fontWeight: 600,
+                                marginTop: '18px',
+                              }}
+                              disabled={selectedCardholderIds.length === 0 || batchPdfLoading !== null}
+                              onClick={() => setShowBatchWizard(true)}
                             >
-                              {batchPdfLoading === 'PRODUCTION' ? 'Queueing Grid...' : 'Compile Production PDF'}
+                              {batchPdfLoading ? (
+                                <><div className="spinner" style={{ width: '15px', height: '15px' }} /> Queueing...</>
+                              ) : (
+                                <>⚡ Compile PDF ({selectedCardholderIds.length} card{selectedCardholderIds.length !== 1 ? 's' : ''})</>
+                              )}
                             </button>
                           </div>
+
+                          {/* Compile Wizard Modal */}
+                          {showBatchWizard && (
+                            <CompileWizardModal
+                              cardCount={selectedCardholderIds.length}
+                              onClose={() => setShowBatchWizard(false)}
+                              compiling={batchPdfLoading !== null}
+                              onCompile={handleBatchCompile}
+                            />
+                          )}
 
                           {/* Live compilation progress status */}
                           {batchJob && (
