@@ -1954,8 +1954,22 @@ export default function TemplatesPage() {
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD/MM/YYYY">DD/MM/YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="MM/DD/YYYY">MM/DD/YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="YYYY-MM-DD">YYYY-MM-DD</option>
-                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="D MMM YYYY">D MMM YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD-MM-YYYY">DD-MM-YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD.MM.YYYY">DD.MM.YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD-MMM-YYYY">DD-MMM-YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD MMM YYYY">DD MMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD MMMM YYYY">DD MMMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="D MMM YYYY">D MMM YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMM DD, YYYY">MMM DD, YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMMM DD, YYYY">MMMM DD, YYYY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="YYYY/MM/DD">YYYY/MM/DD</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD/MM/YY">DD/MM/YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MM/DD/YY">MM/DD/YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD-MM-YY">DD-MM-YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD.MM.YY">DD.MM.YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="DD-MMM-YY">DD-MMM-YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MM/YY">MM/YY</option>
+                  <option style={{ background: '#1e293b', color: '#ffffff' }} value="MM/YYYY">MM/YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMM YYYY">MMM YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="MMMM YYYY">MMMM YYYY</option>
                   <option style={{ background: '#1e293b', color: '#ffffff' }} value="YYYY">YYYY (Year only)</option>
@@ -4631,13 +4645,24 @@ export default function TemplatesPage() {
                                             <option value="MM/DD/YYYY">MM/DD/YYYY (05/15/2002)</option>
                                             <option value="YYYY-MM-DD">YYYY-MM-DD (2002-05-15)</option>
                                             <option value="DD-MM-YYYY">DD-MM-YYYY (15-05-2002)</option>
+                                            <option value="DD.MM.YYYY">DD.MM.YYYY (15.05.2002)</option>
+                                            <option value="DD-MMM-YYYY">DD-MMM-YYYY (15-May-2002)</option>
                                             <option value="DD MMM YYYY">DD MMM YYYY (15 May 2002)</option>
                                             <option value="DD MMMM YYYY">DD MMMM YYYY (15 May 2002)</option>
+                                            <option value="D MMM YYYY">D MMM YYYY (15 May 2002)</option>
                                             <option value="MMM DD, YYYY">MMM DD, YYYY (May 15, 2002)</option>
                                             <option value="MMMM DD, YYYY">MMMM DD, YYYY (May 15, 2002)</option>
-                                            <option value="YYYY">YYYY (2002)</option>
+                                            <option value="YYYY/MM/DD">YYYY/MM/DD (2002/05/15)</option>
                                             <option value="DD/MM/YY">DD/MM/YY (15/05/02)</option>
                                             <option value="MM/DD/YY">MM/DD/YY (05/15/02)</option>
+                                            <option value="DD-MM-YY">DD-MM-YY (15-05-02)</option>
+                                            <option value="DD.MM.YY">DD.MM.YY (15.05.02)</option>
+                                            <option value="DD-MMM-YY">DD-MMM-YY (15-May-02)</option>
+                                            <option value="MM/YY">MM/YY (05/02)</option>
+                                            <option value="MM/YYYY">MM/YYYY (05/2002)</option>
+                                            <option value="MMM YYYY">MMM YYYY (May 2002)</option>
+                                            <option value="MMMM YYYY">MMMM YYYY (May 2002)</option>
+                                            <option value="YYYY">YYYY (2002)</option>
                                           </select>
                                         </div>
                                       )}
@@ -4851,13 +4876,24 @@ export default function TemplatesPage() {
                                             <option value="MM/DD/YYYY">MM/DD/YYYY (05/15/2002)</option>
                                             <option value="YYYY-MM-DD">YYYY-MM-DD (2002-05-15)</option>
                                             <option value="DD-MM-YYYY">DD-MM-YYYY (15-05-2002)</option>
+                                            <option value="DD.MM.YYYY">DD.MM.YYYY (15.05.2002)</option>
+                                            <option value="DD-MMM-YYYY">DD-MMM-YYYY (15-May-2002)</option>
                                             <option value="DD MMM YYYY">DD MMM YYYY (15 May 2002)</option>
                                             <option value="DD MMMM YYYY">DD MMMM YYYY (15 May 2002)</option>
+                                            <option value="D MMM YYYY">D MMM YYYY (15 May 2002)</option>
                                             <option value="MMM DD, YYYY">MMM DD, YYYY (May 15, 2002)</option>
                                             <option value="MMMM DD, YYYY">MMMM DD, YYYY (May 15, 2002)</option>
-                                            <option value="YYYY">YYYY (2002)</option>
+                                            <option value="YYYY/MM/DD">YYYY/MM/DD (2002/05/15)</option>
                                             <option value="DD/MM/YY">DD/MM/YY (15/05/02)</option>
                                             <option value="MM/DD/YY">MM/DD/YY (05/15/02)</option>
+                                            <option value="DD-MM-YY">DD-MM-YY (15-05-02)</option>
+                                            <option value="DD.MM.YY">DD.MM.YY (15.05.02)</option>
+                                            <option value="DD-MMM-YY">DD-MMM-YY (15-May-02)</option>
+                                            <option value="MM/YY">MM/YY (05/02)</option>
+                                            <option value="MM/YYYY">MM/YYYY (05/2002)</option>
+                                            <option value="MMM YYYY">MMM YYYY (May 2002)</option>
+                                            <option value="MMMM YYYY">MMMM YYYY (May 2002)</option>
+                                            <option value="YYYY">YYYY (2002)</option>
                                           </select>
                                         </div>
                                       )}

@@ -403,22 +403,40 @@ export function formatDate(dateVal: any, formatStr?: string): string {
     date = new Date(dateVal);
   } else {
     // String - try parsing
-    const parsed = Date.parse(String(dateVal));
-    if (isNaN(parsed)) {
-      // Try parsing DD/MM/YYYY or DD-MM-YYYY manually if standard parse fails
-      const str = String(dateVal).trim();
-      const match = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (match) {
-        // Assume day, month, year
-        const d = parseInt(match[1], 10);
-        const m = parseInt(match[2], 10) - 1;
-        const y = parseInt(match[3], 10);
+    const str = String(dateVal).trim();
+    const parsed = Date.parse(str);
+    if (!isNaN(parsed)) {
+      date = new Date(parsed);
+    } else {
+      // Try parsing DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY manually
+      const matchDMY = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+      if (matchDMY) {
+        const d = parseInt(matchDMY[1], 10);
+        const m = parseInt(matchDMY[2], 10) - 1;
+        const y = parseInt(matchDMY[3], 10);
         date = new Date(y, m, d);
       } else {
-        return String(dateVal); // return original if not parsable
+        // Try parsing YYYY/MM/DD, YYYY-MM-DD, YYYY.MM.DD
+        const matchYMD = str.match(/^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/);
+        if (matchYMD) {
+          const y = parseInt(matchYMD[1], 10);
+          const m = parseInt(matchYMD[2], 10) - 1;
+          const d = parseInt(matchYMD[3], 10);
+          date = new Date(y, m, d);
+        } else {
+          // Try parsing DD/MM/YY, DD-MM-YY, DD.MM.YY
+          const matchShort = str.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/);
+          if (matchShort) {
+            const d = parseInt(matchShort[1], 10);
+            const m = parseInt(matchShort[2], 10) - 1;
+            let y = parseInt(matchShort[3], 10);
+            y += y < 50 ? 2000 : 1900;
+            date = new Date(y, m, d);
+          } else {
+            return String(dateVal); // return original if not parsable
+          }
+        }
       }
-    } else {
-      date = new Date(parsed);
     }
   }
 
