@@ -573,7 +573,7 @@ export async function renderCardSide(
         } else if (f.textTransform === 'lowercase') {
           processedValue = valueStr.toLowerCase();
         } else if (f.textTransform === 'capitalize') {
-          processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+          processedValue = valueStr.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         }
 
         // Apply opacity
@@ -1227,7 +1227,7 @@ export async function renderCardSideToPdfBytes(
           } else if (f.textTransform === 'lowercase') {
             processedValue = valueStr.toLowerCase();
           } else if (f.textTransform === 'capitalize') {
-            processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+            processedValue = valueStr.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
           }
 
           // Test if the font can encode the text

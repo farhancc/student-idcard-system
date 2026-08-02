@@ -573,7 +573,7 @@ export async function renderCardSideClient(
         } else if (f.textTransform === 'lowercase') {
           processedValue = valueStr.toLowerCase();
         } else if (f.textTransform === 'capitalize') {
-          processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+          processedValue = valueStr.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
         }
 
         if (f.opacity != null) {
@@ -1375,7 +1375,7 @@ export async function renderCardSideToPdfBytesClient(
           let processedValue = valueStr;
           if (f.textTransform === 'uppercase') processedValue = valueStr.toUpperCase();
           else if (f.textTransform === 'lowercase') processedValue = valueStr.toLowerCase();
-          else if (f.textTransform === 'capitalize') processedValue = valueStr.replace(/\b\w/g, c => c.toUpperCase());
+          else if (f.textTransform === 'capitalize') processedValue = valueStr.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
           // Test if the font can encode the text
           let canEncode = true;
