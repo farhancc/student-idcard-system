@@ -878,12 +878,37 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
             flex-direction: column !important;
           }
           .portal-preview-panel {
-            width: 100% !important;
-            max-width: 100% !important;
-            position: relative !important;
+            position: fixed !important;
             top: 0 !important;
-            margin-top: 24px !important;
-            max-height: none !important;
+            left: 0 !important;
+            right: 0 !important;
+            bottom: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            z-index: 1000 !important;
+            background: rgba(0, 0, 0, 0.75) !important;
+            backdrop-filter: blur(6px) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 16px !important;
+            border-radius: 0 !important;
+            border: none !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+          }
+          .portal-preview-panel-content {
+            background: var(--card-bg) !important;
+            border: 1px solid var(--glass-border) !important;
+            border-radius: 16px !important;
+            padding: 24px 20px !important;
+            width: 100% !important;
+            max-width: 440px !important;
+            max-height: 90vh !important;
+            overflow-y: auto !important;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;
           }
         }
         @media (max-width: 640px) {
@@ -1473,7 +1498,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               return (
                                 <div 
                                   key={ch.id} 
-                                  onClick={() => setSelectedCh(ch)}
                                   style={{
                                     background: selectedCh?.id === ch.id ? '#eff6ff' : 'var(--card-bg)',
                                     border: selectedCh?.id === ch.id ? '2px solid var(--primary)' : '1px solid var(--glass-border)',
@@ -1483,7 +1507,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                     flexDirection: 'column',
                                     gap: '12px',
                                     boxShadow: '0 2px 8px rgba(37, 99, 235, 0.05)',
-                                    cursor: 'pointer'
                                   }}
                                 >
                                   {/* Top Row: Photo & Main Info */}
@@ -1524,7 +1547,16 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                       type="button"
                                       className="btn btn-secondary" 
                                       style={{ flex: 1, padding: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '600' }} 
-                                      onClick={(e) => { e.stopPropagation(); setSelectedCh(ch); }}
+                                      onClick={(e) => { 
+                                        e.stopPropagation(); 
+                                        setSelectedCh(ch);
+                                        if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+                                          setTimeout(() => {
+                                            const el = document.getElementById('portal-side-preview-panel');
+                                            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                          }, 100);
+                                        }
+                                      }}
                                     >
                                       <Eye size={14} style={{ color: 'var(--primary)' }} /> Preview
                                     </button>
@@ -1556,162 +1588,169 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 )}
               </div>
 
-              {/* Side Preview Panel */}
+              {/* Side Preview Panel on Desktop / Fixed Modal Overlay on Mobile */}
               {selectedCh && template && (
-                <div className="portal-preview-panel" style={{
-                  width: '360px',
-                  flexShrink: 0,
-                  position: 'sticky',
-                  top: '24px',
-                  background: 'var(--card-bg)',
-                  border: '1px solid var(--glass-border)',
-                  borderRadius: '16px',
-                  padding: '24px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '20px',
-                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                  maxHeight: 'calc(100vh - 80px)',
-                  overflowY: 'auto'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>ID Card Preview</h3>
-                    <button 
-                      onClick={() => setSelectedCh(null)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--muted)',
-                        cursor: 'pointer',
-                        padding: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        borderRadius: '50%',
-                        transition: 'background 0.2s'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-
-                  {/* Card Preview Renderer */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                    <CardPreview
-                      template={template}
-                      cardholder={{
-                        ...selectedCh,
-                        customFields: typeof selectedCh.customFields === 'string' ? selectedCh.customFields : JSON.stringify(selectedCh.customFields || {}),
-                      }}
-                      side={previewSide}
-                      pressFonts={pressFonts}
-                      forceWeb={true}
-                      style={{
-                        width: '100%',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                        borderRadius: '12px',
-                      }}
-                    />
-
-                    {/* Front / Back switch */}
-                    {template.backImageUrl && (
-                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                        <button
-                          onClick={() => setPreviewSide('front')}
-                          style={{
-                            padding: '6px 16px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
-                            color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          Front
-                        </button>
-                        <button
-                          onClick={() => setPreviewSide('back')}
-                          style={{
-                            padding: '6px 16px',
-                            borderRadius: '6px',
-                            border: 'none',
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
-                            color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          Back
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Cardholder metadata */}
-                  <div style={{
-                    borderTop: '1px solid var(--glass-border)',
-                    paddingTop: '16px',
+                <div 
+                  id="portal-side-preview-panel" 
+                  className="portal-preview-panel"
+                  onClick={(e) => {
+                    if (e.target === e.currentTarget) setSelectedCh(null);
+                  }}
+                  style={{
+                    width: '360px',
+                    flexShrink: 0,
+                    position: 'sticky',
+                    top: '24px',
+                    background: 'var(--card-bg)',
+                    border: '1px solid var(--glass-border)',
+                    borderRadius: '16px',
+                    padding: '24px',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px',
-                    fontSize: '0.85rem'
-                  }}>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Cardholder Information</div>
-                    
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--muted)' }}>Name:</span>
-                      <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{selectedCh.name}</span>
+                    gap: '20px',
+                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+                    maxHeight: 'calc(100vh - 80px)',
+                    overflowY: 'auto'
+                  }}
+                >
+                  <div className="portal-preview-panel-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px', width: '100%' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>ID Card Preview</h3>
+                      <button 
+                        onClick={() => setSelectedCh(null)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--muted)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: '50%',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                      >
+                        <X size={18} />
+                      </button>
                     </div>
 
-                    {hasDesignation && selectedCh.designation && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--muted)' }}>Designation:</span>
-                        <span style={{ color: 'var(--foreground)' }}>{selectedCh.designation}</span>
-                      </div>
-                    )}
+                    {/* Card Preview Renderer */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                      <CardPreview
+                        template={template}
+                        cardholder={{
+                          ...selectedCh,
+                          customFields: typeof selectedCh.customFields === 'string' ? selectedCh.customFields : JSON.stringify(selectedCh.customFields || {}),
+                        }}
+                        side={previewSide}
+                        pressFonts={pressFonts}
+                        forceWeb={true}
+                        style={{
+                          width: '100%',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                          borderRadius: '12px',
+                        }}
+                      />
 
-
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--muted)' }}>Department:</span>
-                      <span style={{ color: 'var(--foreground)' }}>{getCardholderDeptName(selectedCh)}</span>
+                      {/* Front / Back switch */}
+                      {template.backImageUrl && (
+                        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                          <button
+                            onClick={() => setPreviewSide('front')}
+                            style={{
+                              padding: '6px 16px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
+                              color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Front
+                          </button>
+                          <button
+                            onClick={() => setPreviewSide('back')}
+                            style={{
+                              padding: '6px 16px',
+                              borderRadius: '6px',
+                              border: 'none',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
+                              color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Back
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Custom fields */}
-                    {(() => {
-                      let parsedCustom: Record<string, string> = {};
-                      try {
-                        parsedCustom = typeof selectedCh.customFields === 'string' ? JSON.parse(selectedCh.customFields) : (selectedCh.customFields || {});
-                      } catch { parsedCustom = {}; }
+                    {/* Cardholder metadata */}
+                    <div style={{
+                      borderTop: '1px solid var(--glass-border)',
+                      paddingTop: '16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '12px',
+                      fontSize: '0.85rem'
+                    }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Cardholder Information</div>
                       
-                      const entries = Object.entries(parsedCustom).filter(([k, v]) => {
-                        return v && typeof v === 'string' && !v.startsWith('data:') && !v.startsWith('http');
-                      });
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--muted)' }}>Name:</span>
+                        <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{selectedCh.name}</span>
+                      </div>
 
-                      if (entries.length === 0) return null;
+                      {hasDesignation && selectedCh.designation && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--muted)' }}>Designation:</span>
+                          <span style={{ color: 'var(--foreground)' }}>{selectedCh.designation}</span>
+                        </div>
+                      )}
 
-                      return (
-                        <>
-                          <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
-                          {entries.map(([key, val]) => {
-                            const label = formatFieldLabel(key);
-                            return (
-                              <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                <span style={{ color: 'var(--muted)' }}>{label}:</span>
-                                <span style={{ color: 'var(--foreground)', textAlign: 'right' }}>{val}</span>
-                              </div>
-                            );
-                          })}
-                        </>
-                      );
-                    })()}
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--muted)' }}>Department:</span>
+                        <span style={{ color: 'var(--foreground)' }}>{getCardholderDeptName(selectedCh)}</span>
+                      </div>
+
+                      {/* Custom fields */}
+                      {(() => {
+                        let parsedCustom: Record<string, string> = {};
+                        try {
+                          parsedCustom = typeof selectedCh.customFields === 'string' ? JSON.parse(selectedCh.customFields) : (selectedCh.customFields || {});
+                        } catch { parsedCustom = {}; }
+                        
+                        const entries = Object.entries(parsedCustom).filter(([k, v]) => {
+                          return v && typeof v === 'string' && !v.startsWith('data:') && !v.startsWith('http');
+                        });
+
+                        if (entries.length === 0) return null;
+
+                        return (
+                          <>
+                            <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
+                            {entries.map(([key, val]) => {
+                              const label = formatFieldLabel(key);
+                              return (
+                                <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <span style={{ color: 'var(--muted)' }}>{label}:</span>
+                                  <span style={{ color: 'var(--foreground)', textAlign: 'right' }}>{val}</span>
+                                </div>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
