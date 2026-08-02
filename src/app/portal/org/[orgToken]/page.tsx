@@ -145,6 +145,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [fieldTypeMap, setFieldTypeMap] = useState<Record<string, string>>({});
+  const [fieldCoordsMap, setFieldCoordsMap] = useState<Record<string, FieldCoordinate>>({});
   const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
 
   // Field visibility states
@@ -201,20 +202,36 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       const allFields: FieldCoordinate[] = [...front, ...back];
 
       const typeMap: Record<string, string> = {};
+      const coordsMap: Record<string, FieldCoordinate> = {};
       allFields.forEach(f => {
-        if (f.field) typeMap[f.field] = f.type || 'text';
+        if (f.field) {
+          typeMap[f.field] = f.type || 'text';
+          coordsMap[f.field] = f;
+        }
       });
       setFieldTypeMap(typeMap);
-      // Include user-fillable text, id, date, and number fields
-      const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number' || !f.type);
+      setFieldCoordsMap(coordsMap);
+
+      // Identify fields that are mapped to 'qr', 'barcode', 'id' or static fields to exclude from user forms
+      const restrictedFields = new Set(
+        allFields
+          .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'id' || (f as any).staticValue !== undefined)
+          .map(f => f.field)
+      );
+
+      // Include user-fillable text, date, and number fields (excluding restricted and ID types)
+      const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || !f.type) && f.type !== 'id' && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
       const filteredKeys = keys.filter(k => {
         const clean = cleanFieldKey(k);
+        const meta = coordsMap[k];
         return clean !== 'photo' && 
           clean !== 'avatar' &&
           clean !== 'cardserial' &&
-          !clean.includes('serial');
+          !clean.includes('serial') &&
+          meta?.type !== 'id' &&
+          (meta as any)?.staticValue === undefined;
       });
       setFormFields(filteredKeys);
 
@@ -1627,25 +1644,63 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 const clean = cleanFieldKey(field);
                 const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
                 const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
-                const isDate = isDateField(field, fieldTypeMap[field]);
+                const fieldMeta = fieldCoordsMap[field];
+                const isDate = isDateField(field, fieldMeta?.type || fieldTypeMap[field]);
+                const isNumber = (fieldMeta?.type || fieldTypeMap[field]) === 'number';
+                const minCap = (fieldMeta as any)?.min;
+                const maxCap = (fieldMeta as any)?.max;
+
                 return (
                   <div className="form-group" key={field}>
-                    <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>
+                    <label className="form-label">
+                      {label}{isNameLike ? ' *' : ''}
+                      {isNumber && (minCap !== undefined || maxCap !== undefined) && (
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '6px', fontWeight: 'normal' }}>
+                          ({minCap !== undefined && maxCap !== undefined ? `Range: ${minCap} - ${maxCap}` : (minCap !== undefined ? `Min: ${minCap}` : `Max: ${maxCap}`)})
+                        </span>
+                      )}
+                    </label>
                     <input
-                      type={isDate ? "date" : "text"}
+                      type={isNumber ? "number" : (isDate ? "date" : "text")}
+                      min={isNumber && minCap !== undefined ? minCap : undefined}
+                      max={isNumber && maxCap !== undefined ? maxCap : undefined}
+                      maxLength={!isNumber && !isDate && maxCap !== undefined && maxCap > 0 ? maxCap : undefined}
                       required={isNameLike}
                       className="form-input"
                       value={customFields[field] || ''}
                       onChange={e => {
-                        const val = e.target.value;
-                        setCustomFields({
-                          ...customFields,
+                        let val = e.target.value;
+                        if (isNumber && val !== '') {
+                          const numVal = Number(val);
+                          if (!isNaN(numVal)) {
+                            if (maxCap !== undefined && maxCap !== null && numVal > maxCap) {
+                              val = String(maxCap);
+                            }
+                          }
+                        } else if (!isNumber && !isDate && maxCap !== undefined && maxCap > 0 && val.length > maxCap) {
+                          val = val.substring(0, maxCap);
+                        }
+                        setCustomFields(prev => ({
+                          ...prev,
                           [field]: val,
-                        });
+                        }));
                         if (isNameLike) {
                           setName(val);
                         } else if (isDesignationLike) {
                           setDesignation(val);
+                        }
+                      }}
+                      onBlur={e => {
+                        if (isNumber && e.target.value !== '') {
+                          const numVal = Number(e.target.value);
+                          if (!isNaN(numVal)) {
+                            let clamped = numVal;
+                            if (minCap !== undefined && minCap !== null && clamped < minCap) clamped = minCap;
+                            if (maxCap !== undefined && maxCap !== null && clamped > maxCap) clamped = maxCap;
+                            if (clamped !== numVal) {
+                              setCustomFields(prev => ({ ...prev, [field]: String(clamped) }));
+                            }
+                          }
                         }
                       }}
                       onClick={e => {
@@ -1655,7 +1710,11 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           } catch {}
                         }
                       }}
-                      placeholder={isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`}
+                      placeholder={
+                        isNumber
+                          ? (minCap !== undefined && maxCap !== undefined ? `Enter number (${minCap} to ${maxCap})` : `Enter number for ${label.toLowerCase()}`)
+                          : (isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`)
+                      }
                       style={{ cursor: isDate ? 'pointer' : 'text' }}
                     />
                   </div>
