@@ -238,13 +238,14 @@ export function getResolvedFieldValue(
     }
     // Priority 2: Use cardholder's uniqueKey if set (fallback to customFields keys)
     const chUniqueKey = cardholder.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key;
-    if (chUniqueKey && String(chUniqueKey).trim() !== '') {
+    if (chUniqueKey && String(chUniqueKey).trim() !== '' && !String(chUniqueKey).startsWith('C-')) {
       return chUniqueKey;
     }
-    // Priority 3: Fall back to cardSerial if uniqueKey isn't available
-    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '') {
+    // Priority 3: Fall back to cardSerial if uniqueKey isn't available and not an auto-generated C- timestamp serial
+    if (cardholder.cardSerial && String(cardholder.cardSerial).trim() !== '' && !cardholder.cardSerial.startsWith('C-')) {
       return cardholder.cardSerial;
     }
+    return undefined;
   }
 
   // NAME resolution fallback
@@ -547,7 +548,14 @@ export function resolveFieldRawValue(
         customObj = cardholder.customFields;
       }
     }
-    resolved = cardholder?.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key || cardholder?.cardSerial || '';
+    const realId = cardholder?.uniqueKey || customObj.uniqueKey || customObj.id || customObj.unique_key;
+    if (realId && String(realId).trim() !== '' && !String(realId).startsWith('C-')) {
+      resolved = realId;
+    } else if (cardholder?.cardSerial && !cardholder.cardSerial.startsWith('C-')) {
+      resolved = cardholder.cardSerial;
+    } else {
+      resolved = undefined;
+    }
   }
 
   // 3. Image type vs Text/Other type handling

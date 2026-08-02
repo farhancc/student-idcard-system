@@ -611,10 +611,11 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
           return;
         }
 
-        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
-          if (!idVal || String(idVal).trim() === '') {
-            warnings.push('Unique ID/Key is missing');
+        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber' || fieldClean.includes('id')) {
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch, f.type) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
+          if (!idVal || String(idVal).trim() === '' || String(idVal).startsWith('C-')) {
+            const label = formatFieldLabel(f.field) || 'ID';
+            warnings.push(`${label} is missing`);
           }
           return;
         }
@@ -1077,17 +1078,18 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                                 if (tf.field === 'designation' || tf.field === 'role') {
                                   return <td key={tf.field}>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>;
                                 }
-                                if (tf.field === 'uniqueKey') {
+                                if (tf.field === 'uniqueKey' || tf.type === 'id' || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '').includes('id')) {
                                   const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
-                                  const idVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
-                                  return <td key={tf.field}><code>{idVal}</code></td>;
+                                  const rawVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || parsedCustom[tf.field];
+                                  const idVal = (rawVal && !String(rawVal).startsWith('C-')) ? rawVal : null;
+                                  return <td key={tf.field}>{idVal ? <code>{idVal}</code> : <span style={{ color: 'var(--muted)' }}>—</span>}</td>;
                                 }
                                 if (tf.type === 'image') {
                                   const val = parsedCustom[tf.field];
                                   return (
                                     <td key={tf.field}>
                                       {val ? (
-                                        <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                        <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#f1f5f9', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
                                           <img src={val} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         </div>
                                       ) : (

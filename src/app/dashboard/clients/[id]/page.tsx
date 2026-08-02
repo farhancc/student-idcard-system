@@ -1867,17 +1867,15 @@ export default function ClientDetailsPage() {
         // IMPORTANT: Do NOT fall back to cardSerial here — cardSerial is
         // auto-generated and is NOT a user-provided ID. If it's the only
         // thing present, the ID field is genuinely missing for the user.
-        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          // Check for a real user-provided ID value (not just cardSerial fallback)
+        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber' || fieldClean.includes('id')) {
           const idFromCustom = parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key ||
-            // Also check all custom fields for any explicit ID-like key
             Object.entries(parsedCustom).find(([k]) => {
               const kc = k.toLowerCase().replace(/[^a-z0-9]/g, '');
               return kc === 'id' || kc === 'studentid' || kc === 'rollno' || kc === 'rollnumber' || kc === 'admno' || kc === 'admissionnumber' || kc === 'empid' || kc === 'employeeid';
             })?.[1];
           const idVal = ch.uniqueKey || idFromCustom;
-          if (!idVal || String(idVal).trim() === '' || String(idVal) === 'null' || String(idVal) === 'undefined') {
-            const label = formatFieldLabel(f.field);
+          if (!idVal || String(idVal).trim() === '' || String(idVal).startsWith('C-') || String(idVal) === 'null' || String(idVal) === 'undefined') {
+            const label = formatFieldLabel(f.field) || 'ID';
             warnings.push(`${label} is missing`);
           }
           return;

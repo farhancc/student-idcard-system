@@ -742,10 +742,11 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           return;
         }
 
-        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
-          if (!idVal || String(idVal).trim() === '') {
-            warnings.push('Unique ID/Key is missing');
+        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber' || fieldClean.includes('id')) {
+          const idVal = getResolvedFieldValue(f.field, cardholderData, ch, f.type) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
+          if (!idVal || String(idVal).trim() === '' || String(idVal).startsWith('C-')) {
+            const label = formatFieldLabel(f.field) || 'ID';
+            warnings.push(`${label} is missing`);
           }
           return;
         }
@@ -1256,7 +1257,15 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                           );
                                         }
 
-                                        const val = parsedCustom[tf.field] || (tf.field === 'designation' ? ch.designation : null);
+                                        let val = parsedCustom[tf.field];
+                                        if (!val) {
+                                          if (tf.isName) val = ch.name;
+                                          else if (tf.field === 'designation') val = ch.designation;
+                                          else if (tf.type === 'id' || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '').includes('id') || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '') === 'uniquekey') {
+                                            const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key;
+                                            if (rawId && !String(rawId).startsWith('C-')) val = rawId;
+                                          }
+                                        }
                                         const isPrimaryTextCol = !hasName && index === 0;
 
                                         return (
