@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
+import CardPreview from '@/app/components/CardPreview';
 import { ToastProvider, useToast } from '@/components/ui/toast';
 import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
@@ -21,6 +22,7 @@ import {
   Building,
   FileText,
   Download,
+  X,
 } from 'lucide-react';
 
 const isDateField = (fieldKey: string, fieldType?: string) => {
@@ -184,6 +186,16 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const [editingCardholderId, setEditingCardholderId] = useState<number | null>(null);
   const [previewCardholder, setPreviewCardholder] = useState<Cardholder | null>(null);
   const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
+  const [pressFonts, setPressFonts] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/superadmin/fonts')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setPressFonts(data);
+      })
+      .catch(() => {});
+  }, []);
 
   // Form States
   const [name, setName] = useState('');
@@ -732,16 +744,22 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     <div className="dept-portal-container" style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px' }}>
       <style>{`
         @media (max-width: 900px) {
+          .portal-desktop-table {
+            display: none !important;
+          }
+          .portal-mobile-card-list {
+            display: flex !important;
+          }
           .portal-main-grid {
             flex-direction: column !important;
           }
-          .portal-preview-panel {
-            width: 100% !important;
-            max-width: 100% !important;
-            position: relative !important;
-            top: 0 !important;
-            margin-top: 24px !important;
-            max-height: none !important;
+        }
+        @media (min-width: 901px) {
+          .portal-desktop-table {
+            display: block !important;
+          }
+          .portal-mobile-card-list {
+            display: none !important;
           }
         }
         @media (max-width: 640px) {
@@ -771,6 +789,15 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
           .portal-search-bar {
             max-width: 100% !important;
             width: 100% !important;
+          }
+          .portal-toolbar-actions {
+            width: 100% !important;
+            flex-direction: column !important;
+          }
+          .portal-toolbar-actions button,
+          .portal-toolbar-actions a {
+            width: 100% !important;
+            justify-content: center !important;
           }
           .portal-add-btn {
             width: 100% !important;
@@ -929,7 +956,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <div className="portal-toolbar-actions" style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             {selectedIds.length > 0 && (
               <span style={{ fontSize: '0.875rem', color: 'var(--muted)', marginRight: '8px' }}>
                 {selectedIds.length} selected
@@ -1488,47 +1515,186 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
       {/* Preview Modal */}
       {previewCardholder && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(6px)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '480px', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '1.25rem', marginBottom: '8px' }}>ID Card Preview</h3>
-            <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>Previewing card for <strong>{previewCardholder.name}</strong></p>
-            <div style={{ borderRadius: '12px', border: '1px solid var(--glass-border)', background: 'rgba(59,130,246,0.04)', padding: '24px', marginBottom: '20px', textAlign: 'left' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cardholder Details</div>
-              {(() => {
-                const photo = getEffectivePhotoUrl(previewCardholder);
-                return photo ? (
-                  <div style={{ marginBottom: '12px' }}>
-                    <img src={photo} alt={previewCardholder.name} style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
-                  </div>
-                ) : null;
-              })()}
-              <div style={{ fontWeight: '700', fontSize: '1.1rem', marginBottom: '4px' }}>{previewCardholder.name}</div>
-              {previewCardholder.designation && <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '4px' }}>{previewCardholder.designation}</div>}
-              {(() => {
-                const custom = previewCardholder.customFields ? (typeof previewCardholder.customFields === 'string' ? JSON.parse(previewCardholder.customFields) : previewCardholder.customFields) : {};
-                const idVal = previewCardholder.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
-                return idVal ? <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {idVal}</div> : null;
-              })()}
-              <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--muted)', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
-                ℹ️ Card template preview is available in the Desktop App only.
+        <div 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setPreviewCardholder(null);
+          }}
+          style={{ 
+            position: 'fixed', 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            background: 'rgba(0,0,0,0.8)', 
+            backdropFilter: 'blur(6px)', 
+            zIndex: 999, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            padding: '16px',
+            boxSizing: 'border-box'
+          }}
+        >
+          <div 
+            className="card" 
+            style={{ 
+              width: '100%', 
+              maxWidth: '440px', 
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              padding: '24px', 
+              borderRadius: '16px', 
+              background: 'var(--card-bg)', 
+              border: '1px solid var(--glass-border)', 
+              position: 'relative',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+            }}
+          >
+            {/* Header with Close X */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.2rem', margin: 0, fontWeight: '700' }}>ID Card Preview</h3>
+                <p style={{ color: 'var(--muted)', fontSize: '0.8rem', margin: '2px 0 0 0' }}>
+                  Previewing card for <strong>{previewCardholder.name}</strong>
+                </p>
               </div>
+              <button 
+                type="button" 
+                onClick={() => setPreviewCardholder(null)}
+                style={{ 
+                  background: 'none', 
+                  border: 'none', 
+                  color: 'var(--muted)', 
+                  cursor: 'pointer', 
+                  padding: '4px',
+                  borderRadius: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={20} />
+              </button>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-              {(() => {
-                const backParsed = JSON.parse(template?.backFields || '[]');
-                const hasBack = backParsed.length > 0;
-                if (!hasBack) return <div />;
-                return (
-                  <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px' }}>
-                    {(['front', 'back'] as const).map(s => (
-                      <button key={s} type="button" onClick={() => setPreviewSide(s)} style={{ padding: '4px 12px', fontSize: '0.75rem', fontWeight: '500', borderRadius: '6px', border: 'none', cursor: 'pointer', background: previewSide === s ? 'var(--primary)' : 'transparent', color: previewSide === s ? '#fff' : 'var(--muted)', transition: 'all 0.2s' }}>
-                        {s.charAt(0).toUpperCase() + s.slice(1)}
-                      </button>
-                    ))}
+
+            {/* Live Interactive Card Renderer */}
+            {template ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <CardPreview
+                  template={template}
+                  cardholder={{
+                    ...previewCardholder,
+                    customFields: typeof previewCardholder.customFields === 'string' ? previewCardholder.customFields : JSON.stringify(previewCardholder.customFields || {}),
+                  }}
+                  side={previewSide}
+                  pressFonts={pressFonts}
+                  forceWeb={true}
+                  style={{
+                    width: '100%',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+                    borderRadius: '12px',
+                  }}
+                />
+
+                {/* Front / Back Side Switcher */}
+                {template.backImageUrl && (
+                  <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSide('front')}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
+                        color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      Front
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewSide('back')}
+                      style={{
+                        padding: '6px 16px',
+                        borderRadius: '6px',
+                        border: 'none',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
+                        color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      Back
+                    </button>
                   </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>
+                Template data loading...
+              </div>
+            )}
+
+            {/* Cardholder metadata breakdown */}
+            <div style={{
+              borderTop: '1px solid var(--glass-border)',
+              paddingTop: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+              fontSize: '0.85rem',
+              textAlign: 'left'
+            }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+                Cardholder Information
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--muted)' }}>Name:</span>
+                <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{previewCardholder.name}</span>
+              </div>
+
+              {previewCardholder.designation && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: 'var(--muted)' }}>Designation:</span>
+                  <span style={{ color: 'var(--foreground)' }}>{previewCardholder.designation}</span>
+                </div>
+              )}
+
+              {(() => {
+                let parsedCustom: Record<string, string> = {};
+                try {
+                  parsedCustom = typeof previewCardholder.customFields === 'string' ? JSON.parse(previewCardholder.customFields) : (previewCardholder.customFields || {});
+                } catch { parsedCustom = {}; }
+                
+                const entries = Object.entries(parsedCustom).filter(([k, v]) => {
+                  return v && typeof v === 'string' && !v.startsWith('data:') && !v.startsWith('http');
+                });
+
+                if (entries.length === 0) return null;
+
+                return (
+                  <>
+                    <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
+                    {entries.map(([key, val]) => {
+                      const label = formatFieldLabel(key);
+                      return (
+                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--muted)' }}>{label}:</span>
+                          <span style={{ color: 'var(--foreground)', textAlign: 'right' }}>{val}</span>
+                        </div>
+                      );
+                    })}
+                  </>
                 );
               })()}
-              <button className="btn btn-primary" onClick={() => setPreviewCardholder(null)}>Close Preview</button>
             </div>
           </div>
         </div>
