@@ -950,8 +950,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     <table className="custom-table">
                       <thead>
                         <tr>
-                          <th>Photo</th>
-                          <th>Name</th>
+                          {hasPhoto && <th>Photo</th>}
+                          {(hasName || formFields.length === 0) && <th>Name</th>}
                           <th>Department</th>
                           {hasDesignation && <th>Designation</th>}
                           {/* Dynamic Custom Text Fields */}
@@ -985,50 +985,54 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                 transition: 'all 0.2s',
                               }}
                             >
-                              <td>
-                                <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                  {(() => {
-                                    const effectivePhoto = getEffectivePhotoUrl(ch);
-                                    return effectivePhoto ? (
-                                      <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : (
-                                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
-                                    );
-                                  })()}
-                                </div>
-                              </td>
-                              <td style={{ fontWeight: 'bold' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  {ch.name}
-                                  {(() => {
-                                    const warnings = getCardholderWarnings(ch);
-                                    if (warnings.length > 0) {
-                                      return (
-                                        <span 
-                                          title={warnings.join('\n')}
-                                          style={{
-                                            display: 'inline-flex',
-                                            alignItems: 'center',
-                                            gap: '4px',
-                                            background: 'rgba(245,158,11,0.15)',
-                                            color: '#fbbf24',
-                                            padding: '2px 6px',
-                                            borderRadius: '4px',
-                                            fontSize: '0.7rem',
-                                            fontWeight: 'normal',
-                                            border: '1px solid rgba(245,158,11,0.3)',
-                                            cursor: 'help'
-                                          }}
-                                        >
-                                          <AlertCircle size={12} />
-                                          {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
-                                        </span>
+                              {hasPhoto && (
+                                <td>
+                                  <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                    {(() => {
+                                      const effectivePhoto = getEffectivePhotoUrl(ch);
+                                      return effectivePhoto ? (
+                                        <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
                                       );
-                                    }
-                                    return null;
-                                  })()}
-                                </div>
-                               </td>
+                                    })()}
+                                  </div>
+                                </td>
+                              )}
+                              {(hasName || formFields.length === 0) && (
+                                <td style={{ fontWeight: 'bold' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    {ch.name}
+                                    {(() => {
+                                      const warnings = getCardholderWarnings(ch);
+                                      if (warnings.length > 0) {
+                                        return (
+                                          <span 
+                                            title={warnings.join('\n')}
+                                            style={{
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '4px',
+                                              background: 'rgba(245,158,11,0.15)',
+                                              color: '#fbbf24',
+                                              padding: '2px 6px',
+                                              borderRadius: '4px',
+                                              fontSize: '0.7rem',
+                                              fontWeight: 'normal',
+                                              border: '1px solid rgba(245,158,11,0.3)',
+                                              cursor: 'help'
+                                            }}
+                                          >
+                                            <AlertCircle size={12} />
+                                            {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                          </span>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
+                                  </div>
+                                </td>
+                              )}
                               <td style={{ fontSize: '0.85rem' }}>
                                 <span style={{
                                   padding: '3px 8px',
@@ -1043,9 +1047,43 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               {hasDesignation && <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>}
 
                               {/* Dynamic Custom Text Fields */}
-                              {formFields.map(field => (
-                                <td key={field}>{parsedCustom[field] || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                              ))}
+                              {formFields.map((field, idx) => {
+                                const isFirstCol = !hasName && formFields.length > 0 && idx === 0;
+                                return (
+                                  <td key={field} style={isFirstCol ? { fontWeight: 'bold' } : undefined}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      {parsedCustom[field] || <span style={{ color: 'var(--muted)' }}>—</span>}
+                                      {isFirstCol && (() => {
+                                        const warnings = getCardholderWarnings(ch);
+                                        if (warnings.length > 0) {
+                                          return (
+                                            <span 
+                                              title={warnings.join('\n')}
+                                              style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                background: 'rgba(245,158,11,0.15)',
+                                                color: '#fbbf24',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'normal',
+                                                border: '1px solid rgba(245,158,11,0.3)',
+                                                cursor: 'help'
+                                              }}
+                                            >
+                                              <AlertCircle size={12} />
+                                              {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                  </td>
+                                );
+                              })}
 
                               {/* Dynamic Custom Image Fields */}
                               {customImgFields.map(field => {
