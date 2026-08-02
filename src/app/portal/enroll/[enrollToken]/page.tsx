@@ -534,37 +534,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 }}>
                   <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
                   <div>
-                    This enrollment template does not have any input fields configured. A standard Full Name field is provided below as a fallback.
+                    This enrollment template does not have any input fields configured.
                   </div>
-                </div>
-              )}
-
-              {/* Fallback Name input if no name-like field was detected AND template has 0 fields */}
-              {!hasName && formFields.length === 0 && (
-                <div className="form-group">
-                  <label className="form-label">Full Name *</label>
-                  <input
-                    type="text"
-                    required
-                    className="form-input"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="Enter your full name"
-                  />
-                </div>
-              )}
-
-              {/* Fallback Designation input if no designation-like field was detected in the template fields */}
-              {!hasDesignation && formFields.length === 0 && (
-                <div className="form-group">
-                  <label className="form-label">Designation</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={designation}
-                    onChange={e => setDesignation(e.target.value)}
-                    placeholder="Enter designation (optional)"
-                  />
                 </div>
               )}
           
