@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 
 const isDateField = (fieldKey: string, fieldType?: string) => {
-  if (fieldType === 'date') return true;
+  if (fieldType && fieldType.toLowerCase() === 'date') return true;
   const clean = fieldKey.toLowerCase().replace(/[^a-z]/g, '');
   if (
     clean.includes('no') ||
@@ -168,6 +168,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
+  const [fieldTypeMap, setFieldTypeMap] = useState<Record<string, string>>({});
 
   // Field visibility states
   const [hasName, setHasName] = useState(true);
@@ -212,6 +213,12 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
       const front = JSON.parse(shareData.template.frontFields || '[]');
       const back = JSON.parse(shareData.template.backFields || '[]');
       const allFields: FieldCoordinate[] = [...front, ...back];
+
+      const typeMap: Record<string, string> = {};
+      allFields.forEach(f => {
+        if (f.field) typeMap[f.field] = f.type || 'text';
+      });
+      setFieldTypeMap(typeMap);
       // Include user-fillable text, id, and date fields
       const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || !f.type);
       const keys = Array.from(new Set(textFields.map(f => f.field)));
@@ -407,7 +414,16 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
   const handleSaveCardholder = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalName = name.trim() || 'Cardholder';
+    let resolvedName = name.trim();
+    if (!resolvedName) {
+      for (const k of formFields) {
+        if (customFields[k] && customFields[k].trim()) {
+          resolvedName = customFields[k].trim();
+          break;
+        }
+      }
+    }
+    const finalName = resolvedName || 'Cardholder';
     if (!finalName) return;
     setLoading(true);
     try {
@@ -962,8 +978,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                 </div>
               )}
 
-              {/* Fallback Name input if no name-like field was detected in the template fields */}
-              {!hasName && (
+              {/* Fallback Name input if no name-like field was detected AND template has 0 fields */}
+              {!hasName && formFields.length === 0 && (
                 <div className="form-group">
                   <label className="form-label">Full Name *</label>
                   <input
@@ -1059,7 +1075,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                 const clean = cleanFieldKey(field);
                 const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
                 const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
-                const isDate = isDateField(field);
+                const isDate = isDateField(field, fieldTypeMap[field]);
                 return (
                   <div className="form-group" key={field}>
                     <label className="form-label">{label}{isNameLike ? ' *' : ''}</label>

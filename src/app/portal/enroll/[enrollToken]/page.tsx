@@ -41,7 +41,7 @@ interface Template {
 const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
 const isDateField = (fieldKey: string, fieldType?: string) => {
-  if (fieldType === 'date') return true;
+  if (fieldType && fieldType.toLowerCase() === 'date') return true;
   const clean = cleanFieldKey(fieldKey);
   if (
     clean.includes('no') ||
@@ -327,8 +327,16 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const finalName = name.trim() || 'Cardholder';
+    let resolvedName = name.trim();
+    if (!resolvedName) {
+      for (const k of formFields) {
+        if (customFields[k] && customFields[k].trim()) {
+          resolvedName = customFields[k].trim();
+          break;
+        }
+      }
+    }
+    const finalName = resolvedName || 'Cardholder';
     if (!finalName) {
       setError('Name is required');
       return;
@@ -531,8 +539,8 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 </div>
               )}
 
-              {/* Fallback Name input if no name-like field was detected in the template fields */}
-              {!hasName && (
+              {/* Fallback Name input if no name-like field was detected AND template has 0 fields */}
+              {!hasName && formFields.length === 0 && (
                 <div className="form-group">
                   <label className="form-label">Full Name *</label>
                   <input
