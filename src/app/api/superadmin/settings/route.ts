@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       priceCreditPro,
       priceCreditEnterprise,
       marketplaceListingFee,
+      signupBonusCredits,
     } = await request.json();
 
     if (
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       { key: 'price_credit_pro', value: String(Number(priceCreditPro)) },
       { key: 'price_credit_enterprise', value: String(Number(priceCreditEnterprise)) },
       { key: 'marketplace_listing_fee', value: String(Math.max(0, Number(marketplaceListingFee ?? 0))) },
+      { key: 'signup_bonus_credits', value: String(Math.max(0, Number(signupBonusCredits ?? 500))) },
     ];
 
     // Perform upserts in a transaction
@@ -73,7 +75,7 @@ export async function POST(request: Request) {
         actorName: 'Super Admin',
         action: 'CREDIT_COSTS_UPDATED',
         category: 'SYSTEM',
-        description: `Updated credit costs & plan pricing. Credit prices: Basic = Rs. ${priceCreditBasic}, Pro = Rs. ${priceCreditPro}, Enterprise = Rs. ${priceCreditEnterprise}`,
+        description: `Updated credit costs, plan pricing & signup bonus (${signupBonusCredits ?? 500} credits).`,
         ipAddress: ip,
         severity: 'INFO',
       },
@@ -92,6 +94,7 @@ export async function POST(request: Request) {
         priceCreditBasic: Number(priceCreditBasic),
         priceCreditPro: Number(priceCreditPro),
         priceCreditEnterprise: Number(priceCreditEnterprise),
+        signupBonusCredits: Number(signupBonusCredits ?? 500),
       },
     });
   } catch (error: any) {

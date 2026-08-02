@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { signupSchema } from '@/lib/schemas';
+import { getCreditSettings } from '@/lib/system-settings';
 
 export async function POST(request: Request) {
   // ── Rate limiting: 5 signups per hour per IP ──────────────────────────────
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await hashPassword(password);
+    const creditSettings = await getCreditSettings();
 
     // Create Press and Owner user in a single transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -60,7 +62,7 @@ export async function POST(request: Request) {
           plan: 'BASIC',
           isActive: true,
           credits: 0,
-          promoCredits: 500,
+          promoCredits: creditSettings.signupBonusCredits,
           trialEndsAt: null,
         },
       });

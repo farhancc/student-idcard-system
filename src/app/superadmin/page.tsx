@@ -165,6 +165,7 @@ export default function SuperAdminDashboard() {
   const [priceCreditBasic, setPriceCreditBasic] = useState('1.5');
   const [priceCreditPro, setPriceCreditPro] = useState('1.2');
   const [priceCreditEnterprise, setPriceCreditEnterprise] = useState('1.0');
+  const [signupBonusCredits, setSignupBonusCredits] = useState('500');
   const [settingsSuccess, setSettingsSuccess] = useState('');
 
   const handleOnboardPress = async (e: React.FormEvent) => {
@@ -493,6 +494,7 @@ export default function SuperAdminDashboard() {
         setPriceCreditBasic(String(data.settings.priceCreditBasic));
         setPriceCreditPro(String(data.settings.priceCreditPro));
         setPriceCreditEnterprise(String(data.settings.priceCreditEnterprise));
+        setSignupBonusCredits(String(data.settings.signupBonusCredits ?? '500'));
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load system settings.');
@@ -520,6 +522,7 @@ export default function SuperAdminDashboard() {
           priceCreditBasic: Number(priceCreditBasic),
           priceCreditPro: Number(priceCreditPro),
           priceCreditEnterprise: Number(priceCreditEnterprise),
+          signupBonusCredits: Number(signupBonusCredits),
         }),
       });
       const data = await res.json();
@@ -2030,6 +2033,26 @@ export default function SuperAdminDashboard() {
                   style={{ width: '100%' }}
                 />
                 <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Charged per approval PDF generated for double-sided templates.</span>
+              </div>
+
+              <div style={{ margin: '28px 0 16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>
+                <h4 style={{ fontSize: '0.9rem', color: '#f1f5f9', fontWeight: 600, marginBottom: '4px' }}>Signup Bonus Configuration</h4>
+                <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '14px' }}>Set the amount of promotional bonus credits automatically granted to newly registered presses upon signup.</p>
+              </div>
+
+              <div style={{ marginBottom: '24px' }}>
+                <label className="form-label" htmlFor="signupBonusCredits" style={{ color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Signup Bonus (Promo Credits)</label>
+                <input
+                  type="number"
+                  id="signupBonusCredits"
+                  className="form-input"
+                  value={signupBonusCredits}
+                  onChange={(e) => setSignupBonusCredits(e.target.value)}
+                  min="0"
+                  required
+                  style={{ width: '100%' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginTop: '4px' }}>Promotional credits can be used for card printing & PDF exports, but are restricted from buying marketplace templates.</span>
               </div>
 
               <div style={{ margin: '28px 0 16px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '20px' }}>

@@ -11,6 +11,7 @@ export interface CreditSettings {
   priceCreditBasic: number;
   priceCreditPro: number;
   priceCreditEnterprise: number;
+  signupBonusCredits: number;
 }
 
 export async function getCreditSettings(): Promise<CreditSettings> {
@@ -28,7 +29,8 @@ export async function getCreditSettings(): Promise<CreditSettings> {
             'credit_cost_approval_pdf_double',
             'price_credit_basic',
             'price_credit_pro',
-            'price_credit_enterprise'
+            'price_credit_enterprise',
+            'signup_bonus_credits'
           ]
         }
       }
@@ -51,6 +53,7 @@ export async function getCreditSettings(): Promise<CreditSettings> {
       priceCreditBasic: Number(settingsMap.get('price_credit_basic') || '1.5'),
       priceCreditPro: Number(settingsMap.get('price_credit_pro') || '1.2'),
       priceCreditEnterprise: Number(settingsMap.get('price_credit_enterprise') || '1.0'),
+      signupBonusCredits: Number(settingsMap.get('signup_bonus_credits') || '500'),
     };
   } catch (error) {
     console.error('Failed to fetch credit settings from database:', error);
@@ -65,6 +68,7 @@ export async function getCreditSettings(): Promise<CreditSettings> {
       priceCreditBasic: 1.5,
       priceCreditPro: 1.2,
       priceCreditEnterprise: 1.0,
+      signupBonusCredits: 500,
     };
   }
 }
