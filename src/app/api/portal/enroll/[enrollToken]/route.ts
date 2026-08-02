@@ -128,7 +128,6 @@ export async function POST(
         designation: designation ?? null,
         photoUrl: photoUrl ?? null,
         customFields: Object.keys(custom).length > 0 ? JSON.stringify(custom) : null,
-        uniqueKey: (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) ? String(extractedUniqueKey) : null,
         cardSerial,
         enrollToken, // Stores either the global enrollToken or the department enrollToken
       },

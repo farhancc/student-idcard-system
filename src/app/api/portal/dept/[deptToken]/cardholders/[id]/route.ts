@@ -58,7 +58,6 @@ export async function PUT(
         designation,
         photoUrl,
         customFields: JSON.stringify(custom),
-        uniqueKey: (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) ? String(extractedUniqueKey) : null,
         cardSerial: cardholder.cardSerial,
       },
     });
