@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, basePrisma } from '@/lib/prisma';
+import { basePrisma } from '@/lib/prisma';
 
 // POST /api/marketplace/report?templateId=X
 export async function POST(request: Request) {
@@ -12,6 +12,8 @@ export async function POST(request: Request) {
     const templateId = Number(searchParams.get('templateId'));
     if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
 
+    // Use basePrisma throughout — the template may belong to a different press
+    // or be an official template (pressId: null); tenant-scoped prisma cannot see those.
     const template = await basePrisma.cardTemplate.findFirst({
       where: {
         id: templateId,
@@ -24,7 +26,7 @@ export async function POST(request: Request) {
     });
     if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
 
-    const existingReport = await prisma.templateReport.findUnique({
+    const existingReport = await basePrisma.templateReport.findUnique({
       where: {
         pressId_templateId: { pressId, templateId },
       },
@@ -37,11 +39,11 @@ export async function POST(request: Request) {
       );
     }
 
-    await prisma.$transaction([
-      prisma.templateReport.create({
+    await basePrisma.$transaction([
+      basePrisma.templateReport.create({
         data: { pressId, templateId },
       }),
-      prisma.cardTemplate.update({
+      basePrisma.cardTemplate.update({
         where: { id: templateId },
         data: { reports: { increment: 1 } },
       }),
