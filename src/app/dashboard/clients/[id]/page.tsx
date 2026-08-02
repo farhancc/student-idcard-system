@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
+import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
 import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 import {
   Building2,
@@ -2893,36 +2894,51 @@ export default function ClientDetailsPage() {
 
           {/* Job progress display after compile started */}
           {showCompileModal && qJobResult && (
-            <div onClick={() => { setShowCompileModal(false); setQJobResult(null); }} style={{ position: 'fixed', inset: 0, zIndex: 9900, background: 'rgba(3,4,7,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '28px 32px', width: '100%', maxWidth: '460px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <strong style={{ fontSize: '0.85rem', color: '#fff' }}>
-                    {qJobResult.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'} Job #{qJobResult.id}
-                  </strong>
-                  <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: qJobResult.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : qJobResult.status === 'FAILED' ? 'rgba(239,68,68,0.15)' : 'rgba(99,102,241,0.15)', color: qJobResult.status === 'COMPLETED' ? '#10b981' : qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary)', fontWeight: 'bold' }}>
-                    {qJobResult.status}
-                  </span>
-                </div>
-                <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden', marginBottom: '12px' }}>
-                  <div style={{ width: `${qJobResult.progress ?? 0}%`, height: '100%', background: qJobResult.status === 'FAILED' ? '#ef4444' : 'var(--primary-gradient)', transition: 'width 0.3s ease' }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '24px' }}>
-                  <span>Progress: {qJobResult.progress ?? 0}%</span>
-                  {qJobResult.status === 'COMPLETED' && (
-                    qJobResult.isLocalJob ? <span style={{ color: '#10b981', fontWeight: 'bold' }}>Saved to Documents</span>
-                    : qJobResult.downloadUrl && <a href={qJobResult.downloadUrl} target="_blank" rel="noreferrer" style={{ color: '#10b981', fontWeight: 'bold', textDecoration: 'underline' }}>Download PDF</a>
-                  )}
-                  {qJobResult.status === 'FAILED' && qJobResult.errorMsg && <span style={{ color: 'var(--danger)' }}>Error: {qJobResult.errorMsg}</span>}
-                </div>
-                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                  {qJobResult.status === 'FAILED' && <button className="btn btn-secondary" onClick={() => setQJobResult(null)}>Retry</button>}
-                  {(qJobResult.status === 'COMPLETED' || qJobResult.status === 'FAILED') && (
-                    <button className="btn btn-primary" onClick={() => { setShowCompileModal(false); setQJobResult(null); setSelectedIds([]); }}>Close</button>
-                  )}
-                  {qJobResult.status !== 'COMPLETED' && qJobResult.status !== 'FAILED' && (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Compiling… Keep this window and Desktop App open.</span>
-                  )}
-                </div>
+            <div onClick={() => { setShowCompileModal(false); setQJobResult(null); }} style={{ position: 'fixed', inset: 0, zIndex: 9900, background: 'rgba(3,4,7,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: '480px' }}>
+                {qJobResult.status !== 'COMPLETED' && qJobResult.status !== 'FAILED' ? (
+                  <PdfCompileLoadingAnimation
+                    progress={qJobResult.progress ?? 15}
+                    message={`Compiling ${qJobResult.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'} #${qJobResult.id}`}
+                  />
+                ) : (
+                  <div style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: `2px solid ${qJobResult.status === 'COMPLETED' ? '#10b981' : '#ef4444'}`, borderRadius: '16px', padding: '28px 32px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#fff' }}>
+                        {qJobResult.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'} Job #{qJobResult.id}
+                      </strong>
+                      <span style={{ fontSize: '0.72rem', padding: '3px 10px', borderRadius: '12px', background: qJobResult.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)', color: qJobResult.status === 'COMPLETED' ? '#10b981' : '#ef4444', fontWeight: 700 }}>
+                        {qJobResult.status}
+                      </span>
+                    </div>
+
+                    <div style={{ margin: '16px 0', fontSize: '0.82rem', color: 'var(--muted)', textAlign: 'center' }}>
+                      {qJobResult.status === 'COMPLETED' && (
+                        qJobResult.isLocalJob ? (
+                          <div style={{ color: '#34d399', fontWeight: 600, padding: '12px', background: 'rgba(16,185,129,0.08)', borderRadius: '8px', border: '1px solid rgba(16,185,129,0.2)' }}>
+                            ✓ PDF compilation completed & saved to Documents folder!
+                          </div>
+                        ) : (
+                          qJobResult.downloadUrl && (
+                            <a href={qJobResult.downloadUrl} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                              <Download size={16} /> Download Compiled PDF
+                            </a>
+                          )
+                        )
+                      )}
+                      {qJobResult.status === 'FAILED' && qJobResult.errorMsg && (
+                        <div style={{ color: '#f87171', padding: '12px', background: 'rgba(239,68,68,0.08)', borderRadius: '8px', border: '1px solid rgba(239,68,68,0.2)' }}>
+                          Compilation Error: {qJobResult.errorMsg}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+                      {qJobResult.status === 'FAILED' && <button className="btn btn-secondary" onClick={() => setQJobResult(null)}>Retry</button>}
+                      <button className="btn btn-primary" onClick={() => { setShowCompileModal(false); setQJobResult(null); setSelectedIds([]); }}>Close</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

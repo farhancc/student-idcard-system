@@ -1017,7 +1017,14 @@ export default function ProductionDaemon() {
     return () => clearInterval(statusInterval);
   }, [isDesktop]);
 
-  if (!activeJob) return null;
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Auto-expand daemon widget when active job arrives
+  useEffect(() => {
+    if (activeJob) {
+      setIsExpanded(true);
+    }
+  }, [activeJob]);
 
   return (
     <div style={{
@@ -1025,102 +1032,257 @@ export default function ProductionDaemon() {
       bottom: '24px',
       right: '24px',
       zIndex: 9999,
-      background: 'rgba(15, 23, 42, 0.95)',
-      border: '1px solid rgba(99, 102, 241, 0.4)',
-      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 15px rgba(99, 102, 241, 0.3)',
-      borderRadius: '12px',
-      padding: '16px',
-      width: '320px',
-      color: '#fff',
-      fontSize: '0.8rem',
-      fontFamily: 'system-ui, sans-serif',
-      backdropFilter: 'blur(10px)',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-        <div style={{
-          width: '10px',
-          height: '10px',
-          borderRadius: '50%',
-          backgroundColor: activeJob ? '#f59e0b' : '#10b981',
-          boxShadow: activeJob ? '0 0 8px #f59e0b' : '0 0 8px #10b981',
-          animation: activeJob ? 'pulse 1.5s infinite' : 'none'
-        }} />
-        <span style={{ fontWeight: '600' }}>Compiler Engine</span>
-        <span style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', marginLeft: 'auto' }}>Active</span>
-        {offlineQueueCount > 0 && (
-          <span title={`${offlineQueueCount} print log(s) pending sync`} style={{
-            background: 'rgba(239,68,68,0.2)',
-            border: '1px solid rgba(239,68,68,0.6)',
-            color: '#f87171',
-            borderRadius: '10px',
-            padding: '1px 7px',
-            fontSize: '0.65rem',
-            fontWeight: 700,
-          }}>
-            {offlineQueueCount} queued
-          </span>
-        )}
-      </div>
-
-      {activeJob ? (
-        <div>
-          <div style={{ color: 'rgba(255,255,255,0.8)', marginBottom: '8px' }}>
-            Compiling: <strong style={{ color: '#fbbf24' }}>#{activeJob.id}</strong> ({activeJob.pdfType})
-          </div>
-          <div style={{
-            height: '6px',
-            backgroundColor: 'rgba(255,255,255,0.1)',
-            borderRadius: '3px',
-            overflow: 'hidden',
-            marginBottom: '6px'
-          }}>
+      {/* ── IDLE COLLAPSED PILL ────────────────────────────────────────── */}
+      {!activeJob && !isExpanded && (
+        <div
+          onClick={() => setIsExpanded(true)}
+          style={{
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(16, 185, 129, 0.2)',
+            borderRadius: '30px',
+            padding: '8px 16px',
+            color: '#fff',
+            fontSize: '0.78rem',
+            backdropFilter: 'blur(10px)',
+            transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+          title="Click to expand Production Daemon status & logs"
+        >
+          <div style={{ position: 'relative', width: '10px', height: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{
-              width: `${progress}%`,
+              position: 'absolute',
+              width: '100%',
               height: '100%',
-              backgroundColor: '#6366f1',
-              borderRadius: '3px',
-              transition: 'width 0.3s ease'
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              opacity: 0.75,
+              animation: 'radarPing 2s cubic-bezier(0, 0, 0.2, 1) infinite',
+            }} />
+            <div style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: '#10b981',
+              boxShadow: '0 0 8px #10b981',
             }} />
           </div>
-          <div style={{ textAlign: 'right', fontSize: '0.7rem', color: 'rgba(255,255,255,0.6)' }}>
-            {progress}% Completed
-          </div>
-        </div>
-      ) : (
-        <div style={{ color: 'rgba(255,255,255,0.5)' }}>
-          Idling. Polling for pending jobs...
+
+          <span style={{ fontWeight: 600, color: '#e2e8f0' }}>Production Daemon</span>
+          <span style={{
+            fontSize: '0.68rem',
+            background: 'rgba(16, 185, 129, 0.15)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            color: '#34d399',
+            padding: '1px 7px',
+            borderRadius: '10px',
+            fontWeight: 600,
+          }}>
+            Ready
+          </span>
+
+          {offlineQueueCount > 0 && (
+            <span style={{
+              background: 'rgba(239, 68, 68, 0.2)',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              color: '#f87171',
+              borderRadius: '10px',
+              padding: '1px 7px',
+              fontSize: '0.65rem',
+              fontWeight: 700,
+            }}>
+              {offlineQueueCount} queued
+            </span>
+          )}
         </div>
       )}
 
-      {/* Tiny log stream */}
-      <div style={{
-        marginTop: '12px',
-        paddingTop: '8px',
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        height: '60px',
-        overflowY: 'auto',
-        fontFamily: 'monospace',
-        fontSize: '0.65rem',
-        color: 'rgba(255,255,255,0.6)',
-        display: 'flex',
-        flexDirection: 'column-reverse',
-        gap: '4px',
-        scrollbarWidth: 'none',
-      }}>
-        {log.map((entry, idx) => (
-          <div key={idx} style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            {entry}
+      {/* ── EXPANDED CARD (IDLE OR ACTIVE PROCESSING) ─────────────────── */}
+      {(activeJob || isExpanded) && (
+        <div style={{
+          background: 'rgba(13, 17, 30, 0.95)',
+          border: activeJob ? '1px solid rgba(168, 85, 247, 0.6)' : '1px solid rgba(16, 185, 129, 0.35)',
+          boxShadow: activeJob
+            ? '0 16px 40px rgba(0, 0, 0, 0.6), 0 0 25px rgba(168, 85, 247, 0.3), 0 0 50px rgba(99, 102, 241, 0.2)'
+            : '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(16, 185, 129, 0.15)',
+          borderRadius: '14px',
+          padding: '16px',
+          width: '330px',
+          color: '#fff',
+          fontSize: '0.8rem',
+          backdropFilter: 'blur(12px)',
+          position: 'relative',
+          overflow: 'hidden',
+          transition: 'all 0.3s ease',
+        }}>
+          {/* Active Job Glowing Top Ambient Bar */}
+          {activeJob && (
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              height: '3px',
+              background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1)',
+              backgroundSize: '200% 100%',
+              animation: 'gradientShimmer 2s linear infinite',
+            }} />
+          )}
+
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            {/* Pulsing Status Dot */}
+            <div style={{ position: 'relative', width: '12px', height: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                position: 'absolute',
+                inset: '-2px',
+                borderRadius: '50%',
+                backgroundColor: activeJob ? '#a855f7' : '#10b981',
+                opacity: 0.6,
+                animation: activeJob ? 'radarPulse 1.2s ease-out infinite' : 'radarPing 2.5s cubic-bezier(0, 0, 0.2, 1) infinite',
+              }} />
+              <div style={{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                backgroundColor: activeJob ? '#fbbf24' : '#10b981',
+                boxShadow: activeJob ? '0 0 10px #fbbf24' : '0 0 8px #10b981',
+              }} />
+            </div>
+
+            <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              Production Daemon
+            </span>
+
+            <span style={{
+              fontSize: '0.68rem',
+              color: activeJob ? '#fbbf24' : '#34d399',
+              background: activeJob ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+              border: activeJob ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '10px',
+              padding: '1px 7px',
+              fontWeight: 700,
+              marginLeft: 'auto',
+            }}>
+              {activeJob ? 'COMPILING' : 'STANDBY'}
+            </span>
+
+            {!activeJob && (
+              <button
+                type="button"
+                onClick={() => setIsExpanded(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  padding: '0 2px',
+                }}
+                title="Minimize Daemon"
+              >
+                ✕
+              </button>
+            )}
           </div>
-        ))}
-      </div>
+
+          {/* Active Job Compile Progress */}
+          {activeJob ? (
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px', padding: '12px', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.78rem' }}>
+                  Job <strong style={{ color: '#fbbf24' }}>#{activeJob.id}</strong> ({activeJob.pdfType})
+                </span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#a855f7', fontFamily: 'monospace' }}>
+                  {progress}%
+                </span>
+              </div>
+
+              {/* Glowing Laser Progress Bar */}
+              <div style={{
+                position: 'relative',
+                height: '8px',
+                backgroundColor: 'rgba(255,255,255,0.08)',
+                borderRadius: '4px',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  width: `${progress}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1)',
+                  backgroundSize: '200% 100%',
+                  borderRadius: '4px',
+                  boxShadow: '0 0 10px rgba(168, 85, 247, 0.6)',
+                  animation: 'gradientShimmer 2s linear infinite',
+                  transition: 'width 0.3s ease',
+                }} />
+                {/* Laser scan line across active bar */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  bottom: 0,
+                  width: '15px',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent)',
+                  animation: 'laserScanHorizontal 1.5s ease-in-out infinite',
+                }} />
+              </div>
+            </div>
+          ) : (
+            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', animation: 'radarPing 2s infinite' }} />
+              Listening for pending print jobs from local queue…
+            </div>
+          )}
+
+          {/* Log Stream Header & Log List */}
+          <div style={{
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            height: '70px',
+            overflowY: 'auto',
+            fontFamily: 'monospace',
+            fontSize: '0.66rem',
+            color: 'rgba(255,255,255,0.65)',
+            display: 'flex',
+            flexDirection: 'column-reverse',
+            gap: '3px',
+            scrollbarWidth: 'none',
+          }}>
+            {log.map((entry, idx) => (
+              <div key={idx} style={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', opacity: idx === 0 ? 1 : 0.7 }}>
+                {entry}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
-        @keyframes pulse {
-          0% { opacity: 0.4; }
-          50% { opacity: 1; }
-          100% { opacity: 0.4; }
+        @keyframes radarPing {
+          0% { transform: scale(0.95); opacity: 0.8; }
+          100% { transform: scale(2.4); opacity: 0; }
+        }
+        @keyframes radarPulse {
+          0% { transform: scale(0.9); opacity: 0.9; }
+          50% { transform: scale(1.6); opacity: 0.4; }
+          100% { transform: scale(2.2); opacity: 0; }
+        }
+        @keyframes gradientShimmer {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+        @keyframes laserScanHorizontal {
+          0% { left: 0%; }
+          100% { left: 100%; }
         }
       `}</style>
     </div>
   );
 }
+
