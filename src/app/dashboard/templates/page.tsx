@@ -2581,7 +2581,7 @@ export default function TemplatesPage() {
     });
   };
 
-  const baseTemplates = viewTab === 'my' ? templates : globalTemplates;
+  const baseTemplates = templates;
   const currentTemplates = filterCategory === 'ALL'
     ? baseTemplates
     : baseTemplates.filter((t: any) => (t.category || 'OTHER') === filterCategory);
@@ -4942,24 +4942,6 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Tabs for Template view */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--glass-border)' }}>
-        <button 
-          className={`btn ${viewTab === 'my' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ padding: '10px 20px', borderRadius: '8px 8px 0 0', borderBottom: 'none', background: viewTab === 'my' ? undefined : 'transparent' }}
-          onClick={() => setViewTab('my')}
-        >
-          My Templates ({templates.length})
-        </button>
-        <button 
-          className={`btn ${viewTab === 'starter' ? 'btn-primary' : 'btn-secondary'}`}
-          style={{ padding: '10px 20px', borderRadius: '8px 8px 0 0', borderBottom: 'none', background: viewTab === 'starter' ? undefined : 'transparent' }}
-          onClick={() => setViewTab('starter')}
-        >
-          Starter Templates ({globalTemplates.length})
-        </button>
-      </div>
-
       {/* Category Filter Chips */}
       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '24px' }}>
         <button
@@ -4999,11 +4981,9 @@ export default function TemplatesPage() {
       ) : currentTemplates.length === 0 ? (
         <div className="glass-panel" style={{ padding: '60px 24px', textAlign: 'center', color: 'var(--muted)' }}>
           <LayoutGrid size={40} style={{ marginBottom: '16px' }} />
-          <h3>{viewTab === 'my' ? 'No Templates Created' : 'No Starter Templates Available'}</h3>
+          <h3>No Templates Created</h3>
           <p style={{ marginTop: '8px' }}>
-            {viewTab === 'my' 
-              ? filterCategory !== 'ALL' ? `No ${CATEGORY_LABELS[filterCategory as TemplateCategory]} templates yet.` : 'Create a template and map card details coordinates to begin layouts previews.'
-              : 'Starter templates uploaded by the Super Admin will appear here.'}
+            {filterCategory !== 'ALL' ? `No ${CATEGORY_LABELS[filterCategory as TemplateCategory]} templates yet.` : 'Create a template and map card details coordinates to begin layouts previews.'}
           </p>
         </div>
       ) : (
@@ -5015,13 +4995,7 @@ export default function TemplatesPage() {
             <div 
               key={tmpl.id} 
               className="glass-panel glass-panel-hover" 
-              onClick={() => {
-                if (viewTab === 'starter') {
-                  handleCloneTemplate(tmpl);
-                } else {
-                  handleEditClick(tmpl);
-                }
-              }}
+              onClick={() => handleEditClick(tmpl)}
               style={{ 
                 display: 'flex', 
                 flexDirection: 'column', 
@@ -5057,7 +5031,7 @@ export default function TemplatesPage() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0, marginLeft: '8px' }}>
-                    {viewTab === 'my' && isElectron && (
+                    {isElectron && (
                       <>
                         <button 
                           className="btn btn-secondary" 
@@ -5123,17 +5097,12 @@ export default function TemplatesPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '24px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('front'); }}>
+                <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('front'); }}>
                   <Eye size={14} /> Preview Front
                 </button>
                 {tmpl.backImageUrl && (
-                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: viewTab === 'starter' ? '33%' : '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('back'); }}>
+                  <button className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: '50%' }} onClick={(e) => { e.stopPropagation(); setPreviewId(tmpl.id); setPreviewSide('back'); }}>
                     <Eye size={14} /> Preview Back
-                  </button>
-                )}
-                {viewTab === 'starter' && (
-                  <button className="btn btn-primary" style={{ padding: '8px 12px', fontSize: '0.8rem', width: tmpl.backImageUrl ? '33%' : '66%' }} onClick={(e) => { e.stopPropagation(); handleCloneTemplate(tmpl); }}>
-                    Use Template
                   </button>
                 )}
               </div>
