@@ -155,6 +155,119 @@ const getEffectivePhotoUrl = (ch: any): string | null => {
 
 const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
+
+/**
+ * CardLivePreview — renders a cardholder's ID card onto a <canvas> using
+ * the same renderCardSideClient pipeline used for production PDFs.
+ */
+function CardLivePreview({
+  template,
+  cardholder,
+  side,
+}: {
+  template: any;
+  cardholder: any;
+  side: 'front' | 'back';
+}) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [rendering, setRendering] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!canvasRef.current || !template) return;
+    let cancelled = false;
+    setRendering(true);
+    setError(null);
+
+    (async () => {
+      try {
+        const { renderCardSideClient } = await import('@/lib/pdf/card-renderer-client');
+        if (cancelled) return;
+        await renderCardSideClient(
+          canvasRef.current!,
+          {
+            id: template.id,
+            cardWidth: template.cardWidth,
+            cardHeight: template.cardHeight,
+            frontImageUrl: template.frontImageUrl || '',
+            backImageUrl: template.backImageUrl || null,
+            frontOriginalUrl: template.frontOriginalUrl || null,
+            backOriginalUrl: template.backOriginalUrl || null,
+            frontFields: template.frontFields || '[]',
+            backFields: template.backFields || '[]',
+          },
+          {
+            id: cardholder.id,
+            name: cardholder.name,
+            designation: cardholder.designation,
+            photoUrl: cardholder.photoUrl,
+            cardSerial: cardholder.cardSerial,
+            uniqueKey: cardholder.uniqueKey,
+            customFields: cardholder.customFields,
+          },
+          side,
+          null,  // validTillDate — will be resolved from customFields by renderer
+          [],    // pressFonts — would need separate fetch; renderer falls back to system fonts
+          2      // 2× scale for crisp display
+        );
+        if (!cancelled) setRendering(false);
+      } catch (err: any) {
+        if (!cancelled) {
+          setError('Preview unavailable');
+          setRendering(false);
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [template, cardholder, side]);
+
+  const cardW = template?.cardWidth ?? 320;
+  const cardH = template?.cardHeight ?? 200;
+  // Scale canvas to fit within ~480px width
+  const maxDisplayW = 480;
+  const displayScale = Math.min(1, maxDisplayW / cardW);
+  const displayW = cardW * displayScale;
+  const displayH = cardH * displayScale;
+
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <canvas
+        ref={canvasRef}
+        style={{
+          width: `${displayW}px`,
+          height: `${displayH}px`,
+          borderRadius: '10px',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          display: 'block',
+          border: '1px solid rgba(255,255,255,0.08)',
+        }}
+      />
+      {rendering && (
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '10px',
+          background: 'rgba(13,16,27,0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: 'var(--muted)', fontSize: '0.8rem', gap: '8px',
+        }}>
+          <span style={{ display: 'inline-block', width: '14px', height: '14px', border: '2px solid var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+          Rendering…
+        </div>
+      )}
+      {error && (
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: '10px',
+          background: 'rgba(13,16,27,0.85)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+          color: '#f87171', fontSize: '0.8rem',
+        }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClientDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -314,6 +427,9 @@ export default function ClientDetailsPage() {
 
   // View / Edit Cardholder Details Modals State
   const [viewingCardholder, setViewingCardholder] = useState<Cardholder | null>(null);
+  const [previewTemplate, setPreviewTemplate] = useState<any | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
   const [editingCardholder, setEditingCardholder] = useState<Cardholder | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesignation, setEditDesignation] = useState('');
@@ -709,6 +825,29 @@ export default function ClientDetailsPage() {
     fetchData();
     fetchQuickTemplates();
   }, [clientId]);
+
+  // Fetch template for the live preview when view modal opens
+  useEffect(() => {
+    if (!viewingCardholder) {
+      setPreviewTemplate(null);
+      return;
+    }
+    const templateId = viewingCardholder.resolvedTemplateId;
+    if (!templateId) {
+      setPreviewTemplate(null);
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewSide('front');
+    fetch(`/api/templates/${templateId}?_t=${Date.now()}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.template) setPreviewTemplate(data.template);
+        else setPreviewTemplate(null);
+      })
+      .catch(() => setPreviewTemplate(null))
+      .finally(() => setPreviewLoading(false));
+  }, [viewingCardholder]);
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1724,11 +1863,22 @@ export default function ClientDetailsPage() {
           return;
         }
 
-        // Unique ID / Key / ID field check
+        // ── ID / Unique Key check ───────────────────────────────────────────
+        // IMPORTANT: Do NOT fall back to cardSerial here — cardSerial is
+        // auto-generated and is NOT a user-provided ID. If it's the only
+        // thing present, the ID field is genuinely missing for the user.
         if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber') {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
-          if (!idVal || String(idVal).trim() === '') {
-            warnings.push('Unique ID/Key is missing');
+          // Check for a real user-provided ID value (not just cardSerial fallback)
+          const idFromCustom = parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key ||
+            // Also check all custom fields for any explicit ID-like key
+            Object.entries(parsedCustom).find(([k]) => {
+              const kc = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+              return kc === 'id' || kc === 'studentid' || kc === 'rollno' || kc === 'rollnumber' || kc === 'admno' || kc === 'admissionnumber' || kc === 'empid' || kc === 'employeeid';
+            })?.[1];
+          const idVal = ch.uniqueKey || idFromCustom;
+          if (!idVal || String(idVal).trim() === '' || String(idVal) === 'null' || String(idVal) === 'undefined') {
+            const label = formatFieldLabel(f.field);
+            warnings.push(`${label} is missing`);
           }
           return;
         }
@@ -1743,9 +1893,11 @@ export default function ClientDetailsPage() {
           return;
         }
 
-        // All other text/barcode/qrcode fields (class, rollNo, bloodGroup, fatherName, address, phone, etc.)
+        // ── All other fields: text, number, date, etc. ──────────────────────
+        // Use resolveFieldRawValue to match the exact same resolution as the renderer
         const val = getResolvedFieldValue(f.field, cardholderData, ch);
-        if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
+        const valStr = val === undefined || val === null ? '' : String(val).trim();
+        if (valStr === '' || valStr === 'null' || valStr === 'undefined') {
           const label = formatFieldLabel(f.field);
           warnings.push(`${label} is missing`);
         }
@@ -3429,98 +3581,158 @@ export default function ClientDetailsPage() {
           onClick={() => setViewingCardholder(null)}
           style={{
             position: 'fixed', inset: 0, zIndex: 9000,
-            background: 'rgba(3,4,7,0.75)', backdropFilter: 'blur(6px)',
+            background: 'rgba(3,4,7,0.82)', backdropFilter: 'blur(8px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '16px',
           }}
         >
           <div
             onClick={e => e.stopPropagation()}
             style={{
-              background: 'rgba(13,16,27,0.97)',
+              background: 'rgba(13,16,27,0.98)',
               border: '1px solid var(--glass-border)',
               borderTop: '2px solid var(--primary)',
-              borderRadius: '16px',
-              padding: '28px 32px',
-              width: '100%', maxWidth: '500px',
-              boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
+              borderRadius: '18px',
+              width: '100%',
+              maxWidth: previewTemplate ? '860px' : '500px',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              boxShadow: '0 32px 80px rgba(0,0,0,0.7)',
+              transition: 'max-width 0.3s ease',
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '600' }}>Cardholder Details</h3>
-              <button onClick={() => setViewingCardholder(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '22px 28px 16px', borderBottom: '1px solid var(--glass-border)' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '600' }}>Cardholder Preview</h3>
+                {previewTemplate && (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: '500' }}>{previewTemplate.name}</span>
+                )}
+              </div>
+              <button onClick={() => setViewingCardholder(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px' }}>
                 <X size={18} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
-              {(() => {
-                const photo = getEffectivePhotoUrl(viewingCardholder);
-                return photo ? (
-                  <img 
-                    src={photo} 
-                    alt={viewingCardholder.name} 
-                    style={{ width: '100px', height: '100px', borderRadius: '12px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
-                  />
-                ) : (
-                  <div style={{
-                    width: '100px',
-                    height: '100px',
-                    borderRadius: '12px',
-                    background: 'rgba(255,255,255,0.05)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--muted)',
-                    fontSize: '0.9rem'
-                  }}>
-                    No Photo
-                  </div>
-                );
-              })()}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <h4 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>{viewingCardholder.name}</h4>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  ID: <span style={{ color: '#fff', fontWeight: '500' }}>{(() => {
-                    const custom = viewingCardholder.customFields ? (typeof viewingCardholder.customFields === 'string' ? JSON.parse(viewingCardholder.customFields) : viewingCardholder.customFields) : {};
-                    return viewingCardholder.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
-                  })()}</span>
+            <div style={{ display: 'flex', gap: '0', minHeight: '400px' }}>
+              {/* Left: Cardholder Info */}
+              <div style={{ flex: '0 0 260px', padding: '22px 24px', borderRight: previewTemplate ? '1px solid var(--glass-border)' : 'none' }}>
+                {/* Photo */}
+                <div style={{ marginBottom: '18px' }}>
+                  {(() => {
+                    const photo = getEffectivePhotoUrl(viewingCardholder);
+                    return photo ? (
+                      <img
+                        src={photo}
+                        alt={viewingCardholder.name}
+                        style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', border: '2px solid var(--glass-border)', display: 'block' }}
+                      />
+                    ) : (
+                      <div style={{
+                        width: '80px', height: '80px', borderRadius: '12px',
+                        background: 'rgba(255,255,255,0.05)', border: '2px dashed var(--glass-border)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'var(--muted)', fontSize: '0.7rem', textAlign: 'center',
+                      }}>No Photo</div>
+                    );
+                  })()}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  Designation: <span style={{ color: '#fff' }}>{viewingCardholder.designation || '—'}</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  Template: <span style={{ color: '#fff' }}>{viewingCardholder.templateName || '—'}</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                  Added On: <span style={{ color: '#fff' }}>{new Date(viewingCardholder.createdAt).toLocaleDateString()}</span>
-                </div>
-              </div>
-            </div>
 
-            {viewingCardholder.customFields && (
-              <div style={{ marginTop: '16px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--muted)', display: 'block', marginBottom: '6px' }}>Custom Template Fields</label>
-                <div style={{ 
-                  background: 'rgba(0,0,0,0.2)', 
-                  padding: '12px', 
-                  borderRadius: '8px', 
-                  fontSize: '0.75rem', 
-                  fontFamily: 'monospace',
-                  maxHeight: '150px',
-                  overflowY: 'auto',
-                  border: '1px solid var(--glass-border)'
-                }}>
-                  {Object.entries(JSON.parse(viewingCardholder.customFields)).map(([key, val]) => (
-                    <div key={key} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
-                      <span style={{ color: 'var(--primary)' }}>{key}:</span>
-                      <span style={{ color: '#fff' }}>{String(val)}</span>
+                {/* Core fields */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '16px' }}>
+                  {[
+                    { label: 'Name', value: viewingCardholder.name },
+                    { label: 'Designation', value: viewingCardholder.designation || '—' },
+                    {
+                      label: 'ID / Serial', value: (() => {
+                        const custom = viewingCardholder.customFields ? (typeof viewingCardholder.customFields === 'string' ? (() => { try { return JSON.parse(viewingCardholder.customFields!); } catch { return {}; } })() : viewingCardholder.customFields) : {};
+                        return viewingCardholder.uniqueKey || (custom as any).uniqueKey || (custom as any).id || (custom as any).unique_key || viewingCardholder.cardSerial || '—';
+                      })()
+                    },
+                    { label: 'Template', value: viewingCardholder.templateName || '—' },
+                    { label: 'Added On', value: new Date(viewingCardholder.createdAt).toLocaleDateString() },
+                  ].map(({ label, value }) => (
+                    <div key={label} style={{ fontSize: '0.78rem' }}>
+                      <span style={{ color: 'var(--muted)', display: 'block', marginBottom: '2px' }}>{label}</span>
+                      <span style={{ color: '#fff', fontWeight: '500', wordBreak: 'break-all' }}>{value}</span>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+                {/* Custom Fields */}
+                {viewingCardholder.customFields && (() => {
+                  let parsed: Record<string, any> = {};
+                  try { parsed = typeof viewingCardholder.customFields === 'string' ? JSON.parse(viewingCardholder.customFields) : viewingCardholder.customFields as any; } catch {}
+                  const entries = Object.entries(parsed).filter(([, v]) => {
+                    if (v === null || v === undefined || String(v).trim() === '') return false;
+                    const str = String(v).trim();
+                    // Skip image URLs / base64
+                    return !(str.startsWith('http') && (str.includes('.jpg') || str.includes('.png') || str.includes('.webp') || str.includes('/uploads/'))) && !str.startsWith('data:image/');
+                  });
+                  if (entries.length === 0) return null;
+                  return (
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px', fontWeight: '600' }}>Template Fields</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                        {entries.map(([key, val]) => (
+                          <div key={key} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 8px' }}>
+                            <span style={{ color: 'var(--primary)', display: 'block', fontSize: '0.68rem', marginBottom: '2px' }}>{key}</span>
+                            <span style={{ color: '#fff' }}>{String(val)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Right: Live Card Preview */}
+              {previewTemplate && (
+                <div style={{ flex: 1, padding: '22px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {/* Front / Back toggle */}
+                  {previewTemplate.backImageUrl && (
+                    <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '4px' }}>
+                      {(['front', 'back'] as const).map(side => (
+                        <button
+                          key={side}
+                          onClick={() => setPreviewSide(side)}
+                          style={{
+                            padding: '5px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '600',
+                            background: previewSide === side ? 'var(--primary)' : 'transparent',
+                            color: previewSide === side ? '#fff' : 'var(--muted)',
+                            transition: 'all 0.15s',
+                          }}
+                        >
+                          {side.charAt(0).toUpperCase() + side.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Canvas */}
+                  <CardLivePreview
+                    template={previewTemplate}
+                    cardholder={viewingCardholder}
+                    side={previewSide}
+                  />
+                </div>
+              )}
+
+              {/* No template state */}
+              {!previewTemplate && !previewLoading && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '0.85rem', padding: '32px' }}>
+                  {viewingCardholder.resolvedTemplateId ? 'Could not load template preview.' : 'No template linked to this cardholder.'}
+                </div>
+              )}
+
+              {previewLoading && (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '0.85rem', padding: '32px' }}>
+                  Loading preview…
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 28px 22px', borderTop: '1px solid var(--glass-border)' }}>
               <button className="btn btn-secondary" onClick={() => setViewingCardholder(null)}>Close</button>
             </div>
           </div>
