@@ -512,7 +512,7 @@ export async function renderCardSideClient(
   const getClientValueStr = (f: FieldCoordinate) => {
     const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
-    return `${f.prefix || ''}${rv}${f.suffix || ''}`;
+    return `${f.prefix || ''}${rv ?? ''}${f.suffix || ''}`;
   };
 
   const clientMeasure = (f: FieldCoordinate, s: string) => {
@@ -554,7 +554,7 @@ export async function renderCardSideClient(
     // For non-image fields: skip if no value. For image fields: always proceed (may draw placeholder)
     if (!isImgField && (rawValue === undefined || rawValue === null)) continue;
 
-    const valueStr = `${f.prefix || ''}${rawValue || ''}${f.suffix || ''}`;
+    const valueStr = `${f.prefix || ''}${rawValue ?? ''}${f.suffix || ''}`;
     const effectiveY = f.y + yOffset;
 
     switch (f.type as any) {
@@ -1304,7 +1304,7 @@ export async function renderCardSideToPdfBytesClient(
   const getPdfValueStr = (f: FieldCoordinate) => {
     const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
-    return `${f.prefix || ''}${rv}${f.suffix || ''}`;
+    return `${f.prefix || ''}${rv ?? ''}${f.suffix || ''}`;
   };
 
   const tempCanvas = typeof window !== 'undefined' ? document.createElement('canvas') : null;
@@ -1350,7 +1350,7 @@ export async function renderCardSideToPdfBytesClient(
     if ((rawValue === undefined || rawValue === null) && !hasPrefixOrSuffix && !isImgField) continue;
     if (rawValue === undefined || rawValue === null) rawValue = '';
 
-    const valueStr = `${safePrefix}${rawValue}${safeSuffix}`;
+    const valueStr = `${safePrefix}${rawValue ?? ''}${safeSuffix}`;
     if (!valueStr.trim() && !isImgField) continue;
     const xPt = f.x * PX_TO_PT;
     const yPt = (heightPx - f.y - f.height) * PX_TO_PT - yOffsetPx * PX_TO_PT;
