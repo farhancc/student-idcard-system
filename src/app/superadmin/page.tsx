@@ -9,7 +9,7 @@ import {
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
   DollarSign, TrendingUp, BarChart3, Search, Plus,
   Eye, X, CreditCard, FileText, Type,
-  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders
+  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders, Trash2, Activity, UserCheck, UserX, Clock
 } from 'lucide-react';
 
 interface PressClient {
@@ -25,6 +25,16 @@ interface PressClient {
   totalRevenue: number;
 }
 
+interface PressUserItem {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
 interface Press {
   id: number;
   name: string;
@@ -38,6 +48,7 @@ interface Press {
   createdAt: string;
   totalCardsPrinted: number;
   totalRevenue: number;
+  users?: PressUserItem[];
   clients: PressClient[];
   _count: {
     users: number;
@@ -71,7 +82,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests' | 'marketplace'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'retention' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests' | 'marketplace'>('dashboard');
 
   // Credit Requests State
   const [creditRequests, setCreditRequests] = useState<any[]>([]);
@@ -103,6 +114,11 @@ export default function SuperAdminDashboard() {
   const [analytics, setAnalytics] = useState<any[]>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Retention State
+  const [retention, setRetention] = useState<any>(null);
+  const [retentionLoading, setRetentionLoading] = useState(false);
+  const [retentionFilter, setRetentionFilter] = useState<'all' | 'active' | 'at_risk' | 'churned'>('all');
 
   // Starter Templates State
   const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
@@ -345,9 +361,25 @@ export default function SuperAdminDashboard() {
     }
   };
 
+  const fetchRetention = async () => {
+    setRetentionLoading(true);
+    try {
+      const res = await fetch('/api/superadmin/retention');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setRetention(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load retention data.');
+    } finally {
+      setRetentionLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'analytics') {
       fetchAnalytics();
+    } else if (activeTab === 'retention') {
+      fetchRetention();
     } else if (activeTab === 'templates') {
       fetchGlobalTemplates();
     } else if (activeTab === 'fonts') {
@@ -375,6 +407,36 @@ export default function SuperAdminDashboard() {
       setPresses(prev => prev.map(p => p.id === pressId ? { ...p, isActive: !currentStatus } : p));
     } catch (err: any) {
       setError(err.message || 'Failed to toggle status.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleHardDeletePress = async (pressId: number, pressName: string) => {
+    if (!confirm(`PERMANENT HARD DELETE WARNING:\n\nAre you sure you want to permanently delete Press "${pressName}"?\n\nThis will HARD DELETE all associated users, clients, cardholders, orders, templates, and media files. This action CANNOT be undone!`)) {
+      return;
+    }
+
+    const confirmTyped = prompt(`Type "${pressName}" to confirm permanent hard deletion:`);
+    if (confirmTyped !== pressName) {
+      alert('Confirmation name did not match. Hard deletion cancelled.');
+      return;
+    }
+
+    setActionLoading(pressId);
+    setError('');
+    try {
+      const res = await fetch(`/api/superadmin/presses/${pressId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to hard delete press');
+
+      setPresses(prev => prev.filter(p => p.id !== pressId));
+      if (detailPress?.id === pressId) setDetailPress(null);
+      alert(data.message || 'Press hard deleted successfully!');
+    } catch (err: any) {
+      setError(err.message || 'Failed to hard delete press.');
     } finally {
       setActionLoading(null);
     }
@@ -965,6 +1027,27 @@ export default function SuperAdminDashboard() {
         </button>
         <button 
           type="button" 
+          onClick={() => setActiveTab('retention')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'retention' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+            color: activeTab === 'retention' ? '#10b981' : 'var(--muted)',
+            borderBottom: activeTab === 'retention' ? '2px solid #10b981' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <Activity size={16} /> Customer Retention
+        </button>
+        <button 
+          type="button" 
           onClick={() => setActiveTab('templates')}
           style={{
             padding: '10px 20px',
@@ -1194,6 +1277,7 @@ export default function SuperAdminDashboard() {
                     <tr>
                       <th>Press Details</th>
                       <th>Contact / City</th>
+                      <th>Last Signed In</th>
                       <th>Cards Printed</th>
                       <th>Revenue</th>
                       <th>Usage</th>
@@ -1213,6 +1297,26 @@ export default function SuperAdminDashboard() {
                         <td>
                           <div>{press.city || '—'}</div>
                           <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '2px' }}>{press.phone || '—'}</div>
+                        </td>
+                        <td>
+                          {(() => {
+                            const userLogins = (press.users || [])
+                              .map(u => u.lastLoginAt ? new Date(u.lastLoginAt).getTime() : 0)
+                              .filter(t => t > 0);
+                            const maxLogin = userLogins.length > 0 ? Math.max(...userLogins) : 0;
+                            if (!maxLogin) return <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Never</span>;
+                            const dateObj = new Date(maxLogin);
+                            return (
+                              <div>
+                                <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#10b981' }}>
+                                  {dateObj.toLocaleDateString()}
+                                </div>
+                                <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                                  {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td>
                           <div style={{ fontWeight: '700', fontSize: '1.1rem', color: 'var(--primary)' }}>
@@ -1296,9 +1400,19 @@ export default function SuperAdminDashboard() {
                               <button
                                 className="btn btn-secondary"
                                 style={{ padding: '5px 10px', fontSize: '0.72rem', background: 'rgba(251,191,36,0.15)', color: 'var(--warning)', borderColor: 'rgba(251,191,36,0.3)' }}
+                                title="Manage Credits"
                                 onClick={() => { setSelectedCreditsPress(press); setCreditsModalOpen(true); setCreditsAmount(''); setCreditsSuccessMessage(''); }}
                               >
                                 <CreditCard size={11} />
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '5px 10px', fontSize: '0.72rem', background: 'rgba(239,68,68,0.2)', color: '#f87171', borderColor: 'rgba(239,68,68,0.4)' }}
+                                title="Hard Delete Press & All Records"
+                                disabled={actionLoading === press.id}
+                                onClick={() => handleHardDeletePress(press.id, press.name)}
+                              >
+                                <Trash2 size={11} />
                               </button>
                             </div>
                           </div>
@@ -1462,6 +1576,217 @@ export default function SuperAdminDashboard() {
               </div>
             )}
           </div>
+        </>
+      ) : activeTab === 'retention' ? (
+        <>
+          {retentionLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px', flexDirection: 'column', gap: '12px' }}>
+              <Loader2 size={36} className="spinner" />
+              <span style={{ color: 'var(--muted)' }}>Calculating retention metrics…</span>
+            </div>
+          ) : !retention ? (
+            <div style={{ textAlign: 'center', padding: '60px', color: 'var(--muted)' }}>No data available yet.</div>
+          ) : (
+            <>
+              {/* ── KPI Summary Cards ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+                {[
+                  { label: 'Retention Rate', value: `${retention.summary.retentionRate}%`, sub: 'Active presses', color: '#10b981', icon: <UserCheck size={22} /> },
+                  { label: 'Active Presses', value: retention.summary.activePresses, sub: 'Last 30 days', color: '#10b981', icon: <Activity size={22} /> },
+                  { label: 'At-Risk Presses', value: retention.summary.atRiskPresses, sub: '30–90 days idle', color: '#f59e0b', icon: <Clock size={22} /> },
+                  { label: 'Churned Presses', value: retention.summary.churnedPresses, sub: '90+ days no activity', color: '#ef4444', icon: <UserX size={22} /> },
+                  { label: 'Avg Orders / Month', value: retention.summary.avgOrdersPerMonth, sub: 'Per press', color: 'var(--primary)', icon: <BarChart3 size={22} /> },
+                  { label: 'Total Presses', value: retention.summary.totalPresses, sub: 'All time', color: 'var(--muted)', icon: <Building2 size={22} /> },
+                ].map(card => (
+                  <div key={card.label} className="glass-panel" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${card.color}22`, border: `1px solid ${card.color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color, flexShrink: 0 }}>
+                      {card.icon}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{card.label}</div>
+                      <div style={{ fontSize: '1.7rem', fontWeight: '800', color: card.color, lineHeight: 1.1 }}>{card.value}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{card.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Monthly Timeline ── */}
+              <div className="glass-panel" style={{ marginBottom: '28px' }}>
+                <h3 style={{ fontSize: '1rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <TrendingUp size={16} color="#10b981" /> Monthly Activity Timeline (Last 12 Months)
+                </h3>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Month</th>
+                        <th>New Presses</th>
+                        <th>Orders Placed</th>
+                        <th>Active (cohort)</th>
+                        <th>At-Risk</th>
+                        <th>Churned</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(retention.monthlyTimeline || []).map((row: any) => (
+                        <tr key={row.month}>
+                          <td style={{ fontWeight: '600' }}>{row.month}</td>
+                          <td><span style={{ color: 'var(--primary)', fontWeight: '700' }}>{row.newPresses}</span></td>
+                          <td><span style={{ color: '#10b981', fontWeight: '700' }}>{row.orders}</span></td>
+                          <td><span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{row.activeCount}</span></td>
+                          <td><span className="badge badge-warning" style={{ fontSize: '0.72rem' }}>{row.atRiskCount}</span></td>
+                          <td><span className="badge badge-danger" style={{ fontSize: '0.72rem' }}>{row.churnedCount}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* ── Plan Stats + Freq Distribution ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
+                {/* Plan-wise retention */}
+                <div className="glass-panel">
+                  <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldCheck size={16} color="var(--primary)" /> Retention by Plan
+                  </h3>
+                  {(retention.planStats || []).map((p: any) => (
+                    <div key={p.plan} style={{ marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                        <span style={{ fontWeight: '600', fontSize: '0.9rem' }}>{p.plan}</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{p.total} presses</span>
+                      </div>
+                      <div style={{ background: 'rgba(255,255,255,0.06)', borderRadius: '6px', height: '8px', overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${p.total > 0 ? (p.active / p.total * 100) : 0}%`, background: '#10b981', transition: 'width 0.6s' }} />
+                        <div style={{ width: `${p.total > 0 ? (p.atRisk / p.total * 100) : 0}%`, background: '#f59e0b' }} />
+                        <div style={{ width: `${p.total > 0 ? (p.churned / p.total * 100) : 0}%`, background: '#ef4444' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', marginTop: '5px', fontSize: '0.72rem' }}>
+                        <span style={{ color: '#10b981' }}>● Active: {p.active}</span>
+                        <span style={{ color: '#f59e0b' }}>● At-Risk: {p.atRisk}</span>
+                        <span style={{ color: '#ef4444' }}>● Churned: {p.churned}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Order Frequency Distribution */}
+                <div className="glass-panel">
+                  <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <FolderKanban size={16} color="var(--primary)" /> Order Frequency Distribution
+                  </h3>
+                  {(retention.freqDistribution || []).map((f: any) => {
+                    const maxCount = Math.max(...(retention.freqDistribution || []).map((x: any) => x.count), 1);
+                    return (
+                      <div key={f.label} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <span style={{ fontSize: '0.82rem', minWidth: '70px', color: 'var(--muted)' }}>{f.label}</span>
+                        <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '10px', overflow: 'hidden' }}>
+                          <div style={{ width: `${(f.count / maxCount) * 100}%`, height: '100%', background: 'var(--primary)', borderRadius: '4px', transition: 'width 0.6s' }} />
+                        </div>
+                        <span style={{ fontSize: '0.85rem', fontWeight: '700', minWidth: '28px', textAlign: 'right' }}>{f.count}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ── Per-Press Churn Risk Table ── */}
+              <div className="glass-panel">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                  <h3 style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <AlertTriangle size={16} color="#f59e0b" /> Press Churn Risk Analysis
+                  </h3>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {(['all', 'active', 'at_risk', 'churned'] as const).map(f => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setRetentionFilter(f)}
+                        style={{
+                          padding: '5px 12px', fontSize: '0.78rem', borderRadius: '6px', border: 'none', cursor: 'pointer',
+                          background: retentionFilter === f
+                            ? f === 'active' ? 'rgba(16,185,129,0.25)' : f === 'at_risk' ? 'rgba(245,158,11,0.25)' : f === 'churned' ? 'rgba(239,68,68,0.25)' : 'rgba(99,102,241,0.25)'
+                            : 'rgba(255,255,255,0.06)',
+                          color: retentionFilter === f
+                            ? f === 'active' ? '#10b981' : f === 'at_risk' ? '#f59e0b' : f === 'churned' ? '#ef4444' : 'var(--primary)'
+                            : 'var(--muted)',
+                          fontWeight: retentionFilter === f ? '700' : '500',
+                        }}
+                      >
+                        {f === 'all' ? 'All' : f === 'at_risk' ? 'At-Risk' : f.charAt(0).toUpperCase() + f.slice(1)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="custom-table">
+                    <thead>
+                      <tr>
+                        <th>Press Name</th>
+                        <th>Plan</th>
+                        <th>Churn Risk</th>
+                        <th>Status</th>
+                        <th>Last Activity</th>
+                        <th>Days Idle</th>
+                        <th>Total Orders</th>
+                        <th>Orders/Month</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(retention.pressMetrics || [])
+                        .filter((p: any) => retentionFilter === 'all' || p.status === retentionFilter)
+                        .sort((a: any, b: any) => b.churnRisk - a.churnRisk)
+                        .map((p: any) => (
+                          <tr key={p.id}>
+                            <td>
+                              <div style={{ fontWeight: '600' }}>{p.name}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{p.email}</div>
+                            </td>
+                            <td>
+                              <span className={`badge ${p.plan === 'ENTERPRISE' ? 'badge-primary' : p.plan === 'PRO' ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '0.7rem' }}>
+                                {p.plan}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <div style={{ flex: 1, background: 'rgba(255,255,255,0.08)', borderRadius: '4px', height: '6px', minWidth: '60px' }}>
+                                  <div style={{
+                                    width: `${p.churnRisk}%`, height: '100%', borderRadius: '4px',
+                                    background: p.churnRisk >= 80 ? '#ef4444' : p.churnRisk >= 40 ? '#f59e0b' : '#10b981',
+                                    transition: 'width 0.4s'
+                                  }} />
+                                </div>
+                                <span style={{ fontSize: '0.78rem', fontWeight: '700', color: p.churnRisk >= 80 ? '#f87171' : p.churnRisk >= 40 ? '#fbbf24' : '#34d399', minWidth: '30px' }}>
+                                  {p.churnRisk}%
+                                </span>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`badge ${p.status === 'active' ? 'badge-success' : p.status === 'at_risk' ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: '0.7rem' }}>
+                                {p.status === 'at_risk' ? 'At-Risk' : p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                              {p.lastActivityAt ? new Date(p.lastActivityAt).toLocaleDateString() : 'Never'}
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {p.daysSinceActivity !== null ? (
+                                <span style={{ fontWeight: '700', color: p.daysSinceActivity > 60 ? '#f87171' : p.daysSinceActivity > 20 ? '#fbbf24' : '#34d399' }}>
+                                  {p.daysSinceActivity}d
+                                </span>
+                              ) : <span style={{ color: 'var(--muted)' }}>—</span>}
+                            </td>
+                            <td style={{ textAlign: 'center', fontWeight: '700' }}>{p.totalOrders}</td>
+                            <td style={{ textAlign: 'center', color: 'var(--primary)', fontWeight: '600' }}>{p.ordersPerMonth}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
         </>
       ) : activeTab === 'templates' ? (
         <>
@@ -2276,9 +2601,19 @@ export default function SuperAdminDashboard() {
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>{detailPress.email} · {detailPress.city} · {detailPress.phone}</div>
               </div>
-              <button onClick={() => setDetailPress(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <button
+                  className="btn btn-danger"
+                  style={{ padding: '6px 14px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(239,68,68,0.2)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)' }}
+                  disabled={actionLoading === detailPress.id}
+                  onClick={() => handleHardDeletePress(detailPress.id, detailPress.name)}
+                >
+                  <Trash2 size={14} /> Hard Delete Press & All Records
+                </button>
+                <button onClick={() => setDetailPress(null)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Stats Row */}
@@ -2297,6 +2632,65 @@ export default function SuperAdminDashboard() {
                 </div>
               ))}
             </div>
+
+            {/* Staff Users & Last Signed In Activity */}
+            <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Users size={16} color="var(--primary)" /> Staff Users & Last Signed In Activity
+            </h3>
+            {(!detailPress.users || detailPress.users.length === 0) ? (
+              <div style={{ textAlign: 'center', padding: '24px', marginBottom: '24px', color: 'var(--muted)', background: 'rgba(255,255,255,0.02)', borderRadius: '8px' }}>No user accounts recorded.</div>
+            ) : (
+              <div className="table-container" style={{ marginBottom: '24px' }}>
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th>User Name & Email</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Last Signed In</th>
+                      <th>Created On</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detailPress.users.map(u => (
+                      <tr key={u.id}>
+                        <td>
+                          <div style={{ fontWeight: '600', color: '#fff' }}>{u.name}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{u.email}</div>
+                        </td>
+                        <td>
+                          <span className={`badge ${u.role === 'OWNER' ? 'badge-primary' : 'badge-secondary'}`} style={{ fontSize: '0.72rem' }}>
+                            {u.role}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`badge ${u.active ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.72rem' }}>
+                            {u.active ? 'Active' : 'Disabled'}
+                          </span>
+                        </td>
+                        <td>
+                          {u.lastLoginAt ? (
+                            <div>
+                              <div style={{ fontWeight: '600', fontSize: '0.85rem', color: '#10b981' }}>
+                                {new Date(u.lastLoginAt).toLocaleDateString()}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+                                {new Date(u.lastLoginAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </div>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Never signed in</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Clients Table */}
             <h3 style={{ fontSize: '1rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>

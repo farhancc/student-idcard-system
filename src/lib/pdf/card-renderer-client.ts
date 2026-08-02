@@ -1543,15 +1543,70 @@ export async function renderCardSideToPdfBytesClient(
             if (f.align === 'center') lineDrawX = xPt + (wPt - textWidth) / 2;
             else if (f.align === 'right') lineDrawX = xPt + wPt - textWidth;
 
+            const drawTextSafe = async (txt: string, dX: number, dY: number) => {
+              try {
+                page.drawText(txt, { x: dX, y: dY, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+              } catch (err) {
+                try {
+                  if (typeof document !== 'undefined') {
+                    const scale = 4;
+                    const fontStyleStr = f.fontStyle === 'italic' ? 'italic ' : '';
+                    const fontWeightStr = f.fontWeight || 'normal';
+                    const fontFamilyStr = f.fontFamily || 'sans-serif';
+                    const canvasFont = `${fontStyleStr}${fontWeightStr} ${fontSizePt}px "${fontFamilyStr}", 'Noto Sans Malayalam', sans-serif`;
+
+                    const tCanvas = document.createElement('canvas');
+                    const tCtx = tCanvas.getContext('2d');
+                    if (tCtx) {
+                      tCtx.font = canvasFont;
+                      const textMetrics = tCtx.measureText(txt);
+                      const textW = Math.ceil(textMetrics.width) || 1;
+                      const textH = Math.ceil(fontSizePt * 1.4) || 1;
+
+                      tCanvas.width = textW * scale;
+                      tCanvas.height = textH * scale;
+
+                      const ctx = tCanvas.getContext('2d');
+                      if (ctx) {
+                        ctx.scale(scale, scale);
+                        ctx.font = canvasFont;
+                        ctx.fillStyle = f.color || '#000000';
+                        ctx.textBaseline = 'top';
+                        ctx.fillText(txt, 0, 0);
+
+                        const dataUrl = tCanvas.toDataURL('image/png');
+                        const base64 = dataUrl.split(',')[1];
+                        const pngBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                        const embeddedPng = await pdfDoc.embedPng(pngBytes);
+
+                        page.drawImage(embeddedPng, {
+                          x: dX,
+                          y: dY - fontSizePt * 0.2,
+                          width: textW,
+                          height: textH,
+                          opacity,
+                        });
+                      }
+                    }
+                  }
+                } catch (fallbackErr) {
+                  const sanitized = txt.replace(/[^\x00-\x7F]/g, '?');
+                  try {
+                    page.drawText(sanitized, { x: dX, y: dY, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+                  } catch (e) {}
+                }
+              }
+            };
+
             if (letterSpacingPt) {
               let charX = lineDrawX;
               for (let ci = 0; ci < lineText.length; ci++) {
                 const ch = lineText[ci];
-                page.drawText(ch, { x: charX, y: currentYPt, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+                await drawTextSafe(ch, charX, currentYPt);
                 charX += embeddedFont.widthOfTextAtSize(ch, fontSizePt) + letterSpacingPt;
               }
             } else {
-              page.drawText(lineText, { x: lineDrawX, y: currentYPt, size: fontSizePt, font: embeddedFont, color: hexToRgbClient(f.color), opacity });
+              await drawTextSafe(lineText, lineDrawX, currentYPt);
             }
 
             // Text decoration

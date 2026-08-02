@@ -34,24 +34,37 @@ export async function GET(
     });
     const templateMap = new Map(templates.map(t => [t.id, t.name]));
 
-    const shares = await prisma.clientPortalShare.findMany({
-      where: { clientId, pressId },
-      select: { enrollToken: true, templateId: true }
-    });
+    // Collect all enroll tokens that belong to THIS portal share
+    // (the org-level token + all department tokens under this share)
     const depts = await prisma.clientDepartment.findMany({
-      where: { portalShare: { clientId, pressId } },
-      select: { enrollToken: true, portalShare: { select: { templateId: true } } }
+      where: { portalShareId: share.id },
+      select: { enrollToken: true }
     });
-    const tokenToTemplateIdMap = new Map<string, number>();
-    for (const s of shares) {
-      if (s.enrollToken) tokenToTemplateIdMap.set(s.enrollToken, s.templateId);
-    }
+
+    const thisShareEnrollTokens = new Set<string>();
+    if (share.enrollToken) thisShareEnrollTokens.add(share.enrollToken);
     for (const d of depts) {
-      if (d.enrollToken) tokenToTemplateIdMap.set(d.enrollToken, d.portalShare.templateId);
+      if (d.enrollToken) thisShareEnrollTokens.add(d.enrollToken);
     }
 
+    // Build enroll-token → templateId map for display purposes (only this share)
+    const tokenToTemplateIdMap = new Map<string, number>();
+    for (const tok of thisShareEnrollTokens) {
+      tokenToTemplateIdMap.set(tok, share.templateId);
+    }
+
+    // Fetch only cardholders that belong to this template's portal:
+    //  - templateId directly set to this share's template, OR
+    //  - enrolled via any of this share's enroll tokens (org or dept)
     const cardholders = await prisma.cardholder.findMany({
-      where: { clientId, pressId },
+      where: {
+        clientId,
+        pressId,
+        OR: [
+          { templateId: share.templateId },
+          { enrollToken: { in: Array.from(thisShareEnrollTokens) } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         cardAsset: {
@@ -69,6 +82,8 @@ export async function GET(
       if (ch.enrollToken && tokenToTemplateIdMap.has(ch.enrollToken)) {
         const tId = tokenToTemplateIdMap.get(ch.enrollToken);
         templateName = templateMap.get(tId!) || '—';
+      } else if (ch.templateId) {
+        templateName = templateMap.get(ch.templateId) || '—';
       } else if (ch.cardAsset?.templateId) {
         templateName = templateMap.get(ch.cardAsset.templateId) || '—';
       }
@@ -145,6 +160,7 @@ export async function POST(
       data: {
         pressId: share.pressId,
         clientId: share.clientId,
+        templateId: share.templateId, // stamp template so future filter works
         name,
         designation,
         photoUrl,

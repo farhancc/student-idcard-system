@@ -111,6 +111,7 @@ export async function POST(
       data: {
         pressId: dept.portalShare.pressId,
         clientId: dept.portalShare.clientId,
+        templateId: dept.portalShare.templateId, // stamp template so filtering works
         name,
         designation,
         photoUrl,

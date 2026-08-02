@@ -164,6 +164,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const [latestApprovalJob, setLatestApprovalJob] = useState<ApprovalJob | null>(null);
   const [cardholders, setCardholders] = useState<Cardholder[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTemplateFilter, setSelectedTemplateFilter] = useState<string>('ALL');
   const [filterWarningsOnly, setFilterWarningsOnly] = useState(false);
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
@@ -653,6 +654,30 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     return matchesSearch && matchesWarnings;
   });
 
+  const allTemplateNames = React.useMemo(() => {
+    const set = new Set<string>();
+    cardholders.forEach(ch => {
+      const tName = (ch.templateName && ch.templateName !== '—') ? ch.templateName : (template?.name || 'General Template');
+      set.add(tName);
+    });
+    if (set.size === 0 && template?.name) {
+      set.add(template.name);
+    }
+    return Array.from(set);
+  }, [cardholders, template]);
+
+  const groupedByTemplate = React.useMemo(() => {
+    const map = new Map<string, Cardholder[]>();
+    filtered.forEach(ch => {
+      const tName = (ch.templateName && ch.templateName !== '—') ? ch.templateName : (template?.name || 'General Template');
+      if (!map.has(tName)) {
+        map.set(tName, []);
+      }
+      map.get(tName)!.push(ch);
+    });
+    return map;
+  }, [filtered, template]);
+
   if (loading && cardholders.length === 0 && !error) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', color: 'var(--foreground)' }}>
@@ -773,19 +798,68 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
           return null;
         })()}
 
-        {/* Toolbar */}
+        {/* Toolbar, Search & Template Filters */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
-            <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-            <input
-              type="text"
-              className="form-input"
-              style={{ paddingLeft: '40px' }}
-              placeholder="Search name, designation, ID..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+            <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
+              <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+              <input
+                type="text"
+                className="form-input"
+                style={{ paddingLeft: '40px' }}
+                placeholder="Search name, designation, ID..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+
+            {/* Template Filter Pills */}
+            {allTemplateNames.length > 1 && (
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTemplateFilter('ALL')}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    borderRadius: '6px',
+                    border: selectedTemplateFilter === 'ALL' ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                    background: selectedTemplateFilter === 'ALL' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                    color: selectedTemplateFilter === 'ALL' ? 'var(--primary)' : 'var(--muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  All Templates ({filtered.length})
+                </button>
+                {allTemplateNames.map(tName => {
+                  const tCount = cardholders.filter(c => ((c.templateName && c.templateName !== '—') ? c.templateName : (template?.name || 'General Template')) === tName).length;
+                  return (
+                    <button
+                      key={tName}
+                      type="button"
+                      onClick={() => setSelectedTemplateFilter(tName)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.8rem',
+                        fontWeight: '600',
+                        borderRadius: '6px',
+                        border: selectedTemplateFilter === tName ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
+                        background: selectedTemplateFilter === tName ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)',
+                        color: selectedTemplateFilter === tName ? 'var(--primary)' : 'var(--muted)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      {tName} ({tCount})
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             {selectedIds.length > 0 && (
               <span style={{ fontSize: '0.875rem', color: 'var(--muted)', marginRight: '8px' }}>
@@ -843,7 +917,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
           </div>
         </div>
 
-        {/* Cardholders Table */}
+        {/* Cardholders Tables Grouped By Template */}
         {filtered.length === 0 ? (
           <div className="card" style={{ padding: '48px', textAlign: 'center', border: '1.5px dashed var(--glass-border)' }}>
             <Users size={48} style={{ color: 'var(--muted)', margin: '0 auto 16px' }} />
@@ -854,141 +928,200 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
             <button className="btn btn-primary" onClick={openAddModal}>Add First Cardholder</button>
           </div>
         ) : (
-          <div className="table-container">
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px' }}>
-                    <input
-                      type="checkbox"
-                      checked={filtered.length > 0 && filtered.every(ch => selectedIds.includes(ch.id))}
-                      onChange={toggleSelectAll}
-                      style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                    />
-                  </th>
-                  {templateFields.map(tf => {
-                    const label = formatFieldLabel(tf.field);
-                    return <th key={tf.field}>{label}</th>;
-                  })}
-                  <th>Enrolled On</th>
-                  <th className="sticky-actions">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map(ch => {
-                  let parsedCustom: Record<string, string> = {};
-                  try {
-                    parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
-                  } catch { parsedCustom = {}; }
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            {Array.from(groupedByTemplate.entries())
+              .filter(([tName]) => selectedTemplateFilter === 'ALL' || selectedTemplateFilter === tName)
+              .map(([tName, tCardholders]) => (
+                <div key={tName} className="card" style={{ padding: '0', overflow: 'hidden', border: '1px solid var(--glass-border)', borderRadius: '12px' }}>
+                  {/* Template Header Banner */}
+                  <div style={{
+                    padding: '16px 20px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    borderBottom: '1px solid var(--glass-border)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '8px',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '1.05rem', margin: 0, fontWeight: 'bold' }}>{tName}</h3>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Template Section</span>
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: '0.8rem',
+                      fontWeight: '600',
+                      padding: '4px 12px',
+                      borderRadius: '20px',
+                      background: 'rgba(59, 130, 246, 0.15)',
+                      color: 'var(--primary)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)'
+                    }}>
+                      {tCardholders.length} Enrolled {tCardholders.length === 1 ? 'Record' : 'Records'}
+                    </span>
+                  </div>
 
-                  return (
-                    <tr key={ch.id}>
-                      <td>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(ch.id)}
-                          onChange={() => toggleSelect(ch.id)}
-                          style={{ cursor: 'pointer', width: '16px', height: '16px' }}
-                        />
-                      </td>
-                      {templateFields.map(tf => {
-                        if (tf.isMainPhoto) {
+                  {/* Dedicated Template Table */}
+                  <div className="table-container" style={{ margin: 0 }}>
+                    <table className="custom-table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: '40px' }}>
+                            <input
+                              type="checkbox"
+                              checked={tCardholders.length > 0 && tCardholders.every(ch => selectedIds.includes(ch.id))}
+                              onChange={() => {
+                                const groupIds = tCardholders.map(c => c.id);
+                                const allSelected = groupIds.every(id => selectedIds.includes(id));
+                                if (allSelected) {
+                                  setSelectedIds(prev => prev.filter(id => !groupIds.includes(id)));
+                                } else {
+                                  setSelectedIds(prev => Array.from(new Set([...prev, ...groupIds])));
+                                }
+                              }}
+                              style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                            />
+                          </th>
+                          {templateFields.map(tf => {
+                            const label = formatFieldLabel(tf.field);
+                            return <th key={tf.field}>{label}</th>;
+                          })}
+                          <th>Enrolled On</th>
+                          <th className="sticky-actions">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tCardholders.map(ch => {
+                          let parsedCustom: Record<string, string> = {};
+                          try {
+                            parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
+                          } catch { parsedCustom = {}; }
+
                           return (
-                            <td key={tf.field}>
-                              <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                {(() => {
-                                  const effectivePhoto = getEffectivePhotoUrl(ch);
-                                  return effectivePhoto ? (
-                                    <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  ) : (
-                                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                            <tr key={ch.id}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedIds.includes(ch.id)}
+                                  onChange={() => toggleSelect(ch.id)}
+                                  style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                />
+                              </td>
+                              {templateFields.map(tf => {
+                                if (tf.isMainPhoto) {
+                                  return (
+                                    <td key={tf.field}>
+                                      <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                        {(() => {
+                                          const effectivePhoto = getEffectivePhotoUrl(ch);
+                                          return effectivePhoto ? (
+                                            <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                                          );
+                                        })()}
+                                      </div>
+                                    </td>
                                   );
-                                })()}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (tf.isName) {
-                          return (
-                            <td key={tf.field} style={{ fontWeight: 'bold' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                {ch.name}
-                                {(() => {
-                                  const warnings = getCardholderWarnings(ch);
-                                  if (warnings.length > 0) {
-                                    return (
-                                      <span 
-                                        title={warnings.join('\n')}
-                                        style={{
-                                          display: 'inline-flex',
-                                          alignItems: 'center',
-                                          gap: '4px',
-                                          background: 'rgba(245,158,11,0.15)',
-                                          color: '#fbbf24',
-                                          padding: '2px 6px',
-                                          borderRadius: '4px',
-                                          fontSize: '0.7rem',
-                                          fontWeight: 'normal',
-                                          border: '1px solid rgba(245,158,11,0.3)',
-                                          cursor: 'help'
-                                        }}
-                                      >
-                                        <AlertCircle size={12} />
-                                        {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
-                                      </span>
-                                    );
-                                  }
-                                  return null;
-                                })()}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (tf.field === 'designation' || tf.field === 'role') {
-                          return <td key={tf.field}>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>;
-                        }
-                        if (tf.field === 'uniqueKey') {
-                          const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
-                          const idVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
-                          return <td key={tf.field}><code>{idVal}</code></td>;
-                        }
-                        if (tf.type === 'image') {
-                          const val = parsedCustom[tf.field];
-                          return (
-                            <td key={tf.field}>
-                              {val ? (
-                                <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                  <img src={val} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                }
+                                if (tf.isName) {
+                                  return (
+                                    <td key={tf.field} style={{ fontWeight: 'bold' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {ch.name}
+                                        {(() => {
+                                          const warnings = getCardholderWarnings(ch);
+                                          if (warnings.length > 0) {
+                                            return (
+                                              <span 
+                                                title={warnings.join('\n')}
+                                                style={{
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px',
+                                                  background: 'rgba(245,158,11,0.15)',
+                                                  color: '#fbbf24',
+                                                  padding: '2px 6px',
+                                                  borderRadius: '4px',
+                                                  fontSize: '0.7rem',
+                                                  fontWeight: 'normal',
+                                                  border: '1px solid rgba(245,158,11,0.3)',
+                                                  cursor: 'help'
+                                                }}
+                                              >
+                                                <AlertCircle size={12} />
+                                                {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                              </span>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
+                                      </div>
+                                    </td>
+                                  );
+                                }
+                                if (tf.field === 'designation' || tf.field === 'role') {
+                                  return <td key={tf.field}>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>;
+                                }
+                                if (tf.field === 'uniqueKey') {
+                                  const custom = ch.customFields ? (typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields) : {};
+                                  const idVal = ch.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key || '—';
+                                  return <td key={tf.field}><code>{idVal}</code></td>;
+                                }
+                                if (tf.type === 'image') {
+                                  const val = parsedCustom[tf.field];
+                                  return (
+                                    <td key={tf.field}>
+                                      {val ? (
+                                        <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                          <img src={val} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        </div>
+                                      ) : (
+                                        <span style={{ color: 'var(--muted)' }}>—</span>
+                                      )}
+                                    </td>
+                                  );
+                                }
+                                return (
+                                  <td key={tf.field}>{parsedCustom[tf.field] || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                                );
+                              })}
+                              <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{new Date(ch.createdAt).toLocaleDateString()}</td>
+                              <td className="sticky-actions">
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                  <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={() => { setPreviewCardholder(ch); setPreviewSide('front'); }} title="Preview ID Card">
+                                    <Eye size={14} style={{ color: 'var(--primary)' }} />
+                                  </button>
+                                  <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEditModal(ch)} title="Edit Cardholder">
+                                    <Edit2 size={14} />
+                                  </button>
+                                  <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => handleDeleteCardholder(ch.id)} title="Delete Cardholder">
+                                    <Trash2 size={14} />
+                                  </button>
                                 </div>
-                              ) : (
-                                <span style={{ color: 'var(--muted)' }}>—</span>
-                              )}
-                            </td>
+                              </td>
+                            </tr>
                           );
-                        }
-                        return (
-                          <td key={tf.field}>{parsedCustom[tf.field] || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                        );
-                      })}
-                      <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{new Date(ch.createdAt).toLocaleDateString()}</td>
-                      <td className="sticky-actions">
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={() => { setPreviewCardholder(ch); setPreviewSide('front'); }} title="Preview ID Card">
-                            <Eye size={14} style={{ color: 'var(--primary)' }} />
-                          </button>
-                          <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={() => openEditModal(ch)} title="Edit Cardholder">
-                            <Edit2 size={14} />
-                          </button>
-                          <button className="btn btn-danger" style={{ padding: '6px 10px' }} onClick={() => handleDeleteCardholder(ch.id)} title="Delete Cardholder">
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
       </div>

@@ -78,6 +78,18 @@ export async function GET() {
   try {
     const presses = await prisma.press.findMany({
       include: {
+        users: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            active: true,
+            lastLoginAt: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
         _count: {
           select: {
             users: true,

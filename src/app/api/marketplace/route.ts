@@ -122,7 +122,7 @@ export async function GET(request: Request) {
       prisma.cardTemplate.count({ where }),
     ]);
 
-    const templateIds = templates.map(t => t.id);
+    const templateIds = templates.map((t: any) => t.id);
 
     let likedSet = new Set<number>();
     let reportedSet = new Set<number>();
@@ -143,13 +143,13 @@ export async function GET(request: Request) {
           select: { templateId: true },
         }),
       ]);
-      likedSet = new Set(userLikes.map(l => l.templateId));
-      reportedSet = new Set(userReports.map(r => r.templateId));
-      purchasedSet = new Set(userPurchases.map(p => p.templateId));
+      likedSet = new Set(userLikes.map((l: any) => l.templateId));
+      reportedSet = new Set(userReports.map((r: any) => r.templateId));
+      purchasedSet = new Set(userPurchases.map((p: any) => p.templateId));
     }
 
     // Enrich: detect field types & fields summary without exposing exact X/Y coordinates
-    const enriched = templates.map(t => {
+    const enriched = templates.map((t: any) => {
       let fieldTypes: string[] = [];
       let fieldsSummary: { key: string; name: string; label: string; type: string; side: 'Front' | 'Back'; prefix?: string; suffix?: string; sampleValue?: string }[] = [];
       try {

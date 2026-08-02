@@ -62,6 +62,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Update last signed in timestamp
+    await prisma.pressUser.update({
+      where: { id: user.id },
+      data: { lastLoginAt: new Date() },
+    });
+
     // Generate JWT
     const token = await signUserToken({
       userId: user.id,
