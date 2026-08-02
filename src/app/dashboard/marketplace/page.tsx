@@ -340,7 +340,7 @@ export default function MarketplacePage() {
               }}>{f.label}</button>
             ))}
             <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--muted)', alignSelf: 'center' }}>
-              {total} template{total !== 1 ? 's' : ''}
+              {loading ? 'Loading…' : `${total.toLocaleString()} template${total !== 1 ? 's' : ''}`}
             </span>
           </div>
 
@@ -394,17 +394,19 @@ export default function MarketplacePage() {
             </div>
           )}
 
+
           {/* Pagination */}
           {pages > 1 && (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '32px', alignItems: 'center' }}>
-              <button className="btn btn-secondary" style={{ padding: '8px 12px', minWidth: 'auto' }} disabled={page === 1} onClick={() => setPage(p => p - 1)}>
-                <ChevronLeft size={16} />
-              </button>
-              <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>Page {page} of {pages}</span>
-              <button className="btn btn-secondary" style={{ padding: '8px 12px', minWidth: 'auto' }} disabled={page === pages} onClick={() => setPage(p => p + 1)}>
-                <ChevronRight size={16} />
-              </button>
-            </div>
+            <MarketplacePaginator
+              page={page}
+              pages={pages}
+              total={total}
+              limit={20}
+              onPageChange={(p) => {
+                setPage(p);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
           )}
         </>
       )}
@@ -462,6 +464,124 @@ export default function MarketplacePage() {
         </ModalErrorBoundary>
       )}
 
+    </div>
+  );
+}
+
+
+/**
+ * MarketplacePaginator — numbered pages with smart ellipsis, first/last shortcuts,
+ * and a result-range summary label.
+ */
+function MarketplacePaginator({
+  page,
+  pages,
+  total,
+  limit,
+  onPageChange,
+}: {
+  page: number;
+  pages: number;
+  total: number;
+  limit: number;
+  onPageChange: (page: number) => void;
+}) {
+  // Build the visible page numbers with ellipsis
+  const getPageNumbers = () => {
+    if (pages <= 7) return Array.from({ length: pages }, (_, i) => i + 1);
+    const nums: (number | 'ellipsis')[] = [];
+    // Always show first + last; show ±2 around current
+    const delta = 2;
+    const rangeStart = Math.max(2, page - delta);
+    const rangeEnd = Math.min(pages - 1, page + delta);
+
+    nums.push(1);
+    if (rangeStart > 2) nums.push('ellipsis');
+    for (let i = rangeStart; i <= rangeEnd; i++) nums.push(i);
+    if (rangeEnd < pages - 1) nums.push('ellipsis');
+    nums.push(pages);
+    return nums;
+  };
+
+  const from = Math.min((page - 1) * limit + 1, total);
+  const to = Math.min(page * limit, total);
+
+  const btnBase: React.CSSProperties = {
+    minWidth: '36px',
+    height: '36px',
+    padding: '0 8px',
+    borderRadius: '8px',
+    border: '1px solid var(--glass-border)',
+    background: 'transparent',
+    color: 'var(--muted)',
+    cursor: 'pointer',
+    fontSize: '0.82rem',
+    fontWeight: '500',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.15s',
+  };
+
+  const btnActive: React.CSSProperties = {
+    ...btnBase,
+    background: 'var(--primary)',
+    borderColor: 'var(--primary)',
+    color: '#fff',
+    fontWeight: '700',
+    boxShadow: '0 2px 8px rgba(99,102,241,0.4)',
+  };
+
+  const btnDisabled: React.CSSProperties = {
+    ...btnBase,
+    opacity: 0.35,
+    cursor: 'not-allowed',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', marginTop: '36px' }}>
+      {/* Result range */}
+      <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
+        Showing <strong style={{ color: 'var(--text)' }}>{from}–{to}</strong> of <strong style={{ color: 'var(--text)' }}>{total.toLocaleString()}</strong> templates
+      </span>
+
+      {/* Page buttons */}
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Prev */}
+        <button
+          style={page === 1 ? btnDisabled : btnBase}
+          disabled={page === 1}
+          onClick={() => onPageChange(page - 1)}
+          title="Previous page"
+        >
+          <ChevronLeft size={15} />
+        </button>
+
+        {/* Numbered pages */}
+        {getPageNumbers().map((n, i) =>
+          n === 'ellipsis' ? (
+            <span key={`ell-${i}`} style={{ color: 'var(--muted)', padding: '0 4px', fontSize: '0.9rem', lineHeight: '36px' }}>…</span>
+          ) : (
+            <button
+              key={n}
+              style={n === page ? btnActive : btnBase}
+              onClick={() => n !== page && onPageChange(n as number)}
+            >
+              {n}
+            </button>
+          )
+        )}
+
+        {/* Next */}
+        <button
+          style={page === pages ? btnDisabled : btnBase}
+          disabled={page === pages}
+          onClick={() => onPageChange(page + 1)}
+          title="Next page"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
     </div>
   );
 }
