@@ -549,7 +549,7 @@ export async function renderCardSideClient(
     let rawValue = resolveFieldRawValue(f, data, cardholder);
     if ((rawValue === undefined || rawValue === null || rawValue === '') && isImgField) {
       // Try all possible static image sources on the field definition
-      rawValue = f.imageUrl || f.sampleValue || f.value || f.src || f.url || f.defaultUrl || f.defaultValue || null;
+      rawValue = (f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue || null;
     }
     // For non-image fields: skip if no value. For image fields: always proceed (may draw placeholder)
     if (!isImgField && (rawValue === undefined || rawValue === null)) continue;
@@ -557,7 +557,7 @@ export async function renderCardSideClient(
     const valueStr = `${f.prefix || ''}${rawValue || ''}${f.suffix || ''}`;
     const effectiveY = f.y + yOffset;
 
-    switch (f.type) {
+    switch (f.type as any) {
       case 'id':
       case 'text':
       case 'date':
@@ -789,7 +789,7 @@ export async function renderCardSideClient(
         ctx.font = `600 ${Math.max(10, Math.min(14, f.height * 0.25))}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const labelText = f.label || f.name || f.field || 'Image Field';
+        const labelText = (f as any).label || (f as any).name || f.field || 'Image Field';
         ctx.fillText(labelText, f.x + f.width / 2, effectiveY + f.height / 2);
         ctx.restore();
         break;

@@ -1637,6 +1637,7 @@ export default function TemplatesPage() {
               }}
             >
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="text">Text</option>
+              <option style={{ background: '#1e293b', color: '#ffffff' }} value="number">Number</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="date">Date</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="image">Image</option>
               <option style={{ background: '#1e293b', color: '#ffffff' }} value="qr">QR Code</option>
