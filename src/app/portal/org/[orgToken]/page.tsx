@@ -963,8 +963,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           </div>
         </div>
 
-        {/* Tab Selection Navigation */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+        {/* Navigation Tabs */}
+        <div className="portal-tabs" style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '12px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <button 
             type="button" 
             onClick={() => setActiveTab('cardholders')}
@@ -1240,7 +1240,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           </div>
 
                           {/* Dedicated Template Table */}
-                          <div className="table-container" style={{ margin: 0 }}>
+                          <div className="table-container portal-desktop-table" style={{ margin: 0 }}>
                             <table className="custom-table">
                               <thead>
                                 <tr>
@@ -1456,6 +1456,99 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                 })}
                               </tbody>
                             </table>
+                          </div>
+
+                          {/* Dedicated Mobile Cardholder Cards List */}
+                          <div className="portal-mobile-card-list" style={{ padding: '16px', flexDirection: 'column', gap: '12px' }}>
+                            {tCardholders.map(ch => {
+                              let parsedCustom: Record<string, string> = {};
+                              try {
+                                parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : (ch.customFields || {});
+                              } catch { parsedCustom = {}; }
+
+                              const effectivePhoto = getEffectivePhotoUrl(ch);
+                              const warnings = getCardholderWarnings(ch);
+                              const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key || parsedCustom.studentId || parsedCustom.employeeId;
+
+                              return (
+                                <div 
+                                  key={ch.id} 
+                                  onClick={() => setSelectedCh(ch)}
+                                  style={{
+                                    background: selectedCh?.id === ch.id ? '#eff6ff' : 'var(--card-bg)',
+                                    border: selectedCh?.id === ch.id ? '2px solid var(--primary)' : '1px solid var(--glass-border)',
+                                    borderRadius: '12px',
+                                    padding: '16px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '12px',
+                                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.05)',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {/* Top Row: Photo & Main Info */}
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                                    <div style={{ width: '50px', height: '64px', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0', border: '1px solid var(--glass-border)', flexShrink: 0 }}>
+                                      {effectivePhoto ? (
+                                        <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                                      )}
+                                    </div>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ fontWeight: '700', fontSize: '1rem', color: 'var(--foreground)', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                        <span>{ch.name}</span>
+                                        {warnings.length > 0 && (
+                                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(245,158,11,0.15)', color: '#d97706', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '600' }}>
+                                            <AlertCircle size={12} /> {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {ch.designation && <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '2px' }}>{ch.designation}</div>}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '6px', flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: '#eff6ff', color: '#1d4ed8', fontWeight: '600' }}>
+                                          {getCardholderDeptName(ch)}
+                                        </span>
+                                        {rawId && !String(rawId).startsWith('C-') && (
+                                          <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: '500' }}>
+                                            ID: <strong style={{ color: 'var(--foreground)' }}>{String(rawId)}</strong>
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Bottom Row: Full Action Buttons */}
+                                  <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--glass-border)' }}>
+                                    <button 
+                                      type="button"
+                                      className="btn btn-secondary" 
+                                      style={{ flex: 1, padding: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '600' }} 
+                                      onClick={(e) => { e.stopPropagation(); setSelectedCh(ch); }}
+                                    >
+                                      <Eye size={14} style={{ color: 'var(--primary)' }} /> Preview
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      className="btn btn-secondary" 
+                                      style={{ flex: 1, padding: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontWeight: '600' }} 
+                                      onClick={(e) => { e.stopPropagation(); openEditModal(ch); }}
+                                    >
+                                      <Edit2 size={14} /> Edit
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      className="btn btn-danger" 
+                                      style={{ padding: '8px 14px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteCardholder(ch.id); }}
+                                      title="Delete Cardholder"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       ))}
