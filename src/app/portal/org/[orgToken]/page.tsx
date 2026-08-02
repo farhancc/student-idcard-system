@@ -871,11 +871,83 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     : 0.75; // Default 3:4 portrait
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px' }}>
+    <div className="org-portal-container" style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px' }}>
+      <style>{`
+        @media (max-width: 900px) {
+          .portal-main-grid {
+            flex-direction: column !important;
+          }
+          .portal-preview-panel {
+            width: 100% !important;
+            max-width: 100% !important;
+            position: relative !important;
+            top: 0 !important;
+            margin-top: 24px !important;
+            max-height: none !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .org-portal-container {
+            padding: 16px 12px !important;
+          }
+          .portal-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 16px !important;
+          }
+          .portal-header h1 {
+            font-size: 1.5rem !important;
+          }
+          .portal-header-actions {
+            width: 100% !important;
+          }
+          .portal-header-actions button,
+          .portal-header-actions a {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .portal-info-box {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .portal-info-actions {
+            width: 100% !important;
+            flex-direction: column !important;
+          }
+          .portal-info-actions button,
+          .portal-info-actions a {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .portal-toolbar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .portal-search-bar {
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          .portal-add-btn {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .portal-modal-overlay {
+            padding: 12px !important;
+          }
+          .portal-modal-card {
+            padding: 20px 16px !important;
+            max-height: 92vh !important;
+            border-radius: 12px !important;
+          }
+          .dept-link-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
         {/* Header Section */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--glass-border)' }}>
+        <div className="portal-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--glass-border)' }}>
           <div>
             <span style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               {client?.type} MANAGEMENT PORTAL (ORGANISATION HEAD)
@@ -883,7 +955,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
             <h1 style={{ fontSize: '2.2rem', marginTop: '8px', marginBottom: '4px' }}>{client?.name}</h1>
           </div>
 
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="portal-header-actions" style={{ display: 'flex', gap: '12px' }}>
             <button className="btn btn-secondary" onClick={copyEnrollmentLink} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {copied ? <Check size={16} /> : <Copy size={16} />}
               Copy Global Staff Link
@@ -892,7 +964,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         </div>
 
         {/* Tab Selection Navigation */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px', borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           <button 
             type="button" 
             onClick={() => setActiveTab('cardholders')}
@@ -908,7 +980,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              whiteSpace: 'nowrap'
             }}
           >
             <Users size={16} /> Enrolled Cardholders
@@ -928,7 +1001,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              whiteSpace: 'nowrap'
             }}
           >
             <Building size={16} /> Departments ({departments.length})
@@ -938,14 +1012,14 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         {activeTab === 'cardholders' ? (
           <>
             {/* Info Box */}
-            <div className="card" style={{ padding: '20px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.1)', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+            <div className="card portal-info-box" style={{ padding: '20px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.1)', marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div>
                 <h4 style={{ fontSize: '0.95rem', marginBottom: '4px' }}>Register cardholders or share links</h4>
                 <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: 0 }}>
                   You can register cardholders manually or generate department links so department managers can handle registration.
                 </p>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div className="portal-info-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 {/* Card Preview Toggle */}
                 <button
                   type="button"
@@ -1032,7 +1106,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               return null;
             })()}
 
-            <div style={{
+            <div className="portal-main-grid" style={{
               display: 'flex',
               gap: '24px',
               alignItems: 'flex-start',
@@ -1041,9 +1115,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 {/* Toolbar, Search & Template Filters */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                <div className="portal-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
-                    <div style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
+                    <div className="portal-search-bar" style={{ position: 'relative', width: '100%', maxWidth: '360px' }}>
                       <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
                       <input 
                         type="text" 
@@ -1102,7 +1176,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     )}
                   </div>
 
-                  <button className="btn btn-secondary" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button className="btn btn-secondary portal-add-btn" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Plus size={16} /> Add Cardholder
                   </button>
                 </div>
@@ -1391,7 +1465,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
               {/* Side Preview Panel */}
               {selectedCh && template && (
-                <div style={{
+                <div className="portal-preview-panel" style={{
                   width: '360px',
                   flexShrink: 0,
                   position: 'sticky',
@@ -1629,7 +1703,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     </div>
 
                     {/* Department Head & Staff Links */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px', marginTop: '8px' }}>
+                    <div className="dept-link-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px', marginTop: '8px' }}>
                       {/* Dept Head Link */}
                       <div style={{ background: 'rgba(0,0,0,0.15)', padding: '14px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -1705,7 +1779,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
       {/* Add / Edit Cardholder Modal */}
       {showModal && (
-        <div style={{
+        <div className="portal-modal-overlay" style={{
           position: 'fixed',
           top: 0,
           left: 0,
@@ -1719,7 +1793,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           justifyContent: 'center',
           padding: '24px',
         }}>
-          <div className="card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+          <div className="card portal-modal-card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>
               {modalMode === 'add' ? 'Add New Cardholder' : 'Edit Cardholder'}
             </h2>

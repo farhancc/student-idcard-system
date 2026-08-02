@@ -729,11 +729,67 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
     : 0.75; // Default 3:4 portrait
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px' }}>
+    <div className="dept-portal-container" style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px' }}>
+      <style>{`
+        @media (max-width: 900px) {
+          .portal-main-grid {
+            flex-direction: column !important;
+          }
+          .portal-preview-panel {
+            width: 100% !important;
+            max-width: 100% !important;
+            position: relative !important;
+            top: 0 !important;
+            margin-top: 24px !important;
+            max-height: none !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .dept-portal-container {
+            padding: 16px 12px !important;
+          }
+          .portal-header {
+            flex-direction: column !important;
+            align-items: stretch !important;
+            gap: 16px !important;
+          }
+          .portal-header h1 {
+            font-size: 1.5rem !important;
+          }
+          .portal-header-actions {
+            width: 100% !important;
+          }
+          .portal-header-actions button,
+          .portal-header-actions a {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .portal-toolbar {
+            flex-direction: column !important;
+            align-items: stretch !important;
+          }
+          .portal-search-bar {
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          .portal-add-btn {
+            width: 100% !important;
+            justify-content: center !important;
+          }
+          .portal-modal-overlay {
+            padding: 12px !important;
+          }
+          .portal-modal-card {
+            padding: 20px 16px !important;
+            max-height: 92vh !important;
+            border-radius: 12px !important;
+          }
+        }
+      `}</style>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '32px', paddingBottom: '24px', borderBottom: '1px solid var(--glass-border)' }}>
+        <div className="portal-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '32px', paddingBottom: '24px', borderBottom: '1px solid var(--glass-border)' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
               <Building size={16} style={{ color: '#f59e0b' }} />
@@ -745,10 +801,12 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
             <p style={{ color: 'var(--muted)', fontSize: '0.95rem' }}>Active Template: <span style={{ color: 'var(--foreground)' }}>{template?.name}</span></p>
           </div>
 
-          <button className="btn btn-secondary" onClick={copyEnrollmentLink} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {copied ? <Check size={16} /> : <Copy size={16} />}
-            Copy Staff Enrollment Link
-          </button>
+          <div className="portal-header-actions">
+            <button className="btn btn-secondary" onClick={copyEnrollmentLink} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {copied ? <Check size={16} /> : <Copy size={16} />}
+              Copy Staff Enrollment Link
+            </button>
+          </div>
         </div>
 
         {/* Notice — department capabilities */}
@@ -810,9 +868,9 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
         })()}
 
         {/* Toolbar, Search & Template Filters */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+        <div className="portal-toolbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
-            <div style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
+            <div className="portal-search-bar" style={{ position: 'relative', width: '100%', maxWidth: '340px' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
               <input
                 type="text"
@@ -1140,8 +1198,8 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
 
       {/* Add / Edit Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
+        <div className="portal-modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="card portal-modal-card" style={{ width: '100%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', borderRadius: '16px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '24px' }}>
               {modalMode === 'add' ? 'Add New Cardholder' : 'Edit Cardholder'}
             </h2>
