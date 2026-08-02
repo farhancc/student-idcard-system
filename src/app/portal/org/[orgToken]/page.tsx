@@ -101,6 +101,16 @@ interface Department {
   enrolledCount: number;
 }
 
+interface TemplateField {
+  field: string;
+  type?: string;
+  width?: number;
+  height?: number;
+  borderRadius?: number;
+  isMainPhoto?: boolean;
+  isName?: boolean;
+}
+
 const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
 export default function OrgPortalPage({ params }: { params: Promise<{ orgToken: string }> }) {
@@ -135,6 +145,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [formFields, setFormFields] = useState<string[]>([]);
   const [customImgFields, setCustomImgFields] = useState<FieldCoordinate[]>([]);
   const [fieldTypeMap, setFieldTypeMap] = useState<Record<string, string>>({});
+  const [templateFields, setTemplateFields] = useState<TemplateField[]>([]);
 
   // Field visibility states
   const [hasName, setHasName] = useState(true);
@@ -198,8 +209,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       const textFields = allFields.filter(f => f.type === 'text' || f.type === 'id' || f.type === 'date' || !f.type);
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
-      const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
-      
       const filteredKeys = keys.filter(k => {
         const clean = cleanFieldKey(k);
         return clean !== 'photo' && 
@@ -222,6 +231,39 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       }) || null;
       const customImages = imageFields.filter(f => f !== mainPhoto);
       setCustomImgFields(customImages);
+
+      // Extract template fields in order
+      const uniqueFields: TemplateField[] = [];
+      const seen = new Set<string>();
+      
+      if (mainPhoto) {
+        uniqueFields.push({ field: mainPhoto.field, type: 'image', isMainPhoto: true });
+        seen.add(mainPhoto.field);
+      }
+      
+      const nameField = allFields.find(f => {
+        const clean = cleanFieldKey(f.field);
+        return ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
+      });
+      if (nameField) {
+        uniqueFields.push({ field: nameField.field, type: 'text', isName: true });
+        seen.add(nameField.field);
+      }
+      
+      allFields.forEach(f => {
+        const clean = cleanFieldKey(f.field);
+        if (clean === 'cardserial' || clean.includes('serial')) return;
+        if (seen.has(f.field)) return;
+        uniqueFields.push({
+          field: f.field,
+          type: f.type,
+          width: f.width,
+          height: f.height,
+          borderRadius: f.borderRadius
+        });
+        seen.add(f.field);
+      });
+      setTemplateFields(uniqueFields);
 
       // Detect visibility of standard fields
       const mappedFields = allFields.map(f => cleanFieldKey(f.field));
@@ -950,20 +992,11 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     <table className="custom-table">
                       <thead>
                         <tr>
-                          {hasPhoto && <th>Photo</th>}
-                          {(hasName || formFields.length === 0) && <th>Name</th>}
-                          <th>Department</th>
-                          {hasDesignation && <th>Designation</th>}
-                          {/* Dynamic Custom Text Fields */}
-                          {formFields.map(field => {
-                            const label = formatFieldLabel(field);
-                            return <th key={field}>{label}</th>;
+                          {templateFields.map(tf => {
+                            const label = formatFieldLabel(tf.field);
+                            return <th key={tf.field}>{label}</th>;
                           })}
-                          {/* Dynamic Custom Image Fields */}
-                          {customImgFields.map(field => {
-                            const label = formatFieldLabel(field.field);
-                            return <th key={field.field}>{label}</th>;
-                          })}
+                          {templateFields.length === 0 && <th>Full Name</th>}
                           <th>Enrolled On</th>
                           <th className="sticky-actions">Actions</th>
                         </tr>
@@ -985,21 +1018,116 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                 transition: 'all 0.2s',
                               }}
                             >
-                              {hasPhoto && (
-                                <td>
-                                  <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                    {(() => {
-                                      const effectivePhoto = getEffectivePhotoUrl(ch);
-                                      return effectivePhoto ? (
-                                        <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              {templateFields.map((tf, index) => {
+                                if (tf.isMainPhoto) {
+                                  return (
+                                    <td key={tf.field}>
+                                      <div style={{ width: '40px', height: '52px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                        {(() => {
+                                          const effectivePhoto = getEffectivePhotoUrl(ch);
+                                          return effectivePhoto ? (
+                                            <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
+                                          );
+                                        })()}
+                                      </div>
+                                    </td>
+                                  );
+                                }
+
+                                if (tf.isName) {
+                                  return (
+                                    <td key={tf.field} style={{ fontWeight: 'bold' }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        {ch.name}
+                                        {(() => {
+                                          const warnings = getCardholderWarnings(ch);
+                                          if (warnings.length > 0) {
+                                            return (
+                                              <span 
+                                                title={warnings.join('\n')}
+                                                style={{
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  gap: '4px',
+                                                  background: 'rgba(245,158,11,0.15)',
+                                                  color: '#fbbf24',
+                                                  padding: '2px 6px',
+                                                  borderRadius: '4px',
+                                                  fontSize: '0.7rem',
+                                                  fontWeight: 'normal',
+                                                  border: '1px solid rgba(245,158,11,0.3)',
+                                                  cursor: 'help'
+                                                }}
+                                              >
+                                                <AlertCircle size={12} />
+                                                {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                              </span>
+                                            );
+                                          }
+                                          return null;
+                                        })()}
+                                      </div>
+                                    </td>
+                                  );
+                                }
+
+                                if (tf.type === 'image') {
+                                  const imgVal = parsedCustom[tf.field];
+                                  return (
+                                    <td key={tf.field}>
+                                      {imgVal ? (
+                                        <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                                          <img src={imgVal} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        </div>
                                       ) : (
-                                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
-                                      );
-                                    })()}
-                                  </div>
-                                </td>
-                              )}
-                              {(hasName || formFields.length === 0) && (
+                                        <span style={{ color: 'var(--muted)' }}>—</span>
+                                      )}
+                                    </td>
+                                  );
+                                }
+
+                                const val = parsedCustom[tf.field] || (tf.field === 'designation' ? ch.designation : null);
+                                const isPrimaryTextCol = !hasName && index === 0;
+
+                                return (
+                                  <td key={tf.field} style={isPrimaryTextCol ? { fontWeight: 'bold' } : undefined}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      {val || <span style={{ color: 'var(--muted)' }}>—</span>}
+                                      {isPrimaryTextCol && (() => {
+                                        const warnings = getCardholderWarnings(ch);
+                                        if (warnings.length > 0) {
+                                          return (
+                                            <span 
+                                              title={warnings.join('\n')}
+                                              style={{
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                                background: 'rgba(245,158,11,0.15)',
+                                                color: '#fbbf24',
+                                                padding: '2px 6px',
+                                                borderRadius: '4px',
+                                                fontSize: '0.7rem',
+                                                fontWeight: 'normal',
+                                                border: '1px solid rgba(245,158,11,0.3)',
+                                                cursor: 'help'
+                                              }}
+                                            >
+                                              <AlertCircle size={12} />
+                                              {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+
+                              {templateFields.length === 0 && (
                                 <td style={{ fontWeight: 'bold' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     {ch.name}
@@ -1033,73 +1161,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                   </div>
                                 </td>
                               )}
-                              <td style={{ fontSize: '0.85rem' }}>
-                                <span style={{
-                                  padding: '3px 8px',
-                                  borderRadius: '4px',
-                                  background: ch.enrollToken === enrollToken || !ch.enrollToken ? 'rgba(255,255,255,0.05)' : 'rgba(59, 130, 246, 0.1)',
-                                  color: ch.enrollToken === enrollToken || !ch.enrollToken ? 'var(--muted)' : 'var(--primary)',
-                                  border: '1px solid var(--glass-border)'
-                                }}>
-                                  {getCardholderDeptName(ch)}
-                                </span>
-                              </td>
-                              {hasDesignation && <td>{ch.designation || <span style={{ color: 'var(--muted)' }}>—</span>}</td>}
-
-                              {/* Dynamic Custom Text Fields */}
-                              {formFields.map((field, idx) => {
-                                const isFirstCol = !hasName && formFields.length > 0 && idx === 0;
-                                return (
-                                  <td key={field} style={isFirstCol ? { fontWeight: 'bold' } : undefined}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      {parsedCustom[field] || <span style={{ color: 'var(--muted)' }}>—</span>}
-                                      {isFirstCol && (() => {
-                                        const warnings = getCardholderWarnings(ch);
-                                        if (warnings.length > 0) {
-                                          return (
-                                            <span 
-                                              title={warnings.join('\n')}
-                                              style={{
-                                                display: 'inline-flex',
-                                                alignItems: 'center',
-                                                gap: '4px',
-                                                background: 'rgba(245,158,11,0.15)',
-                                                color: '#fbbf24',
-                                                padding: '2px 6px',
-                                                borderRadius: '4px',
-                                                fontSize: '0.7rem',
-                                                fontWeight: 'normal',
-                                                border: '1px solid rgba(245,158,11,0.3)',
-                                                cursor: 'help'
-                                              }}
-                                            >
-                                              <AlertCircle size={12} />
-                                              {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
-                                            </span>
-                                          );
-                                        }
-                                        return null;
-                                      })()}
-                                    </div>
-                                  </td>
-                                );
-                              })}
-
-                              {/* Dynamic Custom Image Fields */}
-                              {customImgFields.map(field => {
-                                const val = parsedCustom[field.field];
-                                return (
-                                  <td key={field.field}>
-                                    {val ? (
-                                      <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                        <img src={val} alt={field.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                      </div>
-                                    ) : (
-                                      <span style={{ color: 'var(--muted)' }}>—</span>
-                                    )}
-                                  </td>
-                                );
-                              })}
 
                               <td style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
                                 {new Date(ch.createdAt).toLocaleDateString()}
