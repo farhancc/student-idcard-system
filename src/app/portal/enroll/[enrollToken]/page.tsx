@@ -355,6 +355,33 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
       return;
     }
 
+    // Validate number fields min/max caps before submission
+    for (const field of formFields) {
+      const coord = fieldCoordsMap[field];
+      const type = (coord?.type || fieldTypeMap[field]) || 'text';
+      const val = customFields[field];
+
+      if (type === 'number' && val !== undefined && val !== null && String(val).trim() !== '') {
+        const numVal = Number(val);
+        const label = formatFieldLabel(field);
+        const minCap = (coord as any)?.min;
+        const maxCap = (coord as any)?.max;
+
+        if (isNaN(numVal)) {
+          setError(`${label} must be a valid number`);
+          return;
+        }
+        if (minCap !== undefined && minCap !== null && numVal < minCap) {
+          setError(`${label} must be at least ${minCap}`);
+          return;
+        }
+        if (maxCap !== undefined && maxCap !== null && numVal > maxCap) {
+          setError(`${label} cannot be greater than ${maxCap}`);
+          return;
+        }
+      }
+    }
+
     setLoading(true);
     setError('');
 

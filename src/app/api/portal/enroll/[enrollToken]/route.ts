@@ -66,6 +66,40 @@ export async function POST(
 
     const { name, designation, photoUrl, customFields, uniqueKey } = parsed.data;
 
+    // Fetch template to validate Number min/max caps
+    const template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
+
+    if (template) {
+      try {
+        const front = JSON.parse(template.frontFields || '[]');
+        const back = JSON.parse(template.backFields || '[]');
+        const allFields: any[] = [...front, ...back];
+
+        if (customFields && typeof customFields === 'object') {
+          for (const f of allFields) {
+            if (f.field && f.type === 'number') {
+              const rawVal = (customFields as Record<string, any>)[f.field];
+              if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+                const numVal = Number(rawVal);
+                const label = f.label || f.field;
+                if (isNaN(numVal)) {
+                  return NextResponse.json({ error: `${label} must be a valid number` }, { status: 400 });
+                }
+                if (f.min !== undefined && f.min !== null && numVal < f.min) {
+                  return NextResponse.json({ error: `${label} must be at least ${f.min}` }, { status: 400 });
+                }
+                if (f.max !== undefined && f.max !== null && numVal > f.max) {
+                  return NextResponse.json({ error: `${label} cannot exceed ${f.max}` }, { status: 400 });
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse template fields for validation:', err);
+      }
+    }
+
     // Generate unique card serial number if needed
     const cardSerial = uniqueKey || `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 

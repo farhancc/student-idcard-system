@@ -73,6 +73,38 @@ export async function POST(
       return NextResponse.json({ error: 'Name is required' }, { status: 400 });
     }
 
+    // Validate Number fields against template min/max caps
+    const template = dept.portalShare.templateId ? await prisma.cardTemplate.findUnique({ where: { id: dept.portalShare.templateId } }) : null;
+    if (template) {
+      try {
+        const front = JSON.parse(template.frontFields || '[]');
+        const back = JSON.parse(template.backFields || '[]');
+        const allFields: any[] = [...front, ...back];
+        const fieldsObj = typeof customFields === 'string' ? JSON.parse(customFields) : (customFields || {});
+
+        for (const f of allFields) {
+          if (f.field && f.type === 'number') {
+            const rawVal = fieldsObj[f.field];
+            if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+              const numVal = Number(rawVal);
+              const label = f.label || f.field;
+              if (isNaN(numVal)) {
+                return NextResponse.json({ error: `${label} must be a valid number` }, { status: 400 });
+              }
+              if (f.min !== undefined && f.min !== null && numVal < f.min) {
+                return NextResponse.json({ error: `${label} must be at least ${f.min}` }, { status: 400 });
+              }
+              if (f.max !== undefined && f.max !== null && numVal > f.max) {
+                return NextResponse.json({ error: `${label} cannot exceed ${f.max}` }, { status: 400 });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Failed to parse template fields:', err);
+      }
+    }
+
     const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     const cardholder = await prisma.cardholder.create({
