@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     // Press credits
     const press = await prisma.press.findUnique({
       where: { id: pressId },
-      select: { credits: true, plan: true },
+      select: { credits: true, promoCredits: true, plan: true },
     });
 
     // Revenue this month (from invoices)
@@ -179,7 +179,7 @@ export async function GET(request: Request) {
         storageLimitGb: 5.0,
         revenueThisMonth,
         pendingRevenue,
-        credits: press?.credits ?? 0,
+        credits: (press?.credits ?? 0) + (press?.promoCredits ?? 0),
         lockedCredits: 0,
         plan: press?.plan ?? 'FREE',
       },

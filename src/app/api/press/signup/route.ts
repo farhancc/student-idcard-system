@@ -61,7 +61,7 @@ export async function POST(request: Request) {
           city,
           plan: 'BASIC',
           isActive: true,
-          credits: 0,
+          credits: creditSettings.signupBonusCredits,
           promoCredits: creditSettings.signupBonusCredits,
           trialEndsAt: null,
         },

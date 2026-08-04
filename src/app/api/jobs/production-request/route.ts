@@ -119,7 +119,7 @@ export async function POST(request: Request) {
     const transactionResult = await prisma.$transaction(async (tx) => {
       // 1. Acquire pessimistic write lock on the press
       const presses = await tx.$queryRaw<any[]>`
-        SELECT id, credits, plan FROM "press" WHERE id = ${pressId} FOR UPDATE
+        SELECT id, credits, promo_credits, plan FROM "press" WHERE id = ${pressId} FOR UPDATE
       `;
       const press = presses[0];
 
@@ -127,18 +127,23 @@ export async function POST(request: Request) {
         throw new Error('Press tenant not found');
       }
 
-      if (press.credits < totalCreditsNeeded) {
-        throw new Error(`Insufficient credits. This job requires ${totalCreditsNeeded} credits, but you only have ${press.credits}.`);
+      const paidCredits = Number(press.credits || 0);
+      const promoCredits = Number(press.promo_credits || 0);
+      const totalAvailable = paidCredits + promoCredits;
+
+      if (totalAvailable < totalCreditsNeeded) {
+        throw new Error(`Insufficient credits. This job requires ${totalCreditsNeeded} credits, but you only have ${totalAvailable}.`);
       }
 
       if (totalCreditsNeeded > 0) {
-        // Deduct credits
+        const promoDeduct = Math.min(promoCredits, totalCreditsNeeded);
+        const paidDeduct = totalCreditsNeeded - promoDeduct;
+
         await tx.press.update({
           where: { id: pressId },
           data: {
-            credits: {
-              decrement: totalCreditsNeeded,
-            },
+            ...(paidDeduct > 0 ? { credits: { decrement: paidDeduct } } : {}),
+            ...(promoDeduct > 0 ? { promoCredits: { decrement: promoDeduct } } : {}),
           },
         });
       }
@@ -198,7 +203,7 @@ export async function POST(request: Request) {
         },
       });
 
-      return { job, remainingCredits: press.credits - cardCountLocked };
+      return { job, remainingCredits: totalAvailable - cardCountLocked };
     });
 
     return NextResponse.json({
