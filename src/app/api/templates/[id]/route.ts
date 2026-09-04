@@ -9,19 +9,15 @@ export async function GET(
 ) {
   try {
     const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
     const { id } = await params;
     const templateId = Number(id);
 
-    const template = await prisma.cardTemplate.findFirst({
-      where: {
-        id: templateId,
-        OR: [{ pressId }, { pressId: null }],
-      },
-    });
+    const where: any = { id: templateId };
+    if (pressIdStr) {
+      where.OR = [{ pressId: Number(pressIdStr) }, { pressId: null }];
+    }
+
+    const template = await prisma.cardTemplate.findFirst({ where });
 
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });

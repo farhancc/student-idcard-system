@@ -5,12 +5,15 @@ import { renderCardSideClient } from '@/lib/pdf/card-renderer-client';
 
 interface CardTemplate {
   id?: number;
-  cardWidth: number;
-  cardHeight: number;
+  cardWidth?: number;
+  cardHeight?: number;
+  width?: number;
+  height?: number;
   frontImageUrl?: string | null;
   backImageUrl?: string | null;
   frontFields?: string | null;
   backFields?: string | null;
+  [key: string]: any;
 }
 
 interface Cardholder {
@@ -221,8 +224,8 @@ export default function CardPreview({
             border: '1px solid var(--glass-border, rgba(255, 255, 255, 0.15))',
             display: loading && !canvasRef.current ? 'none' : 'block',
           }}
-          width={template.cardWidth || 1013}
-          height={template.cardHeight || 638}
+          width={template.cardWidth || template.width || 1013}
+          height={template.cardHeight || template.height || 638}
         />
       </div>
     );

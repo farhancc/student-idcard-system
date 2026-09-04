@@ -114,6 +114,36 @@ export async function ensureFontLoadedClient(fontName: string, fontUrl: string):
 }
 
 /**
+ * Ensures Google Fonts or web fonts are loaded into the browser/Electron document context.
+ */
+export async function loadGoogleFontInBrowser(fontFamily?: string) {
+  if (typeof window === 'undefined' || !fontFamily) return;
+  const cleanName = fontFamily.trim();
+  if (!cleanName || cleanName === 'sans-serif' || cleanName === 'serif' || cleanName === 'monospace') return;
+  const stdFonts = ['helvetica', 'arial', 'times', 'times new roman', 'courier', 'courier new'];
+  if (stdFonts.includes(cleanName.toLowerCase())) return;
+
+  const fontId = `gfont-${cleanName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+  if (loadedFonts.has(fontId)) return;
+
+  try {
+    if (!document.getElementById(fontId)) {
+      const link = document.createElement('link');
+      link.id = fontId;
+      link.rel = 'stylesheet';
+      link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(cleanName)}:wght@300;400;500;600;700;800&display=swap`;
+      document.head.appendChild(link);
+    }
+    if (document.fonts) {
+      await document.fonts.load(`12px "${cleanName}"`).catch(() => {});
+    }
+    loadedFonts.add(fontId);
+  } catch (err) {
+    console.warn(`[PDF client] Could not load Google font "${cleanName}":`, err);
+  }
+}
+
+/**
  * Loads an image in the browser with robust CORS fallback and relative URL resolution.
  */
 function loadImageClient(url: string): Promise<HTMLImageElement> {
@@ -1377,12 +1407,27 @@ export async function renderCardSideToPdfBytesClient(
           else if (f.textTransform === 'lowercase') processedValue = valueStr.toLowerCase();
           else if (f.textTransform === 'capitalize') processedValue = valueStr.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
+          // Test if font is a custom web font not present as native TTF in pdf-lib
+          let isCustomFontUnembedded = false;
+          if (f.fontFamily && f.fontFamily !== 'sans-serif' && f.fontFamily !== 'serif' && f.fontFamily !== 'monospace') {
+            const stdAliases = ['helvetica', 'arial', 'times', 'times new roman', 'courier', 'courier new'];
+            if (!stdAliases.includes(f.fontFamily.toLowerCase())) {
+              const hasNativeMatch = pressFonts.some(pf => pf.name.toLowerCase().includes(f.fontFamily!.toLowerCase()));
+              if (!hasNativeMatch) {
+                isCustomFontUnembedded = true;
+                await loadGoogleFontInBrowser(f.fontFamily);
+              }
+            }
+          }
+
           // Test if the font can encode the text
-          let canEncode = true;
-          try {
-            embeddedFont.encodeText(processedValue);
-          } catch (e) {
-            canEncode = false;
+          let canEncode = !isCustomFontUnembedded;
+          if (canEncode) {
+            try {
+              embeddedFont.encodeText(processedValue);
+            } catch (e) {
+              canEncode = false;
+            }
           }
 
           if (!canEncode) {
@@ -1401,6 +1446,7 @@ export async function renderCardSideToPdfBytesClient(
                 if (matchingFont) {
                   fontName = await ensureFontLoadedClient(matchingFont.name, matchingFont.fileUrl);
                 } else {
+                  await loadGoogleFontInBrowser(f.fontFamily);
                   fontName = f.fontFamily;
                 }
               }

@@ -6,9 +6,6 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   serverExternalPackages: ['canvas', 'sharp', 'pdfjs-dist'],
   outputFileTracingExcludes: {
     '*': [
@@ -96,5 +93,4 @@ export default withSentryConfig(nextConfig, {
   project: "student-id-pdf-system",
   widenClientFileUpload: true,
   disableLogger: true,
-  dryRun: !process.env.SENTRY_AUTH_TOKEN,
 });

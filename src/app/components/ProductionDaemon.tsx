@@ -496,12 +496,15 @@ export default function ProductionDaemon() {
           // Update both the local variable and the shared payload reference
           const refreshed = {
             ...template,
-            frontFields: ft.frontFields ?? template.frontFields,
-            backFields: ft.backFields ?? template.backFields,
+            ...ft,
+            frontFields: typeof ft.frontFields === 'string' ? ft.frontFields : (ft.frontFields ? JSON.stringify(ft.frontFields) : template.frontFields),
+            backFields: typeof ft.backFields === 'string' ? ft.backFields : (ft.backFields ? JSON.stringify(ft.backFields) : template.backFields),
             frontImageUrl: ft.frontImageUrl ?? template.frontImageUrl,
             backImageUrl: ft.backImageUrl ?? template.backImageUrl,
             frontOriginalUrl: ft.frontOriginalUrl ?? template.frontOriginalUrl,
             backOriginalUrl: ft.backOriginalUrl ?? template.backOriginalUrl,
+            cardWidth: ft.cardWidth ? Number(ft.cardWidth) : template.cardWidth,
+            cardHeight: ft.cardHeight ? Number(ft.cardHeight) : template.cardHeight,
             version: ft.version ?? template.version,
           };
           template = refreshed;

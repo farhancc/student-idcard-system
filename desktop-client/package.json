@@ -5,7 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "start:local": "PORTAL_URL=http://localhost:3000 electron .",
+    "start:local": "ELECTRON_DISABLE_SANDBOX=1 PORTAL_URL=http://localhost:3000 electron --no-sandbox .",
     "dist": "electron-builder",
     "postinstall": "patch-package && node scripts/download-binaries.js"
   },

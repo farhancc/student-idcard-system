@@ -1365,7 +1365,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                         let val = parsedCustom[tf.field];
                                         if (!val) {
                                           if (tf.isName) val = ch.name;
-                                          else if (tf.field === 'designation') val = ch.designation;
+                                          else if (tf.field === 'designation') val = ch.designation || '';
                                           else if (tf.type === 'id' || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '').includes('id') || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '') === 'uniquekey') {
                                             const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key;
                                             if (rawId && !String(rawId).startsWith('C-')) val = rawId;
