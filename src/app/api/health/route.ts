@@ -3,29 +3,23 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Cache-Control': 'no-store',
+  const headers = {
+    'Cache-Control': 'no-store, max-age=0',
   };
 
   try {
-    // Dynamically import prisma to avoid module-level engine load failures
     const { prisma } = await import('@/lib/prisma');
     await prisma.$queryRaw`SELECT 1`;
 
     return NextResponse.json(
-      { status: 'ok', timestamp: new Date().toISOString(), database: 'connected', uptime: process.uptime() },
-      { headers: corsHeaders },
+      { status: 'ok', database: 'connected', timestamp: new Date().toISOString() },
+      { status: 200, headers }
     );
   } catch (error: unknown) {
     console.error('Health check database error:', error);
-    // Still return 200 so Electron knows the server is reachable even if DB is slow
     return NextResponse.json(
-      { status: 'degraded', timestamp: new Date().toISOString(), database: 'disconnected', error: 'Database connection failed' },
-      { status: 200, headers: corsHeaders },
+      { status: 'unhealthy', database: 'disconnected', error: 'Database connection failed' },
+      { status: 503, headers }
     );
   }
 }
-
-
-

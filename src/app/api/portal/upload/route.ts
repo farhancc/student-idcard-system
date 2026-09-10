@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '@/lib/prisma';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 const isCloudinaryConfigured =
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -15,12 +16,38 @@ if (isCloudinaryConfigured) {
   });
 }
 
+function validateImageMagicBytes(buf: Buffer): string | null {
+  if (buf.length < 4) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) {
+    return 'image/png';
+  }
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') {
+    return 'image/webp';
+  }
+  return null;
+}
+
 export async function POST(request: Request) {
+  const ip = getClientIp(request);
+  const rl = await rateLimit(`portal-upload:${ip}`, 20, 60 * 1000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Too many upload requests. Please wait a minute.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
+      }
+    );
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const token = formData.get('token') as string || ''; // orgToken or enrollToken
-    const type = formData.get('type') as string || 'photo'; // template | photo
+    const token = (formData.get('token') as string) || ''; // orgToken or enrollToken
+    const type = (formData.get('type') as string) || 'photo'; // template | photo
 
     if (!token) {
       return NextResponse.json({ error: 'Missing security token' }, { status: 400 });
@@ -67,14 +94,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 });
     }
 
-    // Whitelist image MIME types
-    const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!ALLOWED_MIME_TYPES.includes(file.type)) {
-      return NextResponse.json({ error: 'Invalid file type. Only JPEG, PNG, and WebP images are allowed' }, { status: 400 });
-    }
-
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Verify magic bytes rather than relying on client header
+    const verifiedMimeType = validateImageMagicBytes(buffer);
+    if (!verifiedMimeType) {
+      return NextResponse.json(
+        { error: 'Invalid file content. Only real JPEG, PNG, and WebP images are allowed.' },
+        { status: 400 }
+      );
+    }
 
     if (isCloudinaryConfigured) {
       // ── Cloudinary path ───────────────────────────────────────────────────
@@ -82,7 +112,7 @@ export async function POST(request: Request) {
         cloudinary.uploader.upload_stream(
           {
             folder: `press_${pressId}/${type}s`,
-            resource_type: 'auto',
+            resource_type: 'image',
           },
           (error, result) => {
             if (error) reject(error);
@@ -98,11 +128,8 @@ export async function POST(request: Request) {
       });
     } else {
       // ── Fallback: base64 data URI (no filesystem writes) ──────────────────
-      // Vercel's /var/task is read-only — we cannot write to public/uploads.
-      // Instead, encode the photo as a data URI and store it directly in the DB.
-      const mimeType = file.type || 'image/jpeg';
       const base64 = buffer.toString('base64');
-      const dataUri = `data:${mimeType};base64,${base64}`;
+      const dataUri = `data:${verifiedMimeType};base64,${base64}`;
 
       return NextResponse.json({
         success: true,
