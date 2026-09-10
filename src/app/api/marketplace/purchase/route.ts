@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, basePrisma } from '@/lib/prisma';
+import { requireRole } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,9 +8,9 @@ export const dynamic = 'force-dynamic';
 // Body: { templateId }
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const buyerPressId = Number(pressIdStr);
+    const auth = requireRole(request, ['OWNER', 'OPERATOR']);
+    if ('response' in auth) return auth.response;
+    const buyerPressId = auth.actor.pressId;
 
     let body: unknown;
     try {
