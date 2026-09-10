@@ -247,7 +247,22 @@ export const prisma = (basePrisma.$extends({
             //     (pressId is not part of unique constraints, so findUnique can't accept it)
             if (['findUnique', 'findUniqueOrThrow'].includes(op)) {
               args.where = args.where || {};
-              args.where[pressIdField] = pressId;
+              if (model === 'CardTemplate') {
+                const existingWhere = args.where;
+                args.where = {
+                  AND: [
+                    existingWhere,
+                    {
+                      OR: [
+                        { pressId: null },
+                        { pressId: pressId }
+                      ]
+                    }
+                  ]
+                };
+              } else {
+                args.where[pressIdField] = pressId;
+              }
               const rewrittenOp = op === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
               return (basePrisma as any)[model][rewrittenOp](args);
             }

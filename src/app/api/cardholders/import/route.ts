@@ -95,6 +95,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No data rows found in the source.' }, { status: 400 });
     }
 
+    const MAX_IMPORT_ROWS = 5000;
+    if (rawData.length > MAX_IMPORT_ROWS) {
+      return NextResponse.json({
+        error: `Import row limit exceeded. Maximum ${MAX_IMPORT_ROWS} rows allowed per import (found ${rawData.length} rows).`
+      }, { status: 400 });
+    }
+
     // 2. Parse and map columns
     // Column mapping defaults if not provided
     const mapping: Record<string, string> = columnMappingJson 
@@ -317,10 +324,20 @@ export async function POST(request: Request) {
 
     if (importMode !== 'check') {
       if (itemsToCreate.length > 0) {
-        await prisma.cardholder.createMany({
-          data: itemsToCreate,
-        });
-        newItems.push(...itemsToCreate);
+        // Run in batches of 100 so post-write syncCardholderValues hook triggers for each record
+        const BATCH_SIZE = 100;
+        for (let i = 0; i < itemsToCreate.length; i += BATCH_SIZE) {
+          const batch = itemsToCreate.slice(i, i + BATCH_SIZE);
+          const createdBatch = await prisma.$transaction(async (tx) => {
+            const results = [];
+            for (const item of batch) {
+              const created = await tx.cardholder.create({ data: item });
+              results.push(created);
+            }
+            return results;
+          });
+          newItems.push(...createdBatch);
+        }
       }
 
       if (txOps.length > 0) {

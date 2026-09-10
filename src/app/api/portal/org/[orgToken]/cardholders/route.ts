@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { clampLimit } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,8 +15,8 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const limitStr = searchParams.get('limit') || searchParams.get('take');
     const offsetStr = searchParams.get('offset') || searchParams.get('skip');
-    const limit = limitStr ? Number(limitStr) : undefined;
-    const offset = offsetStr ? Number(offsetStr) : undefined;
+    const limit = limitStr ? clampLimit(limitStr, 50, 100) : undefined;
+    const offset = offsetStr && !isNaN(Number(offsetStr)) ? Math.max(0, Math.floor(Number(offsetStr))) : undefined;
 
     const share = await prisma.clientPortalShare.findUnique({
       where: { orgToken },

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
+import { clampLimit } from '@/lib/pagination';
 
 export async function POST(request: Request) {
   try {
@@ -157,7 +158,7 @@ export async function GET(request: Request) {
     const pressId = Number(pressIdStr);
 
     const { searchParams } = new URL(request.url);
-    const limit = Number(searchParams.get('limit') || searchParams.get('take')) || 50;
+    const limit = clampLimit(searchParams.get('limit') || searchParams.get('take'), 50, 100);
     const skip = Number(searchParams.get('skip') || searchParams.get('offset')) || 0;
 
     const jobs = await prisma.pdfJob.findMany({
