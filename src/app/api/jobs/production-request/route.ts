@@ -56,7 +56,8 @@ export async function POST(request: Request) {
     const order = await prisma.cardOrder.findFirst({
       where: { id: Number(orderId), pressId },
       include: {
-        _count: { select: { cardholders: true } }
+        _count: { select: { cardholders: true } },
+        template: true,
       }
     });
 
@@ -69,11 +70,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Order does not contain any cardholders' }, { status: 400 });
     }
 
-    // Fetch template to check if it has a back side (for pricing determination)
-    const template = await prisma.cardTemplate.findUnique({
-      where: { id: order.templateId },
-    });
-
+    const template = order.template;
     if (!template) {
       return NextResponse.json({ error: 'Order template not found' }, { status: 404 });
     }
@@ -212,8 +209,8 @@ export async function POST(request: Request) {
       jobId: transactionResult.job.id,
       creditsBalance: transactionResult.remainingCredits,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Request PDF job error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

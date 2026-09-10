@@ -95,8 +95,8 @@ export async function POST(request: Request) {
       deletedCount: deleteResult.count,
       deletedPhotos: deletedPhotosCount,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Purge archived cardholders error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

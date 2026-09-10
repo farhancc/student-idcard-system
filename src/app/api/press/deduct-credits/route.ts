@@ -51,8 +51,8 @@ export async function POST(request: Request) {
       success: true,
       creditsBalance: updatedPress.credits,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Deduct credits error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 400 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 400 });
   }
 }

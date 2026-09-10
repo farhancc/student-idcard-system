@@ -110,8 +110,8 @@ export async function POST(request: Request) {
         provider: 'base64',
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Portal upload handler error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to upload image' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
   }
 }

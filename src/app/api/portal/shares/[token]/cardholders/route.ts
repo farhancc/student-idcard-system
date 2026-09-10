@@ -10,25 +10,32 @@ export async function GET(
   try {
     const { token } = await params;
 
+    const { searchParams } = new URL(request.url);
+    const limitStr = searchParams.get('limit') || searchParams.get('take');
+    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+    const limit = limitStr ? Number(limitStr) : undefined;
+    const offset = offsetStr ? Number(offsetStr) : undefined;
+
     let share = await prisma.clientPortalShare.findUnique({
       where: { orgToken: token },
+      include: {
+        departments: {
+          select: { enrollToken: true },
+        },
+      },
     });
 
     let enrollTokensToFilter: string[] = [];
 
     if (share) {
-      const depts = await prisma.clientDepartment.findMany({
-        where: { portalShareId: share.id },
-        select: { enrollToken: true },
-      });
-      enrollTokensToFilter = [share.enrollToken, ...depts.map(d => d.enrollToken)];
+      enrollTokensToFilter = [share.enrollToken, ...share.departments.map(d => d.enrollToken)];
     } else {
       const dept = await prisma.clientDepartment.findUnique({
         where: { deptToken: token },
         include: { portalShare: true },
       });
       if (dept) {
-        share = dept.portalShare;
+        share = { ...dept.portalShare, departments: [] };
         enrollTokensToFilter = [dept.enrollToken];
       }
     }
@@ -43,6 +50,8 @@ export async function GET(
         enrollToken: { in: enrollTokensToFilter },
       },
       orderBy: { createdAt: 'desc' },
+      ...(limit !== undefined ? { take: limit } : {}),
+      ...(offset !== undefined ? { skip: offset } : {}),
     });
 
     const template = await prisma.cardTemplate.findUnique({

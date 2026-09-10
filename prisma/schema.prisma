@@ -72,6 +72,7 @@ model Client {
   contactPhone String?  @map("contact_phone")
   contactEmail String?  @map("contact_email")
   address      String?
+  deletedAt    DateTime? @map("deleted_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
   cardholders  Cardholder[]
@@ -79,6 +80,8 @@ model Client {
   serialCtrs   CardSerialCounter[]
   templateAssignments TemplateClientAssignment[]
 
+  @@index([pressId])
+  @@index([deletedAt])
   @@map("clients")
 }
 
@@ -98,6 +101,7 @@ model Cardholder {
   cardSerial   String?  @map("card_serial")
   active       Boolean  @default(true)
   enrollToken  String?  @map("enroll_token")
+  deletedAt    DateTime? @map("deleted_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
   cardAsset    CardAsset?
@@ -106,8 +110,10 @@ model Cardholder {
   values       CardholderValue[]
 
   @@index([pressId])
+  @@index([clientId])
   @@index([enrollToken])
   @@index([templateId])
+  @@index([deletedAt])
   @@map("cardholders")
 }
 
@@ -150,6 +156,8 @@ model CardTemplate {
   templateLikes TemplateLike[]
   templateReports TemplateReport[]
 
+  @@index([pressId])
+  @@index([isPublic, isLatest])
   @@map("card_templates")
 }
 
@@ -233,6 +241,7 @@ model CardOrder {
   notes           String?
   validTill       DateTime? @map("valid_till")
   templateVersion Int      @default(1) @map("template_version")
+  deletedAt       DateTime? @map("deleted_at")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -245,6 +254,9 @@ model CardOrder {
   cardholders     OrderCardholder[]
 
   @@index([pressId, clientId])
+  @@index([status])
+  @@index([deletedAt])
+  @@index([createdAt])
   @@map("card_orders")
 }
 
@@ -255,7 +267,7 @@ model OrderCardholder {
   orderId      Int        @map("order_id")
   order        CardOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   cardholderId Int        @map("cardholder_id")
-  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Cascade)
+  cardholder   Cardholder @relation(fields: [cardholderId], references: [id], onDelete: Restrict)
   addedAt      DateTime   @default(now()) @map("added_at")
 
   @@unique([orderId, cardholderId])
@@ -277,6 +289,7 @@ model CardAsset {
   isStale      Boolean  @default(false) @map("is_stale")
   generatedAt  DateTime @default(now()) @map("generated_at")
 
+  @@index([pressId, templateId])
   @@map("card_assets")
 }
 
@@ -314,6 +327,8 @@ model PdfJob {
 
   @@index([pressId, status])
   @@index([isLocalJob])
+  @@index([orderId])
+  @@index([expiresAt])
   @@map("pdf_jobs")
 }
 
@@ -322,7 +337,7 @@ model PdfJob {
 model OrderInvoice {
   id            Int      @id @default(autoincrement())
   orderId       Int      @unique @map("order_id")
-  order         CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order         CardOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
   pressId       Int      @map("press_id")
   press         Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
   pricePerCard  Decimal  @db.Decimal(10, 2) @map("price_per_card")
@@ -373,6 +388,8 @@ model CardPrintRecord {
   remarks      String?
   createdAt    DateTime @default(now()) @map("created_at")
 
+  @@index([orderId])
+  @@index([cardholderId])
   @@map("card_print_records")
 }
 
@@ -388,6 +405,7 @@ model PdfDownloadLog {
   downloadedAt DateTime @default(now()) @map("downloaded_at")
   ipAddress    String?  @map("ip_address")
 
+  @@index([pdfJobId])
   @@map("pdf_download_logs")
 }
 
@@ -396,7 +414,7 @@ model PdfDownloadLog {
 model OrderActivityLog {
   id         Int      @id @default(autoincrement())
   orderId    Int      @map("order_id")
-  order      CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      CardOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
   pressId    Int      @map("press_id")
   press      Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
   actorId    Int      @map("actor_id") // PressUser id
@@ -407,6 +425,7 @@ model OrderActivityLog {
   note       String?
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([orderId])
   @@map("order_activity_logs")
 }
 
@@ -435,6 +454,7 @@ model OrderNote {
   content    String
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([orderId])
   @@map("order_notes")
 }
 
@@ -443,7 +463,7 @@ model OrderNote {
 model DeliveryRecord {
   id           Int      @id @default(autoincrement())
   orderId      Int      @unique @map("order_id")
-  order        CardOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order        CardOrder @relation(fields: [orderId], references: [id], onDelete: Restrict)
   pressId      Int      @map("press_id")
   deliveredTo  String   @map("delivered_to")
   deliveredAt  DateTime @map("delivered_at")

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import Image from 'next/image';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -1300,7 +1301,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                                 {(() => {
                                                   const effectivePhoto = getEffectivePhotoUrl(ch);
                                                   return effectivePhoto ? (
-                                                    <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    <Image src={effectivePhoto} alt={ch.name} width={50} height={64} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                   ) : (
                                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
                                                   );
@@ -1353,7 +1354,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                             <td key={tf.field}>
                                               {imgVal ? (
                                                 <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#222', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                                  <img src={imgVal} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                   <Image src={imgVal} alt={tf.field} width={40} height={30} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                                 </div>
                                               ) : (
                                                 <span style={{ color: 'var(--muted)' }}>—</span>
@@ -1509,7 +1510,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                                     <div style={{ width: '50px', height: '64px', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0', border: '1px solid var(--glass-border)', flexShrink: 0 }}>
                                       {effectivePhoto ? (
-                                        <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        <Image src={effectivePhoto} alt={ch.name} width={50} height={64} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                       ) : (
                                         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
                                       )}
@@ -2172,7 +2173,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 const photo = getEffectivePhotoUrl(previewCardholder);
                 return photo ? (
                   <div style={{ marginBottom: '12px' }}>
-                    <img src={photo} alt={previewCardholder.name} style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
+                    <Image src={photo} alt={previewCardholder.name} width={60} height={80} unoptimized style={{ width: '60px', height: '80px', objectFit: 'cover', borderRadius: '6px', border: '1px solid var(--glass-border)' }} />
                   </div>
                 ) : null;
               })()}

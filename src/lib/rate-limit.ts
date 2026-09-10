@@ -18,9 +18,19 @@ const store = new Map<string, RateLimitEntry>();
 
 // Cache for dynamic Upstash Ratelimit instances
 const ratelimitCache = new Map<string, Ratelimit>();
+let rateLimitFallbackWarned = false;
 
 function getUpstashRatelimit(maxHits: number, windowMs: number): Ratelimit | null {
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    if (!rateLimitFallbackWarned) {
+      rateLimitFallbackWarned = true;
+      const msg = 'Rate limiter: Upstash Redis not configured. Falling back to in-memory storage (not suitable for multi-instance deployments).';
+      if (process.env.NODE_ENV === 'production') {
+        console.error(`[CRITICAL] ${msg}`);
+      } else {
+        console.warn(`[rate-limit] ${msg}`);
+      }
+    }
     return null;
   }
   const cacheKey = `${maxHits}:${windowMs}`;

@@ -45,15 +45,26 @@ export async function POST(request: Request) {
     }
 
     const pressId = Number(pressIdStr);
-    const { name, email, password, role } = await request.json();
 
-    if (!name || !email || !password || !role) {
-      return NextResponse.json({ error: 'All fields (name, email, password, role) are required' }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    if (role !== 'OPERATOR' && role !== 'DESIGNER' && role !== 'OWNER') {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    const { createUserSchema } = await import('@/lib/schemas');
+    const parsed = createUserSchema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return NextResponse.json(
+        { error: issue?.message || 'Invalid input' },
+        { status: 400 }
+      );
     }
+
+    const { name, email, password, role } = parsed.data;
+
 
     // Check if email already registered globally in press users
     const existingUser = await prisma.pressUser.findUnique({

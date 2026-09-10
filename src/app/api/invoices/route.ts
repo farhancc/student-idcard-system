@@ -9,20 +9,38 @@ export async function GET(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    const invoices = await prisma.orderInvoice.findMany({
-      where: { pressId },
-      include: {
-        order: {
-          include: {
-            client: true,
-            template: true,
-          }
-        }
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { searchParams } = new URL(request.url);
+    const limitStr = searchParams.get('limit') || searchParams.get('take');
+    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+    const limit = limitStr ? Number(limitStr) : undefined;
+    const offset = offsetStr ? Number(offsetStr) : undefined;
 
-    return NextResponse.json({ success: true, invoices });
+    const [total, invoices] = await Promise.all([
+      prisma.orderInvoice.count({ where: { pressId } }),
+      prisma.orderInvoice.findMany({
+        where: { pressId },
+        include: {
+          order: {
+            include: {
+              client: true,
+              template: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        ...(limit !== undefined ? { take: limit } : {}),
+        ...(offset !== undefined ? { skip: offset } : {}),
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      invoices,
+      data: invoices,
+      total,
+      limit: limit ?? invoices.length,
+      offset: offset ?? 0,
+    });
   } catch (error) {
     console.error('Get invoices error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

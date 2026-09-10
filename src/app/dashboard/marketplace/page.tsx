@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 import CardPreview from '@/app/components/CardPreview';
 import { useToast } from '@/components/ui/toast';
 import {
@@ -627,9 +628,12 @@ function TemplateCard({ template: t, isPurchased, isPurchasing, isLiking, isLike
 
       {/* Preview — use real card aspect ratio so portrait cards aren't cropped */}
       <div style={{ position: 'relative', aspectRatio: `${t.cardWidth || 673}/${t.cardHeight || 1039}`, background: '#111', overflow: 'hidden' }}>
-        <img
+        <Image
           src={showBack && t.backImageUrl ? t.backImageUrl : t.frontImageUrl}
           alt={t.name}
+          width={t.cardWidth || 673}
+          height={t.cardHeight || 1039}
+          unoptimized
           style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
         />
         {/* Badges */}
@@ -1176,9 +1180,12 @@ function TemplateDetailModal({
                       style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
                     />
                   ) : (
-                    <img
+                    <Image
                       src={t.frontImageUrl}
                       alt={`${t.name} Front`}
+                      width={t.cardWidth || 673}
+                      height={t.cardHeight || 1039}
+                      unoptimized
                       style={{
                         display: 'block',
                         maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
@@ -1224,9 +1231,12 @@ function TemplateDetailModal({
                         style={{ maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px', maxHeight: '420px', objectFit: 'contain' }}
                       />
                     ) : (
-                      <img
+                      <Image
                         src={t.backImageUrl || (t as any).backOriginalUrl || t.frontImageUrl}
                         alt={`${t.name} Back`}
+                        width={t.cardWidth || 673}
+                        height={t.cardHeight || 1039}
+                        unoptimized
                         style={{
                           display: 'block',
                           maxWidth: t.cardWidth > t.cardHeight ? '520px' : '360px',
@@ -1342,15 +1352,18 @@ function TemplateDetailModal({
               >
                 <X size={24} />
               </button>
-              <img
+              <Image
                 src={fullscreenImg}
                 alt="Full Screen Preview"
+                width={1200}
+                height={800}
+                unoptimized
                 style={{
                   maxWidth: '96vw',
                   maxHeight: '94vh',
                   objectFit: 'contain',
                   borderRadius: '12px',
-                  boxShadow: '0 25px 80px rgba(0,0,0,0.9)',
+                  boxShadow: '0 10px 50px rgba(0,0,0,0.8)',
                 }}
               />
             </div>

@@ -142,7 +142,7 @@ export const cardholderUpdateSchema = z.object({
   designation: z.string().max(150).nullable().optional(),
   photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional().or(z.literal('')),
   uniqueKey: z.string().max(500).nullable().optional(),
-  customFields: z.record(z.string(), z.any()).nullable().optional(),
+  customFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
   active: z.boolean().optional(),
 });
 
@@ -156,4 +156,76 @@ export const creditUpdateSchema = z.object({
 });
 
 export type CreditUpdateInput = z.infer<typeof creditUpdateSchema>;
+
+// ── Password & User Management ────────────────────────────────────────────────
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z
+      .string({ message: 'Current password is required' })
+      .min(1, 'Current password is required'),
+    newPassword: z
+      .string({ message: 'New password is required' })
+      .min(8, 'New password must be at least 8 characters long')
+      .max(256),
+  })
+  .refine((data) => data.currentPassword !== data.newPassword, {
+    message: 'New password must be different from current password',
+    path: ['newPassword'],
+  });
+
+export const superadminLoginSchema = z.object({
+  email: z
+    .string({ message: 'Email is required' })
+    .email('Invalid email address')
+    .max(255),
+  password: z
+    .string({ message: 'Password is required' })
+    .min(1, 'Password is required')
+    .max(256),
+});
+
+export const createUserSchema = z.object({
+  name: z
+    .string({ message: 'Name is required' })
+    .min(1, 'Name is required')
+    .max(150),
+  email: z
+    .string({ message: 'Email is required' })
+    .email('Invalid email address')
+    .max(255),
+  password: z
+    .string({ message: 'Password is required' })
+    .min(8, 'Password must be at least 8 characters long')
+    .max(256),
+  role: z.enum(['OWNER', 'OPERATOR', 'DESIGNER'], { message: 'Invalid role' }),
+});
+
+export const creditRequestSchema = z.object({
+  amount: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, { message: 'Amount must be a positive number' }),
+});
+
+export const marketplacePurchaseSchema = z.object({
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, { message: 'templateId required' }),
+});
+
+export const createCardholderSchema = z.object({
+  name: z.string({ message: 'Name is required' }).min(1, 'Name is required').max(150),
+  designation: z.string().max(150).nullable().optional(),
+  photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional(),
+  customFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
+  ignoreDuplicate: z.boolean().optional(),
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
+});
+
+export const createOrderSchema = z.object({
+  clientId: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, { message: 'Client ID is required' }),
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, { message: 'Template ID is required' }),
+  cardholderIds: z.array(z.union([z.number(), z.string()]).transform(val => Number(val))).min(1, 'Cardholder IDs array cannot be empty'),
+  validTill: z.string().nullable().optional(),
+  pricePerCard: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
+  status: z.enum(['DRAFT', 'APPROVAL_PDF_GENERATED', 'APPROVAL_PDF_SENT', 'APPROVED', 'PRINTING', 'DELIVERED']).optional(),
+});
+
+
 

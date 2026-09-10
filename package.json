@@ -5,10 +5,12 @@
   "scripts": {
     "dev": "next dev",
     "postinstall": "export DIRECT_URL=\"$DATABASE_URL\" && prisma generate",
-    "build": "export DIRECT_URL=\"$DATABASE_URL\" && export PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK=true && prisma db push --accept-data-loss && prisma generate && next build",
+    "build": "export DIRECT_URL=\"$DATABASE_URL\" && prisma migrate deploy && prisma generate && next build",
     "db:migrate": "prisma migrate deploy",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -26,7 +28,6 @@
     "jszip": "^3.10.1",
     "lenis": "^1.3.23",
     "lucide-react": "^1.17.0",
-    "md5": "^2.3.0",
     "next": "16.2.7",
     "papaparse": "^5.5.3",
     "pdf-lib": "^1.17.1",
@@ -56,7 +57,8 @@
     "prisma": "^6.19.3",
     "tsx": "^4.22.4",
     "typescript": "^5",
-    "vercel": "^58.4.4"
+    "vercel": "^58.4.4",
+    "vitest": "^4.1.11"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"

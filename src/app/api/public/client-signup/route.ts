@@ -116,8 +116,8 @@ export async function POST(request: Request) {
       orgToken,
       clientId: client.id,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Client signup error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

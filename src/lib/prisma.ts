@@ -194,15 +194,29 @@ export const prisma = (basePrisma.$extends({
           'PressUser', 'Client', 'Cardholder', 'CardTemplate', 'CardOrder',
           'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
           'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
-          'PressApiKey', 'PrintVendor', 'ClientPortalShare'
+          'PressApiKey', 'PrintVendor', 'ClientPortalShare',
+          'PdfJob', 'CardAsset', 'CreditRequest',
+          'TemplatePurchase', 'TemplateLike', 'TemplateReport'
         ];
+
+        // TemplatePurchase uses buyerPressId instead of the standard pressId column
+        const pressIdField = model === 'TemplatePurchase' ? 'buyerPressId' : 'pressId';
 
         const op = operation as string;
         const pressId = await getCurrentPressId();
 
         if (tenantModels.includes(model) && pressId !== null) {
-          // 1. Read operations (inject tenant filter)
-          if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy'].includes(op)) {
+          // 1a. Rewrite findUnique → findFirst for tenant-scoped models
+          //     (pressId is not part of unique constraints, so findUnique can't accept it)
+          if (['findUnique', 'findUniqueOrThrow'].includes(op)) {
+            args.where = args.where || {};
+            args.where[pressIdField] = pressId;
+            const rewrittenOp = op === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
+            return (basePrisma as any)[model][rewrittenOp](args);
+          }
+
+          // 1b. Read operations (inject tenant filter)
+          if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy', 'findFirstOrThrow'].includes(op)) {
             args.where = args.where || {};
             if (model === 'CardTemplate') {
               // Allow global templates (pressId is null) or tenant-specific templates
@@ -219,28 +233,28 @@ export const prisma = (basePrisma.$extends({
                 ]
               };
             } else {
-              args.where.pressId = pressId;
+              args.where[pressIdField] = pressId;
             }
           }
 
           // 2. Write operations (inject tenant on creation/modification)
           if (['create', 'createMany'].includes(op)) {
             if (Array.isArray(args.data)) {
-              args.data = args.data.map((item: any) => ({ ...item, pressId }));
+              args.data = args.data.map((item: any) => ({ ...item, [pressIdField]: pressId }));
             } else {
               args.data = args.data || {};
-              args.data.pressId = pressId;
+              args.data[pressIdField] = pressId;
             }
           }
 
           if (['update', 'updateMany', 'delete', 'deleteMany', 'upsert'].includes(op)) {
             args.where = args.where || {};
-            args.where.pressId = pressId;
+            args.where[pressIdField] = pressId;
             if (op === 'upsert') {
               args.create = args.create || {};
-              args.create.pressId = pressId;
+              args.create[pressIdField] = pressId;
               args.update = args.update || {};
-              args.update.pressId = pressId;
+              args.update[pressIdField] = pressId;
             }
           }
         }

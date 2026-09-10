@@ -14,10 +14,17 @@ export async function GET(
     const { id } = await params;
     const orderId = Number(id);
 
-    // 1. Fetch order with client details
+    // 1. Fetch order with client details and latest completed approval PDF job
     const order = await prisma.cardOrder.findFirst({
       where: { id: orderId, pressId },
-      include: { client: true },
+      include: {
+        client: true,
+        pdfJobs: {
+          where: { pdfType: 'APPROVAL', status: 'COMPLETED' },
+          orderBy: { generatedAt: 'desc' },
+          take: 1,
+        },
+      },
     });
 
     if (!order) {
@@ -34,12 +41,7 @@ export async function GET(
     // Sanitize phone number (strip whitespace, dashes, plus sign)
     const sanitizedPhone = clientPhone.replace(/\D/g, '');
 
-    // 2. Fetch latest completed approval PDF job
-    const job = await prisma.pdfJob.findFirst({
-      where: { orderId, pressId, pdfType: 'APPROVAL', status: 'COMPLETED' },
-      orderBy: { generatedAt: 'desc' },
-    });
-
+    const job = order.pdfJobs[0];
     if (!job) {
       return NextResponse.json({
         error: 'No completed Approval PDF found for this order. Please generate the Approval PDF first.',

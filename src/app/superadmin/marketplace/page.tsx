@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import {
   Store, Shield, Eye, EyeOff, Trash2,
   Search, RefreshCw, Heart, Flag, Tag, Upload, CheckCircle,
@@ -166,7 +167,7 @@ export default function SuperAdminMarketplacePage() {
               border: t.reports > 5 ? '1px solid rgba(239,68,68,0.4)' : '1px solid var(--glass-border)',
             }}>
               {t.frontImageUrl && (
-                <img src={t.frontImageUrl} alt={t.name} style={{ width: '48px', height: '64px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0, background: '#111' }} />
+                <Image src={t.frontImageUrl} alt={t.name} width={48} height={64} unoptimized style={{ width: '48px', height: '64px', objectFit: 'contain', borderRadius: '6px', flexShrink: 0, background: '#111' }} />
               )}
               <div style={{ flex: 1, minWidth: '160px' }}>
                 <div style={{ fontWeight: '600', fontSize: '0.88rem' }}>{t.name}</div>

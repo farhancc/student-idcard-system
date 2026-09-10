@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import PlatformTour, { resetTour } from '@/components/ui/PlatformTour';
 import { 
@@ -114,7 +115,7 @@ export default function DashboardLayoutClient({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '32px', paddingLeft: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px' }}>
-            <img src="/logo.png" alt="IDexo Logo" style={{ width: '32px', height: '32px', objectFit: 'contain' }} />
+            <Image src="/logo.png" alt="IDexo Logo" width={32} height={32} style={{ objectFit: 'contain' }} />
           </div>
           <div>
             <h3 style={{ fontSize: '1.1rem', fontWeight: '700', margin: 0, color: '#fff' }}>IDexo Portal</h3>
@@ -309,7 +310,7 @@ export default function DashboardLayoutClient({
             zIndex: 100
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <img src="/logo.png" alt="IDexo Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+              <Image src="/logo.png" alt="IDexo Logo" width={28} height={28} style={{ objectFit: 'contain' }} />
               <span style={{ fontWeight: '700', fontSize: '1rem', color: '#fff' }}>IDexo</span>
             </div>
             <button 

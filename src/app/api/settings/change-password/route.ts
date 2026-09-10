@@ -22,31 +22,18 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const { currentPassword, newPassword } = body as {
-      currentPassword?: string;
-      newPassword?: string;
-    };
-
-    if (!currentPassword || !newPassword) {
+    const { changePasswordSchema } = await import('@/lib/schemas');
+    const parsed = changePasswordSchema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
       return NextResponse.json(
-        { error: 'Current password and new password are required' },
+        { error: issue?.message || 'Invalid input' },
         { status: 400 }
       );
     }
 
-    if (newPassword.length < 8) {
-      return NextResponse.json(
-        { error: 'New password must be at least 8 characters long' },
-        { status: 400 }
-      );
-    }
+    const { currentPassword, newPassword } = parsed.data;
 
-    if (currentPassword === newPassword) {
-      return NextResponse.json(
-        { error: 'New password must be different from the current password' },
-        { status: 400 }
-      );
-    }
 
     // Fetch the user's current password hash from DB
     const user = await prisma.pressUser.findUnique({

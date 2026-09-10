@@ -156,10 +156,23 @@ export async function GET(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
+    const { searchParams } = new URL(request.url);
+    const limit = Number(searchParams.get('limit') || searchParams.get('take')) || 50;
+    const skip = Number(searchParams.get('skip') || searchParams.get('offset')) || 0;
+
     const jobs = await prisma.pdfJob.findMany({
       where: { pressId },
       orderBy: { generatedAt: 'desc' },
-      take: 50,
+      take: limit,
+      skip: skip,
+      include: {
+        order: {
+          include: {
+            invoice: true,
+            cardholders: true,
+          },
+        },
+      },
     });
 
     return NextResponse.json({ success: true, jobs });

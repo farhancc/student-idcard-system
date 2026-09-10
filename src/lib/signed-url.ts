@@ -46,6 +46,17 @@ function extractCloudinaryResourceType(url: string): 'image' | 'raw' | 'video' {
   return 'image';
 }
 
+function getSignedUrlSecret(): string {
+  const secret = process.env.SIGNED_URL_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('FATAL: SIGNED_URL_SECRET, NEXTAUTH_SECRET, or JWT_SECRET must be configured in production');
+    }
+    return 'dev-secret-change-me';
+  }
+  return secret;
+}
+
 /**
  * Given any asset URL (Cloudinary or local), return a short-lived signed URL.
  *
@@ -79,7 +90,7 @@ export function generateSignedUrl(originalUrl: string, ttlSeconds = SIGNED_URL_T
   }
 
   // ── Local / relative URL ─────────────────────────────────────────
-  const secret = process.env.SIGNED_URL_SECRET || process.env.NEXTAUTH_SECRET || 'dev-secret-change-me';
+  const secret = getSignedUrlSecret();
   const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
   const payload = `${originalUrl}:${expiresAt}`;
   const sig = crypto.createHmac('sha256', secret).update(payload).digest('hex').slice(0, 32);
@@ -98,7 +109,7 @@ export function validateSignedUrl(originalPath: string, sig: string, exp: string
     return false; // Expired
   }
 
-  const secret = process.env.SIGNED_URL_SECRET || process.env.NEXTAUTH_SECRET || 'dev-secret-change-me';
+  const secret = getSignedUrlSecret();
   const payload = `${originalPath}:${expiresAt}`;
   const expectedSig = crypto.createHmac('sha256', secret).update(payload).digest('hex').slice(0, 32);
 

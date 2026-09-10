@@ -106,9 +106,40 @@ export async function POST(request: Request) {
       details: [] as any[],
     };
 
+    // Pre-fetch all cardholders for this client in 1 query to prevent N+1 queries
+    const allCardholders = await prisma.cardholder.findMany({
+      where: { clientId },
+    });
+
+    const cardholderByName = new Map<string, typeof allCardholders[0]>();
+    for (const c of allCardholders) {
+      cardholderByName.set(c.name.trim().toLowerCase(), c);
+    }
+
+    const findCardholderInMemory = (baseName: string) => {
+      const lower = baseName.trim().toLowerCase();
+      if (cardholderByName.has(lower)) {
+        return cardholderByName.get(lower)!;
+      }
+      return allCardholders.find(c => {
+        if (!c.customFields) return false;
+        try {
+          const parsed = typeof c.customFields === 'string' ? JSON.parse(c.customFields) : c.customFields;
+          if (parsed) {
+            return Object.values(parsed).some((v: any) =>
+              String(v).trim().toLowerCase() === lower
+            );
+          }
+        } catch {}
+        return false;
+      }) || null;
+    };
+
     // Prepare upload directory: public/uploads/{pressId}/{clientId}/photos/
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', String(pressId), String(clientId), 'photos');
     fs.mkdirSync(uploadDir, { recursive: true });
+
+    const pendingPhotoUpdates: Array<{ id: number; photoUrl: string }> = [];
 
     for (const entry of zipEntries) {
       if (entry.isDirectory) continue;
@@ -122,29 +153,8 @@ export async function POST(request: Request) {
       const baseName = path.basename(entry.entryName, ext).trim();
       const imageBuffer = entry.getData();
 
-      // Find matching cardholder: check name first (case-insensitive), then check custom fields
-      let cardholder = await prisma.cardholder.findFirst({
-        where: { clientId, name: { equals: baseName, mode: 'insensitive' } },
-      });
-
-      if (!cardholder) {
-        // Fallback: search custom fields (any key containing the baseName value)
-        const candidates = await prisma.cardholder.findMany({
-          where: { clientId },
-        });
-        cardholder = candidates.find(c => {
-          if (!c.customFields) return false;
-          try {
-            const parsed = typeof c.customFields === 'string' ? JSON.parse(c.customFields) : c.customFields;
-            if (parsed) {
-              return Object.values(parsed).some((v: any) => 
-                String(v).trim().toLowerCase() === baseName.toLowerCase()
-              );
-            }
-          } catch {}
-          return false;
-        }) || null;
-      }
+      // Find matching cardholder in-memory
+      const cardholder = findCardholderInMemory(baseName);
 
       if (!cardholder) {
         results.unmatched++;
@@ -211,17 +221,7 @@ export async function POST(request: Request) {
         publicUrl = `/uploads/${pressId}/${clientId}/photos/${destFileName}`;
       }
 
-      // Update Cardholder DB
-      await prisma.cardholder.update({
-        where: { id: cardholder.id },
-        data: { photoUrl: publicUrl },
-      });
-
-      // Mark cache stale
-      await prisma.cardAsset.updateMany({
-        where: { cardholderId: cardholder.id },
-        data: { isStale: true },
-      });
+      pendingPhotoUpdates.push({ id: cardholder.id, photoUrl: publicUrl });
 
       results.matched++;
       results.details.push({
@@ -230,6 +230,23 @@ export async function POST(request: Request) {
         status: 'SUCCESS',
         warnings: validation.warnings,
         photoUrl: publicUrl,
+      });
+    }
+
+    // Execute pending DB updates in a single transaction
+    if (pendingPhotoUpdates.length > 0) {
+      const updatedCardholderIds = pendingPhotoUpdates.map(u => u.id);
+      await prisma.$transaction(async (tx) => {
+        await Promise.all(pendingPhotoUpdates.map(update => 
+          tx.cardholder.update({
+            where: { id: update.id },
+            data: { photoUrl: update.photoUrl },
+          })
+        ));
+        await tx.cardAsset.updateMany({
+          where: { cardholderId: { in: updatedCardholderIds } },
+          data: { isStale: true },
+        });
       });
     }
 

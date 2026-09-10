@@ -47,9 +47,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Client or Template not found' }, { status: 404 });
     }
 
-    // 1. Process/Import Cardholders list
+    // 1. Process/Import Cardholders list (pre-fetch existing cardholders to avoid N+1 queries)
+    const existingCardholders = await prisma.cardholder.findMany({
+      where: { clientId },
+    });
+
+    const existingMap = new Map<string, typeof existingCardholders[0]>();
+    for (const c of existingCardholders) {
+      const key = `${c.name.trim().toLowerCase()}::${(c.designation || '').trim().toLowerCase()}`;
+      existingMap.set(key, c);
+    }
+
     const cardholderIds: number[] = [];
     let matchedPhotosCount = 0;
+
+    const updatesToRun: Array<{ id: number; data: any; markStale: boolean }> = [];
+    const createsToRun: Array<any> = [];
 
     for (let i = 0; i < cardholders.length; i++) {
       const ch = cardholders[i];
@@ -73,10 +86,8 @@ export async function POST(request: Request) {
         ? JSON.stringify(custom) 
         : null;
 
-      // Find duplicate in DB
-      const duplicate = await prisma.cardholder.findFirst({
-        where: { clientId, name, designation: designation ?? null },
-      });
+      const key = `${name.toLowerCase()}::${(designation || '').toLowerCase()}`;
+      const duplicate = existingMap.get(key);
 
       const cardholderPayload = {
         pressId,
@@ -87,31 +98,52 @@ export async function POST(request: Request) {
         customFields: customFieldsStr,
       };
 
-      let cardholderRecord;
       if (duplicate) {
-        cardholderRecord = await prisma.cardholder.update({
-          where: { id: duplicate.id },
+        const markStale = (
+          name !== duplicate.name ||
+          designation !== duplicate.designation ||
+          customFieldsStr !== duplicate.customFields
+        );
+        updatesToRun.push({
+          id: duplicate.id,
           data: {
             ...cardholderPayload,
             photoUrl: photoUrl || duplicate.photoUrl,
           },
+          markStale,
         });
-        // Mark cached asset stale if name/designation/custom changed
-        if (
-          name !== duplicate.name ||
-          designation !== duplicate.designation ||
-          customFieldsStr !== duplicate.customFields
-        ) {
-          await prisma.cardAsset.updateMany({
-            where: { cardholderId: duplicate.id },
-            data: { isStale: true },
-          });
-        }
+        cardholderIds.push(duplicate.id);
       } else {
-        cardholderRecord = await prisma.cardholder.create({ data: cardholderPayload });
+        createsToRun.push(cardholderPayload);
       }
+    }
 
-      cardholderIds.push(cardholderRecord.id);
+    // Execute database mutations inside a single transaction
+    if (updatesToRun.length > 0 || createsToRun.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        if (updatesToRun.length > 0) {
+          await Promise.all(updatesToRun.map(u => 
+            tx.cardholder.update({
+              where: { id: u.id },
+              data: u.data,
+            }).then(() => {
+              if (u.markStale) {
+                return tx.cardAsset.updateMany({
+                  where: { cardholderId: u.id },
+                  data: { isStale: true },
+                });
+              }
+            })
+          ));
+        }
+
+        if (createsToRun.length > 0) {
+          const createdItems = await Promise.all(createsToRun.map(c => tx.cardholder.create({ data: c })));
+          for (const created of createdItems) {
+            cardholderIds.push(created.id);
+          }
+        }
+      });
     }
 
     if (cardholderIds.length === 0) {

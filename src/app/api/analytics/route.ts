@@ -78,24 +78,29 @@ export async function GET(request: Request) {
     const calculatedStorageBytes = (cardAssetsCount * 300000) + (completedPdfCount * 1500000);
     const storageUsedGb = Number((calculatedStorageBytes / (1024 * 1024 * 1024)).toFixed(3));
 
-    // ── Breakdowns ─────────────────────────────────────────────────────────────
+    // ── Breakdowns (using groupBy for batch counts) ───────────────────────────
 
-    const pdfTypes = ['PRODUCTION', 'APPROVAL', 'INDIVIDUAL', 'INVOICE'];
-    const byType: Record<string, number> = {};
-    for (const type of pdfTypes) {
-      byType[type] = await prisma.pdfJob.count({ where: { pressId, pdfType: type } });
-    }
+    const pdfTypeGroups = await prisma.pdfJob.groupBy({
+      by: ['pdfType'],
+      where: { pressId },
+      _count: { _all: true },
+    });
+    const byType: Record<string, number> = { PRODUCTION: 0, APPROVAL: 0, INDIVIDUAL: 0, INVOICE: 0 };
+    pdfTypeGroups.forEach(g => { if (g.pdfType) byType[g.pdfType] = g._count._all; });
 
-    const statuses = ['COMPLETED', 'FAILED', 'PENDING', 'PROCESSING'];
-    const byStatus: Record<string, number> = {};
-    for (const status of statuses) {
-      byStatus[status] = await prisma.pdfJob.count({ where: { pressId, status } });
-    }
+    const statusGroups = await prisma.pdfJob.groupBy({
+      by: ['status'],
+      where: { pressId },
+      _count: { _all: true },
+    });
+    const byStatus: Record<string, number> = { COMPLETED: 0, FAILED: 0, PENDING: 0, PROCESSING: 0 };
+    statusGroups.forEach(g => { if (g.status) byStatus[g.status] = g._count._all; });
 
     // ── Top Clients ────────────────────────────────────────────────────────────
 
     const clients = await prisma.client.findMany({
       where: { pressId },
+      take: 100,
       include: { _count: { select: { cardholders: true } } },
     });
     const topClients = clients
@@ -123,7 +128,30 @@ export async function GET(request: Request) {
       },
     });
 
-    // ── Monthly production and financial trend (last 6 months) ──────────────────
+    // ── Monthly production and financial trend (single 6-month range query) ───
+
+    const sixMonthsAgoStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    
+    const [allJobs6Months, allInvoices6Months] = await Promise.all([
+      prisma.pdfJob.findMany({
+        where: {
+          pressId,
+          pdfType: 'PRODUCTION',
+          status: 'COMPLETED',
+          completedAt: { gte: sixMonthsAgoStart },
+        },
+        take: 100,
+        include: { order: { include: { _count: { select: { cardholders: true } } } } },
+      }),
+      prisma.orderInvoice.findMany({
+        where: {
+          pressId,
+          createdAt: { gte: sixMonthsAgoStart },
+        },
+        take: 100,
+        select: { createdAt: true, totalAmount: true, paidAmount: true },
+      }),
+    ]);
 
     const monthlyTrend: { month: string; cards: number }[] = [];
     const financialTrend: { month: string; invoiced: number; paid: number; pending: number; cards: number }[] = [];
@@ -131,13 +159,11 @@ export async function GET(request: Request) {
     for (let i = 5; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      
-      const jobs = await prisma.pdfJob.findMany({
-        where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: start, lt: end } },
-        include: { order: { include: { _count: { select: { cardholders: true } } } } },
-      });
-      
-      const cards = jobs.reduce((acc: number, job: any) => {
+
+      const monthJobs = allJobs6Months.filter(
+        j => j.completedAt && j.completedAt >= start && j.completedAt < end
+      );
+      const cards = monthJobs.reduce((acc: number, job: any) => {
         return acc + (job.order?._count?.cardholders || 0);
       }, 0);
 
@@ -146,14 +172,11 @@ export async function GET(request: Request) {
         cards,
       });
 
-      // Fetch financial invoices for this specific month range
-      const invoices = await prisma.orderInvoice.findMany({
-        where: { pressId, createdAt: { gte: start, lt: end } },
-        select: { totalAmount: true, paidAmount: true }
-      });
-
-      const invoiced = invoices.reduce((acc: number, inv: any) => acc + Number(inv.totalAmount || 0), 0);
-      const paid = invoices.reduce((acc: number, inv: any) => acc + Number(inv.paidAmount || 0), 0);
+      const monthInvoices = allInvoices6Months.filter(
+        inv => inv.createdAt >= start && inv.createdAt < end
+      );
+      const invoiced = monthInvoices.reduce((acc: number, inv: any) => acc + Number(inv.totalAmount || 0), 0);
+      const paid = monthInvoices.reduce((acc: number, inv: any) => acc + Number(inv.paidAmount || 0), 0);
       const pending = Math.max(0, invoiced - paid);
 
       financialTrend.push({

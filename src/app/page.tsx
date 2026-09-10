@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Printer, LayoutGrid, ArrowRight, CircleCheckBig, Apple,
   Monitor, Terminal, Download, Activity, Settings, MessageSquare,
@@ -370,12 +371,12 @@ export default function LandingPage() {
               justifyContent: 'center',
               padding: '6px'
             }}>
-              <img
+              <Image
                 src="/logo.png"
                 alt="IDexo Logo"
+                width={28}
+                height={28}
                 style={{
-                  width: '100%',
-                  height: '100%',
                   objectFit: 'contain',
                   filter: 'brightness(0) invert(1)'
                 }}
@@ -441,10 +442,13 @@ export default function LandingPage() {
         </div>
 
         <div style={{ position: 'relative' }}>
-          <img
+          <Image
             src="/hero_dashboard.png"
             alt="IDexo Printing Press Console Dashboard"
+            width={1200}
+            height={800}
             className="hero-mockup-frame"
+            style={{ width: '100%', height: 'auto' }}
           />
           <div style={{
             position: 'absolute',
@@ -585,7 +589,7 @@ export default function LandingPage() {
                   </ul>
                 </div>
                 <div>
-                  <img src="/feature_data_collection.png" alt="Client Intake Portal" className="hero-mockup-frame" />
+                  <Image src="/feature_data_collection.png" alt="Client Intake Portal" width={800} height={500} className="hero-mockup-frame" style={{ width: '100%', height: 'auto' }} />
                 </div>
               </div>
             )}
@@ -613,7 +617,7 @@ export default function LandingPage() {
                   </ul>
                 </div>
                 <div>
-                  <img src="/feature_template_designer.png" alt="Template Coordinate Canvas" className="hero-mockup-frame" />
+                  <Image src="/feature_template_designer.png" alt="Template Coordinate Canvas" width={800} height={500} className="hero-mockup-frame" style={{ width: '100%', height: 'auto' }} />
                 </div>
               </div>
             )}
@@ -641,7 +645,7 @@ export default function LandingPage() {
                   </ul>
                 </div>
                 <div>
-                  <img src="/feature_production_grid.png" alt="Duplex Imposition Grid" className="hero-mockup-frame" />
+                  <Image src="/feature_production_grid.png" alt="Duplex Imposition Grid" width={800} height={500} className="hero-mockup-frame" style={{ width: '100%', height: 'auto' }} />
                 </div>
               </div>
             )}
@@ -669,7 +673,7 @@ export default function LandingPage() {
                   </ul>
                 </div>
                 <div>
-                  <img src="/feature_press_console.png" alt="GST Billing & Invoicing Console" className="hero-mockup-frame" />
+                  <Image src="/feature_press_console.png" alt="GST Billing & Invoicing Console" width={800} height={500} className="hero-mockup-frame" style={{ width: '100%', height: 'auto' }} />
                 </div>
               </div>
             )}
@@ -868,12 +872,12 @@ export default function LandingPage() {
                   justifyContent: 'center',
                   padding: '5px'
                 }}>
-                  <img
+                  <Image
                     src="/logo.png"
                     alt="IDexo Logo"
+                    width={26}
+                    height={26}
                     style={{
-                      width: '100%',
-                      height: '100%',
                       objectFit: 'contain',
                       filter: 'brightness(0) invert(1)'
                     }}

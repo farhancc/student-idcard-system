@@ -215,16 +215,17 @@ export async function POST(request: Request) {
               data: { status: 'PRINTING' },
             });
 
-            // Record print logs
-            for (const ch of order.cardholders) {
-              await tx.cardPrintRecord.create({
-                data: {
+            // Record print logs using createMany batch
+            if (order.cardholders.length > 0) {
+              const now = new Date();
+              await tx.cardPrintRecord.createMany({
+                data: order.cardholders.map(ch => ({
                   cardholderId: ch.cardholderId,
                   pressId,
                   orderId: order.id,
                   status: 'PRINTED',
-                  printedAt: new Date(),
-                },
+                  printedAt: now,
+                })),
               });
             }
 
@@ -306,8 +307,8 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Complete PDF job error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

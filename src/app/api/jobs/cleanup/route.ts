@@ -5,8 +5,17 @@ import path from 'path';
 
 export async function POST(request: Request) {
   try {
-    // Optional: Protect cron route using token or simple signature check
-    // In this basic version, we allow running it via post request.
+    // Destructive and irreversible: restrict to the tenant owner.
+    // Superseded by the scheduled /api/cron/cleanup — delete this route once
+    // that job is running (see REMEDIATION_PLAN.md item 2.2).
+    const pressId = request.headers.get('x-press-id');
+    const role = request.headers.get('x-user-role');
+    if (!pressId || !role) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (role !== 'OWNER') {
+      return NextResponse.json({ error: 'Forbidden: owners only' }, { status: 403 });
+    }
 
     const now = new Date();
 
@@ -64,12 +73,15 @@ export async function POST(request: Request) {
           }
         }
       }
+    }
 
-      // Delete job record from database
-      await prisma.pdfJob.delete({
-        where: { id: job.id },
+    // Batch delete all expired job records in a single DB query
+    const expiredJobIds = expiredJobs.map(j => j.id);
+    if (expiredJobIds.length > 0) {
+      const deleteResult = await prisma.pdfJob.deleteMany({
+        where: { id: { in: expiredJobIds } },
       });
-      deletedRecordsCount++;
+      deletedRecordsCount = deleteResult.count;
     }
 
     return NextResponse.json({

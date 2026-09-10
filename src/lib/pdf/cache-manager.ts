@@ -1,6 +1,6 @@
 import { prisma } from '../prisma';
 import { renderCardSide, renderCardSideToPdfBytes } from './card-engine';
-import md5 from 'md5';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -43,7 +43,7 @@ export async function getOrRenderCard(
 
   // Calculate current template layout hash to check if cache is stale
   const currentLayoutString = template.frontFields + template.backFields + template.frontImageUrl + (template.backImageUrl || '') + String(template.version || 1);
-  const templateHash = md5(currentLayoutString);
+  const templateHash = crypto.createHash('sha256').update(currentLayoutString).digest('hex');
 
   // 2. Query cache entry
   const cachedAsset = await prisma.cardAsset.findUnique({

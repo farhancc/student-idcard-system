@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, basePrisma } from '@/lib/prisma';
 import { updateClientSchema } from '@/lib/schemas';
 
 export async function GET(
@@ -139,81 +139,38 @@ export async function DELETE(
     const clientId = Number(id);
 
     const client = await prisma.client.findFirst({
-      where: { id: clientId, pressId },
+      where: { id: clientId, pressId, deletedAt: null },
     });
 
     if (!client) {
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    // 1. Fetch all assets linked to this client before database deletion
-    const cardholders = await prisma.cardholder.findMany({
-      where: { clientId },
-      select: { photoUrl: true }
-    });
+    const now = new Date();
 
-    const templates = await prisma.cardTemplate.findMany({
-      where: { clientId },
-      select: { frontImageUrl: true, backImageUrl: true, frontOriginalUrl: true, backOriginalUrl: true }
-    });
-
-    const pdfJobs = await prisma.pdfJob.findMany({
-      where: { order: { clientId } },
-      select: { downloadUrl: true }
-    });
-
-    // 2. Extract and delete Cloudinary assets if configured
-    if (isCloudinaryConfigured) {
-      const resourcesToDelete: { publicId: string; resourceType: 'image' | 'raw' }[] = [];
-
-      cardholders.forEach(ch => {
-        const res = getCloudinaryResource(ch.photoUrl);
-        if (res) resourcesToDelete.push(res);
-      });
-
-      templates.forEach(t => {
-        const r1 = getCloudinaryResource(t.frontImageUrl);
-        if (r1) resourcesToDelete.push(r1);
-        const r2 = getCloudinaryResource(t.backImageUrl);
-        if (r2) resourcesToDelete.push(r2);
-        const r3 = getCloudinaryResource(t.frontOriginalUrl);
-        if (r3) resourcesToDelete.push(r3);
-        const r4 = getCloudinaryResource(t.backOriginalUrl);
-        if (r4) resourcesToDelete.push(r4);
-      });
-
-      pdfJobs.forEach(job => {
-        const res = getCloudinaryResource(job.downloadUrl);
-        if (res) resourcesToDelete.push(res);
-      });
-
-      // Deduplicate resources to prevent multiple API hits for the same file
-      const uniqueResources = Array.from(new Set(resourcesToDelete.map(r => JSON.stringify(r))))
-        .map(str => JSON.parse(str) as { publicId: string; resourceType: 'image' | 'raw' });
-
-      // Run deletions in parallel, ignoring individual failures
-      await Promise.all(
-        uniqueResources.map(async (res) => {
-          try {
-            await cloudinary.uploader.destroy(res.publicId, { resource_type: res.resourceType });
-          } catch (err) {
-            console.error(`Failed to delete Cloudinary resource: ${res.publicId}`, err);
-          }
-        })
-      );
-    }
-
-    // 3. Database cascade will handle cardholders, orders, assets, serials, and pdf jobs.
-    await prisma.client.delete({
-      where: { id: clientId },
-    });
+    // Soft-delete: mark client, its cardholders, and its orders as deleted.
+    // Financial records (invoices), delivery records, and audit logs are preserved.
+    await basePrisma.$transaction([
+      basePrisma.client.update({
+        where: { id: clientId },
+        data: { deletedAt: now },
+      }),
+      basePrisma.cardholder.updateMany({
+        where: { clientId, deletedAt: null },
+        data: { deletedAt: now, active: false },
+      }),
+      basePrisma.cardOrder.updateMany({
+        where: { clientId, pressId, deletedAt: null },
+        data: { deletedAt: now },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,
-      message: 'Client and all associated database records and Cloudinary assets deleted permanently',
+      message: 'Client archived successfully. Financial records and order history are preserved.',
     });
   } catch (error) {
-    console.error('Delete client error:', error);
+    console.error('Archive client error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

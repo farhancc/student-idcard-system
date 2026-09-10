@@ -14,6 +14,12 @@ export async function GET(
     const { id } = await params;
     const clientId = Number(id);
 
+    const { searchParams } = new URL(request.url);
+    const limitStr = searchParams.get('limit') || searchParams.get('take');
+    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+    const limit = limitStr ? Number(limitStr) : undefined;
+    const offset = offsetStr ? Number(offsetStr) : undefined;
+
     // Verify client belongs to this press
     const client = await prisma.client.findFirst({
       where: { id: clientId, pressId },
@@ -23,15 +29,20 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    const cardholders = await prisma.cardholder.findMany({
-      where: { clientId },
-      orderBy: { name: 'asc' },
-      include: {
-        cardAsset: {
-          select: { templateId: true }
+    const [total, cardholders] = await Promise.all([
+      prisma.cardholder.count({ where: { clientId } }),
+      prisma.cardholder.findMany({
+        where: { clientId },
+        orderBy: { name: 'asc' },
+        ...(limit !== undefined ? { take: limit } : {}),
+        ...(offset !== undefined ? { skip: offset } : {}),
+        include: {
+          cardAsset: {
+            select: { templateId: true }
+          }
         }
-      }
-    });
+      }),
+    ]);
 
     const templates = await prisma.cardTemplate.findMany({
       where: {
@@ -89,7 +100,14 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ success: true, cardholders: cardholdersWithTemplate, templates });
+    return NextResponse.json({
+      success: true,
+      cardholders: cardholdersWithTemplate,
+      templates,
+      total,
+      limit: limit ?? cardholders.length,
+      offset: offset ?? 0,
+    });
   } catch (error) {
     console.error('Get cardholders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -109,11 +127,25 @@ export async function POST(
     const { id } = await params;
     const clientId = Number(id);
 
-    const { name, designation, photoUrl, customFields, ignoreDuplicate, templateId } = await request.json();
-
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
+
+    const { createCardholderSchema } = await import('@/lib/schemas');
+    const parsed = createCardholderSchema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return NextResponse.json(
+        { error: issue?.message || 'Invalid cardholder input' },
+        { status: 400 }
+      );
+    }
+
+    const { name, designation, photoUrl, customFields, ignoreDuplicate, templateId } = parsed.data;
+
 
     // Verify client
     const client = await prisma.client.findFirst({

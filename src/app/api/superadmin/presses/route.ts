@@ -171,6 +171,21 @@ export async function GET() {
       });
     }
 
+    const pressIds = presses.map(p => p.id);
+
+    // Batch counts with 4 groupBy queries instead of 4×N subqueries
+    const [userCounts, clientCounts, orderCounts, jobCounts] = pressIds.length > 0 ? await Promise.all([
+      prisma.pressUser.groupBy({ by: ['pressId'], where: { pressId: { in: pressIds } }, _count: { _all: true } }),
+      prisma.client.groupBy({ by: ['pressId'], where: { pressId: { in: pressIds } }, _count: { _all: true } }),
+      prisma.cardOrder.groupBy({ by: ['pressId'], where: { pressId: { in: pressIds } }, _count: { _all: true } }),
+      prisma.pdfJob.groupBy({ by: ['pressId'], where: { pressId: { in: pressIds } }, _count: { _all: true } }),
+    ]) : [[], [], [], []];
+
+    const userCountMap = new Map(userCounts.map(u => [u.pressId, u._count._all]));
+    const clientCountMap = new Map(clientCounts.map(c => [c.pressId, c._count._all]));
+    const orderCountMap = new Map(orderCounts.map(o => [o.pressId, o._count._all]));
+    const jobCountMap = new Map(jobCounts.map(j => [j.pressId, j._count._all]));
+
     // Aggregate per-press stats
     const pressesWithStats = presses.map(press => {
       let totalCardsPrinted = 0;
@@ -208,6 +223,12 @@ export async function GET() {
       const { clients: _c, ...pressBase } = press as any;
       return {
         ...pressBase,
+        _count: {
+          users: userCountMap.get(press.id) || pressBase._count?.users || 0,
+          clients: clientCountMap.get(press.id) || pressBase._count?.clients || 0,
+          orders: orderCountMap.get(press.id) || pressBase._count?.orders || 0,
+          jobs: jobCountMap.get(press.id) || pressBase._count?.jobs || 0,
+        },
         totalCardsPrinted,
         totalRevenue,
         clients,

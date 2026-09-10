@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { CheckCircle, Printer, Shield, Cpu, Database } from 'lucide-react';
 import ScrollStackRaw, { ScrollStackItem } from './ScrollStack';
 const ScrollStack = ScrollStackRaw as any;
@@ -493,7 +494,7 @@ export default function TimelineContainer() {
                             <div className="mockup-browser-url">idexo.io/{step.mockType}</div>
                           </div>
                           <div style={{ padding: '8px', position: 'relative', overflow: 'hidden', height: '140px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <img src={img.src} alt={img.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px', opacity: 0.8 }} />
+                            <Image src={img.src} alt={img.alt} width={300} height={140} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px', opacity: 0.8 }} />
                             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(3,7,18,0.8), transparent 70%)' }} />
                           </div>
                         </div>
@@ -503,7 +504,7 @@ export default function TimelineContainer() {
                         <div className="mockup-phone">
                           <div className="mockup-phone-notch" />
                           <div style={{ position: 'relative', overflow: 'hidden', height: '130px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '12px' }}>
-                            <img src={img.src} alt={img.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
+                            <Image src={img.src} alt={img.alt} width={300} height={130} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }} />
                             <div className="crop-overlay">
                               <div className="crop-bracket crop-tl" />
                               <div className="crop-bracket crop-tr" />
@@ -516,7 +517,7 @@ export default function TimelineContainer() {
 
                       {img.styleType === 'crop' && (
                         <div style={{ position: 'relative', overflow: 'hidden', height: '164px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={164} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.7 }} />
                           <div className="crop-overlay">
                             <div className="crop-bracket crop-tl" />
                             <div className="crop-bracket crop-tr" />
@@ -532,10 +533,10 @@ export default function TimelineContainer() {
                       {img.styleType === 'grid' && (
                         <div className="grid-preview-container" style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
                           <div className="grid-fold-line" />
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={70} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={70} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={70} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={70} style={{ width: '100%', height: '70px', objectFit: 'contain', opacity: 0.6 }} />
                         </div>
                       )}
 
@@ -558,7 +559,7 @@ export default function TimelineContainer() {
                               </div>
                               <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)' }} />
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
-                                <img src={img.src} alt={img.alt} style={{ width: '36px', height: '50px', objectFit: 'cover', borderRadius: '2px', opacity: 0.6 }} />
+                                <Image src={img.src} alt={img.alt} width={36} height={50} style={{ objectFit: 'cover', borderRadius: '2px', opacity: 0.6 }} />
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
                                   <div style={{ height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', width: '80%' }} />
                                   <div style={{ height: '4px', background: 'rgba(255,255,255,0.05)', borderRadius: '2px', width: '50%' }} />
@@ -571,7 +572,7 @@ export default function TimelineContainer() {
 
                       {img.styleType === 'invoice' && (
                         <div style={{ position: 'relative', overflow: 'hidden', height: '164px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <img src={img.src} alt={img.alt} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.15 }} />
+                          <Image src={img.src} alt={img.alt} width={300} height={164} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.15 }} />
                           <div className="invoice-overlay">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#9ca3af' }}>INVOICE #INV-4929</span>

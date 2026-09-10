@@ -36,7 +36,7 @@ export async function signUserToken(payload: UserSessionPayload): Promise<string
   return new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('30d')
+    .setExpirationTime('7d')
     .sign(JWT_SECRET);
 }
 

@@ -19,30 +19,34 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid template ID' }, { status: 400 });
   }
 
-  // Verify template exists
+  // Verify template exists and fetch fields in single query
   const template = await prisma.cardTemplate.findUnique({
     where: { id: templateId },
-    select: { id: true, name: true, frontFields: true, backFields: true },
+    select: {
+      id: true,
+      name: true,
+      frontFields: true,
+      backFields: true,
+      fields: {
+        select: {
+          field: true,
+          type: true,
+          side: true,
+          isRequired: true,
+          fontSize: true,
+          color: true,
+          prefix: true,
+        },
+        orderBy: [{ side: 'asc' }, { sortOrder: 'asc' }],
+      },
+    },
   });
 
   if (!template) {
     return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
-  // Prefer normalized TemplateField rows
-  const dbFields = await prisma.templateField.findMany({
-    where: { templateId },
-    orderBy: [{ side: 'asc' }, { sortOrder: 'asc' }],
-    select: {
-      field: true,
-      type: true,
-      side: true,
-      isRequired: true,
-      fontSize: true,
-      color: true,
-      prefix: true,
-    },
-  });
+  const dbFields = template.fields;
 
   // Fallback: if no TemplateField rows exist yet, parse from JSON columns
   if (dbFields.length === 0) {

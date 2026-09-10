@@ -81,9 +81,9 @@ export async function POST(request: Request) {
         pdfFileUrl: updated.pdfFileUrl,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Marketplace publish error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -107,7 +107,8 @@ export async function DELETE(request: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Marketplace unpublish error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

@@ -18,15 +18,25 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { email, password } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-
-    if (!email || !password) {
+    const { superadminLoginSchema } = await import('@/lib/schemas');
+    const parsed = superadminLoginSchema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
       return NextResponse.json(
-        { error: 'Email and Password are required' },
+        { error: issue?.message || 'Invalid email or password' },
         { status: 400 }
       );
     }
+
+    const { email, password } = parsed.data;
+
 
     const admin = await prisma.superAdmin.findUnique({
       where: { email },

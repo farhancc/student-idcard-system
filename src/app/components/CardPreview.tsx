@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
 import { renderCardSideClient } from '@/lib/pdf/card-renderer-client';
 
 interface CardTemplate {
@@ -175,9 +176,12 @@ export default function CardPreview({
   if (imgUrl && !cardholder && !renderOnCanvas) {
     return (
       <div className={`relative flex items-center justify-center ${className}`} style={wrapperStyle}>
-        <img
+        <Image
           src={imgUrl}
           alt={`${side.toUpperCase()} Preview`}
+          width={template.cardWidth || template.width || 1013}
+          height={template.cardHeight || template.height || 638}
+          unoptimized
           style={{
             maxWidth: '100%',
             maxHeight: style.maxHeight || '100%',
@@ -235,9 +239,12 @@ export default function CardPreview({
   if (imgUrl) {
     return (
       <div className={`relative flex items-center justify-center ${className}`} style={wrapperStyle}>
-        <img
+        <Image
           src={imgUrl}
           alt={`${side.toUpperCase()} Preview`}
+          width={template.cardWidth || template.width || 1013}
+          height={template.cardHeight || template.height || 638}
+          unoptimized
           style={{
             maxWidth: '100%',
             maxHeight: style.maxHeight || '100%',

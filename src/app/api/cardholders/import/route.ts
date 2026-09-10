@@ -222,10 +222,26 @@ export async function POST(request: Request) {
       });
     }
 
+    // 4. Batch optimization: Pre-fetch all existing cardholders for this client in 1 query (prevents N+1 queries)
+    const existingCardholders = await prisma.cardholder.findMany({
+      where: { clientId, pressId },
+    });
+
+    const existingMap = new Map<string, typeof existingCardholders[0]>();
+    for (const ch of existingCardholders) {
+      const key = `${ch.name.trim().toLowerCase()}:${(ch.designation || '').trim().toLowerCase()}`;
+      if (!existingMap.has(key)) {
+        existingMap.set(key, ch);
+      }
+    }
+
     const duplicates: any[] = [];
     const newItems: any[] = [];
     const updatedItems: any[] = [];
-    const skippedCount = { val: 0 };
+    let skippedCountVal = 0;
+
+    const itemsToCreate: any[] = [];
+    const txOps: Array<(tx: any) => Promise<{ type: 'update' | 'create'; data: any }>> = [];
 
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
@@ -245,10 +261,8 @@ export async function POST(request: Request) {
         }
       });
 
-      // Find duplicate in DB: name + designation (since uniqueKey concept is deprecated/removed)
-      const duplicate = await prisma.cardholder.findFirst({
-        where: { clientId, name, designation: designation ?? null },
-      });
+      const lookupKey = `${name.toLowerCase()}:${(designation || '').toLowerCase()}`;
+      const duplicate = existingMap.get(lookupKey);
 
       const cardholderPayload: any = {
         pressId,
@@ -264,42 +278,63 @@ export async function POST(request: Request) {
         duplicates.push({ rowNumber: i + 1, source: row, existing: duplicate });
 
         if (importMode === 'skip') {
-          skippedCount.val += 1;
+          skippedCountVal += 1;
         } else if (importMode === 'update') {
-          const updated = await prisma.cardholder.update({
-            where: { id: duplicate.id },
-            data: {
-              ...cardholderPayload,
-              // Keep original photo if new one not provided
-              photoUrl: photoUrl || duplicate.photoUrl,
-            },
-          });
-          // Mark cached asset stale if name/designation/custom changed
-          if (
-            name !== duplicate.name ||
-            designation !== duplicate.designation ||
-            JSON.stringify(custom) !== duplicate.customFields
-          ) {
-            await prisma.cardAsset.updateMany({
-              where: { cardholderId: duplicate.id },
-              data: { isStale: true },
+          txOps.push(async (tx) => {
+            const updated = await tx.cardholder.update({
+              where: { id: duplicate.id },
+              data: {
+                ...cardholderPayload,
+                photoUrl: photoUrl || duplicate.photoUrl,
+              },
             });
-          }
-          updatedItems.push(updated);
+            if (
+              name !== duplicate.name ||
+              designation !== duplicate.designation ||
+              JSON.stringify(custom) !== duplicate.customFields
+            ) {
+              await tx.cardAsset.updateMany({
+                where: { cardholderId: duplicate.id },
+                data: { isStale: true },
+              });
+            }
+            return { type: 'update', data: updated };
+          });
         } else if (importMode === 'overwrite') {
-          // Delete and recreate
-          await prisma.cardholder.delete({ where: { id: duplicate.id } });
-          const created = await prisma.cardholder.create({ data: cardholderPayload });
-          newItems.push(created);
+          txOps.push(async (tx) => {
+            await tx.cardholder.delete({ where: { id: duplicate.id } });
+            const created = await tx.cardholder.create({ data: cardholderPayload });
+            return { type: 'create', data: created };
+          });
         }
       } else {
         // Not a duplicate
         if (importMode !== 'check') {
-          const created = await prisma.cardholder.create({ data: cardholderPayload });
-          newItems.push(created);
+          itemsToCreate.push(cardholderPayload);
         }
       }
     }
+
+    if (importMode !== 'check') {
+      if (itemsToCreate.length > 0) {
+        await prisma.cardholder.createMany({
+          data: itemsToCreate,
+        });
+        newItems.push(...itemsToCreate);
+      }
+
+      if (txOps.length > 0) {
+        const txResults = await prisma.$transaction(async (tx) => {
+          return Promise.all(txOps.map(op => op(tx)));
+        });
+
+        for (const res of txResults) {
+          if (res.type === 'update') updatedItems.push(res.data);
+          else if (res.type === 'create') newItems.push(res.data);
+        }
+      }
+    }
+
 
     return NextResponse.json({
       success: true,
@@ -307,7 +342,7 @@ export async function POST(request: Request) {
       totalRows: rawData.length,
       newAdded: newItems.length,
       updated: updatedItems.length,
-      skipped: skippedCount.val,
+      skipped: skippedCountVal,
       duplicateCount: duplicates.length,
       duplicates: importMode === 'check' ? duplicates : [], // Only return duplicate details on check mode
       validationErrors,          // Per-row required field violations

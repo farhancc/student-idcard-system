@@ -17,54 +17,83 @@ export async function GET(
 
     const shares = await prisma.clientPortalShare.findMany({
       where: { pressId, clientId },
+      include: {
+        departments: {
+          select: { enrollToken: true },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
 
-    const sharesWithCount = await Promise.all(
-      shares.map(async (share) => {
-        const depts = await prisma.clientDepartment.findMany({
-          where: { portalShareId: share.id },
-          select: { enrollToken: true },
-        });
-        const tokens = [share.enrollToken, ...depts.map(d => d.enrollToken)];
-        const count = await prisma.cardholder.count({
-          where: { enrollToken: { in: tokens } },
-        });
+    // Collect all tokens across all shares
+    const allTokens: string[] = [];
+    const shareTokensMap = new Map<number, string[]>();
+    const templateIds = new Set<number>();
 
-        const latestApprovalJob = await prisma.pdfJob.findFirst({
+    for (const share of shares) {
+      const tokens = [share.enrollToken, ...share.departments.map(d => d.enrollToken)].filter(Boolean);
+      shareTokensMap.set(share.id, tokens);
+      allTokens.push(...tokens);
+      templateIds.add(share.templateId);
+    }
+
+    // Batch query 1: Cardholder counts grouped by enrollToken
+    const cardholderCounts = allTokens.length > 0
+      ? await prisma.cardholder.groupBy({
+          by: ['enrollToken'],
+          where: { enrollToken: { in: allTokens } },
+          _count: { _all: true },
+        })
+      : [];
+    const countMap = new Map(cardholderCounts.map(c => [c.enrollToken, c._count._all]));
+
+    // Batch query 2: Latest completed pdfJobs for client and templates
+    const completedJobs = templateIds.size > 0
+      ? await prisma.pdfJob.findMany({
           where: {
             order: {
-              clientId: share.clientId,
-              templateId: share.templateId,
+              clientId,
+              templateId: { in: Array.from(templateIds) },
             },
-            pdfType: 'APPROVAL',
             status: 'COMPLETED',
           },
           orderBy: { id: 'desc' },
-          select: { id: true, isLocalJob: true },
-        });
-
-        const latestProductionJob = await prisma.pdfJob.findFirst({
-          where: {
-            order: {
-              clientId: share.clientId,
-              templateId: share.templateId,
-            },
-            pdfType: 'PRODUCTION',
-            status: 'COMPLETED',
+          select: {
+            id: true,
+            isLocalJob: true,
+            pdfType: true,
+            order: { select: { templateId: true } },
           },
-          orderBy: { id: 'desc' },
-          select: { id: true, isLocalJob: true },
-        });
+        })
+      : [];
 
-        return {
-          ...share,
-          enrolledCount: count,
-          latestApprovalJob,
-          latestProductionJob,
-        };
-      })
-    );
+    const approvalJobMap = new Map<number, { id: number; isLocalJob: boolean }>();
+    const productionJobMap = new Map<number, { id: number; isLocalJob: boolean }>();
+
+    for (const job of completedJobs) {
+      const tId = job.order.templateId;
+      if (job.pdfType === 'APPROVAL' && !approvalJobMap.has(tId)) {
+        approvalJobMap.set(tId, { id: job.id, isLocalJob: job.isLocalJob });
+      } else if (job.pdfType === 'PRODUCTION' && !productionJobMap.has(tId)) {
+        productionJobMap.set(tId, { id: job.id, isLocalJob: job.isLocalJob });
+      }
+    }
+
+    const sharesWithCount = shares.map((share) => {
+      const tokens = shareTokensMap.get(share.id) || [];
+      const enrolledCount = tokens.reduce((sum, tok) => sum + (countMap.get(tok) || 0), 0);
+      const latestApprovalJob = approvalJobMap.get(share.templateId) || null;
+      const latestProductionJob = productionJobMap.get(share.templateId) || null;
+
+      // Remove internal departments from response object to maintain exact API contract
+      const { departments: _d, ...shareData } = share;
+      return {
+        ...shareData,
+        enrolledCount,
+        latestApprovalJob,
+        latestProductionJob,
+      };
+    });
 
     // Templates for UI: Strictly show client-assigned templates (via join table or direct column)
     const clientAssignments = await prisma.templateClientAssignment.findMany({

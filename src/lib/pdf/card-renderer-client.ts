@@ -24,8 +24,8 @@ export interface FieldCoordinate {
   suffix?: string; // e.g. " (A+)"
   letterSpacing?: number;
   lineHeight?: number;
-  textDecoration?: string;
-  textTransform?: string;
+  textDecoration?: 'none' | 'underline' | 'line-through';
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   opacity?: number;
   staticValue?: string;
   dateFormat?: string;

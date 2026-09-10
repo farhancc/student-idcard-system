@@ -11,8 +11,21 @@ export async function POST(request: Request) {
     if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     const buyerPressId = Number(pressIdStr);
 
-    const { templateId } = await request.json();
-    if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const { marketplacePurchaseSchema } = await import('@/lib/schemas');
+    const parsed = marketplacePurchaseSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'templateId required' }, { status: 400 });
+    }
+
+    const { templateId } = parsed.data;
+
 
     // Fetch the template — use basePrisma to bypass tenant isolation and see all presses
     const template = await basePrisma.cardTemplate.findFirst({
@@ -132,8 +145,8 @@ export async function POST(request: Request) {
       clonedTemplateId: result.clonedTemplateId,
       purchaseId: result.purchase.id,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Marketplace purchase error:', error);
-    return NextResponse.json({ error: error.message || 'Purchase failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Purchase failed' }, { status: 500 });
   }
 }

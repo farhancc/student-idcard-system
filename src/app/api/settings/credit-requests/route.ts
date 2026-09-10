@@ -20,9 +20,9 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ success: true, requests });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('List credit requests error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -36,13 +36,21 @@ export async function POST(request: Request) {
     if (isNaN(pressId)) {
       return NextResponse.json({ error: 'Invalid Press ID context' }, { status: 401 });
     }
-    
-    const body = await request.json();
-    const amount = Number(body.amount);
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-    if (isNaN(amount) || amount <= 0) {
+    const { creditRequestSchema } = await import('@/lib/schemas');
+    const parsed = creditRequestSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json({ error: 'Amount must be a positive number' }, { status: 400 });
     }
+
+    const { amount } = parsed.data;
+
 
     const creditRequest = await prisma.creditRequest.create({
       data: {
@@ -57,8 +65,8 @@ export async function POST(request: Request) {
       message: 'Credit request submitted successfully',
       request: creditRequest,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Create credit request error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

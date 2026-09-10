@@ -116,7 +116,7 @@ export async function PUT(
 
     const order = await prisma.cardOrder.findFirst({
       where: { id: orderId, pressId },
-      include: { cardholders: true }
+      include: { cardholders: true, invoice: true }
     });
 
     if (!order) {
@@ -139,9 +139,7 @@ export async function PUT(
 
       // 1b. Update invoice payment status if provided
       if (paymentStatus) {
-        const invoice = await tx.orderInvoice.findFirst({
-          where: { orderId },
-        });
+        const invoice = order.invoice;
         if (invoice) {
           await tx.orderInvoice.update({
             where: { id: invoice.id },
@@ -224,24 +222,26 @@ export async function DELETE(
     const orderId = Number(id);
 
     const order = await prisma.cardOrder.findFirst({
-      where: { id: orderId, pressId },
+      where: { id: orderId, pressId, deletedAt: null },
     });
 
     if (!order) {
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Delete (cascade handles invoices, activity logs, notes, delivery records)
-    await prisma.cardOrder.delete({
+    // Soft-delete: mark order as deleted.
+    // Invoices, delivery records, and audit logs are preserved (onDelete: Restrict).
+    await prisma.cardOrder.update({
       where: { id: orderId },
+      data: { deletedAt: new Date() },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Order and all associated records deleted successfully',
+      message: 'Order archived successfully. Financial records and audit history are preserved.',
     });
   } catch (error) {
-    console.error('Delete order error:', error);
+    console.error('Archive order error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

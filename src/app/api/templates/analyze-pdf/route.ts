@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
 
 // ────────────────────────────────────────────────────────────────
@@ -27,20 +27,57 @@ interface FieldCoordinate {
 // Helpers
 // ────────────────────────────────────────────────────────────────
 
-/** Fetch a PDF buffer from Cloudinary URL or local /public path */
-async function getPdfBuffer(url: string): Promise<Buffer> {
-  if (url.startsWith('/')) {
-    const localPath = path.join(process.cwd(), 'public', url);
-    if (fs.existsSync(localPath)) return fs.readFileSync(localPath);
-    throw new Error(`Local file not found: ${localPath}`);
+const MAX_PDF_BYTES = 20 * 1024 * 1024;
+const FETCH_TIMEOUT_MS = 10_000;
+const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
+
+// The only host we store template originals on (see next.config.ts remotePatterns).
+const ALLOWED_HOSTS = new Set(['res.cloudinary.com']);
+
+/**
+ * Load the source PDF.
+ *
+ * Both branches are attacker-reachable — `originalUrl` comes straight from the
+ * request body — so each one is constrained rather than trusted:
+ *   - local paths must resolve to somewhere inside public/
+ *   - remote URLs must be https on an allowlisted host, with redirects refused
+ *     so a 30x cannot walk out of the allowlist
+ * Throws opaque codes; callers must not echo them to the client.
+ */
+async function getPdfBuffer(rawUrl: string): Promise<Buffer> {
+  if (rawUrl.startsWith('/')) {
+    const resolved = path.resolve(PUBLIC_DIR, rawUrl.replace(/^\/+/, ''));
+    // path.resolve has already collapsed any ../ segments, so a prefix test is sufficient.
+    if (resolved !== PUBLIC_DIR && !resolved.startsWith(PUBLIC_DIR + path.sep)) {
+      throw new Error('INVALID_PATH');
+    }
+    const stat = await fsp.stat(resolved).catch(() => null);
+    if (!stat?.isFile()) throw new Error('NOT_FOUND');
+    if (stat.size > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
+    return fsp.readFile(resolved);
   }
-  if (url.startsWith('http')) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Failed to fetch PDF: ${res.statusText}`);
-    const ab = await res.arrayBuffer();
-    return Buffer.from(ab);
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new Error('INVALID_URL');
   }
-  throw new Error(`Unsupported URL format: ${url}`);
+  if (parsed.protocol !== 'https:') throw new Error('INVALID_URL');
+  if (!ALLOWED_HOSTS.has(parsed.hostname)) throw new Error('HOST_NOT_ALLOWED');
+
+  const res = await fetch(parsed, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error('FETCH_FAILED');
+
+  const declared = Number(res.headers.get('content-length') ?? NaN);
+  if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
+
+  const ab = await res.arrayBuffer();
+  if (ab.byteLength > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
+  return Buffer.from(ab);
 }
 
 /**
@@ -118,7 +155,9 @@ export async function POST(request: Request) {
     try {
       pdfBuffer = await getPdfBuffer(originalUrl);
     } catch (err: any) {
-      return NextResponse.json({ error: `Could not load PDF: ${err.message}` }, { status: 400 });
+      // Never echo the reason back: it would confirm which local paths exist.
+      console.error('analyze-pdf: source load failed', { code: err?.message });
+      return NextResponse.json({ error: 'Could not load the source PDF' }, { status: 400 });
     }
 
     // ── 2. Parse with pdfjs-dist (legacy build, Node-compatible) ─
@@ -298,8 +337,8 @@ export async function POST(request: Request) {
       textCount: deduped.filter(f => f.type === 'text').length,
       imageCount: deduped.filter(f => f.type === 'image').length,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('analyze-pdf error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to analyze PDF' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to analyze PDF' }, { status: 500 });
   }
 }

@@ -17,7 +17,6 @@ const publicRoutes = [
   '/api/health',
   '/api/desktop/version',
   '/api/v1',
-  '/api/test-db',
 ];
 
 export async function middleware(request: NextRequest) {
@@ -76,10 +75,12 @@ export async function middleware(request: NextRequest) {
     // ── DESIGNER: only allowed on /dashboard/templates and /dashboard/settings ──
     if (payload.role === 'DESIGNER') {
       const isApiCall = pathname.startsWith('/api/');
-      const isPostOrPut = request.method === 'POST' || request.method === 'PUT' || request.method === 'DELETE';
+      // Allowlist the safe methods rather than blocklisting unsafe ones, so any
+      // method added later (PATCH, and anything after it) is blocked by default.
+      const isMutation = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
 
       // Block mutating API calls on orders/billing/invoices/clients
-      if (isApiCall && isPostOrPut &&
+      if (isApiCall && isMutation &&
         (pathname.includes('/api/orders') || pathname.includes('/api/billing') ||
          pathname.includes('/api/invoices') || pathname.includes('/api/clients') ||
          pathname.includes('/api/cardholders'))) {
@@ -113,6 +114,25 @@ export async function middleware(request: NextRequest) {
     requestHeaders.set('x-press-id', String(payload.pressId));
     requestHeaders.set('x-user-role', payload.role);
     requestHeaders.set('x-user-name', encodeURIComponent(payload.name || 'Operator'));
+
+    // Sign the injected headers with HMAC for defense-in-depth (prevents header forgery
+    // if a route is accidentally excluded from the middleware matcher)
+    const sigPayload = `${payload.userId}:${payload.pressId}:${payload.role}`;
+    const secret = process.env.JWT_SECRET || 'dev-middleware-secret';
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sigBytes = await crypto.subtle.sign('HMAC', key, encoder.encode(sigPayload));
+    const sigHex = Array.from(new Uint8Array(sigBytes))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 32);
+    requestHeaders.set('x-middleware-sig', sigHex);
 
     return NextResponse.next({
       request: {

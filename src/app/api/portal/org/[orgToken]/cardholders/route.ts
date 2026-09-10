@@ -11,8 +11,19 @@ export async function GET(
   try {
     const { orgToken } = await params;
 
+    const { searchParams } = new URL(request.url);
+    const limitStr = searchParams.get('limit') || searchParams.get('take');
+    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+    const limit = limitStr ? Number(limitStr) : undefined;
+    const offset = offsetStr ? Number(offsetStr) : undefined;
+
     const share = await prisma.clientPortalShare.findUnique({
       where: { orgToken },
+      include: {
+        departments: {
+          select: { enrollToken: true }
+        }
+      }
     });
 
     if (!share || !share.active) {
@@ -35,15 +46,9 @@ export async function GET(
     const templateMap = new Map(templates.map(t => [t.id, t.name]));
 
     // Collect all enroll tokens that belong to THIS portal share
-    // (the org-level token + all department tokens under this share)
-    const depts = await prisma.clientDepartment.findMany({
-      where: { portalShareId: share.id },
-      select: { enrollToken: true }
-    });
-
     const thisShareEnrollTokens = new Set<string>();
     if (share.enrollToken) thisShareEnrollTokens.add(share.enrollToken);
-    for (const d of depts) {
+    for (const d of share.departments) {
       if (d.enrollToken) thisShareEnrollTokens.add(d.enrollToken);
     }
 
@@ -66,6 +71,8 @@ export async function GET(
         ],
       },
       orderBy: { createdAt: 'desc' },
+      ...(limit !== undefined ? { take: limit } : {}),
+      ...(offset !== undefined ? { skip: offset } : {}),
       include: {
         cardAsset: {
           select: {

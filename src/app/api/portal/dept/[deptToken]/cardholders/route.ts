@@ -19,6 +19,12 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const limitStr = searchParams.get('limit') || searchParams.get('take');
+    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+    const limit = limitStr ? Number(limitStr) : undefined;
+    const offset = offsetStr ? Number(offsetStr) : undefined;
+
     const cardholders = await prisma.cardholder.findMany({
       where: {
         clientId: dept.portalShare.clientId,
@@ -26,6 +32,8 @@ export async function GET(
         enrollToken: dept.enrollToken,
       },
       orderBy: { createdAt: 'desc' },
+      ...(limit !== undefined ? { take: limit } : {}),
+      ...(offset !== undefined ? { skip: offset } : {}),
       include: {
         cardAsset: {
           select: { frontUrl: true, backUrl: true },

@@ -79,24 +79,26 @@ export async function DELETE(
     const cardholderId = Number(id);
 
     const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, pressId },
+      where: { id: cardholderId, pressId, deletedAt: null },
     });
 
     if (!cardholder) {
       return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
     }
 
-    // Database cascade handles CardAsset deletion
-    await prisma.cardholder.delete({
+    // Soft-delete: mark cardholder as deleted and inactive.
+    // Historical order membership (OrderCardholder) and print records are preserved.
+    await prisma.cardholder.update({
       where: { id: cardholderId },
+      data: { deletedAt: new Date(), active: false },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Cardholder deleted successfully',
+      message: 'Cardholder archived successfully',
     });
   } catch (error) {
-    console.error('Delete cardholder error:', error);
+    console.error('Archive cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

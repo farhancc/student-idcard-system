@@ -17,11 +17,11 @@ export async function GET() {
       { status: 'ok', timestamp: new Date().toISOString(), database: 'connected', uptime: process.uptime() },
       { headers: corsHeaders },
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Health check database error:', error);
     // Still return 200 so Electron knows the server is reachable even if DB is slow
     return NextResponse.json(
-      { status: 'degraded', timestamp: new Date().toISOString(), database: 'disconnected', error: error instanceof Error ? error.message : 'Unknown' },
+      { status: 'degraded', timestamp: new Date().toISOString(), database: 'disconnected', error: 'Database connection failed' },
       { status: 200, headers: corsHeaders },
     );
   }

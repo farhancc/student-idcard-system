@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import DashboardOverview from './components/DashboardOverview';
 import SuperAdminMarketplacePage from './marketplace/page';
 import { useRouter } from 'next/navigation';
+import { PressClient, PressUserItem, Press, categoryColor } from './types';
 import { 
   Building2, Users, FolderKanban, ShieldCheck, 
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
@@ -11,67 +13,10 @@ import {
   Eye, X, CreditCard, FileText, Type,
   ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders, Trash2, Activity, UserCheck, UserX, Clock
 } from 'lucide-react';
-
-interface PressClient {
-  id: number;
-  name: string;
-  type: string;
-  contactName: string | null;
-  contactEmail: string | null;
-  contactPhone: string | null;
-  createdAt: string;
-  totalOrders: number;
-  totalCards: number;
-  totalRevenue: number;
-}
-
-interface PressUserItem {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  active: boolean;
-  lastLoginAt: string | null;
-  createdAt: string;
-}
-
-interface Press {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  city: string;
-  plan: string;
-  isActive: boolean;
-  credits: number;
-  trialEndsAt: string | null;
-  createdAt: string;
-  totalCardsPrinted: number;
-  totalRevenue: number;
-  users?: PressUserItem[];
-  clients: PressClient[];
-  _count: {
-    users: number;
-    clients: number;
-    orders: number;
-    jobs: number;
-  };
-}
-
 const severityStyles: Record<string, { bg: string; color: string; label: string; icon: React.ReactNode }> = {
   INFO:     { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa', label: 'Info',     icon: <Info size={12} /> },
   WARN:     { bg: 'rgba(234,179,8,0.15)',  color: '#fbbf24', label: 'Warning',  icon: <AlertTriangle size={12} /> },
   CRITICAL: { bg: 'rgba(239,68,68,0.18)', color: '#f87171', label: 'Critical', icon: <Zap size={12} /> },
-};
-
-const categoryColor: Record<string, string> = {
-  TEMPLATE: '#818cf8',
-  SECURITY: '#f87171',
-  BILLING:  '#34d399',
-  USER:     '#60a5fa',
-  PORTAL:   '#a78bfa',
-  ORDER:    '#fbbf24',
-  SYSTEM:   '#94a3b8',
 };
 
 export default function SuperAdminDashboard() {
@@ -521,10 +466,10 @@ export default function SuperAdminDashboard() {
       setCreditsSuccessMessage(`Successfully updated credits! New balance: ${data.credits} credits.`);
       
       // Update local state
-      setPresses(prev => prev.map(p => p.id === selectedCreditsPress.id ? { ...p, credits: data.credits } : p));
+      setPresses((prev: Press[]) => prev.map((p: Press) => p.id === selectedCreditsPress.id ? { ...p, credits: data.credits } : p));
       
       // Also update selected press local state for display
-      setSelectedCreditsPress(prev => prev ? { ...prev, credits: data.credits } : null);
+      setSelectedCreditsPress((prev: Press | null) => prev ? { ...prev, credits: data.credits } : null);
       
       setCreditsAmount('');
       setTimeout(() => {
@@ -1301,8 +1246,8 @@ export default function SuperAdminDashboard() {
                         <td>
                           {(() => {
                             const userLogins = (press.users || [])
-                              .map(u => u.lastLoginAt ? new Date(u.lastLoginAt).getTime() : 0)
-                              .filter(t => t > 0);
+                              .map((u: PressUserItem) => u.lastLoginAt ? new Date(u.lastLoginAt).getTime() : 0)
+                              .filter((t: number) => t > 0);
                             const maxLogin = userLogins.length > 0 ? Math.max(...userLogins) : 0;
                             if (!maxLogin) return <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>Never</span>;
                             const dateObj = new Date(maxLogin);
@@ -1807,10 +1752,12 @@ export default function SuperAdminDashboard() {
                   {/* Preview Image */}
                   <div style={{ position: 'relative', width: '100%', paddingBottom: '63%', background: 'rgba(3,4,7,0.4)', borderRadius: '8px', overflow: 'hidden', marginBottom: '16px', border: '1px solid var(--glass-border)' }}>
                     {tmpl.frontImageUrl ? (
-                      <img 
+                      <Image 
                         src={tmpl.frontImageUrl} 
                         alt={tmpl.name} 
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+                        fill
+                        unoptimized
+                        style={{ objectFit: 'contain' }}
                       />
                     ) : (
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: '0.8rem' }}>
@@ -2652,7 +2599,7 @@ export default function SuperAdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {detailPress.users.map(u => (
+                    {detailPress.users.map((u: PressUserItem) => (
                       <tr key={u.id}>
                         <td>
                           <div style={{ fontWeight: '600', color: '#fff' }}>{u.name}</div>
@@ -2713,7 +2660,7 @@ export default function SuperAdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {detailPress.clients.map(client => (
+                    {detailPress.clients.map((client: PressClient) => (
                       <tr key={client.id}>
                         <td style={{ fontWeight: '600' }}>{client.name}</td>
                         <td><span className="badge badge-primary" style={{ fontSize: '0.7rem' }}>{client.type}</span></td>

@@ -39,21 +39,22 @@ export async function GET(request: Request) {
     const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-    // Fetch all clients for this press
+    // Fetch all clients with filtered cardholders for this press in a single query
     const clients = await prisma.client.findMany({
       where: { pressId },
+      include: {
+        cardholders: {
+          where: {
+            createdAt: { gte: startDate, lte: endDate },
+          },
+        },
+      },
     });
 
     const backupClients = [];
 
     for (const client of clients) {
-      // Find cardholders created in that range
-      const cardholders = await prisma.cardholder.findMany({
-        where: {
-          clientId: client.id,
-          createdAt: { gte: startDate, lte: endDate },
-        },
-      });
+      const cardholders = client.cardholders;
 
       if (cardholders.length === 0) {
         continue;
@@ -146,8 +147,8 @@ export async function GET(request: Request) {
       success: true,
       clients: backupClients,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Backup prepare route error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

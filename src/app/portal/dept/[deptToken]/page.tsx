@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import Image from 'next/image';
 import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -1065,7 +1066,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                                         {(() => {
                                           const effectivePhoto = getEffectivePhotoUrl(ch);
                                           return effectivePhoto ? (
-                                            <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            <Image src={effectivePhoto} alt={ch.name} width={48} height={62} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                           ) : (
                                             <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
                                           );
@@ -1125,7 +1126,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                                     <td key={tf.field}>
                                       {val ? (
                                         <div style={{ width: '40px', height: '30px', borderRadius: '4px', background: '#f1f5f9', overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
-                                          <img src={val} alt={tf.field} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                          <Image src={val} alt={tf.field} width={40} height={30} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                         </div>
                                       ) : (
                                         <span style={{ color: 'var(--muted)' }}>—</span>
@@ -1194,7 +1195,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                             />
                             <div style={{ width: '48px', height: '62px', borderRadius: '8px', overflow: 'hidden', background: '#e2e8f0', border: '1px solid var(--glass-border)', flexShrink: 0 }}>
                               {effectivePhoto ? (
-                                <img src={effectivePhoto} alt={ch.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <Image src={effectivePhoto} alt={ch.name} width={48} height={62} unoptimized style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                               ) : (
                                 <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'var(--muted)' }}>No Pix</div>
                               )}

@@ -35,8 +35,9 @@ export async function GET(request: Request) {
     ]);
 
     return NextResponse.json({ templates, total, page, pages: Math.ceil(total / limit) });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Superadmin marketplace list error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -113,7 +114,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Superadmin marketplace moderation error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

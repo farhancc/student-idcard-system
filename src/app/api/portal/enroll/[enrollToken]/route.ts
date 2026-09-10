@@ -133,7 +133,13 @@ export async function POST(
       },
     });
 
-    return NextResponse.json({ success: true, cardholder });
+    return NextResponse.json({
+      success: true,
+      cardholder: {
+        name: cardholder.name,
+        designation: cardholder.designation,
+      },
+    });
   } catch (error) {
     console.error('Portal enrollment error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

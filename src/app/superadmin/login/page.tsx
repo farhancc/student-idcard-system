@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Lock, Mail, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 
 export default function SuperAdminLoginPage() {
@@ -49,12 +50,12 @@ export default function SuperAdminLoginPage() {
     }}>
       <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', borderTop: '2px solid var(--danger)' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img
+          <Image
             src="/logo.png"
             alt="IDexo Logo"
+            width={64}
+            height={64}
             style={{
-              width: '64px',
-              height: '64px',
               objectFit: 'contain',
               marginBottom: '16px'
             }}

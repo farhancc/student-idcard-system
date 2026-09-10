@@ -22,7 +22,8 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ purchases });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('List purchases error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

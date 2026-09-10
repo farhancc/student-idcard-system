@@ -65,7 +65,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, liked, likes: newLikesCount });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    console.error('Toggle template like error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

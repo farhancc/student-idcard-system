@@ -45,6 +45,10 @@ export async function GET(request: Request) {
           template: true,
           invoice: true,
           cardholders: { select: { cardholderId: true } },
+          pdfJobs: {
+            select: { id: true, status: true, pdfType: true, progress: true, downloadUrl: true },
+            orderBy: { generatedAt: 'desc' },
+          },
         },
         orderBy,
         skip: (page - 1) * pageSize,
@@ -76,11 +80,21 @@ export async function POST(request: Request) {
     const userId = Number(userIdStr);
     const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
 
-    const { clientId, templateId, cardholderIds, validTill, pricePerCard, status } = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-    if (!clientId || !templateId || !cardholderIds || !Array.isArray(cardholderIds) || cardholderIds.length === 0) {
+    const { createOrderSchema } = await import('@/lib/schemas');
+    const parsed = createOrderSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json({ error: 'Client ID, Template ID, and non-empty Cardholder IDs array are required.' }, { status: 400 });
     }
+
+    const { clientId, templateId, cardholderIds, validTill, pricePerCard, status } = parsed.data;
+
 
     // Verify client and template belong to press
     const client = await prisma.client.findFirst({ where: { id: Number(clientId), pressId } });

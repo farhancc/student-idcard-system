@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     }
     const pressId = Number(pressIdStr);
 
-    // Fetch the oldest pending job for this press (FIFO)
+    // Fetch the oldest pending job for this press (FIFO) with order and press included
     const job = await prisma.pdfJob.findFirst({
       where: {
         pressId,
@@ -20,27 +20,27 @@ export async function GET(request: Request) {
         status: 'PENDING',
       },
       orderBy: { generatedAt: 'asc' },
+      include: {
+        order: {
+          include: {
+            client: true,
+            invoice: true,
+            cardholders: {
+              include: {
+                cardholder: true
+              }
+            }
+          }
+        },
+        press: true,
+      }
     });
 
     if (!job) {
       return NextResponse.json({ success: true, job: null });
     }
 
-    // Retrieve order details — template is fetched separately (fresh direct query)
-    // to guarantee the latest frontFields/backFields after any template edits.
-    const order = await prisma.cardOrder.findUnique({
-      where: { id: job.orderId },
-      include: {
-        client: true,
-        invoice: true,
-        cardholders: {
-          include: {
-            cardholder: true
-          }
-        }
-      },
-    });
-
+    const order = job.order;
     if (!order) {
       return NextResponse.json({ error: 'Order not found for PDF job' }, { status: 404 });
     }
@@ -57,9 +57,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Template not found for this order' }, { status: 404 });
     }
 
-    const press = await prisma.press.findUnique({
-      where: { id: job.pressId },
-    });
+    const press = job.press;
 
     const pressFonts = await prisma.pressFont.findMany({
       where: {

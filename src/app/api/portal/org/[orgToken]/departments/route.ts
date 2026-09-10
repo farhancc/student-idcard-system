@@ -24,22 +24,27 @@ export async function GET(
       orderBy: { name: 'asc' },
     });
 
-    // Fetch counts of cardholders in each department
-    const deptsWithCounts = await Promise.all(
-      departments.map(async (dept) => {
-        const count = await prisma.cardholder.count({
+    const enrollTokens = departments.map(d => d.enrollToken).filter(Boolean);
+
+    // Fetch counts of cardholders in all departments using a single groupBy query
+    const counts = enrollTokens.length > 0
+      ? await prisma.cardholder.groupBy({
+          by: ['enrollToken'],
           where: {
             clientId: share.clientId,
             pressId: share.pressId,
-            enrollToken: dept.enrollToken,
+            enrollToken: { in: enrollTokens },
           },
-        });
-        return {
-          ...dept,
-          enrolledCount: count,
-        };
-      })
-    );
+          _count: { _all: true },
+        })
+      : [];
+
+    const countMap = new Map(counts.map(c => [c.enrollToken, c._count._all]));
+
+    const deptsWithCounts = departments.map((dept) => ({
+      ...dept,
+      enrolledCount: countMap.get(dept.enrollToken) || 0,
+    }));
 
     return NextResponse.json({ success: true, departments: deptsWithCounts });
   } catch (error) {

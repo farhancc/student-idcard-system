@@ -43,22 +43,66 @@ export async function POST(
       });
     }
 
-    const assigned: string[] = [];
+    const cleanPrefix = prefix.trim().toUpperCase();
+    const padding = padLen ? Number(padLen) : 4;
+    const count = cardholders.length;
 
-    // Loop and assign serials sequentially
-    for (const cardholder of cardholders) {
-      const serial = await assignSerialNumber(pressId, clientId, prefix, padLen ? Number(padLen) : 4);
-      await prisma.cardholder.update({
-        where: { id: cardholder.id },
-        data: { cardSerial: serial },
+    const assigned = await prisma.$transaction(async (tx) => {
+      // 1. Get or create counter and increment by count
+      let ctr = await tx.cardSerialCounter.findUnique({
+        where: {
+          pressId_clientId_prefix: {
+            pressId,
+            clientId,
+            prefix: cleanPrefix,
+          },
+        },
       });
-      // Mark card asset stale
-      await prisma.cardAsset.updateMany({
-        where: { cardholderId: cardholder.id },
+
+      if (!ctr) {
+        ctr = await tx.cardSerialCounter.create({
+          data: {
+            pressId,
+            clientId,
+            prefix: cleanPrefix,
+            lastSeq: 0,
+            padLen: padding,
+          },
+        });
+      }
+
+      const startSeq = ctr.lastSeq + 1;
+      await tx.cardSerialCounter.update({
+        where: { id: ctr.id },
+        data: { lastSeq: { increment: count } },
+      });
+
+      const serials: string[] = [];
+      const cardholderIds: number[] = [];
+
+      for (let i = 0; i < count; i++) {
+        const seqNum = startSeq + i;
+        const paddedSeq = String(seqNum).padStart(padding, '0');
+        const serial = `${cleanPrefix}-${paddedSeq}`;
+        serials.push(serial);
+
+        const ch = cardholders[i];
+        cardholderIds.push(ch.id);
+      }
+
+      await Promise.all(cardholders.map((ch, i) => tx.cardholder.update({
+        where: { id: ch.id },
+        data: { cardSerial: serials[i] },
+      })));
+
+      // Mark card assets stale in 1 batch query
+      await tx.cardAsset.updateMany({
+        where: { cardholderId: { in: cardholderIds } },
         data: { isStale: true },
       });
-      assigned.push(serial);
-    }
+
+      return serials;
+    });
 
     return NextResponse.json({
       success: true,

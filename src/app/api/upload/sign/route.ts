@@ -50,8 +50,8 @@ export async function POST(request: Request) {
       apiKey: process.env.CLOUDINARY_API_KEY,
       cloudName: process.env.CLOUDINARY_CLOUD_NAME,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Signing error:', err);
-    return NextResponse.json({ error: err.message || 'Failed to sign upload request' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to sign upload request' }, { status: 500 });
   }
 }

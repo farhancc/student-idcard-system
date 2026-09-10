@@ -145,6 +145,26 @@ export async function POST(request: Request) {
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Verify magic bytes (file signature) for common formats to prevent polyglot file uploads
+    const validateMagicBytes = (buf: Buffer, ext: string): boolean => {
+      if (buf.length < 4) return false;
+      if (ext === '.png') return buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+      if (ext === '.jpg' || ext === '.jpeg') return buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+      if (ext === '.webp') return buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP';
+      if (ext === '.pdf') return buf.subarray(0, 4).toString('ascii') === '%PDF';
+      if (ext === '.psd') return buf.subarray(0, 4).toString('ascii') === '8BPS';
+      if (ext === '.svg') {
+        const head = buf.subarray(0, 200).toString('utf8').trim().toLowerCase();
+        return head.includes('<svg') || head.includes('<?xml');
+      }
+      return true;
+    };
+
+    if (!validateMagicBytes(buffer, fileExtension)) {
+      return NextResponse.json({ error: 'File content does not match the claimed file extension.' }, { status: 400 });
+    }
+
     const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
     const isSourceDesignFile = ['.cdr', '.psd', '.ai'].includes(fileExtension);
 
@@ -246,8 +266,8 @@ export async function POST(request: Request) {
         provider: 'local_fallback',
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Upload handler error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to upload image' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });
   }
 }

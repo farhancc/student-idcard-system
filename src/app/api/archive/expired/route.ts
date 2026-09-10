@@ -20,6 +20,12 @@ export async function GET(request: Request) {
       },
       include: {
         client: true,
+        cardAsset: true,
+        orderCards: {
+          include: {
+            order: true,
+          },
+        },
       },
     });
 
@@ -47,27 +53,14 @@ export async function GET(request: Request) {
       let resolvedTemplate = null;
 
       // 1. Try to find template via CardAsset
-      const asset = await prisma.cardAsset.findFirst({
-        where: { cardholderId: ch.id },
-      });
-
+      const asset = ch.cardAsset;
       if (asset) {
         resolvedTemplate = templates.find(t => t.id === asset.templateId) || null;
       }
 
       // 2. Try to find template via CardOrder containing this cardholder ID
-      if (!resolvedTemplate) {
-        const order = await prisma.cardOrder.findFirst({
-          where: {
-            pressId,
-            clientId: ch.clientId,
-            cardholders: {
-              some: {
-                cardholderId: ch.id,
-              },
-            },
-          },
-        });
+      if (!resolvedTemplate && ch.orderCards.length > 0) {
+        const order = ch.orderCards[0]?.order;
         if (order) {
           resolvedTemplate = templates.find(t => t.id === order.templateId) || null;
         }
@@ -148,8 +141,8 @@ export async function GET(request: Request) {
       success: true,
       data: Array.from(groupsMap.values()),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Fetch expired cardholders error:', error);
-    return NextResponse.json({ error: error.message || 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
