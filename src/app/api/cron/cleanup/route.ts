@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withSystemContext } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -37,7 +37,8 @@ async function handleCleanup(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
+  return withSystemContext(async () => {
+    try {
     const now = new Date();
     
     // Find all jobs that have expired or are older than 30 days
@@ -125,6 +126,7 @@ async function handleCleanup(request: Request) {
     console.error('Expired PDF cleanup error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
+  });
 }
 
 // Vercel cron sends GET requests

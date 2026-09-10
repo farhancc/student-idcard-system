@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withSystemContext } from '@/lib/prisma';
 import { verifyPassword, signUserToken } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { loginSchema } from '@/lib/schemas';
@@ -18,7 +18,8 @@ export async function POST(request: Request) {
     );
   }
 
-  try {
+  return withSystemContext(async () => {
+    try {
     // ── Input validation ────────────────────────────────────────────────────
     let body: unknown;
     try {
@@ -107,4 +108,5 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+  });
 }

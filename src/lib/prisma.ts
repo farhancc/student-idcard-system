@@ -1,5 +1,35 @@
 import { PrismaClient } from '@prisma/client';
 import { headers } from 'next/headers';
+import { AsyncLocalStorage } from 'async_hooks';
+
+export type TenantContext = { pressId: number } | { system: true };
+const ctxStore = new AsyncLocalStorage<TenantContext>();
+
+/** Run with an explicit tenant — for token-authenticated routes (portal, v1). */
+export function withPressContext<T>(pressId: number, fn: () => Promise<T>): Promise<T> {
+  return ctxStore.run({ pressId }, fn);
+}
+
+/** Run unscoped, deliberately — cron, superadmin, marketplace, seed. */
+export function withSystemContext<T>(fn: () => Promise<T>): Promise<T> {
+  return ctxStore.run({ system: true }, fn);
+}
+
+async function resolveContext(): Promise<TenantContext | null> {
+  const explicit = ctxStore.getStore();
+  if (explicit) return explicit;
+  try {
+    const headersList = await headers();
+    const pressIdStr = headersList.get('x-press-id');
+    if (pressIdStr) {
+      const n = Number(pressIdStr);
+      if (Number.isInteger(n)) return { pressId: n };
+    }
+  } catch {
+    // Fallback when outside of a request context (e.g. build, seeding, cron jobs)
+  }
+  return null;
+}
 
 const globalForPrisma = global as unknown as { prisma: any };
 
@@ -203,60 +233,69 @@ export const prisma = (basePrisma.$extends({
         const pressIdField = model === 'TemplatePurchase' ? 'buyerPressId' : 'pressId';
 
         const op = operation as string;
-        const pressId = await getCurrentPressId();
+        const ctx = await resolveContext();
 
-        if (tenantModels.includes(model) && pressId !== null) {
-          // 1a. Rewrite findUnique → findFirst for tenant-scoped models
-          //     (pressId is not part of unique constraints, so findUnique can't accept it)
-          if (['findUnique', 'findUniqueOrThrow'].includes(op)) {
-            args.where = args.where || {};
-            args.where[pressIdField] = pressId;
-            const rewrittenOp = op === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
-            return (basePrisma as any)[model][rewrittenOp](args);
-          }
-
-          // 1b. Read operations (inject tenant filter)
-          if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy', 'findFirstOrThrow'].includes(op)) {
-            args.where = args.where || {};
-            if (model === 'CardTemplate') {
-              // Allow global templates (pressId is null) or tenant-specific templates
-              const existingWhere = args.where;
-              args.where = {
-                AND: [
-                  existingWhere,
-                  {
-                    OR: [
-                      { pressId: null },
-                      { pressId: pressId }
-                    ]
-                  }
-                ]
-              };
-            } else {
+        if (tenantModels.includes(model)) {
+          if (ctx === null) {
+            console.warn('[TENANT WARNING] unscoped query on tenant model:', {
+              model,
+              operation: op,
+            });
+          } else if ('pressId' in ctx) {
+            const pressId = ctx.pressId;
+            // 1a. Rewrite findUnique → findFirst for tenant-scoped models
+            //     (pressId is not part of unique constraints, so findUnique can't accept it)
+            if (['findUnique', 'findUniqueOrThrow'].includes(op)) {
+              args.where = args.where || {};
               args.where[pressIdField] = pressId;
+              const rewrittenOp = op === 'findUnique' ? 'findFirst' : 'findFirstOrThrow';
+              return (basePrisma as any)[model][rewrittenOp](args);
             }
-          }
 
-          // 2. Write operations (inject tenant on creation/modification)
-          if (['create', 'createMany'].includes(op)) {
-            if (Array.isArray(args.data)) {
-              args.data = args.data.map((item: any) => ({ ...item, [pressIdField]: pressId }));
-            } else {
-              args.data = args.data || {};
-              args.data[pressIdField] = pressId;
+            // 1b. Read operations (inject tenant filter)
+            if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy', 'findFirstOrThrow'].includes(op)) {
+              args.where = args.where || {};
+              if (model === 'CardTemplate') {
+                // Allow global templates (pressId is null) or tenant-specific templates
+                const existingWhere = args.where;
+                args.where = {
+                  AND: [
+                    existingWhere,
+                    {
+                      OR: [
+                        { pressId: null },
+                        { pressId: pressId }
+                      ]
+                    }
+                  ]
+                };
+              } else {
+                args.where[pressIdField] = pressId;
+              }
             }
-          }
 
-          if (['update', 'updateMany', 'delete', 'deleteMany', 'upsert'].includes(op)) {
-            args.where = args.where || {};
-            args.where[pressIdField] = pressId;
-            if (op === 'upsert') {
-              args.create = args.create || {};
-              args.create[pressIdField] = pressId;
-              args.update = args.update || {};
-              args.update[pressIdField] = pressId;
+            // 2. Write operations (inject tenant on creation/modification)
+            if (['create', 'createMany'].includes(op)) {
+              if (Array.isArray(args.data)) {
+                args.data = args.data.map((item: any) => ({ ...item, [pressIdField]: pressId }));
+              } else {
+                args.data = args.data || {};
+                args.data[pressIdField] = pressId;
+              }
+            }
+
+            if (['update', 'updateMany', 'delete', 'deleteMany', 'upsert'].includes(op)) {
+              args.where = args.where || {};
+              args.where[pressIdField] = pressId;
+              if (op === 'upsert') {
+                args.create = args.create || {};
+                args.create[pressIdField] = pressId;
+                args.update = args.update || {};
+                args.update[pressIdField] = pressId;
+              }
             }
           }
+          // Note: if ctx is { system: true }, tenant filtering is deliberately skipped.
         }
 
         const result = await query(args);

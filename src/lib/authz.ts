@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { verifyMiddlewareHeaders } from '@/lib/middleware-verify';
 
 export interface Actor {
   userId: number;
@@ -8,6 +9,10 @@ export interface Actor {
 }
 
 export function getActor(request: Request): Actor | null {
+  if (!verifyMiddlewareHeaders(request)) {
+    return null;
+  }
+
   const userIdStr = request.headers.get('x-user-id');
   const pressIdStr = request.headers.get('x-press-id');
   const role = request.headers.get('x-user-role');
