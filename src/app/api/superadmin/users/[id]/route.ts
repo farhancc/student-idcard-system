@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getClientIp } from '@/lib/rate-limit';
 
 /**
  * DELETE /api/superadmin/users/[id]
@@ -42,7 +43,7 @@ export async function DELETE(
         resourceType: 'PressUser',
         resourceId: String(userId),
         description: `Permanently hard deleted ${user.role} user "${user.name}" (${user.email}).`,
-        ipAddress: '127.0.0.1',
+        ipAddress: getClientIp(request),
         severity: 'WARN',
       },
     });

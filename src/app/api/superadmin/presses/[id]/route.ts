@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
+import { getClientIp } from '@/lib/rate-limit';
 
 const isCloudinaryConfigured = 
   process.env.CLOUDINARY_CLOUD_NAME && 
@@ -103,7 +104,7 @@ export async function DELETE(
           resourceType: 'Press',
           resourceId: String(pressId),
           description: `Permanently hard deleted Press "${press.name}" (${press.email}) and all associated records.`,
-          ipAddress: '127.0.0.1',
+          ipAddress: getClientIp(request),
           severity: 'CRITICAL',
         },
       });

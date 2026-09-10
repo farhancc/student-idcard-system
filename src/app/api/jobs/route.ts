@@ -82,9 +82,11 @@ export async function POST(request: Request) {
       });
       
       if (!existingInvoice) {
-        const pricePerCard = 50.0; // Default ₹50 per card
+        const priceSetting = await prisma.systemSetting.findUnique({ where: { key: 'default_price_per_card' } });
+        const taxSetting = await prisma.systemSetting.findUnique({ where: { key: 'default_tax_percent' } });
+        const pricePerCard = priceSetting && !isNaN(Number(priceSetting.value)) ? Number(priceSetting.value) : 50.0;
+        const taxPercent = taxSetting && !isNaN(Number(taxSetting.value)) ? Number(taxSetting.value) : 18.0;
         const subtotal = cardCount * pricePerCard;
-        const taxPercent = 18.0;   // Default 18% GST
         const taxAmount = (subtotal * taxPercent) / 100.0;
         const totalAmount = subtotal + taxAmount;
 

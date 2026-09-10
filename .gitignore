@@ -56,3 +56,9 @@ next-env.d.ts
 # uploaded files
 /public/uploads/
 
+# scratch and stitch artifacts
+/scratch/
+/artifacts/
+/.stitch/
+
+
