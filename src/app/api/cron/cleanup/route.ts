@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -18,14 +19,23 @@ if (isCloudinaryConfigured) {
   });
 }
 
-export async function POST(request: Request) {
-  // 1. Verify Cron Secret to prevent unauthorized triggers
-  const authHeader = request.headers.get('Authorization');
+/** Verify CRON_SECRET using constant-time comparison to prevent timing attacks. */
+function verifyCronAuth(request: Request): boolean {
+  const authHeader = request.headers.get('Authorization') ?? '';
   const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) return false;
+
+  const expected = `Bearer ${cronSecret}`;
+  const a = Buffer.from(authHeader);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+async function handleCleanup(request: Request) {
+  if (!verifyCronAuth(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
 
   try {
     const now = new Date();
@@ -116,3 +126,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
+
+// Vercel cron sends GET requests
+export async function GET(request: Request) {
+  return handleCleanup(request);
+}
+
+export async function POST(request: Request) {
+  return handleCleanup(request);
+}
+

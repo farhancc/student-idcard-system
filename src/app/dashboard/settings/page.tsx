@@ -12,8 +12,6 @@ import {
   Trash2, 
   Plus, 
   ShieldCheck, 
-  Database, 
-  AlertTriangle, 
   Copy, 
   CheckCircle,
   Clock,
@@ -46,10 +44,6 @@ interface PrintVendor {
   notes?: string;
 }
 
-interface CleanupResult {
-  deletedFiles: number;
-  deletedDbRecords: number;
-}
 
 interface Font {
   id: number;
@@ -85,9 +79,6 @@ export default function SettingsPage() {
   const [showVendorForm, setShowVendorForm] = useState(false);
   const [vendorLoading, setVendorLoading] = useState(false);
 
-  // Cleanup State
-  const [cleanupResult, setCleanupResult] = useState<CleanupResult | null>(null);
-  const [cleanupLoading, setCleanupLoading] = useState(false);
 
   // Fonts state
   const [fonts, setFonts] = useState<Font[]>([]);
@@ -556,25 +547,7 @@ export default function SettingsPage() {
     });
   };
 
-  // Hard cleanup trigger
-  const handleTriggerCleanup = () => {
-    showConfirm({
-      title: 'Purge Expired Files',
-      message: 'This will permanently delete all expired PDF files from storage and prune database logs older than 7 days. This cannot be undone.',
-      confirmLabel: 'Purge Now',
-      variant: 'warning',
-      onConfirm: async () => {
-        closeConfirm();
-        setCleanupLoading(true);
-        setCleanupResult(null);
-        try {
-          const res = await fetch('/api/jobs/cleanup', { method: 'POST' });
-          if (res.ok) { const json = await res.json(); setCleanupResult(json); }
-        } catch (err) { console.error(err); }
-        finally { setCleanupLoading(false); }
-      },
-    });
-  };
+
 
   return (
     <>
@@ -863,39 +836,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Retention cleanup control */}
-          {currentUserRole === 'OWNER' && (
-            <div className="glass-panel">
-              <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Database size={18} color="var(--danger)" /> Retention & Cache Cleaner
-              </h3>
-              <p style={{ fontSize: '0.8rem', marginBottom: '20px' }}>
-                PDF generation jobs expire automatically after 7 days to preserve disk storage. You can run a hard cleanup immediately.
-              </p>
 
-              {cleanupResult && (
-                <div className="glass-panel" style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', border: '1px solid var(--success)', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--success)', fontSize: '0.85rem', marginBottom: '8px' }}>
-                    <CheckCircle size={16} />
-                    <span>Cleanup Finished Successfully:</span>
-                  </div>
-                  <ul style={{ fontSize: '0.75rem', color: 'var(--muted)', listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <li>Expired files deleted: <strong style={{ color: '#fff' }}>{cleanupResult.deletedFiles}</strong></li>
-                    <li>Pruned database logs: <strong style={{ color: '#fff' }}>{cleanupResult.deletedDbRecords}</strong></li>
-                  </ul>
-                </div>
-              )}
-
-              <button 
-                className="btn btn-danger" 
-                style={{ width: '100%', gap: '8px' }} 
-                onClick={handleTriggerCleanup}
-                disabled={cleanupLoading}
-              >
-                <Trash2 size={16} /> {cleanupLoading ? 'Cleaning up...' : 'Purge Expired PDF Files & Logs'}
-              </button>
-            </div>
-          )}
 
           {/* ── Custom Fonts Library ─────────────────────────────────────── */}
           <div className="glass-panel">

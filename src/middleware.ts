@@ -12,9 +12,11 @@ const publicRoutes = [
   '/api/press/signup',
   '/api/public/client-signup',
   '/api/superadmin/login',
+  '/api/billing/stripe-webhook',
   '/portal',
   '/api/portal',
   '/api/health',
+  '/api/cron',
   '/api/desktop/version',
   '/api/v1',
 ];

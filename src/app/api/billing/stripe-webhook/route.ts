@@ -35,14 +35,14 @@ export async function POST(request: Request) {
     console.log(`Stripe Webhook Event Received: ${eventType}`);
 
     const handleUpgrade = async (customerEmail: string, stripeCustomerId: string, stripeSubId: string, plan: string) => {
-      let press = await prisma.press.findFirst({
-        where: {
-          OR: [
-            { stripeCustomerId },
-            { email: customerEmail || undefined },
-          ],
-        },
-      });
+      const matchers: { stripeCustomerId?: string; email?: string }[] = [];
+      if (stripeCustomerId) matchers.push({ stripeCustomerId });
+      if (customerEmail) matchers.push({ email: customerEmail });
+      if (matchers.length === 0) {
+        console.error('Stripe webhook: no usable identifier on event; ignoring');
+        return;
+      }
+      const press = await prisma.press.findFirst({ where: { OR: matchers } });
 
       if (press) {
         await prisma.press.update({
