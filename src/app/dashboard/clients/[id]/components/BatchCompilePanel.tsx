@@ -4,8 +4,15 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FileText, ImageIcon, CheckCircle, AlertTriangle, Upload, FolderOpen } from 'lucide-react';
 import CompileWizardModal, { CompileWizardConfig } from '@/app/components/CompileWizardModal';
 import { isElectronApp } from '@/lib/isElectron';
-import { normalizeGoogleDriveUrl, isImageField, isPrimaryPhotoField } from '@/lib/pdf/field-resolver';
+import {
+  normalizeGoogleDriveUrl,
+  isImageField,
+  parseTemplateFields,
+  pickPrimaryPhotoKey,
+  type TemplateFieldDef,
+} from '@/lib/pdf/field-resolver';
 import { saveBatch, getBatch, clearBatch } from '@/lib/clientDb';
+import { uint8ArrayToBase64 } from '@/lib/downloadHelper';
 
 /**
  * Batch Import — turn a one-off Excel/CSV + photo ZIP into production/proof PDFs
@@ -15,13 +22,6 @@ import { saveBatch, getBatch, clearBatch } from '@/lib/clientDb';
  * folder. Credits are spent through an authoritative server call. The local
  * batch data is cleared once the batch has been compiled.
  */
-
-interface TemplateFieldDef {
-  field: string;
-  type: string;
-  isRequired?: boolean;
-  side?: string;
-}
 
 interface ClientTemplate {
   id: number | string;
@@ -82,8 +82,10 @@ export function BatchCompilePanel({
   const [compiling, setCompiling] = useState(false);
   const [compileProgress, setCompileProgress] = useState(0);
   const [savedResult, setSavedResult] = useState<
-    { count: number; type: string; parts: number; creditsCharged: number; remaining: number } | null
+    { count: number; type: string; parts: number; creditsCharged: number; remaining: number; savedPath: string } | null
   >(null);
+  // Set when the operator has been shown the missing-photo count and chose to proceed.
+  const [ackMissingPhotos, setAckMissingPhotos] = useState(false);
 
   const imageFields = useMemo(() => fieldDefs.filter(f => isImageField(f)), [fieldDefs]);
   const mappedFields = useMemo(
@@ -100,27 +102,11 @@ export function BatchCompilePanel({
     return null;
   };
 
-  const primaryPhotoField = useMemo(() => {
-    if (imageFields.length === 0) return null;
-    const named = imageFields.find(f => classifyField(f.field) === 'photo');
-    return (named || imageFields[0]).field;
-  }, [imageFields]);
-
-  const nameFieldName = useMemo(() => fieldDefs.find(f => classifyField(f.field) === 'name')?.field, [fieldDefs]);
-  const idFieldName = useMemo(() => fieldDefs.find(f => classifyField(f.field) === 'id')?.field, [fieldDefs]);
-
-  // Pure ZIP lookup: match a candidate string against photo filenames (with/without
-  // extension, space/underscore-insensitive). Returns the photo data URL or ''.
-  const zipMatch = (candidate: string): string => {
-    const s = (candidate || '').trim();
-    if (!s || zipMap.size === 0) return '';
-    const base = s.split('/').pop() || s;
-    const noExt = base.replace(/\.[^.]+$/, '');
-    return (
-      zipMap.get(norm(s)) || zipMap.get(norm(base)) ||
-      zipMap.get(sanitizeKey(base)) || zipMap.get(sanitizeKey(noExt)) || ''
-    );
-  };
+  // Must match the renderer's own choice exactly — see pickPrimaryPhotoKey.
+  const primaryPhotoField = useMemo(
+    () => pickPrimaryPhotoKey(imageFields),
+    [imageFields]
+  );
 
   // Columns shown in the review grid: every mapped field, plus the primary photo
   // field even when it has no Excel column (photos matched by ID/name).
@@ -132,26 +118,6 @@ export function BatchCompilePanel({
     }
     return list;
   }, [mappedFields, primaryPhotoField, fieldDefs]);
-
-  // Resolve an image cell value to a renderable src (upload override → direct URL → zip match)
-  const resolveImageSrc = (rowIdx: number, fieldName: string, value: string): string => {
-    const override = imageOverrides[`${rowIdx}:${fieldName}`];
-    if (override) return override;
-    const v = (value || '').trim();
-    if (!v) return '';
-    // Prefer a ZIP photo matched by filename/id (the feature's intent), so a
-    // spreadsheet value that merely looks like a URL doesn't shadow the real photo.
-    if (zipMap.size > 0) {
-      const base = v.split('/').pop() || v;
-      const noExt = base.replace(/\.[^.]+$/, '');
-      const m =
-        zipMap.get(norm(v)) || zipMap.get(norm(base)) ||
-        zipMap.get(sanitizeKey(base)) || zipMap.get(sanitizeKey(noExt));
-      if (m) return m;
-    }
-    if (isUrlLike(v)) return normalizeGoogleDriveUrl(v) || v;
-    return '';
-  };
 
   // ── Hydrate an in-progress batch from IndexedDB on mount ──
   useEffect(() => {
@@ -196,7 +162,7 @@ export function BatchCompilePanel({
     setExcelFile(null); setZipFile(null);
     setFieldDefs([]); setFieldToHeader({}); setUnmatchedHeaders([]);
     setRows([]); setZipMap(new Map()); setImageOverrides({});
-    setSavedResult(null); setError('');
+    setSavedResult(null); setError(''); setAckMissingPhotos(false);
   };
 
   // ── Step 1: parse spreadsheet + template fields + zip photos ──
@@ -235,15 +201,9 @@ export function BatchCompilePanel({
       const headers = Object.keys(parsed[0]);
 
       setAnalyzeStatus('Loading template fields...');
-      const fRes = await fetch(`/api/templates/${templateId}/fields`);
+      const fRes = await fetch(`/api/templates/${templateId}?_t=${Date.now()}`);
       if (!fRes.ok) throw new Error('Failed to load template fields.');
-      const fJson = await fRes.json();
-      const seen = new Set<string>();
-      const defs: TemplateFieldDef[] = ((fJson.fields || []) as TemplateFieldDef[]).filter(f => {
-        if (!f.field || seen.has(norm(f.field))) return false;
-        seen.add(norm(f.field));
-        return true;
-      });
+      const defs = parseTemplateFields((await fRes.json()).template);
       if (defs.length === 0) throw new Error('The selected template has no fields defined.');
 
       // Match each Excel header to a template field by name (case-insensitive)
@@ -285,10 +245,7 @@ export function BatchCompilePanel({
       // Build rows keyed by template field name. When the primary photo field has
       // no Excel column, seed its match-key from the record's ID (or name) so
       // photos named e.g. "SA-2024-001.png" match by uniqueKey.
-      const imgDefs = defs.filter(d => isImageField(d));
-      const primaryLocal = imgDefs.length
-        ? (imgDefs.find(d => PHOTO_ALIASES.includes(norm(d.field))) || imgDefs[0]).field
-        : null;
+      const primaryLocal = pickPrimaryPhotoKey(defs.filter(d => isImageField(d)));
       const idFieldName = defs.find(d => classifyField(d.field) === 'id' && f2h[d.field])?.field;
       const nameFieldName = defs.find(d => classifyField(d.field) === 'name' && f2h[d.field])?.field;
 
@@ -374,6 +331,20 @@ export function BatchCompilePanel({
     return '';
   };
 
+  // A photo the ZIP never matched is invisible in the output — the field is simply
+  // painted blank — so the miss has to surface here, before credits are charged.
+  const photoStats = useMemo(() => {
+    if (!primaryPhotoField || rows.length === 0) return null;
+    const missing: number[] = [];
+    rows.forEach((row, i) => {
+      if (!resolveImageForKey(i, primaryPhotoField, rowValueByName(row, primaryPhotoField))) {
+        missing.push(i + 1);
+      }
+    });
+    return { matched: rows.length - missing.length, missing };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, primaryPhotoField, zipMap, imageOverrides]);
+
   // ── Step 3: render locally + save into the client folder, deduct credits ──
   const handleCompile = async (cfg: CompileWizardConfig) => {
     if (!isElectronApp()) {
@@ -401,20 +372,17 @@ export function BatchCompilePanel({
       if (!template) throw new Error('Template not found.');
       const pressFonts = fontsRes && fontsRes.ok ? ((await fontsRes.json()).fonts || []) : [];
 
-      // The renderer reads field keys from the template's front/back JSON, so we
-      // key customFields by those exact names (not the /fields endpoint names).
-      const parseFields = (s: any): Array<{ field: string; type?: string }> => {
-        try { return typeof s === 'string' ? JSON.parse(s || '[]') : (s || []); } catch { return []; }
-      };
-      const jsonFieldsRaw = [...parseFields(template.frontFields), ...parseFields(template.backFields)];
-      const seenJf = new Set<string>();
-      const jsonFields = jsonFieldsRaw.filter(f => {
-        if (!f?.field || seenJf.has(f.field)) return false;
-        seenJf.add(f.field);
-        return true;
-      });
-      const imageKeys = jsonFields.filter(f => isImageField(f) || f.type === 'image').map(f => f.field);
-      const primaryKey = imageKeys.find(k => isPrimaryPhotoField(k)) ?? imageKeys[0] ?? null;
+      // Same parse the review rows were keyed by. If the template was edited in
+      // between (or the batch was hydrated from IndexedDB against a newer one),
+      // the keys no longer line up and every photo would render blank — so stop
+      // here rather than charge credits for a run of empty cards.
+      const jsonFields = parseTemplateFields(template);
+      if (jsonFields.map(f => f.field).join('\u0000') !== fieldDefs.map(f => f.field).join('\u0000')) {
+        throw new Error(
+          'This template has changed since the batch was imported, so the columns no longer line up. Go back and re-run the import.'
+        );
+      }
+      const primaryKey = pickPrimaryPhotoKey(jsonFields.filter(f => isImageField(f)));
 
       // 2. Build cardholder objects from the (edited) rows.
       const cardholders = rows.map((row, idx) => {
@@ -457,21 +425,6 @@ export function BatchCompilePanel({
         };
       });
       if (cardholders.length === 0) throw new Error('No records to compile.');
-
-      // TEMP diagnostics — confirm photo data reaches the renderer.
-      try {
-        const c0: any = cardholders[0];
-        const imgSummary = imageKeys.map(k => {
-          const val = String(c0.customFields?.[k] ?? '');
-          const kind = val.startsWith('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB')
-            ? 'BLANK' : val.startsWith('data:') ? `data(${val.length})` : val.slice(0, 48);
-          return `${k}=${kind}`;
-        });
-        console.log('[BatchCompile] jsonFields=', jsonFields.map(f => `${f.field}:${f.type}`).join(','));
-        console.log('[BatchCompile] imageKeys=', imageKeys, 'primaryKey=', primaryKey, 'zipMap=', zipMap.size);
-        console.log('[BatchCompile] card0 name=', c0.name, 'photoUrl=', c0.photoUrl ? c0.photoUrl.slice(0, 40) : null,
-          'images:', imgSummary.join(' | '));
-      } catch {}
 
       // 3. Authoritative credit deduction BEFORE the expensive render.
       setCompileProgress(8);
@@ -537,18 +490,14 @@ export function BatchCompilePanel({
 
       // 5. Save each chunk into the client folder.
       const total = blobs.length;
+      let savedPath = '';
       for (let i = 0; i < total; i++) {
         const part = total > 1 ? `_part${i + 1}of${total}` : '';
         const fileName = `${kind}_batch_${cardholders.length}cards_${dateStr}${part}.pdf`;
-        const bytes = new Uint8Array(await blobs[i].arrayBuffer());
-        let binary = '';
-        const CHUNK = 0x8000;
-        for (let j = 0; j < bytes.length; j += CHUNK) {
-          binary += String.fromCharCode.apply(null, bytes.subarray(j, j + CHUNK) as unknown as number[]);
-        }
-        const base64 = btoa(binary);
+        const base64 = uint8ArrayToBase64(new Uint8Array(await blobs[i].arrayBuffer()));
         const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
         if (res && res.success === false) throw new Error(res.error || 'Failed to save PDF.');
+        if (!savedPath && res?.path) savedPath = res.path;
         setCompileProgress(Math.min(100, Math.round(94 + ((i + 1) / total) * 6)));
       }
 
@@ -561,6 +510,7 @@ export function BatchCompilePanel({
         parts: total,
         creditsCharged: credJson.creditsCharged ?? 0,
         remaining: credJson.remainingCredits ?? 0,
+        savedPath,
       });
       setShowWizard(false);
       setStep('done');
@@ -683,6 +633,20 @@ export function BatchCompilePanel({
               <AlertTriangle size={13} /> Unmatched columns ignored: {unmatchedHeaders.join(', ')}
             </div>
           )}
+          {photoStats && (
+            photoStats.missing.length === 0 ? (
+              <div style={{ fontSize: '0.75rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle size={13} /> All {photoStats.matched} record(s) matched a photo
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertTriangle size={13} />
+                {photoStats.matched} of {rows.length} matched a photo — {photoStats.missing.length} missing
+                {' '}(row{photoStats.missing.length > 1 ? 's' : ''} {photoStats.missing.slice(0, 12).join(', ')}
+                {photoStats.missing.length > 12 ? `, +${photoStats.missing.length - 12} more` : ''})
+              </div>
+            )
+          )}
         </div>
 
         <div style={{ overflow: 'auto', maxHeight: '55vh', border: '1px solid var(--glass-border)', borderRadius: '8px', marginBottom: '20px' }}>
@@ -704,7 +668,7 @@ export function BatchCompilePanel({
                   <td style={{ padding: '6px 10px', color: 'var(--muted)' }}>{ri + 1}</td>
                   {reviewFields.map(f => {
                     if (isImageField(f)) {
-                      const src = resolveImageSrc(ri, f.field, row[f.field] || '');
+                      const src = resolveImageForKey(ri, f.field, rowValueByName(row, f.field));
                       return (
                         <td key={f.field} style={{ padding: '6px 10px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -747,9 +711,34 @@ export function BatchCompilePanel({
           </table>
         </div>
 
+        {photoStats && photoStats.missing.length > 0 && (
+          <label style={{
+            display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px', cursor: 'pointer',
+            padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem',
+            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+          }}>
+            <input
+              type="checkbox"
+              checked={ackMissingPhotos}
+              onChange={e => setAckMissingPhotos(e.target.checked)}
+              style={{ marginTop: '2px' }}
+            />
+            <span>
+              <strong>{photoStats.missing.length} record(s) have no photo.</strong> Fix the filename or upload an
+              image in the rows marked above, or tick this box to compile anyway — those cards will print with a
+              blank photo box, and credits are charged for them either way.
+            </span>
+          </label>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
           <button type="button" className="btn btn-secondary" onClick={() => setStep('upload')}>← Back</button>
-          <button type="button" className="btn btn-primary" disabled={rows.length === 0} onClick={() => { setError(''); setShowWizard(true); }}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={rows.length === 0 || (!!photoStats && photoStats.missing.length > 0 && !ackMissingPhotos)}
+            onClick={() => { setError(''); setShowWizard(true); }}
+          >
             Compile PDF →
           </button>
         </div>
@@ -782,9 +771,14 @@ export function BatchCompilePanel({
             </div>
             <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FolderOpen size={14} />
-              {savedResult.count} card(s) → saved to the client folder · {savedResult.creditsCharged} credit(s)
-              charged · {savedResult.remaining} remaining.
+              {savedResult.count} card(s) · {savedResult.creditsCharged} credit(s) charged ·{' '}
+              {savedResult.remaining} remaining.
             </div>
+            {savedResult.savedPath && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                {savedResult.savedPath}
+              </div>
+            )}
           </div>
         </div>
       )}

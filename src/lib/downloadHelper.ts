@@ -1,7 +1,7 @@
 /**
  * Helper to safely encode Uint8Array to base64 in 32KB chunks without stack overflow
  */
-function uint8ArrayToBase64(bytes: Uint8Array): string {
+export function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   const len = bytes.byteLength;
   const CHUNK_SIZE = 0x8000;

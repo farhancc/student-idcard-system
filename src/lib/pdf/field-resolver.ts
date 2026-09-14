@@ -556,6 +556,61 @@ export function isImageField(f: any): boolean {
   );
 }
 
+export interface TemplateFieldDef {
+  field: string;
+  type: string;
+  side?: string;
+}
+
+/**
+ * Parse a template's renderable field keys out of its own front/back JSON.
+ *
+ * This JSON is what the card renderer reads, so it is the only correct source of
+ * field keys for anything that builds `customFields` for it.
+ *
+ * `/api/templates/:id/fields` is NOT interchangeable: it serves the normalized
+ * TemplateField table, which is ordered `side: 'asc'` (so *back*-side fields come
+ * first), renames same-side duplicate keys to `photo_2`, and invents a key for any
+ * JSON entry that has no `field`. Keying import rows off that table puts photos
+ * under keys the renderer never reads.
+ */
+export function parseTemplateFields(
+  template: { frontFields?: unknown; backFields?: unknown } | null | undefined
+): TemplateFieldDef[] {
+  const parse = (raw: unknown): Array<Record<string, unknown>> => {
+    try {
+      const parsed = typeof raw === 'string' ? JSON.parse(raw || '[]') : raw;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+  const out: TemplateFieldDef[] = [];
+  const seen = new Set<string>();
+  for (const f of [...parse(template?.frontFields), ...parse(template?.backFields)]) {
+    const field = typeof f?.field === 'string' ? f.field : '';
+    if (!field || seen.has(field)) continue;
+    seen.add(field);
+    out.push({
+      field,
+      type: typeof f.type === 'string' ? f.type : 'text',
+      side: typeof f.side === 'string' ? f.side : undefined,
+    });
+  }
+  return out;
+}
+
+/**
+ * The single rule for "which image field holds the cardholder's photo".
+ * Every caller that resolves a photo must use this, or a preview and its
+ * compiled output can disagree about where the photo belongs.
+ */
+export function pickPrimaryPhotoKey(imageDefs: TemplateFieldDef[]): string | null {
+  if (imageDefs.length === 0) return null;
+  const keys = imageDefs.map(f => f.field);
+  return keys.find(k => isPrimaryPhotoField(k)) ?? keys[0];
+}
+
 export function getPlaceholderImageForField(fieldKey?: string): string {
   const clean = (fieldKey || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
