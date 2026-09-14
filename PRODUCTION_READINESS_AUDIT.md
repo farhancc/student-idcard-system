@@ -10,7 +10,7 @@
 
 ## Verdict
 
-**The four critical and four high findings are fixed and verified. Two things still gate launch: the tree is uncommitted, and `JWT_SECRET` needs rotating.**
+**The four critical and four high findings are fixed and verified, and the tree is committed (`b263a37`). One thing still gates launch: `JWT_SECRET` needs rotating.**
 
 The 2026-09-09 remediation (phases 0–7) closed most of the original findings properly. Two things had gone wrong on top of it, and both are now resolved:
 
@@ -208,7 +208,7 @@ Unchanged from the audit, and worth restating now the fix list is long:
 
 ## What to do next
 
-1. **Commit the tree.** It is the largest remaining risk and it blocks review of everything above.
+1. ~~**Commit the tree.**~~ Done — `b263a37`, with all four gates green (tsc, 122 tests, warning-free build, 0 prod vulnerabilities).
 2. **Rotate `JWT_SECRET`, `DATABASE_URL` and the R2 credentials** if this tree was ever deployed or its port exposed (C1).
 3. **Provision Upstash** and set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (M3).
 4. **Confirm production env**: `CRON_SECRET`, `STRIPE_*`, `NEXT_PUBLIC_SENTRY_DSN`. The code fails closed without them, but "configured" was never verified.
