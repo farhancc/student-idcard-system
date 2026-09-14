@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,6 +10,10 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(token)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     const { searchParams } = new URL(request.url);
     const limitStr = searchParams.get('limit') || searchParams.get('take');

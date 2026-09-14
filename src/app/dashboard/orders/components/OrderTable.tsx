@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { FolderOpen, ChevronUp, ChevronDown, ChevronsUpDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Order } from '../types';
 
@@ -129,9 +130,9 @@ export function OrderTable({
                     </>
                   )}
                   <td>
-                    <a href={`/dashboard/orders/${ord.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
+                    <Link href={`/dashboard/orders/${ord.id}`} className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem', whiteSpace: 'nowrap' }}>
                       <FolderOpen size={12} /> Open
-                    </a>
+                    </Link>
                   </td>
                 </tr>
               );

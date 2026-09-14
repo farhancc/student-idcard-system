@@ -5,6 +5,7 @@ import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
 import { AlertTriangle, CheckCircle, Copy, Download, X } from 'lucide-react';
+import { autoDownloadJobFile } from '@/lib/downloadHelper';
 import { getEffectivePhotoUrl } from './utils';
 
 export function PortalSharesPanel({ clientId }: { clientId: number }) {
@@ -80,7 +81,15 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
         const res = await fetch(`/api/jobs/${batchJob.id}`);
         const data = await res.json();
         if (data.success && data.job) {
-          setBatchJob(data.job);
+          if (data.job.status === 'COMPLETED' && data.job.downloadUrl && !batchJob.autoDownloaded) {
+            if (!data.job.isLocalJob) {
+              autoDownloadJobFile(data.job.downloadUrl, data.job.fileName);
+            }
+          }
+          setBatchJob({
+            ...data.job,
+            autoDownloaded: data.job.status === 'COMPLETED' ? true : batchJob.autoDownloaded
+          });
           if (data.job.status === 'COMPLETED') {
             fetchShares();
           }
@@ -288,14 +297,11 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                   value={selectedTemplateId} 
                   onChange={e => setSelectedTemplateId(e.target.value)}
                 >
-                  {templates.map(t => {
-                    const isPdf = t.frontImageUrl?.toLowerCase().endsWith('.pdf');
-                    return (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {isPdf ? '📄 [PDF Format]' : ''}
-                      </option>
-                    );
-                  })}
+                  {templates.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
                 </select>
               </div>
               <button id="btn-generate-links" type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
@@ -542,18 +548,7 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
                                 <span>Progress: {batchJob.progress}%</span>
                                 {batchJob.status === 'COMPLETED' && (
-                                  batchJob.isLocalJob ? (
-                                    <span style={{ color: '#10b981', fontWeight: 'bold' }}>Compiled Successfully</span>
-                                  ) : batchJob.downloadUrl && (
-                                    <a 
-                                      href={batchJob.downloadUrl} 
-                                      target="_blank" 
-                                      rel="noreferrer" 
-                                      style={{ color: '#10b981', fontWeight: 'bold', textDecoration: 'underline' }}
-                                    >
-                                      Download PDF File
-                                    </a>
-                                  )
+                                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓ PDF Downloaded & Saved to File</span>
                                 )}
                                 {batchJob.status === 'FAILED' && batchJob.errorMsg && (
                                   <span style={{ color: 'var(--danger)' }}>Error: {batchJob.errorMsg}</span>

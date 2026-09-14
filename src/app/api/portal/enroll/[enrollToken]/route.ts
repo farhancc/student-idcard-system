@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { enrollSchema } from '@/lib/schemas';
+
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function POST(
   request: Request,
@@ -22,6 +26,10 @@ export async function POST(
 
   try {
     const { enrollToken } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(enrollToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     // 1. Resolve share (either global enrollToken or department enrollToken)
     let share = await prisma.clientPortalShare.findUnique({
@@ -43,13 +51,6 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    // Enforce 30-day expiration policy for security
-    const expirationPeriod = 30 * 24 * 60 * 60 * 1000; // 30 days
-    const isExpired = Date.now() - new Date(share.createdAt).getTime() > expirationPeriod;
-    if (isExpired) {
-      return NextResponse.json({ error: 'This enrollment link has expired (expired after 30 days)' }, { status: 410 });
-    }
-
     // ── Input validation ────────────────────────────────────────────────────
     let body: unknown;
     try {
@@ -66,8 +67,28 @@ export async function POST(
 
     const { name, designation, photoUrl, customFields, uniqueKey } = parsed.data;
 
-    // Fetch template to validate Number min/max caps
-    const template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
+    // Fetch template (resolving latest version) to validate Number min/max caps
+    let template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
+    if (template) {
+      const latestVersion = await prisma.cardTemplate.findFirst({
+        where: {
+          OR: [
+            { id: template.id },
+            { parentId: template.id },
+            ...(template.parentId ? [{ id: template.parentId }, { parentId: template.parentId }] : []),
+            ...(template.name ? [{ name: template.name, ...(template.pressId ? { pressId: template.pressId } : {}) }] : [])
+          ],
+          isLatest: true
+        },
+        orderBy: [
+          { version: 'desc' },
+          { id: 'desc' }
+        ]
+      });
+      if (latestVersion) {
+        template = latestVersion;
+      }
+    }
 
     if (template) {
       try {
@@ -106,7 +127,7 @@ export async function POST(
     if (!extractedUniqueKey) {
       for (const [ck, cv] of Object.entries(custom)) {
         const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
+        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'admno' || ckClean === 'uniquekey' || ckClean === 'unique_key') && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
           extractedUniqueKey = cv;
           break;
         }

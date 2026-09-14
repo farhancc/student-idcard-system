@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, basePrisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,9 +8,9 @@ export const dynamic = 'force-dynamic';
 // Secure download gateway — only accessible to buyers or original owner
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { searchParams } = new URL(request.url);
     const templateId = Number(searchParams.get('templateId'));

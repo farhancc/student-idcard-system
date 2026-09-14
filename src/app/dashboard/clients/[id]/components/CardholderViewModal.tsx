@@ -102,20 +102,67 @@ export function CardholderViewModal({
               ))}
             </div>
 
-            {/* Custom Fields */}
-            {cardholder.customFields && (() => {
+            {/* Template Fields */}
+            {(() => {
               let parsed: Record<string, any> = {};
-              try { parsed = typeof cardholder.customFields === 'string' ? JSON.parse(cardholder.customFields) : cardholder.customFields as any; } catch {}
-              const entries = Object.entries(parsed).filter(([, v]) => {
+              try { parsed = typeof cardholder.customFields === 'string' ? JSON.parse(cardholder.customFields) : (cardholder.customFields || {}); } catch {}
+
+              let tmplFields: any[] = [];
+              if (previewTemplate) {
+                try {
+                  const front = JSON.parse(previewTemplate.frontFields || '[]');
+                  const back = JSON.parse(previewTemplate.backFields || '[]');
+                  tmplFields = [...front, ...back].filter(f => f && f.field && !f.isStatic && f.type !== 'static_text' && f.type !== 'static_image' && f.type !== 'image');
+                } catch {}
+              }
+
+              if (tmplFields.length > 0) {
+                const seen = new Set<string>();
+                const uniqueTmplFields = tmplFields.filter(f => {
+                  if (seen.has(f.field)) return false;
+                  seen.add(f.field);
+                  return true;
+                });
+
+                return (
+                  <div>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px', fontWeight: '600' }}>Template Fields</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                      {uniqueTmplFields.map(f => {
+                        let val = parsed[f.field];
+                        if (!val) {
+                          if (f.isName && cardholder.name && cardholder.name !== 'Cardholder') val = cardholder.name;
+                          else if (f.field === 'designation') val = cardholder.designation;
+                          else if (f.field === 'uniqueKey') {
+                            const rawId = cardholder.uniqueKey || parsed.uniqueKey || parsed.id || parsed.unique_key;
+                            if (rawId && !String(rawId).startsWith('C-')) val = rawId;
+                          }
+                        }
+
+                        const label = f.label || f.field;
+
+                        return (
+                          <div key={f.field} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 8px' }}>
+                            <span style={{ color: 'var(--primary)', display: 'block', fontSize: '0.68rem', marginBottom: '2px' }}>{label}</span>
+                            <span style={{ color: val ? '#fff' : '#f59e0b' }}>{val || '— (Missing)'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Fallback if no template linked or loaded
+              const entries = Object.entries(parsed).filter(([k, v]) => {
                 if (v === null || v === undefined || String(v).trim() === '') return false;
                 const str = String(v).trim();
-                // Skip image URLs / base64
                 return !(str.startsWith('http') && (str.includes('.jpg') || str.includes('.png') || str.includes('.webp') || str.includes('/uploads/'))) && !str.startsWith('data:image/');
               });
               if (entries.length === 0) return null;
               return (
                 <div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px', fontWeight: '600' }}>Template Fields</div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px', fontWeight: '600' }}>Custom Fields</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                     {entries.map(([key, val]) => (
                       <div key={key} style={{ fontSize: '0.75rem', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', padding: '6px 8px' }}>

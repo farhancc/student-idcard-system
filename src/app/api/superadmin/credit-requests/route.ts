@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSuperAdmin } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const requests = await prisma.creditRequest.findMany({
       include: {
@@ -27,6 +31,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const body = await request.json();
     const requestId = Number(body.requestId);

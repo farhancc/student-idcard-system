@@ -1,25 +1,36 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import crypto from 'crypto';
+import { cardholderUpdateSchema } from '@/lib/schemas';
+import { authenticateApiKey } from '@/lib/api-key-auth';
 
-async function getPressIdFromApiKey(request: Request): Promise<number | null> {
-  const apiKey = request.headers.get('x-api-key') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-  if (!apiKey) return null;
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const auth = await authenticateApiKey(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth;
 
-  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  const keyRecord = await prisma.pressApiKey.findUnique({
-    where: { keyHash },
-  });
+    const { id } = await params;
+    const cardholderId = Number(id);
+    if (isNaN(cardholderId)) {
+      return NextResponse.json({ error: 'Invalid cardholder ID' }, { status: 400 });
+    }
 
-  if (!keyRecord) return null;
+    const cardholder = await prisma.cardholder.findFirst({
+      where: { id: cardholderId, pressId },
+    });
 
-  // Track usage
-  await prisma.pressApiKey.update({
-    where: { id: keyRecord.id },
-    data: { lastUsed: new Date() },
-  });
+    if (!cardholder) {
+      return NextResponse.json({ error: 'Cardholder not found or access denied' }, { status: 404 });
+    }
 
-  return keyRecord.pressId;
+    return NextResponse.json({ success: true, cardholder });
+  } catch (error) {
+    console.error('REST get single cardholder error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 export async function PUT(
@@ -27,15 +38,31 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressId = await getPressIdFromApiKey(request);
-    if (!pressId) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid API Key' }, { status: 401 });
-    }
+    const auth = await authenticateApiKey(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth;
 
     const { id } = await params;
     const cardholderId = Number(id);
-    const body = await request.json();
-    const { name, designation, photoUrl, customFields, uniqueKey, active } = body;
+    if (isNaN(cardholderId)) {
+      return NextResponse.json({ error: 'Invalid cardholder ID' }, { status: 400 });
+    }
+
+    // ── Input validation ────────────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const parsed = cardholderUpdateSchema.safeParse(body);
+    if (!parsed.success) {
+      const messages = parsed.error.issues.map(i => i.message).join('; ');
+      return NextResponse.json({ error: messages || 'Invalid input' }, { status: 400 });
+    }
+
+    const { name, designation, photoUrl, customFields, uniqueKey, active } = parsed.data;
 
     const cardholder = await prisma.cardholder.findFirst({
       where: { id: cardholderId, pressId },
@@ -98,13 +125,15 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressId = await getPressIdFromApiKey(request);
-    if (!pressId) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid API Key' }, { status: 401 });
-    }
+    const auth = await authenticateApiKey(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth;
 
     const { id } = await params;
     const cardholderId = Number(id);
+    if (isNaN(cardholderId)) {
+      return NextResponse.json({ error: 'Invalid cardholder ID' }, { status: 400 });
+    }
 
     const cardholder = await prisma.cardholder.findFirst({
       where: { id: cardholderId, pressId },

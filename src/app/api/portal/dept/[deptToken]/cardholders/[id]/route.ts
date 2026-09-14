@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 
 export async function PUT(
   request: Request,
@@ -7,6 +8,10 @@ export async function PUT(
 ) {
   try {
     const { deptToken, id: cardholderIdStr } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(deptToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
     const cardholderId = Number(cardholderIdStr);
 
     const dept = await prisma.clientDepartment.findUnique({
@@ -81,6 +86,10 @@ export async function DELETE(
 ) {
   try {
     const { deptToken, id: cardholderIdStr } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(deptToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
     const cardholderId = Number(cardholderIdStr);
 
     const dept = await prisma.clientDepartment.findUnique({

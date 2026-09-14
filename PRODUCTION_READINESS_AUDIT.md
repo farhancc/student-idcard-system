@@ -1,368 +1,227 @@
 # Production Readiness Audit
 
 **Project:** student-id-pdf-system
-**Date:** 2026-09-09
-**Commit:** `a80c8f1` (working tree has 113 uncommitted modified files)
-**Auditor:** Independent review — no prior claims, docs, or the existing `audit.md` were trusted. Every finding below was verified against source or by running a command.
+**Audited:** 2026-09-14 at commit `4891349` + working tree
+**Remediated:** 2026-09-14 (same session) — see *Status* on each finding
+**Supersedes:** the 2026-09-09 audit at commit `a80c8f1`
+**Method:** independent re-audit. Nothing in the previous audit, in `REMEDIATION_PLAN.md`, or in the phase commit messages was taken on trust. Every finding was reproduced against source, a unit test, or a running production build — and every fix was re-verified the same way.
 
 ---
 
 ## Verdict
 
-**Not production ready.** The application builds cleanly, typechecks with zero errors, and passes its 80 unit tests. The multi-tenant isolation layer and the credit/billing concurrency handling are better engineered than most codebases of this size. But there are **four issues that must be fixed before launch**, two of which mean advertised features silently do not work at all in production, and one of which is a server-side request forgery / arbitrary file read reachable by the lowest-privilege user role.
+**The four critical and four high findings are fixed and verified. Two things still gate launch: the tree is uncommitted, and `JWT_SECRET` needs rotating.**
 
-| Area | State |
-|---|---|
-| Build / typecheck | ✅ Clean (`next build` exit 0, `tsc --noEmit` exit 0) |
-| Unit tests | ⚠️ 80 pass, but they test *copies* of the logic, not the logic |
-| Integration tests | ❌ None across 96 API routes |
-| CI | ❌ None (`.github/workflows` does not exist) |
-| Authn / authz | ⚠️ Sound design, but fail-open and with dead defense-in-depth |
-| Tenant isolation | ⚠️ Works; fails open rather than closed |
-| Secrets handling | ✅ `.env` untracked, JWT entropy guard enforced |
-| Dependencies | ❌ 9 vulns in prod deps (1 critical, 6 high) |
-| Payments | ❌ Stripe webhook is unreachable — silently dead |
-| Data retention | ❌ Cleanup never runs — unbounded storage growth |
-| Observability | ⚠️ Sentry wired; health check cannot report unhealthy |
+The 2026-09-09 remediation (phases 0–7) closed most of the original findings properly. Two things had gone wrong on top of it, and both are now resolved:
+
+1. **Phase 5 had been flipped to fail-closed without Phase 5.3.** The whole public surface — portal, v1 API, both signup flows — returned HTTP 500 on every request. Now resolved: each token-authenticated route establishes its tenant explicitly.
+2. **Three new API routes had been added and never reviewed** (`/api/uploads`, `/api/proxy-image`, `/api/storage/presigned`), all untracked, which is why the previous 96-route sweep missed them. One was an unauthenticated arbitrary file read returning `.env`. All three are now hardened.
+
+| Area | 2026-09-09 | At audit | Now |
+|---|---|---|---|
+| Build / typecheck | ✅ | ✅ | ✅ zero warnings |
+| Unit tests | ⚠️ 80, tested a copy | ⚠️ 116, tested a copy | ✅ 122, drive the real extension |
+| Integration tests | ❌ | ❌ | ❌ still none across 100 routes |
+| CI | ❌ none | ❌ **red** | ✅ every step green |
+| Authn / authz | ⚠️ fail-open | ⚠️ 31/100 routes ungated | ✅ signed context; credit routes gated |
+| Tenant isolation | ⚠️ fails open | ❌ breaks users **and** forgeable | ✅ fail-closed and unforgeable |
+| Secrets handling | ✅ | ❌ `.env` readable over HTTP | ✅ closed — **but rotate the secret** |
+| Dependencies | ❌ 9 (1 crit, 6 high) | ⚠️ 6 (3 high) | ✅ 0 |
+| Payments | ❌ dead | ✅ | ✅ |
+| Data retention | ❌ never ran | ✅ | ✅ |
+| Observability | ⚠️ wired | ❌ never initialised | ✅ initialises on server, edge, client |
+| Audit logging | ⚠️ 7/96 routes | ❌ 1/100 | ⚠️ 5/100 — security + billing only |
 
 ---
 
 ## Method
 
-What was actually executed, not inferred:
+Executed, not inferred — first to find, then to verify:
 
 ```
-npx next build            → exit 0 (Next.js 16.2.7, Turbopack)
-npx tsc --noEmit          → exit 0
-npx vitest run            → 7 files, 80 tests, all pass
-npx eslint                → 1147 problems (876 errors, 271 warnings)
-npm audit --omit=dev      → 9 vulnerabilities (1 critical, 6 high, 2 moderate)
+npx prisma generate                     → exit 0
+npx tsc --noEmit                        → exit 0
+npx vitest run                          → 15 files, 122 tests, all pass
+npx next build                          → exit 0 (Next.js 16.3.4, Turbopack), 0 warnings
+npm audit --omit=dev --audit-level=high → exit 0   ← the CI gate; was exit 1
+npx eslint                              → 1268 problems (was 2826)
+npx next start + a 20-case probe suite  → all pass
 ```
 
-Plus a route-by-route sweep of all 96 `route.ts` files for authentication signals, manual reading of the middleware, the Prisma tenant-isolation extension, both auth libraries, and every route flagged by the sweep as unauthenticated or credit-touching.
-
-`npm run build` was **not** run, because its script executes `prisma migrate deploy` against the live `DATABASE_URL`. `next build` was invoked directly instead.
+Plus a sweep of all 100 `route.ts` files for authentication signals and tenant-context wrapping; manual reading of the proxy/middleware, the Prisma extension, both auth libraries, the authorization helper and the rate limiter; and `git diff`/`git show` comparison of the tree against `HEAD` to establish what was deployed versus staged.
 
 ---
 
-## Critical — fix before launch
+## Critical — all fixed
 
-### C1. SSRF and arbitrary local file read via `/api/templates/analyze-pdf`
+### C1. Unauthenticated arbitrary file read via `/api/uploads` — disclosed `JWT_SECRET`
 
-`src/app/api/templates/analyze-pdf/route.ts` accepts an attacker-controlled `originalUrl` from the request body and passes it straight to `getPdfBuffer`:
+`src/app/api/uploads/[...path]/route.ts` joined catch-all segments straight into a filesystem path with no containment check. Percent-encoded separators survive Next's URL normalisation and arrive as a literal `../` inside one segment, so `path.join` walked out of both base directories. The route is public, so no authentication was needed.
 
-```ts
-async function getPdfBuffer(url: string): Promise<Buffer> {
-  if (url.startsWith('/')) {
-    const localPath = path.join(process.cwd(), 'public', url);
-    if (fs.existsSync(localPath)) return fs.readFileSync(localPath);
-    throw new Error(`Local file not found: ${localPath}`);
-  }
-  if (url.startsWith('http')) {
-    const res = await fetch(url);           // ← no allowlist, no timeout, no size cap
-    ...
-  }
-}
+```
+GET /api/uploads/..%2f..%2f..%2f..%2fetc%2fhostname   → 200  farhan-HP
+GET /api/uploads/..%2f..%2f.env                       → 200  the entire .env
 ```
 
-Three distinct problems in nine lines:
+That second response contained `JWT_SECRET`, `DATABASE_URL`, `DIRECT_URL` and all four `R2_*` credentials — a total authentication bypass, since `JWT_SECRET` also signs the `x-middleware-sig` HMAC every authorization check depends on.
 
-1. **SSRF.** `fetch(url)` will retrieve any `http(s)` URL the server can reach — cloud instance metadata (`169.254.169.254`), internal services, private RFC1918 ranges. Redirects are followed.
-2. **Path traversal / arbitrary file read.** `path.join(cwd, 'public', '/../../etc/passwd')` resolves *outside* `public/`. `fs.readFileSync` then reads it. Any PDF-parseable file on the host is returned as extracted field data.
-3. **Path disclosure / existence oracle.** The error message echoes the fully resolved `localPath` back to the caller, so the endpoint confirms whether any given path exists.
+**Status: fixed.** Each path segment is rejected if it is a traversal token, a separator or a NUL, before the filesystem is touched; `resolveWithinDir` then re-checks containment. Served assets also carry `Content-Security-Policy: default-src 'none'; sandbox`, so an SVG that reaches the bucket without passing `sanitizeSvg` cannot execute. Verified: both payloads now 404, legitimate keys still 200.
 
-There is no file-size cap and no timeout, so it doubles as a memory-exhaustion vector.
+> **Not yet done, and it is on you:** rotate `JWT_SECRET`, `DATABASE_URL` and the R2 credentials if this tree was ever deployed or its port exposed. The code is fixed; the secrets that were readable are not.
 
-**Reachable by:** any authenticated user, **including the `DESIGNER` role** — the middleware's designer blocklist covers `/api/orders|billing|invoices|clients|cardholders`, not `/api/templates`.
+### C2. The portal, the v1 API and both signup flows returned HTTP 500
 
-**Fix:** allowlist the host (Cloudinary only), reject non-public IP literals after DNS resolution, resolve the local path and verify it is still inside `public/`, add a byte cap and an `AbortSignal.timeout`, and return a generic error rather than the resolved path.
+Phase 5.4 flipped the tenant default to fail-closed; Phase 5.3 — "migrate every caller the logs identify" — was never done. Three routes called `withSystemContext`; **none** called `withPressContext`. Every route reaching a tenant model without a middleware-injected header threw.
+
+```
+GET /api/portal/shares/<token>            → 500   [TENANT ISOLATION] ClientPortalShare
+GET /api/v1/cardholders  (x-api-key: ...) → 500   [TENANT ISOLATION] PressApiKey
+```
+
+**Status: fixed.** Portal handlers call `enterPortalTenant(token)`, which resolves any org/dept/enrol token to its press and adopts it for the rest of the request — one line per handler, so no handler was restructured. `authenticateApiKey` adopts the press behind the API key. Signup routes declare their context explicitly (`enterSystemContext` for press signup, which creates the tenant; the chosen press for client signup, after validating it exists). Verified: 404/401/200 as appropriate, zero isolation errors in the server log.
+
+Two non-obvious defects surfaced while fixing this, both now resolved:
+
+- **The tenant store was split-brained.** Turbopack emits `src/lib/prisma.ts` into more than one server chunk, so the module-scoped `AsyncLocalStorage` was *not* the same object for the code setting the context and the extension reading it — a correctly-wrapped query still looked unscoped. The store is now pinned to `globalThis`, the same pattern the file already used for the `PrismaClient`.
+- **`withSystemContext` cannot wrap a `findUnique`.** Prisma batches `findUnique` into a later tick, by which point an `AsyncLocalStorage.run()` scope has unwound. The two tenant-discovery lookups now go through `basePrisma` — the unextended client the codebase already exports for deliberate cross-tenant reads — which is both correct and honest about intent.
+
+### C3. `x-press-id` was client-controlled on every public route
+
+`resolveContext` read the header directly. Middleware overwrote it on authenticated routes, but the public-route branch returned early **before** any header was set, so on those routes the client's own value was used. The HMAC built to detect exactly this was checked by `getActor` and ignored by `resolveContext` — the same header, two different levels of trust.
+
+```
+GET /api/portal/shares/nonexistent                      → 500  (blocked)
+GET /api/portal/shares/nonexistent  -H 'x-press-id: 1'  → 404  "Invalid or deactivated portal link"
+```
+
+The 404 was the tell: the query ran, scoped to press 1, because the caller said so. This was live at `HEAD`, where the null-context path only warned.
+
+**Status: fixed, at both ends.**
+- The proxy now strips every injected header (`x-user-id`, `x-press-id`, `x-user-role`, `x-user-name`, `x-tenant-scope`, `x-middleware-sig`) on *every* path, including early returns, before deciding anything.
+- `resolveContext` accepts only a signed context. The signature payload now covers a `scope` field, so `system` is a claim only the proxy can make — which is what lets the 12 superadmin routes work without wrapping each one.
+
+Verified: forged `x-press-id`, a forged signature, and a forged `scope: system` all change nothing.
+
+### C4. Sentry never initialised — no runtime error capture
+
+`withSentryConfig` was wired up and all three config files existed, but none ran. There was no `instrumentation.ts` (in v10 the server and edge configs are only loaded by a `register()` hook you write), and `sentry.client.config.ts` is only honoured by the SDK's **webpack** integration — this project builds with Turbopack, where the SDK's own notice says that filename no longer works.
+
+**Status: fixed.** Added `src/instrumentation.ts` (`register()` importing the server/edge config per `NEXT_RUNTIME`, plus `onRequestError = Sentry.captureRequestError`) and renamed the client config to `src/instrumentation-client.ts`. Verified: `.next/server/instrumentation.js` is emitted and its chunks contain the SDK, the configured `tracesSampleRate` and `captureRequestError`. The deprecated `disableLogger` option was removed; the build is now warning-free.
 
 ---
 
-### C2. `/api/test-db` is an unauthenticated database introspection endpoint
+## High — all fixed
 
-`src/middleware.ts` lists `/api/test-db` in `publicRoutes`, so it bypasses authentication entirely. The handler returns:
+### H1. `/api/proxy-image` was an unmitigated SSRF
 
-- the full `information_schema` table listing for the `public` schema,
-- `pressUser` and `press` row counts,
-- up to 50 rows of `card_templates` joined to press names, including `price` and `is_public`.
+It fetched a caller-supplied URL and returned the body verbatim, with no allowlist, no private-address check, no timeout, no size cap, redirects followed, and `err.message` leaked on failure. The same finding as C1 in the previous audit, fixed thoroughly in `analyze-pdf` and then not applied here.
 
-This is a debugging endpoint that shipped. Anyone on the internet can enumerate your schema and your tenant list.
+**Status: fixed, and consolidated.** A host allowlist was the wrong tool — the route legitimately proxies customer-owned photo hosts — so `src/lib/safe-fetch.ts` now refuses to *connect* to anything that is not a public address. The check runs at connect time via the agent's `lookup` hook, which closes the DNS-rebinding window rather than merely narrowing it, and re-runs on every redirect hop. Responses are capped, timed out, constrained to `image/*` and re-served under a sandbox CSP. `analyze-pdf` was moved onto the same helper (keeping its narrower Cloudinary allowlist on top), so there is now one implementation instead of three.
 
-**Fix:** delete the route and remove it from `publicRoutes`.
+Verified: instance metadata, loopback, bracketed-IPv6 loopback and RFC1918 targets all return an opaque 502.
 
----
+> A test caught a real hole in the first version of this guard: `URL.hostname` keeps the brackets on an IPv6 literal, so `net.isIP('[::1]')` returned 0 and the range check was skipped entirely. Hostnames are now unbracketed before classification.
 
-### C3. Stripe webhooks can never be delivered — the paid-plan path is dead
+### H2. `/api/storage/presigned` handed any authenticated user an arbitrary write key
 
-`/api/billing/stripe-webhook` is **not** in `publicRoutes`. Middleware therefore falls through to the press-user branch, which requires a `press_auth_token` cookie or a JWT `Bearer` header:
+`prefix` was a free-form caller-supplied string and the extension came from the caller's filename, both interpolated straight into the R2 object key — a write-anywhere-in-the-bucket primitive, including over another tenant's photos. The key contained no `pressId` at all.
 
-```ts
-if (pathname.startsWith('/dashboard') || pathname.startsWith('/api/')) {
-  let token = request.cookies.get('press_auth_token')?.value;
-  ...
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-```
+**Status: fixed.** The key is derived entirely server-side as `press_<pressId>/<assetType>s/<ts>-<random>.<ext>`, matching `/api/upload`; `assetType` is a closed enum and the extension comes from the validated content type. The route now uses `requireActor` and its rate limit is keyed per press.
 
-Stripe sends neither. Every webhook gets a **401 before the handler ever runs**. The signature verification inside the route is implemented correctly and is unreachable.
+Verified: a request carrying `prefix: "../../victim"` and `filename: "x.html"` yields `press_1/photos/1789352811624-6cfb130b16dc32e8.png`.
 
-Consequence: `checkout.session.completed`, `invoice.payment_succeeded`, `customer.subscription.updated` and `customer.subscription.deleted` are all silently dropped. Customers pay and are never upgraded; cancellations never downgrade.
+> This route has **no callers anywhere in the codebase**. It is untracked, so I hardened rather than deleted it — but if it is not part of an in-flight feature, deleting it is the better fix.
 
-**Related latent bug** in the same handler, which will surface the moment the route is reachable — `handleUpgrade` matches a press by:
+### H3. `DESIGNER` could spend and refund the press's credits
 
-```ts
-OR: [{ stripeCustomerId }, { email: customerEmail || undefined }]
-```
+Phase 3 gated `press/deduct-credits` and `marketplace/purchase` correctly, but `/api/jobs/*` was missed on both layers: `production-request` deducts credits and `jobs/[id]` POST refunds them, each behind only `requireActor`, and the proxy's designer blocklist covered orders/billing/invoices/clients/cardholders but not jobs.
 
-When `customerEmail` is empty, Prisma drops the `undefined` field, leaving `{}` in the `OR`, which matches **every row**. `findFirst` then upgrades an arbitrary press. Guard the branch instead of relying on `|| undefined`.
+**Status: fixed.** `requireRole(['OWNER','OPERATOR'])` on `production-request`, `jobs/[id]` POST and `production-complete`; `/api/jobs` added to the designer blocklist as defence in depth.
 
-**Fix:** add `/api/billing/stripe-webhook` to `publicRoutes` (the route's own signature check is the correct auth boundary), and fix the `OR` clause.
+### H4. CI was red, so nothing was gated
 
----
+`npm audit --omit=dev --audit-level=high` exited 1 on the tree, so every run since Phase 4 had failed and the `tsc`/`vitest`/`build` steps above it enforced nothing.
 
-### C4. Data retention never runs — unbounded storage growth
+**Status: fixed — 0 vulnerabilities in the production tree.**
 
-Two compounding faults:
+| Package | Advisory | Resolution |
+|---|---|---|
+| `deepmerge-ts` (high) | stack exhaustion, via `@prisma/client → prisma → @prisma/config` | `overrides` to `^8.0.0`; `@prisma/config` uses only the `deepmerge` named export, which v8 still provides |
+| `adm-zip` (moderate) | extraction follows destination symlinks | bumped to `^0.6.1` |
+| `uuid` (moderate) | missing buffer bounds check, via `exceljs` | override scoped to `exceljs` (`^11.1.1`); exceljs uses only `v4`, verified by writing a workbook |
 
-1. **No scheduler exists.** There is no `vercel.json`, so no cron job is registered. Nothing ever calls the cleanup endpoint.
-2. **Even if it were called, it would be rejected.** `/api/cron/cleanup` correctly validates `Authorization: Bearer ${CRON_SECRET}`, but `/api/cron` is not in `publicRoutes`. Middleware intercepts first, extracts the bearer token, tries to verify it as a JWT, fails, and returns 401.
+npm's own suggestion was a major *downgrade* of `prisma` and `exceljs`; overrides were the correct remedy. The uuid override is scoped to `exceljs` because a global one collided with `vercel`'s own uuid.
 
-So expired `PdfJob` rows and their Cloudinary files accumulate forever, despite `expiresAt` being set to 7 days on every job.
-
-The irony worth noting: the *unprotected* near-duplicate at `/api/jobs/cleanup` — whose own comment reads *"In this basic version, we allow running it via post request"* — **is** reachable, by any authenticated user of any role. It is tenant-scoped by the Prisma extension, so it only deletes the caller's own expired jobs, which caps the blast radius, but it has no role check and no business being a public-facing endpoint.
-
-**Fix:** add `vercel.json` with a cron schedule, add `/api/cron` to `publicRoutes`, and delete `/api/jobs/cleanup`.
-
----
-
-### C5. Nine vulnerabilities in production dependencies
-
-```
-next    16.2.7            CRITICAL  Image Optimization AVIF RCE (GHSA-2xp9-vwfh-vxw4),
-                                    SVG DoS, cache confusion, SSRF via rewrites,
-                                    unauthenticated Server Function disclosure
-sharp   <=0.35.4-rc.0     HIGH      libvips CVE-2026-33327/33328/35590/35591, libheif
-adm-zip *                 HIGH      4GB alloc from crafted ZIP; symlink arbitrary overwrite
-postcss                   MODERATE  arbitrary .map file read via sourceMappingURL
-uuid / exceljs            MODERATE  buffer bounds check
-```
-
-`sharp` matters most in context: it is invoked on **untrusted user-uploaded images** at `src/app/api/upload/route.ts:75,87,247` and in the portal upload path.
-
-**One correction to a claim you may see elsewhere:** the critical `next` advisory GHSA-6gpp-xcg3-4w24 (middleware/proxy bypass, CVE-2026-64642) requires *all three* of App Router, Turbopack, **and** a `config.i18n.locales` array with exactly one entry. This app configures no `i18n` at all, so **that specific bypass does not apply here**. The rest of the advisories in the affected range do. Upgrade `next` to ≥ 16.2.11 (npm suggests 16.3.4).
-
----
-
-## High
-
-### H1. Tenant isolation fails open, and its defense-in-depth is dead code
-
-`src/lib/prisma.ts` enforces multi-tenancy through a Prisma `$extends` query hook that reads the tenant from a request header:
-
-```ts
-async function getCurrentPressId(): Promise<number | null> {
-  try {
-    const headersList = await headers();
-    return headersList.get('x-press-id') ? Number(...) : null;
-  } catch {
-    return null;   // ← any failure ⇒ no tenant filter at all
-  }
-}
-```
-
-When this returns `null`, the entire isolation block is skipped and queries run **unscoped across all tenants**. The failure mode is "see everything", not "see nothing".
-
-In practice this is much less exploitable than it first appears, and I verified why: middleware uses `Headers.set()`, which *overwrites* any client-supplied `x-press-id` on protected routes. On the public routes where a client *can* forge the header, the forged value is also applied to the lookup that authorizes the request (e.g. `clientPortalShare.findUnique({ orgToken })` becomes `findFirst({ orgToken, pressId: forged })`), so forgery is self-defeating — it causes a 404, not a cross-tenant read. I could not construct a working cross-tenant exploit.
-
-What makes this High rather than Medium is the second half:
-
-**`verifyMiddlewareHeaders` is never called.** `src/lib/middleware-verify.ts` exists, is documented as the defense-in-depth check, and **not one of the 96 routes imports it**. Middleware computes an HMAC signature (`x-middleware-sig`) with a Web Crypto key import and sign on *every authenticated request*, and nothing ever verifies it. The protection the codebase believes it has does not exist, and every request pays for it.
-
-**Fix:** invert the default — treat `null` as "deny" for tenant models rather than "no filter", with an explicit opt-out for the legitimate cross-tenant paths (which already use `basePrisma`). Then either wire `verifyMiddlewareHeaders` into the routes or delete it and the middleware HMAC along with it.
-
-### H2. The `DESIGNER` role can spend the press's credits
-
-Middleware restricts designers to a hardcoded path list:
-
-```ts
-if (isApiCall && isPostOrPut &&
-  (pathname.includes('/api/orders')  || pathname.includes('/api/billing') ||
-   pathname.includes('/api/invoices') || pathname.includes('/api/clients') ||
-   pathname.includes('/api/cardholders')))
-```
-
-Not covered: `/api/marketplace/purchase` and `/api/press/deduct-credits`. Neither performs a role check of its own — both authorize on `x-press-id` alone. A `DESIGNER`, the lowest-privilege role, can drain the press's paid credit balance by buying marketplace templates.
-
-`/api/jobs` does correctly reject `DESIGNER`, which shows the intent; the marketplace routes were simply missed.
-
-Separately, `isPostOrPut` tests `POST | PUT | DELETE` and **omits `PATCH`**. No currently-exploitable route sits behind that gap, but it will silently admit the next `PATCH` handler added under those paths.
-
-**Fix:** enforce roles in the routes that mutate money, not in a path-prefix list in middleware.
-
-### H3. Credit deduction is client-directed
-
-`/api/press/deduct-credits` accepts `{ amount }` from the caller and decrements that many credits. The transaction itself is correct — it takes a `SELECT … FOR UPDATE` row lock and splits promo vs. paid credits properly — but *how much to charge is decided by the client*, with no link to any job, order, or card count the server can verify. A modified or buggy desktop client can under-report indefinitely.
-
-**Fix:** derive the amount server-side from the completed job.
-
-### H4. Rate limiting is ineffective as deployed
-
-`src/lib/rate-limit.ts` uses Upstash Redis when configured and otherwise falls back to a module-level `Map`. The local `.env` sets no `UPSTASH_*` variables, so the fallback is active — and on serverless, each instance holds its own `Map`, so the effective limit is `configured_limit × instance_count`. The code logs `[CRITICAL]` about this in production, correctly.
-
-`getClientIp` also trusts the first value of `X-Forwarded-For`, which is client-controlled unless a trusted proxy unconditionally overwrites it.
-
-Coverage is thin regardless: of 96 routes, only login, signup, superadmin login, upload, photo import, portal enroll and client-signup are limited. Notably **`/api/portal/upload` has none** — it accepts unauthenticated 5MB uploads (only a shareable portal URL token is needed) and forwards them to your Cloudinary account with `resource_type: 'auto'`. Its MIME check reads `file.type`, the client-supplied part header, with no magic-byte verification.
-
-**Fix:** provision Upstash before launch, rate-limit the portal write paths, and sniff content type from bytes.
+> **Separate defect found here:** `cloudinary` had been removed from `package.json` in the uncommitted work while **11 source files still import it**. It survived only as a stale `node_modules` directory; the first clean `npm ci` would have failed the build. Restored to `^2.10.0`, the version at `HEAD`. An undeclared-dependency check now has no findings.
 
 ---
 
 ## Medium
 
-### M1. Bulk import silently skips the `CardholderValue` double-write
+### M1. Audit logging — partially closed
+Was 1 route of 100 (down from the 7 the previous audit found). Now 5, covering the events that matter most: login success and failure, credit deduction, credit refund, and job-queue credit locking. The helper itself had two defects, both fixed: it derived "is superadmin" from an unsigned `x-super-admin` header, and it read the client IP from spoofable headers — an audit trail that can be forged is worse than none. **Still open:** role and user changes, portal share lifecycle, and superadmin actions are not recorded.
 
-The extension's post-write sync runs only when the result carries an `id`:
+### M2. Tenant isolation tests — fixed
+`applyTenantFilter` was an exported second implementation with no production caller, and it had already drifted: no `take` cap, no soft-delete filter, no null-context branch — the exact branch where C2 and C3 lived. It is deleted. `tests/unit/tenant-isolation.test.ts` now captures the real `$allOperations` hook at import and drives it directly: 15 cases covering the unscoped throw, forged and tampered headers, signed tenant and system scopes, `buyerPressId`, global templates, soft deletes, the 5000-row cap, and both explicit wrappers.
 
-```ts
-if (model === 'Cardholder' && ['create','update','upsert'].includes(op) && result) {
-  for (const item of items) { if (item && item.id) await syncCardholderValues(item.id); }
-}
-```
+### M3. Rate limiting — code fixed, infrastructure still yours
+`getClientIp` trusted `x-forwarded-for` and `x-real-ip` unconditionally, so every IP-keyed limit was bypassable by rotating a header off-Vercel. It now trusts `x-vercel-forwarded-for` (which the platform sets and strips), honours the others only when `TRUST_PROXY_HEADERS=true`, and otherwise returns a shared bucket. Because a shared bucket is weak on its own, login gained a **per-account** limit, which holds regardless of IP spoofing. **Still open:** `UPSTASH_REDIS_REST_URL`/`TOKEN` are not configured, so limits remain per-instance and reset on cold start. The code logs `[CRITICAL]` when this happens; nothing enforces it.
 
-`createMany` returns `{ count }` with no ids — and `src/app/api/cardholders/import/route.ts:320` uses `createMany`. So cardholders created one at a time get `CardholderValue` rows and bulk-imported ones never do. Two classes of record with different shapes, silently.
+### M4. `.env.example` — fixed
+It documented Cloudinary at length and never mentioned `R2_*`, though R2 is the storage the app actually uses. Anyone provisioning from the template got a deployment where uploads silently fell through to local disk. R2 is now documented, along with `TRUST_PROXY_HEADERS` and which files read the Sentry DSN.
 
-### M2. `findUnique` on `CardTemplate` loses the global-template allowance
+### M5. `middleware.ts` → `proxy.ts` — fixed
+Deprecated in Next 16 and warned on every build. Renamed to `src/proxy.ts` with the export renamed to `proxy`; the build now reports `ƒ Proxy (Middleware)` and emits no deprecation warning.
 
-The extension has two branches with different semantics for the same model:
+### M6. CSRF holes — fixed
+The check sat *after* the public-route early return, so all 11 portal mutation routes were exempt regardless of the exemption list, and `if (host)` meant a request with an `Origin` and no `Host` skipped the comparison entirely. Both closed: a missing `Host` is now rejected alongside a missing `Origin`, and the exemption list is explicit.
 
-- `findUnique` / `findUniqueOrThrow` → `where.pressId = pressId` (exact match)
-- `findFirst` / `findMany` / `count` / … → `AND[ where, OR[{pressId: null}, {pressId}] ]` (allows platform-global templates)
+### M7. Prefix matching in the auth perimeter — fixed
+`publicRoutes` used `pathname.startsWith(route)`, so `/api/v1` also matched `/api/v1anything`. All perimeter matching — public routes, CSRF exemptions, designer and operator blocklists — now matches on segment boundaries. Verified: `/api/v1x` returns 401 rather than being waved through.
 
-So a global template (`pressId: null`) is visible in list views and invisible to any detail lookup. Make branch 1a use the same `OR`.
-
-### M3. The double-write is O(fields) sequential round-trips per record
-
-`syncCardholderValues` performs one `findUnique`, N `upsert`s, one `findMany`, and M `delete`s — serially — for every single cardholder create or update. On a per-record import path this multiplies database round-trips by the field count.
-
-### M4. No caps on pagination or input size
-
-- `GET /api/jobs` — `take: Number(limit) || 50`, uncapped, with `include: { order: { invoice, cardholders } }`. `?limit=999999` returns the entire nested object graph.
-- `GET /api/portal/org/[orgToken]/cardholders` — `Number(limit)` passed straight to `take`; `?limit=abc` yields `take: NaN`, which Prisma rejects with a 500.
-- `/api/cardholders/import` — no row cap; the whole CSV/XLSX is parsed into memory.
-- `/api/templates/analyze-pdf` — no size cap (see C1).
-
-### M5. `/api/health` cannot report unhealthy
-
-```ts
-return NextResponse.json({ status: 'degraded', database: 'disconnected', ... },
-  { status: 200, headers: corsHeaders });  // ← 200 on database failure, by design
-```
-
-The comment explains the intent (the Electron client wants to know the server is reachable), but the consequence is that any load balancer, uptime monitor, or platform health check keyed on the status code will never mark this application unhealthy. Split it: `/api/health` for the monitor with a real status code, `/api/health/reachable` for the desktop client. It also sets `Access-Control-Allow-Origin: *` and leaks `process.uptime()`.
-
-### M6. Superadmin hard-delete is unsafe at scale and irreversible
-
-`DELETE /api/superadmin/presses/[id]`:
-
-- destroys Cloudinary media **before** opening the DB transaction — if the transaction then fails, media is gone and rows remain,
-- loads every cardholder for the press with no pagination,
-- issues one sequential `cloudinary.uploader.destroy` per cardholder, guaranteeing a timeout on a large press and leaving deletion half-finished,
-- offers no dry-run or confirmation step, and writes an audit entry with a hardcoded `ipAddress: '127.0.0.1'`.
-
-### M7. Audit logging covers 7 of 96 routes, and records false IPs
-
-Only 7 route files touch the audit log. Several superadmin routes — including the `CRITICAL`-severity hard-delete — hardcode `ipAddress: '127.0.0.1'` rather than reading `x-forwarded-for`, which puts fabricated data in the record you would rely on during an incident.
-
-### M8. The security tests test a copy of the security code
-
-`tests/unit/tenant-isolation.test.ts` is candid about it:
-
-> *"we replicate the extension's argument-rewriting logic and assert that it injects the correct tenant filters. […] This is a faithful copy of the logic at src/lib/prisma.ts lines 189–260."*
-
-The 21 tenant-isolation tests and much of `security.test.ts` never import the module they are named after. They will keep passing after `src/lib/prisma.ts` changes or regresses. There are no route-level or integration tests anywhere. The 80 green tests are worth substantially less than the number suggests.
-
-### M9. `next build` applies migrations to the live database
-
-```json
-"build": "export DIRECT_URL=\"$DATABASE_URL\" && prisma migrate deploy && prisma generate && next build"
-```
-
-Every build — including preview deploys — runs `prisma migrate deploy` against whatever `DATABASE_URL` resolves to. There is no rollback path and no separation between preview and production databases. Move migrations to a deliberate release step.
+### M8. Superadmin hard-delete at scale — still open
+Carried forward from the previous audit's M6, unverified either way. Item 7.5 was not evidenced in the tree and this audit did not write to a live database.
 
 ---
 
 ## Low / hygiene
 
-| # | Finding |
-|---|---|
-| L1 | `.env.example` is **untracked** — `.gitignore` matches `.env*`, so the env template is not in the repo. Add `!.env.example`. |
-| L2 | 876 ESLint errors, 271 warnings — predominantly `no-explicit-any`. Lint runs in neither the build nor CI. |
-| L3 | No CI at all. Build, typecheck, tests, lint, and `npm audit` all pass or fail only on a developer's machine. |
-| L4 | `middleware.ts` is deprecated in Next 16 — the build warns to rename it to `proxy`. Given the entire authorization model lives there, do this deliberately rather than under time pressure. |
-| L5 | Sentry `disableLogger` is deprecated; switch to `webpack.treeshake.removeDebugLogging`. |
-| L6 | No `Content-Security-Policy` header. `next.config.ts` sets HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy — CSP is the notable gap, and the app accepts SVG uploads. |
-| L7 | Business config hardcoded in a route handler: `pricePerCard = 50.0` and `taxPercent = 18.0` in `src/app/api/jobs/route.ts`. Changing GST requires a redeploy. |
-| L8 | `Cardholder.cardSerial` has no unique constraint, and the portal generates `C-${Date.now()}-${rand(1000)}` — collidable, with nothing at the database level to catch it. |
-| L9 | `assignSerialNumber` has a find-or-create race: two concurrent first-uses of a prefix both miss, both insert, one gets a P2002 and 500s. The `increment` itself is atomic and safe. Use an upsert. |
-| L10 | `PressUser.email` is **globally** unique, not unique per press — one person cannot hold accounts at two presses. Likely unintended for a multi-tenant SaaS. |
-| L11 | `publicRoutes` matching is `startsWith`, so `/api/v1` makes every future `/api/v1/*` route public by default. Current `/api/v1` routes do authenticate via API key, so this is a trap for later, not a live hole. |
-| L12 | 113 uncommitted modified files. What is deployed cannot be reconstructed from git. |
-| L13 | Repo hygiene: `dev.log`, `scratch/`, `artifacts/`, `model_photos/`, `.stitch/`, ~2.4MB of PDFs and a 467KB `tsconfig.tsbuildinfo` in the project root; stale `audit.md` and `plan.md`; a stray non-migration `prisma/migrations/manual_add_audit_log.sql` (harmless — the table *is* created by migration `20260709133252` — but misleading). |
+- **L1. Lint — halved, still large.** 2826 problems → **1268**. The difference was `public/pdf.worker.min.mjs`, a vendored minified file that accounted for 1557 of them and is now in `globalIgnores`. What remains is real source: 962 errors, mostly `no-explicit-any` and `no-unused-vars`. The previous audit's "1147" was inflated the same way.
+- **L2. CSP still allows `'unsafe-eval'` and `'unsafe-inline'`** in `script-src`, in all environments. The rest of the header set is good — HSTS with preload, `nosniff`, `frame-ancestors`, a real `Permissions-Policy`.
+- **L3. Uncommitted tree — worse, and now the top risk.** It was 136 modified files and 26 untracked when audited; this session added to that. Phase 1.1 committed the tree specifically so later changes stayed reviewable. Three of the untracked paths are new API routes, two of which were C1 and H1. **Commit this before anything else.**
+- **L4. Integration tests — still none** across 100 API routes. C2 was a total outage of the public surface that 116 green unit tests did not notice. The rewritten isolation tests close the specific gap; they do not close the general one.
 
 ---
 
 ## What is genuinely well built
 
-Stated plainly, because it affects how much of this report is rework versus targeted fixes:
+Unchanged from the audit, and worth restating now the fix list is long:
 
-- **Credit concurrency is correct.** Both `/api/press/deduct-credits` and `/api/marketplace/purchase` take `SELECT … FOR UPDATE` row locks inside interactive transactions before reading and decrementing balances. Promo credits and paid credits are separated, and marketplace purchases correctly refuse promo credits. This is the part most codebases get wrong.
-- **Tenant isolation is centralized**, not sprinkled per-route — including the subtle detail of rewriting `findUnique` to `findFirst` because `pressId` is not part of any unique constraint, and using a distinct `buyerPressId` column for `TemplatePurchase`.
-- **Cross-tenant reads are explicit.** The marketplace paths import `basePrisma` deliberately and re-authorize by hand; I checked `marketplace/download` and it correctly gates on owner-or-purchaser.
-- **Soft-delete cascades are ownership-checked.** `DELETE /api/clients/[id]` verifies ownership through the scoped client *before* dropping to `basePrisma` for the cascade — the pattern that would be an IDOR if done in the other order.
-- **Password and JWT handling are standard and correct** — bcrypt, `jose` HS256, httpOnly + `secure` in production + `sameSite: lax`, 7-day user tokens, 12-hour admin tokens.
-- **`src/lib/config.ts` enforces JWT secret entropy at boot** — minimum 32 characters and a weak-pattern blocklist that throws in production. Uncommon and genuinely good.
-- **Portal token routes are properly scoped.** I specifically probed `portal/org/[orgToken]/cardholders/[id]` for IDOR; it constrains by `clientId` derived from the share on both PUT and DELETE.
-- **Raw SQL is parameterized throughout.** No injection found; there are no `$queryRawUnsafe` call sites.
-- **PDF compilation is offloaded** to the desktop daemon, which sidesteps the serverless timeout problem entirely.
+- **Credit handling is correct.** Server-derived amounts, `SELECT … FOR UPDATE` row locks, idempotent on re-delivery, promo credits spent before paid. The raw SQL carries its own `pressId` filter, acknowledging that raw queries bypass the extension.
+- **The serial-number race is fixed** with a single atomic `upsert` + `increment`.
+- **Cron auth fails closed** with a length-checked `timingSafeEqual`, wrapped in `withSystemContext`, on a real Vercel cron entry.
+- **The Stripe webhook is reachable, CSRF-exempt and system-scoped.**
+- **The health check reports 503** on a failed `SELECT 1`.
+- **`requireRole` / `requireActor` were the right abstraction** — HMAC-verified and fail-closed. Adoption was the gap, not the design.
 
 ---
 
-## Remediation order
+## What to do next
 
-**Before launch — non-negotiable**
-
-1. C1 — lock down `analyze-pdf` (allowlist, path containment, size cap, generic errors).
-2. C2 — delete `/api/test-db`.
-3. C3 — make the Stripe webhook reachable and fix the `OR: [{}, …]` match-everything bug.
-4. C4 — add `vercel.json` cron, make `/api/cron` reachable, delete `/api/jobs/cleanup`.
-5. C5 — `next` ≥ 16.2.11, `sharp` ≥ 0.35.4, `adm-zip` ≥ 0.6.0.
-6. H2 — role checks on `marketplace/purchase` and `deduct-credits`.
-7. H4 — provision Upstash; rate-limit `/api/portal/upload`.
-
-**First week after**
-
-8. H1 — make tenant isolation fail closed; wire up or delete `verifyMiddlewareHeaders`.
-9. H3 — derive credit deduction server-side.
-10. M4 — cap every `take` and every import.
-11. M5 — split the health endpoint so monitors can see failure.
-12. L3 — CI running build, typecheck, test, lint, and audit.
-
-**First month**
-
-13. M8 — replace the replicated-logic tests with tests that import `src/lib/prisma.ts`, and add integration tests for the authorization boundary.
-14. M1/M2/M3 — double-write consistency and the `findUnique` global-template inconsistency.
-15. M6/M7 — safe superadmin deletion; real audit coverage and real IPs.
-16. M9 — migrations out of the build step.
-17. L4 — the `middleware` → `proxy` migration, done deliberately.
+1. **Commit the tree.** It is the largest remaining risk and it blocks review of everything above.
+2. **Rotate `JWT_SECRET`, `DATABASE_URL` and the R2 credentials** if this tree was ever deployed or its port exposed (C1).
+3. **Provision Upstash** and set `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (M3).
+4. **Confirm production env**: `CRON_SECRET`, `STRIPE_*`, `NEXT_PUBLIC_SENTRY_DSN`. The code fails closed without them, but "configured" was never verified.
+5. **Decide on `/api/storage/presigned`** — delete it if it is not part of an in-flight feature (H2).
+6. Then: integration tests (L4), audit-log coverage (M1), superadmin deletion (M8), lint (L1), CSP (L2).
 
 ---
 
 ## Limits of this audit
 
-Stated so the clean areas are not over-read:
-
-- **No runtime testing.** No server was started and no request was sent. Findings are from source analysis plus build/test/audit tooling. C3 and C4 in particular are strong static conclusions from the middleware's control flow, but they are worth confirming with one live request each.
-- **The desktop client was not audited.** `desktop-client/` is excluded from `tsconfig.json` and was out of scope, yet it holds a long-lived credential and drives the credit-deduction path (H3).
-- **The frontend was not audited** for XSS or client-side authorization leakage; ~57k lines across 217 files, and this pass prioritized the server boundary.
-- **No load or performance testing.** M3 and M4 are reasoned from code shape, not measured.
-- **Production environment variables were not inspected** — only local `.env` and `.env.example`. Whether Upstash, Stripe, and `CRON_SECRET` are set in the deployment target could not be verified from here, so H4's severity depends on facts I cannot see.
+- **No live database was written to.** Findings that depend on data volume or production traffic — M8 in particular — are carried forward unverified rather than re-confirmed.
+- **Production environment variables were not inspected.** The local `.env` has no `CRON_SECRET`, `UPSTASH_*`, `STRIPE_*` or Sentry DSN. Failure modes are safe (fail closed, log `[CRITICAL]`), but whether Vercel has them is unknown.
+- **The desktop Electron client was not audited.** Excluded from build file tracing and out of scope.
+- **Client-side code was read only where it called an API under review.** No XSS sweep of the dashboard beyond the CSP and the SVG serving path.
+- **Live probing ran against a local `next start`, not Vercel.** Behaviour behind Vercel's proxy may differ for the header-trust findings; C1 and C2 are filesystem- and application-level and are not affected.
+- **The fixes are verified by unit tests and black-box probes, not by exercising real user journeys.** The portal, v1 and signup flows were confirmed to reach their handlers and scope correctly with invalid credentials; they were not driven end-to-end with valid tokens against real data.

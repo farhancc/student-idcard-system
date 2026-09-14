@@ -74,8 +74,8 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField } from './field-resolver';
-export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel };
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField, normalizeGoogleDriveUrl, getPlaceholderImageForField } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, normalizeGoogleDriveUrl, getPlaceholderImageForField };
 
 /**
  * Loads a custom font using the browser's FontFace API.
@@ -147,75 +147,114 @@ export async function loadGoogleFontInBrowser(fontFamily?: string) {
  * Loads an image in the browser with robust CORS fallback and relative URL resolution.
  */
 function loadImageClient(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    if (!url) {
-      reject(new Error('Image URL is empty'));
+  return new Promise((resolve) => {
+    const createDummyImg = () => {
+      console.warn(`[PDF client] Failed to load image asset (${url || 'empty'}). Using blank placeholder.`);
+      const dummy = new Image();
+      dummy.onload = () => resolve(dummy);
+      dummy.onerror = () => resolve(dummy);
+      dummy.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    };
+
+    if (!url || typeof url !== 'string' || !url.trim()) {
+      createDummyImg();
       return;
     }
-    let srcUrl = url.trim();
-    if (srcUrl.startsWith('local://')) {
-      const urlParts = srcUrl.split('?');
-      let pathPart = urlParts[0].substring(8);
-      const queryPart = urlParts.length > 1 ? '?' + urlParts.slice(1).join('?') : '';
 
-      if (pathPart.startsWith('/')) {
-        pathPart = pathPart.substring(1);
-      }
-      const encodedSegments = pathPart.split('/').map(segment => encodeURIComponent(segment));
-      srcUrl = `local:///${encodedSegments.join('/')}${queryPart}`;
-    }
-    if (typeof window !== 'undefined') {
-      if (srcUrl.startsWith('/')) {
-        srcUrl = `${window.location.origin}${srcUrl}`;
-      } else if (
-        !srcUrl.startsWith('http://') &&
-        !srcUrl.startsWith('https://') &&
-        !srcUrl.startsWith('data:image/') &&
-        !srcUrl.startsWith('local://') &&
-        !srcUrl.startsWith('file://') &&
-        !srcUrl.startsWith('blob:')
-      ) {
-        srcUrl = `${window.location.origin}/${srcUrl}`;
-      }
-    }
-    const img = new Image();
-    if (srcUrl.startsWith('http://') || srcUrl.startsWith('https://')) {
-      img.crossOrigin = 'anonymous'; // Try anonymous first for canvas export
-    }
-    img.onload = () => resolve(img);
-    img.onerror = () => {
-      let relPath = url.trim();
-      if (relPath.includes('/uploads/')) {
-        relPath = relPath.substring(relPath.indexOf('/uploads/'));
-      } else if (relPath.includes('uploads/')) {
-        relPath = '/' + relPath.substring(relPath.indexOf('uploads/'));
-      } else if (relPath.startsWith('/')) {
-        relPath = relPath;
-      }
+    let srcUrl = (normalizeGoogleDriveUrl(url.trim()) || url.trim());
+    try {
+      if (srcUrl.startsWith('local://')) {
+        const urlParts = srcUrl.split('?');
+        let pathPart = urlParts[0].substring(8);
+        const queryPart = urlParts.length > 1 ? '?' + urlParts.slice(1).join('?') : '';
 
-      if (relPath.startsWith('/') && !srcUrl.includes('idexocards.vercel.app')) {
-        const portalUrl = 'https://idexocards.vercel.app';
-        const remoteUrl = `${portalUrl}${relPath}`;
-        const portalImg = new Image();
-        portalImg.crossOrigin = 'anonymous';
-        portalImg.onload = () => resolve(portalImg);
-        portalImg.onerror = () => {
-          const imgFallback = new Image();
-          imgFallback.onload = () => resolve(imgFallback);
-          imgFallback.onerror = () => reject(new Error(`Failed to load image: ${srcUrl}`));
-          imgFallback.src = remoteUrl;
-        };
-        portalImg.src = remoteUrl;
-        return;
+        if (pathPart.startsWith('/')) {
+          pathPart = pathPart.substring(1);
+        }
+        const encodedSegments = pathPart.split('/').map(segment => encodeURIComponent(segment));
+        srcUrl = `local:///${encodedSegments.join('/')}${queryPart}`;
       }
+      if (typeof window !== 'undefined') {
+        if (srcUrl.startsWith('/')) {
+          srcUrl = `${window.location.origin}${srcUrl}`;
+        } else if (
+          !srcUrl.startsWith('http://') &&
+          !srcUrl.startsWith('https://') &&
+          !srcUrl.startsWith('data:image/') &&
+          !srcUrl.startsWith('local://') &&
+          !srcUrl.startsWith('file://') &&
+          !srcUrl.startsWith('blob:')
+        ) {
+          srcUrl = `${window.location.origin}/${srcUrl}`;
+        }
+      }
+      const img = new Image();
+      if (srcUrl.startsWith('http://') || srcUrl.startsWith('https://')) {
+        img.crossOrigin = 'anonymous'; // Try anonymous first for canvas export
+      }
+      img.onload = () => resolve(img);
+      img.onerror = () => {
+        let relPath = url.trim();
+        if (relPath.includes('/uploads/')) {
+          relPath = relPath.substring(relPath.indexOf('/uploads/'));
+        } else if (relPath.includes('uploads/')) {
+          relPath = '/' + relPath.substring(relPath.indexOf('uploads/'));
+        } else if (relPath.startsWith('/')) {
+          relPath = relPath;
+        }
 
-      // Fallback: If CORS anonymous failed, try loading without crossOrigin
-      const imgFallback = new Image();
-      imgFallback.onload = () => resolve(imgFallback);
-      imgFallback.onerror = () => reject(new Error(`Failed to load image: ${srcUrl}`));
-      imgFallback.src = srcUrl;
-    };
-    img.src = srcUrl;
+        // If direct HTTP/HTTPS load failed due to CORS, try proxying via /api/proxy-image
+        if ((srcUrl.startsWith('http://') || srcUrl.startsWith('https://')) && !srcUrl.includes('/api/proxy-image')) {
+          const proxiedUrl = `/api/proxy-image?url=${encodeURIComponent(srcUrl)}`;
+          const proxyImg = new Image();
+          proxyImg.crossOrigin = 'anonymous';
+          proxyImg.onload = () => resolve(proxyImg);
+          proxyImg.onerror = () => {
+            if (relPath.startsWith('/') && !srcUrl.includes('idexocards.vercel.app')) {
+              const portalUrl = 'https://idexocards.vercel.app';
+              const remoteUrl = `${portalUrl}${relPath}`;
+              const portalImg = new Image();
+              portalImg.crossOrigin = 'anonymous';
+              portalImg.onload = () => resolve(portalImg);
+              portalImg.onerror = () => createDummyImg();
+              portalImg.src = remoteUrl;
+              return;
+            }
+            const imgFallback = new Image();
+            imgFallback.onload = () => resolve(imgFallback);
+            imgFallback.onerror = () => createDummyImg();
+            imgFallback.src = srcUrl;
+          };
+          proxyImg.src = proxiedUrl;
+          return;
+        }
+
+        if (relPath.startsWith('/') && !srcUrl.includes('idexocards.vercel.app')) {
+          const portalUrl = 'https://idexocards.vercel.app';
+          const remoteUrl = `${portalUrl}${relPath}`;
+          const portalImg = new Image();
+          portalImg.crossOrigin = 'anonymous';
+          portalImg.onload = () => resolve(portalImg);
+          portalImg.onerror = () => {
+            const imgFallback = new Image();
+            imgFallback.onload = () => resolve(imgFallback);
+            imgFallback.onerror = () => createDummyImg();
+            imgFallback.src = remoteUrl;
+          };
+          portalImg.src = remoteUrl;
+          return;
+        }
+
+        // Fallback: If CORS anonymous failed, try loading without crossOrigin
+        const imgFallback = new Image();
+        imgFallback.onload = () => resolve(imgFallback);
+        imgFallback.onerror = () => createDummyImg();
+        imgFallback.src = srcUrl;
+      };
+      img.src = srcUrl;
+    } catch (err) {
+      createDummyImg();
+    }
   });
 }
 
@@ -518,15 +557,12 @@ export async function renderCardSideClient(
   }
 
   const data: Record<string, any> = {
-    name: cardholder.name || '',
-    designation: cardholder.designation || '',
-    photo: effectivePhotoUrl || cardholder.photoUrl || '',
-    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
-    cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
-    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
-    validTill: formattedValidTill,
     ...customData,
+    ...(cardholder.name && cardholder.name !== 'Cardholder' ? { name: cardholder.name } : {}),
+    ...(cardholder.designation ? { designation: cardholder.designation } : {}),
+    ...(effectivePhotoUrl ? { photo: effectivePhotoUrl, photoUrl: effectivePhotoUrl } : {}),
+    cardSerial: cardholder.cardSerial || '',
+    validTill: formattedValidTill,
   };
 
   // Ensure effectivePhotoUrl overwrites any empty photo key from customData
@@ -741,7 +777,7 @@ export async function renderCardSideClient(
       case 'picture':
       case 'static_image':
       case 'static_img': {
-        const imageSrc = rawValue ? String(rawValue) : ((f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue);
+        const imageSrc = rawValue ? String(rawValue) : ((f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue || getPlaceholderImageForField(f.field || (f as any).label));
         
         if (imageSrc && isValidImageUrl(imageSrc)) {
           try {
@@ -862,7 +898,7 @@ export async function renderCardSideClient(
 /** Helper: fetch a URL and return its raw ArrayBuffer. */
 async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   if (!url) throw new Error('Empty URL passed to fetchArrayBuffer');
-  let targetUrl = url.trim();
+  let targetUrl = (normalizeGoogleDriveUrl(url.trim()) || url.trim());
 
   // Data URI handling
   if (targetUrl.startsWith('data:')) {
@@ -906,16 +942,31 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
     }
   }
 
+  let directFetchOk = false;
   try {
     const res = await fetch(targetUrl);
     if (res.ok) return await res.arrayBuffer();
+    directFetchOk = false; // Non-OK response (403, 302, etc.)
   } catch (err) {
-    // Attempt relative portal fallback below
+    directFetchOk = false; // Network/CORS error
   }
 
-  // Fallback: If relative URL or local protocol failed, fetch from production portal URL
-  let relPath = url.trim();
-  if (relPath.includes('/uploads/')) {
+  // Proxy fallback for external HTTP/HTTPS URLs that failed due to CORS
+  if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(targetUrl)}`;
+      const proxyRes = await fetch(proxyUrl);
+      if (proxyRes.ok) return await proxyRes.arrayBuffer();
+    } catch (proxyErr) {
+      // Proxy also failed — continue to portal fallback below
+    }
+  }
+
+  // Fallback: If relative URL or local protocol failed, fetch from portal URL
+  let relPath = (normalizeGoogleDriveUrl(url.trim()) || url.trim());
+  if (relPath.includes('/api/uploads/')) {
+    relPath = relPath.substring(relPath.indexOf('/api/uploads/'));
+  } else if (relPath.includes('/uploads/')) {
     relPath = relPath.substring(relPath.indexOf('/uploads/'));
   } else if (relPath.includes('uploads/')) {
     relPath = '/' + relPath.substring(relPath.indexOf('uploads/'));
@@ -924,7 +975,9 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   }
 
   if (relPath.startsWith('/')) {
-    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+    const portalUrl = (typeof window !== 'undefined' && window.location && window.location.origin)
+      ? window.location.origin
+      : ((typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app');
     const remoteUrl = `${portalUrl}${relPath}`;
     const remoteRes = await fetch(remoteUrl);
     if (remoteRes.ok) return await remoteRes.arrayBuffer();
@@ -1759,21 +1812,25 @@ export async function renderCardSideToPdfBytesClient(
             }
           } else {
             // Direct load fallback
-            const img = await loadImageClient(rawUrl);
-            const tempCanvas = document.createElement('canvas');
-            const scaleFactor = 3;
-            const boxWidth = f.width * scaleFactor;
-            const boxHeight = f.height * scaleFactor;
-            tempCanvas.width = boxWidth;
-            tempCanvas.height = boxHeight;
-            const tempCtx = tempCanvas.getContext('2d');
-            if (tempCtx) {
-              tempCtx.drawImage(img, 0, 0, boxWidth, boxHeight);
-              const dataUrl = tempCanvas.toDataURL('image/png');
-              const base64 = dataUrl.split(',')[1];
-              const pngBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-              const pdfImg = await pdfDoc.embedPng(pngBytes);
-              page.drawImage(pdfImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+            try {
+              const img = await loadImageClient(rawUrl);
+              const tempCanvas = document.createElement('canvas');
+              const scaleFactor = 3;
+              const boxWidth = f.width * scaleFactor;
+              const boxHeight = f.height * scaleFactor;
+              tempCanvas.width = boxWidth;
+              tempCanvas.height = boxHeight;
+              const tempCtx = tempCanvas.getContext('2d');
+              if (tempCtx) {
+                tempCtx.drawImage(img, 0, 0, boxWidth, boxHeight);
+                const dataUrl = tempCanvas.toDataURL('image/png');
+                const base64 = dataUrl.split(',')[1];
+                const pngBytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+                const pdfImg = await pdfDoc.embedPng(pngBytes);
+                page.drawImage(pdfImg, { x: xPt, y: yPt, width: wPt, height: hPt });
+              }
+            } catch (fallbackImgErr) {
+              console.warn(`[PDF client] Could not load image fallback for field "${f.field}":`, fallbackImgErr);
             }
           }
         } catch (err) {

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 // Use basePrisma (raw client without tenant middleware) so that all presses'
-// public templates are visible in the marketplace, not just the current press's.
-import { basePrisma as prisma } from '@/lib/prisma';
+import { prisma, basePrisma } from '@/lib/prisma';
+import { getActor } from '@/lib/authz';
 import { formatFieldLabel as formatFieldLabelCentral } from '@/lib/pdf/field-resolver';
 
 export const dynamic = 'force-dynamic';
@@ -10,13 +10,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const search = searchParams.get('q') || searchParams.get('search') || '';
     const category = searchParams.get('category') || '';
-    const search = searchParams.get('search') || '';
-    const sort = searchParams.get('sort') || 'popular';
-    const page = Math.max(1, Number(searchParams.get('page') || '1'));
-    const limit = Math.min(40, Number(searchParams.get('limit') || '20'));
-    const skip = (page - 1) * limit;
-
+    const page = Math.max(1, Number(searchParams.get('page') || 1));
+    const limit = Math.min(60, Math.max(1, Number(searchParams.get('limit') || searchParams.get('take') || 24)));
+    const sort = searchParams.get('sort') || 'popular'; // 'popular' | 'newest' | 'price_asc' | 'price_desc' | 'likes'
+    
     // Optional: filter by file formats
     const hasCdr = searchParams.get('has_cdr') === '1';
     const hasAi = searchParams.get('has_ai') === '1';
@@ -27,8 +26,9 @@ export async function GET(request: Request) {
     const hasBarcode = searchParams.get('has_barcode') === '1';
     const priceFilter = searchParams.get('price') || ''; // 'free' | 'paid'
 
-    const pressIdStr = request.headers.get('x-press-id');
-    const pressId = pressIdStr ? Number(pressIdStr) : null;
+    const actor = getActor(request);
+    const pressId = actor?.pressId ?? null;
+    const skip = (page - 1) * limit;
 
     // All marketplace listings must be explicitly published (isPublic: true).
     // Official/global templates (pressId: null) are also subject to this requirement.

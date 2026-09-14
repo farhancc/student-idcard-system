@@ -2,10 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
+import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X } from 'lucide-react';
 
 import CSVImportWizard from './components/CSVImportWizard';
 import CardholderGroupedTables from './components/CardholderGroupedTables';
@@ -15,10 +17,9 @@ import { BulkReassignModal } from './components/BulkReassignModal';
 import { ValidationModal } from './components/ValidationModal';
 import { EmptySlotModal } from './components/EmptySlotModal';
 import { CardholderAddForm } from './components/CardholderAddForm';
-import { ZIPImportPanel } from './components/ZIPImportPanel';
+import { BatchCompilePanel } from './components/BatchCompilePanel';
 import { SerialAssignmentPanel } from './components/SerialAssignmentPanel';
 import { PortalSharesPanel } from './components/PortalSharesPanel';
-import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download } from 'lucide-react';
 
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { useClientData } from './hooks/useClientData';
@@ -95,15 +96,15 @@ export default function ClientDetailsPage() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <a href="/dashboard/clients" style={{
+          <Link href="/dashboard/clients" style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '36px', height: '36px', borderRadius: '50%',
             border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.02)', color: '#fff'
           }}>
             <ArrowLeft size={16} />
-          </a>
+          </Link>
           <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase' }}>Client Directory</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase' }}>Clients</span>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px', fontSize: '1.75rem' }}>
               <Building2 size={24} color="var(--primary)" /> {client?.name}
             </h1>
@@ -119,7 +120,7 @@ export default function ClientDetailsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)', gap: '8px', marginBottom: '32px', flexWrap: 'wrap' }}>
-        {['list', 'portal', 'add', 'csv', 'zip', 'serials'].map(tab => (
+        {['list', 'portal', 'add', 'csv', 'zip'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
@@ -131,11 +132,10 @@ export default function ClientDetailsPage() {
             }}
           >
             {tab === 'list' && `Cardholders (${cardholders.length})`}
-            {tab === 'portal' && <><Building2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Client Portal Links</>}
-            {tab === 'add' && '+ Single Entry'}
+            {tab === 'portal' && <><Building2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Portal Links</>}
+            {tab === 'add' && '+ Add Cardholder'}
             {tab === 'csv' && 'Import CSV'}
-            {tab === 'zip' && 'ZIP Sync'}
-            {tab === 'serials' && 'Auto Serials'}
+            {tab === 'zip' && 'Batch Import'}
           </button>
         ))}
       </div>
@@ -164,9 +164,9 @@ export default function ClientDetailsPage() {
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', background: 'rgba(59,130,246,0.1)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(59,130,246,0.2)' }}>
                 <button className="btn btn-secondary" onClick={() => compileHooks.handleOpenCompileModal()}>Compile ({selectedIds.length})</button>
                 <button className="btn btn-secondary" onClick={() => setShowBulkReassignModal(true)}><Shuffle size={14} /> Reassign</button>
-                <button className="btn btn-secondary" onClick={() => handleBulkStatusToggle(true)}><UserCheck size={14} /> Act</button>
-                <button className="btn btn-secondary" onClick={() => handleBulkStatusToggle(false)}><UserX size={14} /> Deact</button>
-                <button className="btn btn-danger" onClick={handleBulkDelete} disabled={bulkOperationLoading}><Trash2 size={14} /> Del</button>
+                <button className="btn btn-secondary" onClick={() => handleBulkStatusToggle(true)}><UserCheck size={14} /> Activate</button>
+                <button className="btn btn-secondary" onClick={() => handleBulkStatusToggle(false)}><UserX size={14} /> Deactivate</button>
+                <button className="btn btn-danger" onClick={handleBulkDelete} disabled={bulkOperationLoading}><Trash2 size={14} /> Delete</button>
               </div>
             )}
           </div>
@@ -200,6 +200,7 @@ export default function ClientDetailsPage() {
               compiling={!!compileHooks.qCompiling}
               onCompile={async (cfg) => {
                 await compileHooks.handleQuickCompile(cfg.compileType as any, cfg as any);
+                compileHooks.setShowCompileModal(false);
               }}
             />
           )}
@@ -213,14 +214,23 @@ export default function ClientDetailsPage() {
                     Progress: {compileHooks.qJobResult.progress}%
                   </div>
                 </div>
-                {compileHooks.qJobResult.status === 'COMPLETED' && compileHooks.qJobResult.downloadUrl && (
-                  <a href={compileHooks.qJobResult.downloadUrl} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                    <Download size={16} /> Download PDF
-                  </a>
-                )}
-                {compileHooks.qJobResult.status === 'FAILED' && (
-                  <div style={{ color: '#ef4444', fontSize: '0.85rem' }}>{compileHooks.qJobResult.errorMsg}</div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {compileHooks.qJobResult.status === 'COMPLETED' && (
+                    <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <CheckCircle2 size={16} /> PDF Downloaded & Saved to File
+                    </div>
+                  )}
+                  {compileHooks.qJobResult.status === 'FAILED' && (
+                    <div style={{ color: '#ef4444', fontSize: '0.85rem' }}>{compileHooks.qJobResult.errorMsg}</div>
+                  )}
+                  <button
+                    onClick={() => compileHooks.setQJobResult(null)}
+                    style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px' }}
+                    title="Dismiss notification"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -228,8 +238,34 @@ export default function ClientDetailsPage() {
       )}
 
       {activeTab === 'add' && <CardholderAddForm clientId={clientId} clientTemplates={clientTemplates} onSuccess={() => { handleRefresh(); setActiveTab('list'); }} onCancel={() => setActiveTab('list')} />}
-      {activeTab === 'csv' && <CSVImportWizard clientId={clientId} onImported={handleRefresh} onCancel={() => setActiveTab('list')} />}
-      {activeTab === 'zip' && <ZIPImportPanel clientId={clientId} onComplete={handleRefresh} onCancel={() => setActiveTab('list')} />}
+      {activeTab === 'csv' && <CSVImportWizard
+        clientId={clientId}
+        clientTemplates={clientTemplates}
+        onImported={handleRefresh}
+        onCancel={() => setActiveTab('list')}
+        onPrintImported={(ids, templateId) => {
+          // Set the imported cardholder IDs as the selection
+          setSelectedIds(ids);
+          // Pre-set the template if available
+          if (templateId) {
+            compileHooks.setQTemplateId(String(templateId));
+            const tpl = compileHooks.qDetectedTemplateName
+              ? null
+              : clientTemplates.find((t: any) => String(t.id) === String(templateId));
+            if (tpl) {
+              compileHooks.setQDetectedTemplateName(tpl.name || null);
+              compileHooks.setQTemplateMixed(false);
+            }
+          }
+          // Switch to list tab and open compile modal
+          setActiveTab('list');
+          // Use a small delay to ensure state updates propagate before opening modal
+          setTimeout(() => {
+            compileHooks.setShowCompileModal(true);
+          }, 100);
+        }}
+      />}
+      {activeTab === 'zip' && <BatchCompilePanel clientName={client?.name} clientTemplates={clientTemplates} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'serials' && <SerialAssignmentPanel clientId={clientId} onComplete={handleRefresh} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'portal' && <PortalSharesPanel clientId={clientId} />}
 

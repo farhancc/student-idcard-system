@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 describe('Rate Limiter (In-Memory Fallback)', () => {
@@ -50,24 +50,36 @@ describe('Rate Limiter (In-Memory Fallback)', () => {
   });
 
   describe('getClientIp', () => {
-    it('extracts IP from x-forwarded-for header', () => {
-      const mockReq = {
-        headers: new Headers({
-          'x-forwarded-for': '203.0.113.195, 70.41.3.18',
-        }),
-      } as unknown as Request;
+    const req = (h: Record<string, string>) =>
+      ({ headers: new Headers(h) }) as unknown as Request;
 
-      expect(getClientIp(mockReq)).toBe('203.0.113.195');
+    it('trusts x-vercel-forwarded-for, which the platform sets itself', () => {
+      expect(getClientIp(req({ 'x-vercel-forwarded-for': '203.0.113.195, 70.41.3.18' })))
+        .toBe('203.0.113.195');
     });
 
-    it('falls back to x-real-ip if x-forwarded-for is missing', () => {
-      const mockReq = {
-        headers: new Headers({
-          'x-real-ip': '198.51.100.42',
-        }),
-      } as unknown as Request;
+    it('ignores client-settable forwarding headers by default', () => {
+      // Without a trusted proxy in front, these are attacker-controlled: honouring
+      // them would let a caller rotate the rate-limit key at will.
+      expect(getClientIp(req({ 'x-forwarded-for': '203.0.113.195' }))).toBe('unknown');
+      expect(getClientIp(req({ 'x-real-ip': '198.51.100.42' }))).toBe('unknown');
+    });
 
-      expect(getClientIp(mockReq)).toBe('198.51.100.42');
+    it('honours forwarding headers when the deployment declares a trusted proxy', () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      expect(getClientIp(req({ 'x-forwarded-for': '203.0.113.195, 70.41.3.18' })))
+        .toBe('203.0.113.195');
+      expect(getClientIp(req({ 'x-real-ip': '198.51.100.42' }))).toBe('198.51.100.42');
+      vi.unstubAllEnvs();
+    });
+
+    it('prefers the platform header over a spoofed one', () => {
+      vi.stubEnv('TRUST_PROXY_HEADERS', 'true');
+      expect(getClientIp(req({
+        'x-vercel-forwarded-for': '203.0.113.1',
+        'x-forwarded-for': '10.0.0.1',
+      }))).toBe('203.0.113.1');
+      vi.unstubAllEnvs();
     });
 
     it('returns "unknown" if no IP headers exist', () => {

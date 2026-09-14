@@ -223,6 +223,7 @@ model CardholderValue {
 
   @@unique([cardholderId, field])
   @@index([cardholderId])
+  @@index([field, value])
   @@map("cardholder_values")
 }
 
@@ -324,12 +325,29 @@ model PdfJob {
   completedAt    DateTime? @map("completed_at")
 
   downloads      PdfDownloadLog[]
+  chunks         PdfJobChunk[]
 
   @@index([pressId, status])
   @@index([isLocalJob])
   @@index([orderId])
   @@index([expiresAt])
   @@map("pdf_jobs")
+}
+
+model PdfJobChunk {
+  id          Int      @id @default(autoincrement())
+  pdfJobId    Int      @map("pdf_job_id")
+  pdfJob      PdfJob   @relation(fields: [pdfJobId], references: [id], onDelete: Cascade)
+  chunkIndex  Int      @map("chunk_index")
+  totalChunks Int      @map("total_chunks")
+  fileName    String   @map("file_name")
+  downloadUrl String?  @map("download_url")
+  localPath   String?  @map("local_path")
+  fileSize    Int?     @map("file_size")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([pdfJobId, chunkIndex])
+  @@map("pdf_job_chunks")
 }
 
 // ── INVOICING ─────────────────────────────────────────────

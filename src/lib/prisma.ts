@@ -1,9 +1,25 @@
 import { PrismaClient } from '@prisma/client';
 import { headers } from 'next/headers';
+import { readVerifiedContext } from '@/lib/middleware-verify';
 import { AsyncLocalStorage } from 'async_hooks';
 
 export type TenantContext = { pressId: number } | { system: true };
-const ctxStore = new AsyncLocalStorage<TenantContext>();
+
+/**
+ * Pinned to globalThis, not module scope.
+ *
+ * The server bundle contains more than one copy of this module (Turbopack
+ * emits it into several chunks), and a per-copy AsyncLocalStorage means the
+ * copy that *sets* the context is not the copy the Prisma extension *reads* —
+ * so a correctly-wrapped query still looks unscoped and throws. Same reason
+ * the PrismaClient below is pinned.
+ */
+const globalForTenantCtx = globalThis as unknown as {
+  __tenantCtxStore?: AsyncLocalStorage<TenantContext>;
+};
+const ctxStore: AsyncLocalStorage<TenantContext> =
+  globalForTenantCtx.__tenantCtxStore ??
+  (globalForTenantCtx.__tenantCtxStore = new AsyncLocalStorage<TenantContext>());
 
 /** Run with an explicit tenant — for token-authenticated routes (portal, v1). */
 export function withPressContext<T>(pressId: number, fn: () => Promise<T>): Promise<T> {
@@ -15,18 +31,57 @@ export function withSystemContext<T>(fn: () => Promise<T>): Promise<T> {
   return ctxStore.run({ system: true }, fn);
 }
 
+/** Run the remainder of the current request unscoped, deliberately. */
+export function enterSystemContext(): void {
+  ctxStore.enterWith({ system: true });
+}
+
+/**
+ * Set the tenant for the remainder of the current request, rather than for the
+ * duration of a callback.
+ *
+ * Token-authenticated routes (portal, v1) only learn their tenant part-way
+ * through the handler, after looking the token up. Without this they would each
+ * have to be re-indented into a withPressContext() closure.
+ */
+export function enterPressContext(pressId: number): void {
+  ctxStore.enterWith({ pressId });
+}
+
+/**
+ * Look a token up unscoped, then adopt the tenant it points at.
+ *
+ * The lookup itself cannot be tenant-scoped — the token *is* how we discover
+ * which tenant this is — so it runs in system context and nothing else does.
+ */
+export async function resolveTenantFrom<T>(
+  lookup: () => Promise<T>,
+  getPressId: (found: NonNullable<T>) => number | null | undefined
+): Promise<T> {
+  const found = await withSystemContext(lookup);
+  if (found != null) {
+    const pressId = getPressId(found as NonNullable<T>);
+    if (typeof pressId === 'number' && Number.isInteger(pressId)) {
+      enterPressContext(pressId);
+    }
+  }
+  return found;
+}
+
 async function resolveContext(): Promise<TenantContext | null> {
   const explicit = ctxStore.getStore();
   if (explicit) return explicit;
   try {
+    // Only a signed context counts. The plain x-press-id header is settable by
+    // any client on a route the middleware waves through, so reading it without
+    // verifying the signature would let the caller pick their own tenant.
     const headersList = await headers();
-    const pressIdStr = headersList.get('x-press-id');
-    if (pressIdStr) {
-      const n = Number(pressIdStr);
-      if (Number.isInteger(n)) return { pressId: n };
+    const verified = readVerifiedContext(name => headersList.get(name));
+    if (verified) {
+      return verified.scope === 'system' ? { system: true } : { pressId: verified.pressId };
     }
   } catch {
-    // Fallback when outside of a request context (e.g. build, seeding, cron jobs)
+    // Outside a request context (build, seeding, scripts) — caller must wrap.
   }
   return null;
 }
@@ -44,20 +99,8 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
 // Export the raw client for cross-tenant reads (e.g. marketplace — shows ALL presses)
 export { basePrisma };
 
-async function getCurrentPressId(): Promise<number | null> {
-  try {
-    // In Next.js 15+, headers() is asynchronous and must be awaited
-    const headersList = await headers();
-    const pressIdStr = headersList.get('x-press-id');
-    return pressIdStr ? Number(pressIdStr) : null;
-  } catch {
-    // Fallback when outside of a request context (e.g. build, seeding, cron jobs)
-    return null;
-  }
-}
-
-async function syncTemplateFields(templateId: number) {
-  const tmpl = await basePrisma.cardTemplate.findUnique({
+async function syncTemplateFields(templateId: number, db: any = basePrisma) {
+  const tmpl = await db.cardTemplate.findUnique({
     where: { id: templateId },
   });
   if (!tmpl) return;
@@ -80,7 +123,7 @@ async function syncTemplateFields(templateId: number) {
     const side = f.side || 'front';
     activeKeys.add(`${f.field}:${side}`);
 
-    await basePrisma.templateField.upsert({
+    await db.templateField.upsert({
       where: {
         templateId_field_side: {
           templateId,
@@ -134,14 +177,14 @@ async function syncTemplateFields(templateId: number) {
     });
   }
 
-  const existingFields = await basePrisma.templateField.findMany({
+  const existingFields = await db.templateField.findMany({
     where: { templateId },
     select: { field: true, side: true }
   });
 
   for (const ef of existingFields) {
     if (!activeKeys.has(`${ef.field}:${ef.side}`)) {
-      await basePrisma.templateField.delete({
+      await db.templateField.delete({
         where: {
           templateId_field_side: {
             templateId,
@@ -154,8 +197,8 @@ async function syncTemplateFields(templateId: number) {
   }
 }
 
-async function syncCardholderValues(cardholderId: number) {
-  const ch = await basePrisma.cardholder.findUnique({
+async function syncCardholderValues(cardholderId: number, db: any = basePrisma) {
+  const ch = await db.cardholder.findUnique({
     where: { id: cardholderId },
   });
   if (!ch) return;
@@ -184,7 +227,7 @@ async function syncCardholderValues(cardholderId: number) {
     if (!field || value === undefined || value === null) continue;
     activeFields.add(field);
 
-    await basePrisma.cardholderValue.upsert({
+    await db.cardholderValue.upsert({
       where: {
         cardholderId_field: {
           cardholderId,
@@ -197,14 +240,14 @@ async function syncCardholderValues(cardholderId: number) {
   }
 
   // Delete cardholder values no longer present
-  const existingValues = await basePrisma.cardholderValue.findMany({
+  const existingValues = await db.cardholderValue.findMany({
     where: { cardholderId },
     select: { field: true }
   });
 
   for (const ev of existingValues) {
     if (!activeFields.has(ev.field)) {
-      await basePrisma.cardholderValue.delete({
+      await db.cardholderValue.delete({
         where: {
           cardholderId_field: {
             cardholderId,
@@ -216,18 +259,20 @@ async function syncCardholderValues(cardholderId: number) {
   }
 }
 
+export const TENANT_MODELS = [
+  'PressUser', 'Client', 'Cardholder', 'CardTemplate', 'CardOrder',
+  'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
+  'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
+  'PressApiKey', 'PrintVendor', 'ClientPortalShare',
+  'PdfJob', 'CardAsset', 'CreditRequest',
+  'TemplatePurchase', 'TemplateLike', 'TemplateReport'
+];
+
 export const prisma = (basePrisma.$extends({
   query: {
     $allModels: {
       async $allOperations({ model, operation, args, query }: any) {
-        const tenantModels = [
-          'PressUser', 'Client', 'Cardholder', 'CardTemplate', 'CardOrder',
-          'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
-          'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
-          'PressApiKey', 'PrintVendor', 'ClientPortalShare',
-          'PdfJob', 'CardAsset', 'CreditRequest',
-          'TemplatePurchase', 'TemplateLike', 'TemplateReport'
-        ];
+        const tenantModels = TENANT_MODELS;
 
         // TemplatePurchase uses buyerPressId instead of the standard pressId column
         const pressIdField = model === 'TemplatePurchase' ? 'buyerPressId' : 'pressId';
@@ -237,10 +282,17 @@ export const prisma = (basePrisma.$extends({
 
         if (tenantModels.includes(model)) {
           if (ctx === null) {
-            console.warn('[TENANT WARNING] unscoped query on tenant model:', {
-              model,
-              operation: op,
-            });
+            if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test' || process.env.STRICT_TENANT_ENFORCEMENT === 'true') {
+              throw new Error(
+                `[TENANT ISOLATION] Blocked unscoped query on tenant model "${model}" (operation: ${op}). ` +
+                `Wrap in withPressContext() or withSystemContext().`
+              );
+            } else {
+              console.warn('[TENANT WARNING] unscoped query on tenant model:', {
+                model,
+                operation: op,
+              });
+            }
           } else if ('pressId' in ctx) {
             const pressId = ctx.pressId;
             // 1a. Rewrite findUnique → findFirst for tenant-scoped models
@@ -267,7 +319,7 @@ export const prisma = (basePrisma.$extends({
               return (basePrisma as any)[model][rewrittenOp](args);
             }
 
-            // 1b. Read operations (inject tenant filter)
+            // 1b. Read operations (inject tenant filter & soft-delete filter)
             if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy', 'findFirstOrThrow'].includes(op)) {
               args.where = args.where || {};
               if (model === 'CardTemplate') {
@@ -287,6 +339,16 @@ export const prisma = (basePrisma.$extends({
               } else {
                 args.where[pressIdField] = pressId;
               }
+
+              // Auto-filter soft-deleted records unless explicitly queried
+              if (['Client', 'Cardholder', 'CardOrder'].includes(model) && args.where.deletedAt === undefined && !args.where.includeDeleted) {
+                args.where.deletedAt = null;
+              }
+            }
+
+            // Global safety net: cap findMany to 5000 rows unless explicitly set
+            if (op === 'findMany' && args.take === undefined) {
+              args.take = 5000;
             }
 
             // 2. Write operations (inject tenant on creation/modification)
@@ -321,7 +383,7 @@ export const prisma = (basePrisma.$extends({
           for (const item of items) {
             if (item && item.id) {
               try {
-                await syncTemplateFields(item.id);
+                await syncTemplateFields(item.id, (this as any) || basePrisma);
               } catch (err) {
                 console.error(`[Prisma Double-Write] Error syncing TemplateFields for template ${item.id}:`, err);
               }
@@ -335,7 +397,7 @@ export const prisma = (basePrisma.$extends({
           for (const item of items) {
             if (item && item.id) {
               try {
-                await syncCardholderValues(item.id);
+                await syncCardholderValues(item.id, (this as any) || basePrisma);
               } catch (err) {
                 console.error(`[Prisma Double-Write] Error syncing CardholderValues for cardholder ${item.id}:`, err);
               }

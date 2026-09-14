@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateSignedUrl, validateSignedUrl } from '@/lib/signed-url';
+import { requireActor } from '@/lib/authz';
 import fs from 'fs';
 import path from 'path';
 
@@ -9,30 +10,75 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-
-    if (!pressIdStr || !userIdStr) {
-      return new Response('Unauthorized session', { status: 401 });
-    }
-
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId } = auth.actor;
     const { id } = await params;
     const jobId = Number(id);
 
     // 1. Fetch PDF job
     const job = await prisma.pdfJob.findFirst({
       where: { id: jobId, pressId },
+      include: {
+        chunks: {
+          orderBy: { chunkIndex: 'asc' },
+        },
+      },
     });
 
-    if (!job || job.status !== 'COMPLETED' || !job.downloadUrl) {
+    if (!job || job.status !== 'COMPLETED') {
       return new Response('PDF file is not available or generation failed.', { status: 404 });
     }
 
     // 2. Check if link has expired (R5)
     if (job.expiresAt && new Date() > job.expiresAt) {
       return new Response('This download link has expired. PDF jobs expire 7 days after generation.', { status: 410 });
+    }
+
+    // Handle multi-part chunk downloads
+    const chunkParam = new URL(request.url).searchParams.get('chunk');
+    if (job.chunks && job.chunks.length > 0) {
+      if (chunkParam !== null) {
+        const chunkIdx = Number(chunkParam);
+        const chunk = job.chunks.find((c: any) => c.chunkIndex === chunkIdx);
+        if (!chunk || !chunk.downloadUrl) {
+          return new Response('Chunk not found.', { status: 404 });
+        }
+        // Redirect to the chunk's download URL or serve it
+        if (chunk.downloadUrl.startsWith('http')) {
+          return NextResponse.redirect(chunk.downloadUrl, { status: 302 });
+        }
+        // Serve local chunk file
+        const chunkPath = chunk.downloadUrl.replace(/^\//, '');
+        const tmpPath = path.join('/tmp', 'idexo', chunkPath);
+        const publicPath = path.join(process.cwd(), 'public', chunkPath);
+        const finalChunkPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
+        if (!finalChunkPath) return new Response('Chunk file not found on server.', { status: 404 });
+        const chunkBuffer = fs.readFileSync(finalChunkPath);
+        return new Response(chunkBuffer as any, {
+          headers: {
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${chunk.fileName}"`,
+            'Content-Length': String(chunkBuffer.length),
+            'Cache-Control': 'private, no-store',
+          },
+        });
+      } else {
+        // Return JSON listing all chunks
+        return NextResponse.json({
+          multiPart: true,
+          chunkCount: job.chunks.length,
+          chunks: job.chunks.map((c: any) => ({
+            chunkIndex: c.chunkIndex,
+            fileName: c.fileName,
+            downloadUrl: `/api/jobs/${jobId}/download?chunk=${c.chunkIndex}`,
+          })),
+        });
+      }
+    }
+
+    if (!job.downloadUrl) {
+      return new Response('PDF file is not available.', { status: 404 });
     }
 
     // 3. Resolve and serve file
@@ -76,10 +122,28 @@ export async function GET(
         }
       }
 
-      const relativePath = job.downloadUrl.replace(/^\//, '');
-      const tmpPath = path.join('/tmp', 'idexo', relativePath);
-      const publicPath = path.join(process.cwd(), 'public', relativePath);
-      const finalPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
+      let finalPath: string | null = null;
+
+      if (job.downloadUrl.startsWith('local://')) {
+        let urlPath = job.downloadUrl.replace(/^local:\/\//i, '').split('?')[0].split('#')[0];
+        try { urlPath = decodeURIComponent(urlPath); } catch (e) {}
+        if (process.platform === 'win32') {
+          if (urlPath.startsWith('/')) urlPath = urlPath.slice(1);
+        } else {
+          if (!urlPath.startsWith('/')) urlPath = '/' + urlPath;
+        }
+        if (fs.existsSync(urlPath)) {
+          finalPath = urlPath;
+        }
+      }
+
+      if (!finalPath) {
+        const relativePath = job.downloadUrl.replace(/^\//, '');
+        const tmpPath = path.join('/tmp', 'idexo', relativePath);
+        const publicPath = path.join(process.cwd(), 'public', relativePath);
+        finalPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
+      }
+
       if (!finalPath) return new Response('PDF file was not found on server storage.', { status: 404 });
       fileBuffer = fs.readFileSync(finalPath);
     }

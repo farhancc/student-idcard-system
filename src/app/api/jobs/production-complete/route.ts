@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireRole } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
@@ -8,19 +9,15 @@ const productionCompleteSchema = z.object({
   errorMsg: z.string().optional(),
   pdfBase64: z.string().optional(),
   localPath: z.string().optional(),
+  chunkCount: z.number().optional(),
 });
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-
-    let body: unknown;
+    // Completion settles credits and revenue against the press.
+    const auth = requireRole(request, ['OWNER', 'OPERATOR']);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId, name: actorName } = auth.actor;let body: unknown;
     try {
       body = await request.json();
     } catch {
@@ -32,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request parameters', details: validation.error.format() }, { status: 400 });
     }
 
-    const { jobId, success, errorMsg, pdfBase64, localPath } = validation.data;
+    const { jobId, success, errorMsg, pdfBase64, localPath, chunkCount } = validation.data;
 
 
     // Process the entire completion flow inside an interactive transaction to prevent race conditions / double refunds
@@ -58,57 +55,67 @@ export async function POST(request: Request) {
 
       if (success) {
         let downloadUrl = '';
-        if (localPath) {
+        if (chunkCount && chunkCount > 1) {
+          // Multi-chunk job: chunks were already uploaded individually.
+          // Set downloadUrl to indicate multi-part.
+          downloadUrl = `multi-part://${chunkCount}`;
+        } else if (pdfBase64) {
+          try {
+            const pdfBuffer = Buffer.from(pdfBase64, 'base64');
+            const isCloudinaryConfigured = !!(
+              process.env.CLOUDINARY_CLOUD_NAME &&
+              process.env.CLOUDINARY_API_KEY &&
+              process.env.CLOUDINARY_API_SECRET
+            );
+
+            const fileName = `${job.pdfType.toLowerCase()}_order_${job.orderId}_job_${job.id}.pdf`;
+
+            if (isCloudinaryConfigured) {
+              const { v2: cloudinary } = require('cloudinary');
+              cloudinary.config({
+                cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+                api_key: process.env.CLOUDINARY_API_KEY,
+                api_secret: process.env.CLOUDINARY_API_SECRET,
+              });
+
+              const uploadResult = await new Promise<any>((resolve, reject) => {
+                cloudinary.uploader.upload_stream(
+                  {
+                    folder: `press_${pressId}/compiled_pdfs`,
+                    resource_type: 'raw',
+                    public_id: fileName,
+                  },
+                  (err: any, res: any) => {
+                    if (err) reject(err);
+                    else resolve(res);
+                  }
+                ).end(pdfBuffer);
+              });
+
+              downloadUrl = uploadResult.secure_url;
+            } else {
+              const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
+              const fs = require('fs');
+              const path = require('path');
+              const pdfDir = isProd
+                ? path.join('/tmp', 'idexo', 'uploads', String(pressId), 'pdfs')
+                : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
+              fs.mkdirSync(pdfDir, { recursive: true });
+
+              const filePath = path.join(pdfDir, fileName);
+              fs.writeFileSync(filePath, pdfBuffer);
+
+              downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
+            }
+          } catch (uploadErr) {
+            console.error('Failed to save PDF on server storage:', uploadErr);
+          }
+        }
+
+        if (!downloadUrl && localPath) {
           const formattedPath = localPath.replace(/\\/g, '/');
           const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
           downloadUrl = `local://${prefix}${formattedPath}`;
-        } else if (pdfBase64) {
-          const pdfBuffer = Buffer.from(pdfBase64, 'base64');
-          const isCloudinaryConfigured = !!(
-            process.env.CLOUDINARY_CLOUD_NAME &&
-            process.env.CLOUDINARY_API_KEY &&
-            process.env.CLOUDINARY_API_SECRET
-          );
-
-          const fileName = `${job.pdfType.toLowerCase()}_order_${job.orderId}_job_${job.id}.pdf`;
-
-          if (isCloudinaryConfigured) {
-            const { v2: cloudinary } = require('cloudinary');
-            cloudinary.config({
-              cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-              api_key: process.env.CLOUDINARY_API_KEY,
-              api_secret: process.env.CLOUDINARY_API_SECRET,
-            });
-
-            const uploadResult = await new Promise<any>((resolve, reject) => {
-              cloudinary.uploader.upload_stream(
-                {
-                  folder: `press_${pressId}/compiled_pdfs`,
-                  resource_type: 'raw',
-                  public_id: fileName,
-                },
-                (err: any, res: any) => {
-                  if (err) reject(err);
-                  else resolve(res);
-                }
-              ).end(pdfBuffer);
-            });
-
-            downloadUrl = uploadResult.secure_url;
-          } else {
-            const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
-            const fs = require('fs');
-            const path = require('path');
-            const pdfDir = isProd
-              ? path.join('/tmp', 'idexo', 'uploads', String(pressId), 'pdfs')
-              : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
-            fs.mkdirSync(pdfDir, { recursive: true });
-
-            const filePath = path.join(pdfDir, fileName);
-            fs.writeFileSync(filePath, pdfBuffer);
-
-            downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
-          }
         }
 
         // Success Flow

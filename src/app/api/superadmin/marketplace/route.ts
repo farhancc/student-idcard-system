@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { basePrisma as prisma } from '@/lib/prisma';
+import { requireSuperAdmin } from '@/lib/authz';
 
 // GET /api/superadmin/marketplace — list templates for moderation
 // filter: 'all' | 'reported' | 'moderated' | 'all_including_private'
 export async function GET(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get('page') || '1'));
@@ -44,6 +48,9 @@ export async function GET(request: Request) {
 // POST /api/superadmin/marketplace — moderate or publish/unpublish a template
 // Body: { templateId, action: 'hide' | 'unhide' | 'delete' | 'publish' | 'unpublish' }
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { templateId, action, price } = await request.json();
     if (!templateId || !action) return NextResponse.json({ error: 'templateId and action required' }, { status: 400 });

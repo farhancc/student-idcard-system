@@ -85,7 +85,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [pressFonts, setPressFonts] = useState<any[]>([]);
 
   // Field visibility states
-  const [hasName, setHasName] = useState(true);
+  const [hasName, setHasName] = useState(false);
   const [hasDesignation, setHasDesignation] = useState(false);
   const [hasPhoto, setHasPhoto] = useState(false);
 
@@ -120,7 +120,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   useEffect(() => {
     const fetchPortalInfo = async () => {
       try {
-        const res = await fetch(`/api/portal/shares/${enrollToken}`);
+        const res = await fetch(`/api/portal/shares/${enrollToken}`, { cache: 'no-store' });
         if (!res.ok) {
           throw new Error('Link is invalid or has expired');
         }
@@ -147,29 +147,29 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         setFieldTypeMap(typeMap);
         setFieldCoordsMap(coordsMap);
 
-        // Identify fields that are mapped to 'qr', 'barcode', 'id' or static fields to restrict editing on enrollment page
+        // Identify fields that are mapped to 'qr', 'barcode', or static elements to restrict editing on enrollment page
         const restrictedFields = new Set(
           allFields
-            .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'id' || (f as any).staticValue !== undefined)
+            .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'static_text' || f.type === 'static_image' || (f as any).isStatic === true)
             .map(f => f.field)
         );
 
-        // Unique text, date & number fields (excluding ID fields)
-        const textAndDateFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || !f.type) && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
-        const keys = Array.from(new Set(textAndDateFields.map(f => f.field)));
+        // Editable input fields (text, date, number, id, or default)
+        const editableInputFields = allFields.filter(f => 
+          (f.type === 'text' || f.type === 'date' || f.type === 'number' || f.type === 'id' || !f.type) && 
+          !restrictedFields.has(f.field)
+        );
+        const keys = Array.from(new Set(editableInputFields.map(f => f.field)));
         
         const cleanFieldKey = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
 
-        // Remove standard system photo, serial & ID attributes from form fields
+        // Remove standard system photo & internal system card serial attributes from form fields
         const filteredKeys = keys.filter(k => {
           const clean = cleanFieldKey(k);
-          const f = coordsMap[k];
           return clean !== 'photo' && 
             clean !== 'avatar' &&
-            clean !== 'cardserial' &&
-            !clean.includes('serial') &&
-            f?.type !== 'id' &&
-            (f as any)?.staticValue === undefined;
+            clean !== 'photourl' &&
+            clean !== 'cardserial';
         });
         setFormFields(filteredKeys);
 
@@ -338,11 +338,13 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const handleSubmit = async (e: React.FormEvent) => {
     let resolvedName = name.trim();
     if (!resolvedName) {
-      for (const k of formFields) {
-        if (customFields[k] && customFields[k].trim()) {
-          resolvedName = customFields[k].trim();
-          break;
-        }
+      // Look for an explicit name field in formFields
+      const nameKey = formFields.find(k => {
+        const clean = cleanFieldKey(k);
+        return ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
+      });
+      if (nameKey && customFields[nameKey] && customFields[nameKey].trim()) {
+        resolvedName = customFields[nameKey].trim();
       }
     }
     const finalName = resolvedName || 'Cardholder';
@@ -508,261 +510,399 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     : 0.75; // Default 3:4 portrait
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--page-bg)', color: 'var(--foreground)', padding: '40px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ maxWidth: showPreview ? '1100px' : '550px', width: '100%', transition: 'max-width 0.3s ease' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--primary)', fontWeight: 'bold' }}>
-            {client?.type} ID Registration Portal
-          </span>
-          <h1 style={{ fontSize: '1.8rem', marginTop: '8px', marginBottom: '4px' }}>{client?.name}</h1>
+    <div style={{ 
+      minHeight: '100vh', 
+      background: 'radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0) 50%), var(--page-bg)', 
+      color: 'var(--foreground)', 
+      padding: '48px 24px', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      alignItems: 'center' 
+    }}>
+      <div style={{ maxWidth: showPreview ? '1120px' : '560px', width: '100%', transition: 'max-width 0.3s ease' }}>
+        
+        {/* Header Hero */}
+        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '6px 16px',
+            borderRadius: '9999px',
+            background: 'rgba(99, 102, 241, 0.1)',
+            border: '1px solid rgba(99, 102, 241, 0.25)',
+            marginBottom: '16px',
+            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.12)'
+          }}>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6366f1', boxShadow: '0 0 10px #6366f1' }} />
+            <span style={{ fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#a5b4fc' }}>
+              {client?.type} Official Registration Portal
+            </span>
+          </div>
+
+          <h1 style={{ 
+            fontSize: '2.2rem', 
+            fontWeight: 800, 
+            letterSpacing: '-0.02em', 
+            margin: '0 0 8px 0',
+            background: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            {client?.name}
+          </h1>
+
           {departmentName && (
-            <p style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '1rem', marginTop: '4px', marginBottom: '4px' }}>
+            <div style={{ 
+              display: 'inline-block',
+              margin: '4px 0 8px',
+              padding: '4px 14px',
+              background: 'rgba(59, 130, 246, 0.12)',
+              border: '1px solid rgba(59, 130, 246, 0.3)',
+              borderRadius: '8px',
+              color: '#60a5fa',
+              fontWeight: 600,
+              fontSize: '0.9rem'
+            }}>
               Department: {departmentName}
-            </p>
+            </div>
           )}
-          <p style={{ color: 'var(--muted)', fontSize: '0.9rem' }}>Fill in details to generate your ID Card</p>
+
+          <p style={{ color: 'var(--muted)', fontSize: '0.95rem', margin: '4px 0 16px' }}>
+            Please fill in your information below to submit your official ID card details.
+          </p>
+
           <div style={{ 
-            marginTop: '12px', 
-            padding: '8px 16px', 
-            background: 'linear-gradient(90deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)', 
-            border: '1px solid rgba(99, 102, 241, 0.2)', 
+            padding: '8px 18px', 
+            background: 'rgba(255, 255, 255, 0.03)', 
+            border: '1px solid var(--glass-border)', 
             borderRadius: '20px', 
             display: 'inline-flex', 
             alignItems: 'center', 
             gap: '8px',
-            boxShadow: '0 2px 10px rgba(0, 0, 0, 0.1)'
+            backdropFilter: 'blur(8px)',
           }}>
-            <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }}></span>
-            <span style={{ fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 500 }}>
-              To edit or modify your details, please contact your department head.
+            <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
+              💡 <strong>Note:</strong> To correct or edit details after submitting, please contact your department head.
             </span>
           </div>
         </div>
 
-
-
         {error && (
-          <div className="alert alert-danger" style={{ marginBottom: '24px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <AlertCircle size={16} />
-            <span style={{ fontSize: '0.85rem' }}>{error}</span>
+          <div className="alert alert-danger" style={{ 
+            marginBottom: '24px', 
+            display: 'flex', 
+            gap: '10px', 
+            alignItems: 'center',
+            padding: '14px 18px',
+            borderRadius: '12px',
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            color: '#f87171',
+            fontSize: '0.88rem'
+          }}>
+            <AlertCircle size={18} style={{ flexShrink: 0 }} />
+            <span>{error}</span>
           </div>
         )}
 
         <div className={showPreview ? "portal-layout" : ""}>
           <div className={showPreview ? "portal-form-col" : ""}>
-            <form onSubmit={handleSubmit} className="card" style={{ padding: '32px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '16px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <form onSubmit={handleSubmit} className="card" style={{ 
+              padding: '36px', 
+              background: 'rgba(15, 23, 42, 0.65)', 
+              backdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255, 255, 255, 0.12)', 
+              borderRadius: '20px', 
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '22px' 
+            }}>
               <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
-              {/* Hidden canvas for webcam capture */}
               <canvas ref={webcamCanvasRef} style={{ display: 'none' }} />
 
               {formFields.length === 0 && (
                 <div style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  background: 'rgba(245, 158, 11, 0.1)',
-                  border: '1px solid rgba(245, 158, 11, 0.2)',
+                  padding: '14px 18px',
+                  borderRadius: '10px',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
                   color: '#fbbf24',
                   fontSize: '0.85rem',
                   display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '8px',
-                  lineHeight: '1.4'
+                  alignItems: 'center',
+                  gap: '10px',
                 }}>
-                  <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                  <AlertCircle size={18} style={{ flexShrink: 0 }} />
                   <div>
                     This enrollment template does not have any input fields configured.
                   </div>
                 </div>
               )}
           
-          {/* Photo upload + Cropper trigger */}
-          {hasPhoto && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '12px' }}>
-              <div style={{
-                width: `${mainBoxWidth}px`,
-                height: `${mainBoxHeight}px`,
-                background: '#111',
-                borderRadius: `${mainBoxBorderRadius}px`,
-                border: `2px dashed ${photoUrl ? 'var(--primary)' : 'var(--glass-border)'}`,
-                position: 'relative',
-                overflow: 'hidden',
-                cursor: 'pointer',
-                marginBottom: '12px',
-                transition: 'border-color 0.2s',
-              }} onClick={() => triggerUpload('photo')}>
-                {photoUrl ? (
-                  <img src={photoUrl} alt="Cropped profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                ) : uploadingPhoto && activeCropField === 'photo' ? (
-                  <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                    <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
+              {/* Photo upload + Cropper trigger */}
+              {hasPhoto && (
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center', 
+                  padding: '20px',
+                  background: 'rgba(255,255,255,0.02)',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  marginBottom: '8px'
+                }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '14px' }}>
+                    Profile Photo <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div style={{
+                    width: `${mainBoxWidth}px`,
+                    height: `${mainBoxHeight}px`,
+                    background: '#0b0f19',
+                    borderRadius: `${mainBoxBorderRadius}px`,
+                    border: `2px dashed ${photoUrl ? 'var(--primary)' : 'rgba(255,255,255,0.2)'}`,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    marginBottom: '14px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    transition: 'all 0.2s ease',
+                  }} onClick={() => triggerUpload('photo')}>
+                    {photoUrl ? (
+                      <img src={photoUrl} alt="Cropped profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    ) : uploadingPhoto && activeCropField === 'photo' ? (
+                      <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                        <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                        <Upload size={22} style={{ color: 'var(--primary)' }} />
+                        <span style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'center', fontWeight: 500 }}>Click to Upload</span>
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                    <Upload size={24} style={{ color: 'var(--muted)', marginBottom: '8px' }} />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', padding: '0 8px' }}>Upload Photo</span>
+                  {/* Upload + Camera buttons */}
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', gap: '6px', borderRadius: '8px' }} onClick={() => triggerUpload('photo')}>
+                      <Upload size={14} /> Upload File
+                    </button>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', gap: '6px', borderRadius: '8px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }} onClick={() => startWebcam('photo')}>
+                      <Camera size={14} /> Camera
+                    </button>
                   </div>
-                )}
-              </div>
-              {/* Upload + Camera buttons */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px' }} onClick={() => triggerUpload('photo')}>
-                  <Upload size={13} /> Upload
-                </button>
-                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '6px 12px', gap: '5px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }} onClick={() => startWebcam('photo')}>
-                  <Camera size={13} /> Use Camera
-                </button>
-              </div>
-              {webcamError && <p style={{ color: 'var(--danger)', fontSize: '0.72rem', margin: '0 0 4px' }}>{webcamError}</p>}
-              <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Crop tool will match target dimensions and shape.</span>
-            </div>
-          )}
-
-          {/* Custom image fields */}
-          {customImgFields.map(field => {
-            const label = formatFieldLabel(field.field);
-            const value = customFields[field.field] || '';
-            const fieldWidth = field.width || 120;
-            const fieldHeight = field.height || 160;
-            
-            // Scaled dimensions for the preview box (maintaining aspect ratio, max-width 120px)
-            const boxWidth = 120;
-            const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
-            const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 8;
-
-            return (
-              <div key={field.field} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '12px' }}>
-                <label className="form-label" style={{ marginBottom: '8px' }}>{label}</label>
-                <div style={{
-                  width: `${boxWidth}px`,
-                  height: `${boxHeight}px`,
-                  background: '#111',
-                  borderRadius: `${boxBorderRadius}px`,
-                  border: '2px dashed var(--glass-border)',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  marginBottom: '8px',
-                }} onClick={() => triggerUpload(field.field)}>
-                  {value ? (
-                    <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  ) : uploadingPhoto && activeCropField === field.field ? (
-                    <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                      <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                      <Upload size={20} style={{ color: 'var(--muted)', marginBottom: '4px' }} />
-                      <span style={{ fontSize: '0.7rem', color: 'var(--muted)', textAlign: 'center', padding: '0 4px' }}>Upload</span>
-                    </div>
-                  )}
+                  {webcamError && <p style={{ color: 'var(--danger)', fontSize: '0.75rem', marginTop: '6px', marginBottom: 0 }}>{webcamError}</p>}
                 </div>
-                <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>Crop tool will match target dimensions and shape</span>
-              </div>
-            );
-          })}
+              )}
 
-          {/* Fields dynamically extracted from template */}
-          {formFields.map(field => {
-            const label = formatFieldLabel(field);
-            const clean = cleanFieldKey(field);
-            const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
-            const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
-            const isDate = isDateField(field, fieldTypeMap[field]);
-            const isNumber = fieldTypeMap[field] === 'number';
-            const coord = fieldCoordsMap[field];
-            const maxCap = (coord as any)?.max;
-            const minCap = (coord as any)?.min;
+              {/* Custom image fields */}
+              {customImgFields.map(field => {
+                const label = formatFieldLabel(field.field);
+                const value = customFields[field.field] || '';
+                const fieldWidth = field.width || 120;
+                const fieldHeight = field.height || 160;
+                
+                const boxWidth = 120;
+                const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
+                const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 8;
 
-            return (
-              <div className="form-group" key={field}>
-                <label className="form-label">
-                  {label}{isNameLike ? ' *' : ''}
-                  {isNumber && (minCap !== undefined || maxCap !== undefined) && (
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '6px', fontWeight: 'normal' }}>
-                      ({minCap !== undefined && maxCap !== undefined ? `Range: ${minCap} - ${maxCap}` : (minCap !== undefined ? `Min: ${minCap}` : `Max: ${maxCap}`)})
-                    </span>
-                  )}
-                </label>
-                <input
-                  type={isNumber ? "number" : (isDate ? "date" : "text")}
-                  min={isNumber && minCap !== undefined ? minCap : undefined}
-                  max={isNumber && maxCap !== undefined ? maxCap : undefined}
-                  maxLength={!isNumber && !isDate && maxCap !== undefined && maxCap > 0 ? maxCap : undefined}
-                  required={isNameLike}
-                  className="form-input"
-                  value={customFields[field] || ''}
-                  onChange={e => {
-                    let val = e.target.value;
-                    if (isNumber && val !== '') {
-                      const numVal = Number(val);
-                      if (!isNaN(numVal)) {
-                        if (maxCap !== undefined && maxCap !== null && numVal > maxCap) {
-                          val = String(maxCap);
+                return (
+                  <div key={field.field} style={{ 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    alignItems: 'center', 
+                    padding: '16px',
+                    background: 'rgba(255,255,255,0.02)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.06)'
+                  }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '10px' }}>{label}</label>
+                    <div style={{
+                      width: `${boxWidth}px`,
+                      height: `${boxHeight}px`,
+                      background: '#0b0f19',
+                      borderRadius: `${boxBorderRadius}px`,
+                      border: '2px dashed rgba(255,255,255,0.2)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      marginBottom: '10px',
+                    }} onClick={() => triggerUpload(field.field)}>
+                      {value ? (
+                        <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      ) : uploadingPhoto && activeCropField === field.field ? (
+                        <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                          <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                          <Upload size={18} style={{ color: 'var(--primary)' }} />
+                          <span style={{ fontSize: '0.7rem', color: 'var(--muted)', textAlign: 'center' }}>Upload</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Form Input Fields */}
+              {formFields.map(field => {
+                const label = formatFieldLabel(field);
+                const clean = cleanFieldKey(field);
+                const isNameLike = ['name', 'fullname', 'studentname', 'employeename', 'membername', 'staffname', 'cardholdername', 'username'].includes(clean);
+                const isDesignationLike = ['designation', 'role', 'jobtitle', 'post', 'profession'].includes(clean);
+                const isDate = isDateField(field, fieldTypeMap[field]);
+                const isNumber = fieldTypeMap[field] === 'number';
+                const coord = fieldCoordsMap[field];
+                const maxCap = (coord as any)?.max;
+                const minCap = (coord as any)?.min;
+
+                return (
+                  <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ 
+                      fontSize: '0.85rem', 
+                      fontWeight: 600, 
+                      color: 'var(--foreground)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'space-between' 
+                    }}>
+                      <span>
+                        {label} {isNameLike && <span style={{ color: '#ef4444' }}>*</span>}
+                      </span>
+                      {isNumber && (minCap !== undefined || maxCap !== undefined) && (
+                        <span style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 400 }}>
+                          ({minCap !== undefined && maxCap !== undefined ? `Range: ${minCap} - ${maxCap}` : (minCap !== undefined ? `Min: ${minCap}` : `Max: ${maxCap}`)})
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type={isNumber ? "number" : (isDate ? "date" : "text")}
+                      min={isNumber && minCap !== undefined ? minCap : undefined}
+                      max={isNumber && maxCap !== undefined ? maxCap : undefined}
+                      maxLength={!isNumber && !isDate && maxCap !== undefined && maxCap > 0 ? maxCap : undefined}
+                      required={isNameLike}
+                      className="form-input"
+                      value={customFields[field] || ''}
+                      onChange={e => {
+                        let val = e.target.value;
+                        if (isNumber && val !== '') {
+                          const numVal = Number(val);
+                          if (!isNaN(numVal)) {
+                            if (maxCap !== undefined && maxCap !== null && numVal > maxCap) {
+                              val = String(maxCap);
+                            }
+                          }
+                        } else if (!isNumber && !isDate && maxCap !== undefined && maxCap > 0 && val.length > maxCap) {
+                          val = val.substring(0, maxCap);
                         }
-                      }
-                    } else if (!isNumber && !isDate && maxCap !== undefined && maxCap > 0 && val.length > maxCap) {
-                      val = val.substring(0, maxCap);
-                    }
-                    setCustomFields(prev => ({
-                      ...prev,
-                      [field]: val,
-                    }));
-                    if (isNameLike) {
-                      setName(val);
-                    } else if (isDesignationLike) {
-                      setDesignation(val);
-                    }
-                  }}
-                  onBlur={e => {
-                    if (isNumber && e.target.value !== '') {
-                      const numVal = Number(e.target.value);
-                      if (!isNaN(numVal)) {
-                        let clamped = numVal;
-                        if (minCap !== undefined && minCap !== null && clamped < minCap) clamped = minCap;
-                        if (maxCap !== undefined && maxCap !== null && clamped > maxCap) clamped = maxCap;
-                        if (clamped !== numVal) {
-                          setCustomFields(prev => ({ ...prev, [field]: String(clamped) }));
+                        setCustomFields(prev => ({
+                          ...prev,
+                          [field]: val,
+                        }));
+                        if (isNameLike) {
+                          setName(val);
+                        } else if (isDesignationLike) {
+                          setDesignation(val);
                         }
+                      }}
+                      onBlur={e => {
+                        if (isNumber && e.target.value !== '') {
+                          const numVal = Number(e.target.value);
+                          if (!isNaN(numVal)) {
+                            let clamped = numVal;
+                            if (minCap !== undefined && minCap !== null && clamped < minCap) clamped = minCap;
+                            if (maxCap !== undefined && maxCap !== null && clamped > maxCap) clamped = maxCap;
+                            if (clamped !== numVal) {
+                              setCustomFields(prev => ({ ...prev, [field]: String(clamped) }));
+                            }
+                          }
+                        }
+                      }}
+                      onClick={e => {
+                        if (isDate && e.currentTarget && 'showPicker' in e.currentTarget) {
+                          try {
+                            (e.currentTarget as any).showPicker();
+                          } catch {}
+                        }
+                      }}
+                      placeholder={
+                        isNumber
+                          ? (minCap !== undefined && maxCap !== undefined ? `Enter number (${minCap} to ${maxCap})` : `Enter number for ${label.toLowerCase()}`)
+                          : (isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`)
                       }
-                    }
-                  }}
-                  onClick={e => {
-                    if (isDate && e.currentTarget && 'showPicker' in e.currentTarget) {
-                      try {
-                        (e.currentTarget as any).showPicker();
-                      } catch {}
-                    }
-                  }}
-                  placeholder={
-                    isNumber
-                      ? (minCap !== undefined && maxCap !== undefined ? `Enter number (${minCap} to ${maxCap})` : `Enter number for ${label.toLowerCase()}`)
-                      : (isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`)
-                  }
-                  style={{ cursor: isDate ? 'pointer' : 'text' }}
-                />
-              </div>
-            );
-          })}
+                      style={{ 
+                        cursor: isDate ? 'pointer' : 'text',
+                        padding: '12px 16px',
+                        fontSize: '0.9rem',
+                        borderRadius: '10px',
+                        background: 'rgba(15, 23, 42, 0.8)',
+                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                        color: '#fff',
+                        transition: 'all 0.2s ease',
+                      }}
+                    />
+                  </div>
+                );
+              })}
 
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }} disabled={loading || uploadingPhoto}>
-            {loading ? 'Submitting...' : 'Submit Details'}
-          </button>
+              <button 
+                type="submit" 
+                className="btn btn-primary" 
+                style={{ 
+                  width: '100%', 
+                  marginTop: '12px',
+                  padding: '14px 24px',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                  boxShadow: '0 8px 24px rgba(79, 70, 229, 0.35)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease'
+                }} 
+                disabled={loading || uploadingPhoto}
+              >
+                {loading ? (
+                  <>
+                    <Loader className="animate-spin" size={18} /> Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Check size={18} /> Submit Details
+                  </>
+                )}
+              </button>
             </form>
           </div>
 
-          {/* Real-time Preview */}
+          {/* Real-time ID Card Preview Column */}
           {showPreview && template && (
             <div className="portal-preview-col">
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                gap: '16px',
+                gap: '20px',
                 width: '100%',
+                background: 'rgba(15, 23, 42, 0.4)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '24px',
+                borderRadius: '20px',
+                backdropFilter: 'blur(12px)',
               }}>
-                <p style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 600, margin: 0 }}>
-                  Live ID Card Preview
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CreditCard size={16} style={{ color: 'var(--primary)' }} />
+                  <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 700 }}>
+                    Live ID Card Preview
+                  </span>
+                </div>
+
                 <div style={{
                   display: 'flex',
                   gap: '24px',
@@ -771,7 +911,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   width: '100%',
                 }}>
                   {/* Front Side Preview */}
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                     <CardPreview
                       template={template}
                       cardholder={{
@@ -786,17 +926,17 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                       pressFonts={pressFonts}
                       forceWeb={true}
                       style={{
-                        width: '240px',
-                        boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                        width: '250px',
+                        boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
                         borderRadius: '12px',
                       }}
                     />
-                    <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Front View</span>
+                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, background: 'rgba(255,255,255,0.05)', padding: '3px 10px', borderRadius: '6px' }}>Front View</span>
                   </div>
 
                   {/* Back Side Preview */}
                   {template.backImageUrl && (
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                       <CardPreview
                         template={template}
                         cardholder={{
@@ -811,12 +951,12 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                         pressFonts={pressFonts}
                         forceWeb={true}
                         style={{
-                          width: '240px',
-                          boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
+                          width: '250px',
+                          boxShadow: '0 12px 36px rgba(0,0,0,0.6)',
                           borderRadius: '12px',
                         }}
                       />
-                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500 }}>Back View</span>
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: 600, background: 'rgba(255,255,255,0.05)', padding: '3px 10px', borderRadius: '6px' }}>Back View</span>
                     </div>
                   )}
                 </div>

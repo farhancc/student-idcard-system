@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { updateOrderSchema } from '@/lib/schemas';
 
@@ -7,11 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const orderId = Number(id);
 
@@ -71,16 +70,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    const userNameHeader = request.headers.get('x-user-name');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-    const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
-    const userRole = request.headers.get('x-user-role');
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId, role: userRole, name: actorName } = auth.actor;
     const { id } = await params;
     const orderId = Number(id);
 
@@ -97,15 +89,8 @@ export async function PUT(
     }
     const { status, notes, validTill, deliveredTo, deliveredBy, deliveryRemarks, paymentStatus, paymentMethod } = parsed.data;
 
-    // OPERATOR cannot mark as DELIVERED (which triggers invoice generation)
-    // or touch payment status
+    // OPERATOR cannot touch payment status directly
     if (userRole === 'OPERATOR') {
-      if (status === 'DELIVERED') {
-        return NextResponse.json(
-          { error: 'Forbidden: Only the Press Owner can mark an order as Delivered and generate invoices' },
-          { status: 403 }
-        );
-      }
       if (paymentStatus) {
         return NextResponse.json(
           { error: 'Forbidden: Only the Press Owner can update payment status' },
@@ -169,13 +154,21 @@ export async function PUT(
         });
       }
 
-      // 3. M13: Create delivery record if state becomes DELIVERED
-      if (toStatus === 'DELIVERED' && fromStatus !== 'DELIVERED') {
+      // 3. M13: Create or update delivery record if state is DELIVERED
+      if (toStatus === 'DELIVERED') {
         const cardCount = order.cardholders.length;
-        await tx.deliveryRecord.create({
-          data: {
+        await tx.deliveryRecord.upsert({
+          where: { orderId },
+          create: {
             orderId,
             pressId,
+            deliveredTo: deliveredTo || 'Client Office',
+            deliveredBy: deliveredBy || 'Courier Agent',
+            deliveredAt: new Date(),
+            cardCount,
+            remarks: deliveryRemarks || 'Delivered securely.',
+          },
+          update: {
             deliveredTo: deliveredTo || 'Client Office',
             deliveredBy: deliveredBy || 'Courier Agent',
             deliveredAt: new Date(),
@@ -213,11 +206,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const orderId = Number(id);
 

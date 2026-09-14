@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { templateSchema } from '@/lib/schemas';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const templates = await prisma.cardTemplate.findMany({
       where: { pressId, isLatest: true },
@@ -53,11 +52,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const body = await request.json();
     const result = templateSchema.safeParse(body);

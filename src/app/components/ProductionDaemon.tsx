@@ -6,6 +6,13 @@ import { renderCardSideToPdfBytesClient, embedImageBuffer, clearTemplateBgCache,
 import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
+/**
+ * Maximum number of PDF pages per chunk file.
+ * When a compilation exceeds this, the output is split into multiple PDF files
+ * to prevent browser/Electron memory exhaustion on large batches.
+ */
+const MAX_PAGES_PER_CHUNK = 15;
+
 async function safeDrawTextClient(
   page: any,
   pdfDoc: any,
@@ -129,12 +136,12 @@ export default function ProductionDaemon() {
     }
   };
 
-  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string, localPath?: string) => {
+  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string, localPath?: string, chunkCount?: number) => {
     try {
       const res = await fetch('/api/jobs/production-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64, localPath }),
+        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64, localPath, chunkCount }),
         credentials: 'same-origin'
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
@@ -176,7 +183,7 @@ export default function ProductionDaemon() {
       }
       addLog(`Saved successfully to: ${saveResult.path}`);
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, undefined, saveResult.path);
+      await reportJobComplete(job.id, true, undefined, base64Data, saveResult.path);
     } else {
       addLog('Web client detected. Triggering browser file download and uploading to server...');
       
@@ -193,6 +200,64 @@ export default function ProductionDaemon() {
       await updateProgress(job.id, 100, 'PROCESSING');
       await reportJobComplete(job.id, true, undefined, base64Data, undefined);
       addLog('Job completed successfully. Download started.');
+    }
+  };
+
+  /**
+   * Save and upload a single chunk of a multi-part PDF job.
+   * Each chunk is uploaded independently to free memory before the next chunk.
+   */
+  const saveAndCompleteChunk = async (
+    job: any,
+    order: any,
+    pdfBytes: Uint8Array,
+    base64Data: string,
+    chunkIndex: number,
+    totalChunks: number,
+    chunkFileName: string
+  ) => {
+    const electronAPI = (window as any).electronAPI;
+    let localPath: string | undefined;
+
+    if (electronAPI) {
+      addLog(`Saving chunk ${chunkIndex + 1}/${totalChunks} using native bridge...`);
+      const saveResult = await electronAPI.savePdfLocally(chunkFileName, base64Data, order?.clientName || 'Client');
+      if (!saveResult.success) {
+        throw new Error(saveResult.error || `Failed to save chunk ${chunkIndex + 1}`);
+      }
+      localPath = saveResult.path;
+      addLog(`Chunk ${chunkIndex + 1} saved to: ${saveResult.path}`);
+    } else {
+      // Browser: trigger download for each chunk
+      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = chunkFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
+      addLog(`Chunk ${chunkIndex + 1} download triggered.`);
+    }
+
+    // Report chunk to server
+    try {
+      await fetch('/api/jobs/production-chunk-complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: job.id,
+          chunkIndex,
+          totalChunks,
+          pdfBase64: base64Data,
+          localPath,
+          fileName: chunkFileName,
+        }),
+        credentials: 'same-origin',
+      });
+    } catch (err: any) {
+      addLog(`Warning: Failed to report chunk ${chunkIndex + 1} to server: ${err.message}`);
     }
   };
 
@@ -236,7 +301,9 @@ export default function ProductionDaemon() {
           try {
             let fetchUrl = ch.photoUrl;
             if (ch.photoUrl.startsWith('/uploads/') || ch.photoUrl.startsWith('/api/uploads/') || ch.photoUrl.startsWith('uploads/')) {
-              const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+              const portalUrl = (typeof window !== 'undefined' && window.location && window.location.origin)
+                ? window.location.origin
+                : ((typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app');
               const cleanPath = ch.photoUrl.startsWith('/') ? ch.photoUrl : '/' + ch.photoUrl;
               fetchUrl = `${portalUrl}${cleanPath}`;
             }
@@ -269,7 +336,9 @@ export default function ProductionDaemon() {
                 ) {
                   let fetchUrl = val;
                   if (val.startsWith('/uploads/') || val.startsWith('/api/uploads/') || val.startsWith('uploads/')) {
-                    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
+                    const portalUrl = (typeof window !== 'undefined' && window.location && window.location.origin)
+                      ? window.location.origin
+                      : ((typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app');
                     const cleanPath = val.startsWith('/') ? val : '/' + val;
                     fetchUrl = `${portalUrl}${cleanPath}`;
                   }
@@ -424,31 +493,86 @@ export default function ProductionDaemon() {
 
     const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
 
-    const pdfBlob = await generateApprovalPdfClient(
-      order.clientName || 'Client',
-      order.clientName || 'Batch',
-      clientTemplate,
-      clientCardholders,
-      pressFonts
-    );
+    // Calculate total pages for the approval PDF to determine chunking
+    const hasBackSide = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
+    const approvalCardsPerPage = hasBackSide ? 4 : 8;
+    const totalApprovalPages = Math.ceil(clientCardholders.length / approvalCardsPerPage);
+    const totalChunks = Math.ceil(totalApprovalPages / MAX_PAGES_PER_CHUNK);
 
-    await updateProgress(job.id, 80);
+    if (totalChunks <= 1) {
+      // Single chunk — keep existing behavior
+      const pdfBlob = await generateApprovalPdfClient(
+        order.clientName || 'Client',
+        order.clientName || 'Batch',
+        clientTemplate,
+        clientCardholders,
+        pressFonts
+      );
 
-    const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+      await updateProgress(job.id, 80);
 
-    addLog('Converting PDF buffer to base64...');
-    const base64Data = await new Promise<string>((resolve) => {
-      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.readAsDataURL(blob);
-    });
+      const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
 
-    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
+      addLog('Converting PDF buffer to base64...');
+      const base64Data = await new Promise<string>((resolve) => {
+        const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      await saveAndCompleteJob(job, order, pdfBytes, base64Data);
+    } else {
+      // Multi-chunk: split cardholders into groups and compile each chunk separately
+      addLog(`Large approval job: ${totalApprovalPages} pages → ${totalChunks} chunks (max ${MAX_PAGES_PER_CHUNK} pages each)`);
+      const cardsPerChunk = MAX_PAGES_PER_CHUNK * approvalCardsPerPage;
+
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+        const chunkStart = chunkIdx * cardsPerChunk;
+        const chunkEnd = Math.min(chunkStart + cardsPerChunk, clientCardholders.length);
+        const chunkCardholders = clientCardholders.slice(chunkStart, chunkEnd);
+
+        addLog(`Compiling approval chunk ${chunkIdx + 1}/${totalChunks} (${chunkCardholders.length} cards)...`);
+
+        const pdfBlob = await generateApprovalPdfClient(
+          order.clientName || 'Client',
+          order.clientName || 'Batch',
+          clientTemplate,
+          chunkCardholders,
+          pressFonts
+        );
+
+        const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+        const base64Data = await new Promise<string>((resolve) => {
+          const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            resolve(base64);
+          };
+          reader.readAsDataURL(blob);
+        });
+
+        const baseName = (job.fileName || 'approval.pdf').replace(/\.pdf$/i, '');
+        const chunkFileName = `${baseName}_part${chunkIdx + 1}.pdf`;
+
+        await saveAndCompleteChunk(job, order, pdfBytes, base64Data, chunkIdx, totalChunks, chunkFileName);
+
+        // Update progress proportionally
+        const progressPercent = Math.min(95, Math.round(10 + ((chunkIdx + 1) / totalChunks) * 85));
+        await updateProgress(job.id, progressPercent);
+      }
+
+      // Final completion — no base64 payload since chunks uploaded individually
+      await updateProgress(job.id, 100, 'PROCESSING');
+      await reportJobComplete(job.id, true, undefined, undefined, undefined, totalChunks);
+      addLog(`Approval job completed: ${totalChunks} chunks generated.`);
+    }
   };
 
   async function processJob(jobPayload: any) {
@@ -587,15 +711,7 @@ export default function ProductionDaemon() {
     const localCardholders = cardholders.map((ch: any) => ({ ...ch }));
     await cachePhotosForJob(localCardholders);
 
-    const pdfDoc = await PDFDocument.create();
-    pdfDoc.setTitle('Production Print File');
-    pdfDoc.setCreator('ID Card Press Desktop Client');
-
     // Page dimensions in points
-    // A3 Portrait: 841.89 pt x 1190.55 pt
-    // A3 Landscape: 1190.55 pt x 841.89 pt
-    // A4 Portrait: 595.28 pt x 841.89 pt
-    // A4 Landscape: 841.89 pt x 595.28 pt
     let pageWidth = 841.89;
     let pageHeight = 1190.55;
 
@@ -674,175 +790,130 @@ export default function ProductionDaemon() {
               backPdfBytes: cardToUse.backPdfBytes || undefined,
             });
           } else {
-            // Empty/Unassigned slot stays BLANK
             finalCardholders.push({});
           }
         }
       } else {
-        // LEAVE_BLANK
         for (let i = 0; i < diff; i++) {
-          finalCardholders.push({}); // Empty object representing blank slot
+          finalCardholders.push({});
         }
       }
     }
 
-    addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}`);
+    // ── Chunked compilation logic ──────────────────────────────────────────
+    const totalChunks = Math.ceil(totalPages / MAX_PAGES_PER_CHUNK);
+    const isMultiChunk = totalChunks > 1;
 
-    // Loop pages and add grids
-    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
-      const page = pdfDoc.addPage([pageWidth, pageHeight]);
-      page.setMediaBox(0, 0, pageWidth, pageHeight);
-      page.setBleedBox(0, 0, pageWidth, pageHeight);
-      page.setTrimBox(0, 0, pageWidth, pageHeight);
+    addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}${isMultiChunk ? `, chunks=${totalChunks} (max ${MAX_PAGES_PER_CHUNK} pages each)` : ''}`);
 
-      const startIdx = pIdx * cardsPerPage;
-      const endIdx = startIdx + cardsPerPage;
-      const batchCardholders = finalCardholders.slice(startIdx, endIdx);
+    /**
+     * Renders a range of pages [startPage, endPage) into a single PDFDocument,
+     * saves it, converts to base64, and returns the result.
+     */
+    const compilePageRange = async (startPage: number, endPage: number): Promise<{ pdfBytes: Uint8Array; base64Data: string }> => {
+      const pdfDoc = await PDFDocument.create();
+      pdfDoc.setTitle('Production Print File');
+      pdfDoc.setCreator('ID Card Press Desktop Client');
 
-      // Draw fold line only for duplex templates
-      if (!isSingleSided && foldLine) {
-        page.drawLine({
-          start: { x: marginLeft - 10, y: centerY },
-          end: { x: pageWidth - marginRight + 10, y: centerY },
-          thickness: 0.5,
-          color: rgb(0.8, 0.1, 0.1),
-          dashArray: [4, 4],
-        });
-      }
+      for (let pIdx = startPage; pIdx < endPage; pIdx++) {
+        const page = pdfDoc.addPage([pageWidth, pageHeight]);
+        page.setMediaBox(0, 0, pageWidth, pageHeight);
+        page.setBleedBox(0, 0, pageWidth, pageHeight);
+        page.setTrimBox(0, 0, pageWidth, pageHeight);
 
-      for (let gridIdx = 0; gridIdx < batchCardholders.length; gridIdx++) {
-        const ch = batchCardholders[gridIdx];
-        if (!ch || (!ch.id && !ch.name)) {
-          // Leave slot blank
-          continue;
-        }
-        const overallIndex = startIdx + gridIdx;
+        const startIdx = pIdx * cardsPerPage;
+        const endIdx = startIdx + cardsPerPage;
+        const batchCardholders = finalCardholders.slice(startIdx, endIdx);
 
-        const colIdx = gridIdx % cols;
-        const rowIdx = Math.floor(gridIdx / cols);
-
-        const xPos = marginLeft + colIdx * (cWidth + colGap);
-
-        let frontsY: number;
-        let backsY: number | null = null;
-
-        if (isSingleSided) {
-          frontsY = pageHeight - marginTop - rowIdx * (cHeight + rowGap) - cHeight;
-        } else {
-          frontsY = pageHeight - marginTop - rowIdx * (cHeight + rowGap) - cHeight;
-          backsY = 2 * centerY - frontsY - cHeight;
+        // Draw fold line only for duplex templates
+        if (!isSingleSided && foldLine) {
+          page.drawLine({
+            start: { x: marginLeft - 10, y: centerY },
+            end: { x: pageWidth - marginRight + 10, y: centerY },
+            thickness: 0.5,
+            color: rgb(0.8, 0.1, 0.1),
+            dashArray: [4, 4],
+          });
         }
 
-        // ── Render front side as vector PDF ──
-        addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Front)`);
+        for (let gridIdx = 0; gridIdx < batchCardholders.length; gridIdx++) {
+          const ch = batchCardholders[gridIdx];
+          if (!ch || (!ch.id && !ch.name)) {
+            continue;
+          }
+          const overallIndex = startIdx + gridIdx;
 
-        let frontEmbeddedPdf: any = null;
-        let frontEmbeddedImg: any = null;
-        let backEmbeddedPdf: any = null;
-        let backEmbeddedImg: any = null;
+          const colIdx = gridIdx % cols;
+          const rowIdx = Math.floor(gridIdx / cols);
 
-        if (ch.isCustomPdf && ch.pdfBytes) {
-          try {
-            const rawBytes = Uint8Array.from(atob(ch.pdfBytes), c => c.charCodeAt(0));
-            const isPdf = rawBytes[0] === 0x25 && rawBytes[1] === 0x50 && rawBytes[2] === 0x44 && rawBytes[3] === 0x46; // %PDF-
+          const xPos = marginLeft + colIdx * (cWidth + colGap);
 
-            if (isPdf) {
-              const customDoc = await PDFDocument.load(rawBytes);
-              const pageCount = customDoc.getPageCount();
-              const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
-              frontEmbeddedPdf = fPage;
+          let frontsY: number;
+          let backsY: number | null = null;
 
-              if (!isSingleSided && backsY !== null) {
-                if (ch.backPdfBytes) {
-                  const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
-                  const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
-                  if (isBackPdf) {
-                    const backDoc = await PDFDocument.load(backRawBytes);
-                    const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+          if (isSingleSided) {
+            frontsY = pageHeight - marginTop - rowIdx * (cHeight + rowGap) - cHeight;
+          } else {
+            frontsY = pageHeight - marginTop - rowIdx * (cHeight + rowGap) - cHeight;
+            backsY = 2 * centerY - frontsY - cHeight;
+          }
+
+          // ── Render front side as vector PDF ──
+          addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Front)`);
+
+          let frontEmbeddedPdf: any = null;
+          let frontEmbeddedImg: any = null;
+          let backEmbeddedPdf: any = null;
+          let backEmbeddedImg: any = null;
+
+          if (ch.isCustomPdf && ch.pdfBytes) {
+            try {
+              const rawBytes = Uint8Array.from(atob(ch.pdfBytes), c => c.charCodeAt(0));
+              const isPdf = rawBytes[0] === 0x25 && rawBytes[1] === 0x50 && rawBytes[2] === 0x44 && rawBytes[3] === 0x46;
+
+              if (isPdf) {
+                const customDoc = await PDFDocument.load(rawBytes);
+                const pageCount = customDoc.getPageCount();
+                const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
+                frontEmbeddedPdf = fPage;
+
+                if (!isSingleSided && backsY !== null) {
+                  if (ch.backPdfBytes) {
+                    const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
+                    const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                    if (isBackPdf) {
+                      const backDoc = await PDFDocument.load(backRawBytes);
+                      const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                      backEmbeddedPdf = bPage;
+                    } else {
+                      backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                    }
+                  } else if (pageCount > 1) {
+                    const [bPage] = await pdfDoc.embedPdf(customDoc, [1]);
                     backEmbeddedPdf = bPage;
-                  } else {
-                    backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
                   }
-                } else if (pageCount > 1) {
-                  const [bPage] = await pdfDoc.embedPdf(customDoc, [1]);
-                  backEmbeddedPdf = bPage;
+                }
+              } else {
+                frontEmbeddedImg = await embedImageBuffer(pdfDoc, rawBytes);
+
+                if (!isSingleSided && backsY !== null) {
+                  if (ch.backPdfBytes) {
+                    const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
+                    const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                    if (isBackPdf) {
+                      const backDoc = await PDFDocument.load(backRawBytes);
+                      const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                      backEmbeddedPdf = bPage;
+                    } else {
+                      backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                    }
+                  }
                 }
               }
-            } else {
-              // It's an image file (PNG / JPG / WebP / BMP / GIF)
-              frontEmbeddedImg = await embedImageBuffer(pdfDoc, rawBytes);
-
-              if (!isSingleSided && backsY !== null) {
-                if (ch.backPdfBytes) {
-                  const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
-                  const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
-                  if (isBackPdf) {
-                    const backDoc = await PDFDocument.load(backRawBytes);
-                    const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
-                    backEmbeddedPdf = bPage;
-                  } else {
-                    backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
-                  }
-                }
-              }
+            } catch (loadErr: any) {
+              addLog(`Error loading custom card asset: ${loadErr.message}`);
             }
-          } catch (loadErr: any) {
-            addLog(`Error loading custom card asset: ${loadErr.message}`);
-          }
-        } else {
-          const clientTemplate = {
-            id: template.id,
-            cardWidth: template.width || 1011,
-            cardHeight: template.height || 638,
-            frontImageUrl: template.frontImageUrl,
-            backImageUrl: template.backImageUrl,
-            frontOriginalUrl: template.frontOriginalUrl || null,
-            backOriginalUrl: template.backOriginalUrl || null,
-            frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
-            backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
-            version: template.version,
-          };
-
-          // ── DIAGNOSTIC LOG ── Remove after debugging ──────────────────────
-          try {
-            const parsedFront = JSON.parse(clientTemplate.frontFields || '[]');
-            console.log('[Daemon] Template frontFields field count:', parsedFront.length);
-            parsedFront.forEach((f: any, i: number) => {
-              console.log(`[Daemon] Field[${i}] field=${f.field} type=${f.type} fontSize=${f.fontSize} fontWeight=${f.fontWeight} color=${f.color} align=${f.align} prefix="${f.prefix}" suffix="${f.suffix}" x=${f.x} y=${f.y}`);
-            });
-          } catch (diagErr) {
-            console.warn('[Daemon] Could not parse frontFields for diagnostic:', diagErr);
-          }
-          // ─────────────────────────────────────────────────────────────────
-
-          const clientCardholder = {
-            ...ch,
-            customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
-          };
-
-          const frontPdfBytes = await renderCardSideToPdfBytesClient(
-            clientTemplate,
-            clientCardholder,
-            'front',
-            template.validTillDate ? new Date(template.validTillDate) : null,
-            pressFonts
-          );
-          const frontCardDoc = await PDFDocument.load(frontPdfBytes);
-          const [fPage] = await pdfDoc.embedPdf(frontCardDoc, [0]);
-          frontEmbeddedPdf = fPage;
-        }
-
-        if (frontEmbeddedPdf) {
-          page.drawPage(frontEmbeddedPdf, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
-        } else if (frontEmbeddedImg) {
-          page.drawImage(frontEmbeddedImg, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
-        }
-
-        // If double-sided, render back side
-        if (!isSingleSided && backsY !== null) {
-          addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Back)`);
-
-          if (!ch.isCustomPdf) {
+          } else {
             const clientTemplate = {
               id: template.id,
               cardWidth: template.width || 1011,
@@ -861,71 +932,141 @@ export default function ProductionDaemon() {
               customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
             };
 
-            const backPdfBytes = await renderCardSideToPdfBytesClient(
+            const frontPdfBytes = await renderCardSideToPdfBytesClient(
               clientTemplate,
               clientCardholder,
-              'back',
+              'front',
               template.validTillDate ? new Date(template.validTillDate) : null,
               pressFonts
             );
-            const backCardDoc = await PDFDocument.load(backPdfBytes);
-            const [bPage] = await pdfDoc.embedPdf(backCardDoc, [0]);
-            backEmbeddedPdf = bPage;
+            const frontCardDoc = await PDFDocument.load(frontPdfBytes);
+            const [fPage] = await pdfDoc.embedPdf(frontCardDoc, [0]);
+            frontEmbeddedPdf = fPage;
           }
 
-          if (backEmbeddedPdf) {
-            page.drawPage(backEmbeddedPdf, {
-              x: xPos + cWidth,
-              y: backsY + cHeight,
-              width: cWidth,
-              height: cHeight,
-              rotate: degrees(180),
-            });
-          } else if (backEmbeddedImg) {
-            page.drawImage(backEmbeddedImg, {
-              x: xPos + cWidth,
-              y: backsY + cHeight,
-              width: cWidth,
-              height: cHeight,
-              rotate: degrees(180),
-            });
+          if (frontEmbeddedPdf) {
+            page.drawPage(frontEmbeddedPdf, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
+          } else if (frontEmbeddedImg) {
+            page.drawImage(frontEmbeddedImg, { x: xPos, y: frontsY, width: cWidth, height: cHeight });
           }
-        }
 
-        // Draw crop marks
-        if (cropMarks) {
-          drawCropMarks(page, xPos, frontsY, cWidth, cHeight);
+          // If double-sided, render back side
           if (!isSingleSided && backsY !== null) {
-            drawCropMarks(page, xPos, backsY, cWidth, cHeight);
+            addLog(`Rendering card [${overallIndex + 1}/${total}]: ${ch.name} (Back)`);
+
+            if (!ch.isCustomPdf) {
+              const clientTemplate = {
+                id: template.id,
+                cardWidth: template.width || 1011,
+                cardHeight: template.height || 638,
+                frontImageUrl: template.frontImageUrl,
+                backImageUrl: template.backImageUrl,
+                frontOriginalUrl: template.frontOriginalUrl || null,
+                backOriginalUrl: template.backOriginalUrl || null,
+                frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
+                backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+                version: template.version,
+              };
+
+              const clientCardholder = {
+                ...ch,
+                customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
+              };
+
+              const backPdfBytes = await renderCardSideToPdfBytesClient(
+                clientTemplate,
+                clientCardholder,
+                'back',
+                template.validTillDate ? new Date(template.validTillDate) : null,
+                pressFonts
+              );
+              const backCardDoc = await PDFDocument.load(backPdfBytes);
+              const [bPage] = await pdfDoc.embedPdf(backCardDoc, [0]);
+              backEmbeddedPdf = bPage;
+            }
+
+            if (backEmbeddedPdf) {
+              page.drawPage(backEmbeddedPdf, {
+                x: xPos + cWidth,
+                y: backsY + cHeight,
+                width: cWidth,
+                height: cHeight,
+                rotate: degrees(180),
+              });
+            } else if (backEmbeddedImg) {
+              page.drawImage(backEmbeddedImg, {
+                x: xPos + cWidth,
+                y: backsY + cHeight,
+                width: cWidth,
+                height: cHeight,
+                rotate: degrees(180),
+              });
+            }
           }
+
+          // Draw crop marks
+          if (cropMarks) {
+            drawCropMarks(page, xPos, frontsY, cWidth, cHeight);
+            if (!isSingleSided && backsY !== null) {
+              drawCropMarks(page, xPos, backsY, cWidth, cHeight);
+            }
+          }
+
+          // Update progress dynamically
+          const progressPercent = Math.min(90, Math.round(5 + ((overallIndex + 1) / total) * 85));
+          await updateProgress(job.id, progressPercent);
         }
-
-        // Update progress dynamically (allocating 5% to 90% of the job progress bar)
-        const progressPercent = Math.min(90, Math.round(5 + ((overallIndex + 1) / total) * 85));
-        await updateProgress(job.id, progressPercent);
       }
+
+      addLog(`Finalizing PDF (pages ${startPage + 1}–${endPage})...`);
+      const pdfBytes = await pdfDoc.save();
+
+      const base64Data = await new Promise<string>((resolve) => {
+        const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          const base64 = dataUrl.split(',')[1];
+          resolve(base64);
+        };
+        reader.readAsDataURL(blob);
+      });
+
+      return { pdfBytes, base64Data };
+    };
+
+    // ── Execute compilation (single or multi-chunk) ─────────────────────
+    if (!isMultiChunk) {
+      // Single chunk — compile all pages in one PDFDocument (original behavior)
+      const { pdfBytes, base64Data } = await compilePageRange(0, totalPages);
+      await updateProgress(job.id, 95);
+      await saveAndCompleteJob(job, order, pdfBytes, base64Data);
+    } else {
+      // Multi-chunk — compile each chunk separately, upload, free memory
+      addLog(`Starting chunked compilation: ${totalChunks} parts...`);
+
+      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+        const chunkStartPage = chunkIdx * MAX_PAGES_PER_CHUNK;
+        const chunkEndPage = Math.min(chunkStartPage + MAX_PAGES_PER_CHUNK, totalPages);
+        const pagesInChunk = chunkEndPage - chunkStartPage;
+
+        addLog(`Compiling chunk ${chunkIdx + 1}/${totalChunks} (pages ${chunkStartPage + 1}–${chunkEndPage}, ${pagesInChunk} pages)...`);
+
+        const { pdfBytes, base64Data } = await compilePageRange(chunkStartPage, chunkEndPage);
+
+        const baseName = (job.fileName || 'production.pdf').replace(/\.pdf$/i, '');
+        const chunkFileName = `${baseName}_part${chunkIdx + 1}.pdf`;
+
+        await saveAndCompleteChunk(job, order, pdfBytes, base64Data, chunkIdx, totalChunks, chunkFileName);
+
+        addLog(`Chunk ${chunkIdx + 1}/${totalChunks} complete. Memory released.`);
+      }
+
+      // Final job completion — chunks were uploaded individually
+      await updateProgress(job.id, 100, 'PROCESSING');
+      await reportJobComplete(job.id, true, undefined, undefined, undefined, totalChunks);
+      addLog(`Production job completed: ${totalChunks} chunks generated successfully.`);
     }
-
-    addLog('Finalizing PDF generation...');
-    await updateProgress(job.id, 92);
-    
-    const pdfBytes = await pdfDoc.save();
-    await updateProgress(job.id, 95);
-
-    // Convert PDF bytes to Base64 to send over IPC bridge
-    addLog('Converting PDF buffer to base64...');
-    const base64Data = await new Promise<string>((resolve) => {
-      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.readAsDataURL(blob);
-    });
-
-    await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
 
   // Background polling loop
@@ -1063,7 +1204,8 @@ export default function ProductionDaemon() {
           left: 0,
           right: 0,
           height: '3px',
-          background: finishedJobId ? '#10b981' : 'linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #4f46e5)',
+          backgroundColor: finishedJobId ? '#10b981' : 'transparent',
+          backgroundImage: finishedJobId ? 'none' : 'linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #4f46e5)',
           backgroundSize: '200% 100%',
           animation: finishedJobId ? 'none' : 'gradientShimmer 2s linear infinite',
         }} />
@@ -1134,7 +1276,7 @@ export default function ProductionDaemon() {
               <div style={{
                 width: `${progress}%`,
                 height: '100%',
-                background: 'linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #4f46e5)',
+                backgroundImage: 'linear-gradient(90deg, #4f46e5, #6366f1, #818cf8, #4f46e5)',
                 backgroundSize: '200% 100%',
                 borderRadius: '4px',
                 boxShadow: '0 0 10px rgba(99, 102, 241, 0.6)',

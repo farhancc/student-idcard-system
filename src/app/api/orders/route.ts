@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { searchParams } = new URL(request.url);
     const page     = Math.max(1, Number(searchParams.get('page')     || 1));
@@ -36,8 +35,14 @@ export async function GET(request: Request) {
       ];
     }
 
-    const [total, orders] = await Promise.all([
-      prisma.cardOrder.count({ where }),
+    const [total, pendingPrintingCount, orders] = await Promise.all([
+      prisma.cardOrder.count({ where: { pressId } }),
+      prisma.cardOrder.count({
+        where: {
+          pressId,
+          status: { notIn: ['COMPLETED', 'PRINTED', 'DELIVERED', 'CANCELLED'] },
+        },
+      }),
       prisma.cardOrder.findMany({
         where,
         include: {
@@ -61,7 +66,7 @@ export async function GET(request: Request) {
       cardholderIds: JSON.stringify(ord.cardholders.map(oc => oc.cardholderId)),
     }));
 
-    return NextResponse.json({ success: true, orders: ordersWithLegacyField, total, page, pageSize });
+    return NextResponse.json({ success: true, orders: ordersWithLegacyField, total, pendingPrintingCount, page, pageSize });
   } catch (error) {
     console.error('Get orders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -70,21 +75,31 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    const userNameHeader = request.headers.get('x-user-name');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-    const actorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
-
-    let body: unknown;
+    let body: any;
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    let pressId: number;
+    let userId: number = 0;
+    let actorName: string = 'Client Portal';
+
+    if (body.orgToken) {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken: body.orgToken },
+      });
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid portal link' }, { status: 403 });
+      }
+      pressId = share.pressId;
+    } else {
+      const auth = requireActor(request);
+      if ('response' in auth) return auth.response;
+      pressId = auth.actor.pressId;
+      userId = auth.actor.userId;
+      actorName = auth.actor.name;
     }
 
     const { createOrderSchema } = await import('@/lib/schemas');

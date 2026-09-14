@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 
 export async function DELETE(
   request: Request,
@@ -7,6 +8,10 @@ export async function DELETE(
 ) {
   try {
     const { orgToken, id: deptIdStr } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(orgToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
     const deptId = Number(deptIdStr);
 
     const share = await prisma.clientPortalShare.findUnique({

@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSuperAdmin } from '@/lib/authz';
 
 // DELETE /api/superadmin/fonts/[id] — remove a global (system-wide) font
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { id } = await params;
     const fontId  = Number(id);

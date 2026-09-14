@@ -76,8 +76,35 @@ function getLocalUrlFromSystemPath(systemPath) {
 // (authority parsing, path encoding) which corrupts Windows drive-letter paths.
 // Without 'standard', request.url preserves the raw URL we constructed.
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local', privileges: { secure: true, standard: false, corsEnabled: true, supportFetchAPI: true, bypassCSP: true } }
+  { scheme: 'local', privileges: { secure: true, standard: false, corsEnabled: true, supportFetchAPI: true } }
 ]);
+
+// ── Path allowlist for local:// protocol ────────────────────────────────
+// Only files within these directories may be served. This prevents
+// arbitrary file reads via path traversal (e.g. local://../../etc/passwd).
+function getAllowedDirectories() {
+  const userData = app.getPath('userData');
+  const documents = app.getPath('documents');
+  return [
+    path.join(userData, 'templates'),
+    path.join(userData, 'cached_photos'),
+    path.join(userData, 'fonts'),
+    documents,
+  ];
+}
+
+function isPathAllowed(filePath) {
+  let resolved;
+  try {
+    // Resolve symlinks and normalize .. segments
+    resolved = fs.realpathSync(filePath);
+  } catch {
+    // File doesn't exist yet — still validate the normalized form
+    resolved = path.resolve(filePath);
+  }
+  const allowed = getAllowedDirectories();
+  return allowed.some(dir => resolved.startsWith(dir + path.sep) || resolved === dir);
+}
 
 // ── Offline Print Queue ────────────────────────────────────────────────────
 // Uses a JSON file as a durable local queue. No native modules required.
@@ -289,7 +316,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false,
+      sandbox: true,
     },
   });
 
@@ -298,21 +325,23 @@ function createWindow() {
     mainWindow.focus();
   });
 
-  // Enable F12 and Ctrl+Shift+I to toggle DevTools for easy troubleshooting
-  mainWindow.webContents.on('before-input-event', (event, input) => {
-    try {
-      if (input && input.type === 'keyDown' && typeof input.key === 'string') {
-        const isDevToolsCombo = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
-        const isF12 = input.key === 'F12';
-        if (isDevToolsCombo || isF12) {
-          mainWindow.webContents.toggleDevTools();
-          event.preventDefault();
+  // Enable F12 and Ctrl+Shift+I to toggle DevTools (development only)
+  if (!app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      try {
+        if (input && input.type === 'keyDown' && typeof input.key === 'string') {
+          const isDevToolsCombo = (input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i';
+          const isF12 = input.key === 'F12';
+          if (isDevToolsCombo || isF12) {
+            mainWindow.webContents.toggleDevTools();
+            event.preventDefault();
+          }
         }
+      } catch (err) {
+        console.error('Error in before-input-event handler:', err);
       }
-    } catch (err) {
-      console.error('Error in before-input-event handler:', err);
-    }
-  });
+    });
+  }
 
   // Log renderer console messages directly to terminal stdout
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -359,18 +388,22 @@ function createWindow() {
 app.whenReady().then(() => {
   setupApplicationMenu();
   // Register local:// protocol to serve template images/PDFs stored on disk
+  const portalOrigin = getPortalUrl();
   protocol.handle('local', async (request) => {
     const rawUrl = request.url;
     const decodedPath = getSystemPathFromLocalUrl(rawUrl);
-    console.log(`[local://] Request: ${rawUrl}`);
-    console.log(`[local://] Resolved system path: ${decodedPath}`);
     try {
       if (!decodedPath) {
-        console.error('[local://] Empty system path resolved from URL:', rawUrl);
         return new Response('Bad path', { status: 400 });
       }
+
+      // ── Security: path allowlist check ──────────────────────────
+      if (!isPathAllowed(decodedPath)) {
+        console.error(`[local://] BLOCKED: path outside allowed directories: ${decodedPath}`);
+        return new Response('Forbidden', { status: 403 });
+      }
+
       if (!fs.existsSync(decodedPath)) {
-        console.error(`[local://] File does not exist: ${decodedPath}`);
         return new Response('File not found', { status: 404 });
       }
       const fileBuffer = await fs.promises.readFile(decodedPath);
@@ -386,19 +419,18 @@ app.whenReady().then(() => {
       else if (ext === '.woff') contentType = 'font/woff';
       else if (ext === '.woff2') contentType = 'font/woff2';
 
-      console.log(`[local://] Serving ${decodedPath} as ${contentType} (${fileBuffer.length} bytes)`);
       return new Response(fileBuffer, {
         status: 200,
         headers: {
           'Content-Type': contentType,
-          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Origin': portalOrigin,
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Headers': 'Content-Type',
           'Cache-Control': 'no-store'
         }
       });
     } catch (err) {
-      console.error(`[local://] Protocol error for path "${decodedPath}":`, err.message);
+      console.error('[local://] Protocol error:', err.message);
       return new Response('File not found', { status: 404 });
     }
   });
@@ -427,13 +459,14 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
   try {
     const documentsPath = app.getPath('documents');
     let subfolder = 'production';
-    if (fileName.toLowerCase().includes('approval')) {
-      subfolder = 'approval';
-    } else if (fileName.toLowerCase().includes('invoice')) {
+    const fnLower = (fileName || '').toLowerCase();
+    if (fnLower.includes('approval') || fnLower.includes('proof')) {
+      subfolder = 'proof';
+    } else if (fnLower.includes('invoice')) {
       subfolder = 'invoices';
     }
     const safeClientName = (clientName || 'Client').trim().replace(/[^a-z0-9_-]/gi, '_');
-    const targetDir = path.join(documentsPath, 'idexo_prints', safeClientName, subfolder);
+    const targetDir = path.join(documentsPath, 'idexo', safeClientName, subfolder);
 
     if (!fs.existsSync(targetDir)) {
       fs.mkdirSync(targetDir, { recursive: true });
@@ -445,7 +478,9 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
     const filePath = path.join(targetDir, datedFileName);
     const buffer = Buffer.from(base64Data, 'base64');
     
+    // Save file silently to disk without opening or triggering file dialog
     fs.writeFileSync(filePath, buffer);
+    console.log(`[Main Process] Saved PDF silently to: ${filePath}`);
     return { success: true, path: filePath };
   } catch (error) {
     console.error('Failed to save file:', error);
@@ -994,13 +1029,8 @@ ipcMain.handle('save-credentials', async (event, { email, password }) => {
       }
       return { success: true };
     } else {
-      const filePath = path.join(dir, 'credentials.json');
-      fs.writeFileSync(filePath, data, 'utf8');
-      // Clean up encrypted file if it exists
-      const encPath = path.join(dir, 'credentials.enc');
-      if (fs.existsSync(encPath)) {
-        try { fs.unlinkSync(encPath); } catch (e) {}
-      }
+      const fallbackPath = path.join(dir, 'credentials.json');
+      fs.writeFileSync(fallbackPath, data, 'utf8');
       return { success: true };
     }
   } catch (error) {

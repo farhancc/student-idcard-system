@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getClientIp } from '@/lib/rate-limit';
+import { requireSuperAdmin } from '@/lib/authz';
 
 /**
  * DELETE /api/superadmin/users/[id]
@@ -10,6 +11,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { id } = await params;
     const userId = Number(id);

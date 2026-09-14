@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
@@ -6,11 +7,9 @@ export const revalidate = 0;
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     // Fetch the oldest pending job for this press (FIFO) with order and press included
     const job = await prisma.pdfJob.findFirst({

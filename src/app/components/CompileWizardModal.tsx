@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, FileText, Zap, CheckCircle2, AlertCircle, Upload, Layers, Trash2, FolderPlus } from 'lucide-react';
+import { X, FileText, Zap, CheckCircle2, AlertCircle, Upload, Layers, Trash2, FolderPlus, Monitor } from 'lucide-react';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
+import { isElectronApp } from '@/lib/isElectron';
 
 export interface CompileWizardConfig {
   compileType: 'APPROVAL' | 'PRODUCTION';
@@ -26,12 +27,14 @@ interface Props {
   onClose: () => void;
   onCompile: (cfg: CompileWizardConfig) => void;
   compiling?: boolean;
+  /** Live compile progress (0–100). When provided, drives the loading bar. */
+  progress?: number;
 }
 
-export default function CompileWizardModal({ cardCount, onClose, onCompile, compiling }: Props) {
+export default function CompileWizardModal({ cardCount, onClose, onCompile, compiling, progress }: Props) {
   const [step, setStep] = useState<1|2|3|4>(1);
   const [compileType, setCompileType] = useState<'APPROVAL'|'PRODUCTION'|null>(null);
-  const [paperSize, setPaperSize] = useState('A3');
+  const [paperSize, setPaperSize] = useState('A4');
   const [orientation, setOrientation] = useState<'PORTRAIT'|'LANDSCAPE'>('PORTRAIT');
   const [marginLeft, setMarginLeft] = useState(40);
   const [marginRight, setMarginRight] = useState(40);
@@ -43,13 +46,20 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
   const [cropMarks, setCropMarks] = useState(true);
   const [foldLine, setFoldLine] = useState(true);
   const [strategy, setStrategy] = useState<'LEAVE_BLANK'|'REPEAT_LAST'|'REPEAT_FIRST'|'FILL_CUSTOM'>('LEAVE_BLANK');
+  const [unitMode, setUnitMode] = useState<'PT' | 'MM'>('MM');
 
   // Slot-by-Slot Custom Cards State
   const [isDoubleSided, setIsDoubleSided] = useState(false);
   const [slotCards, setSlotCards] = useState<Record<number, SlotCardFile>>({});
   const [preparingCompile, setPreparingCompile] = useState(false);
 
-  // Calculate live slot capacity
+  // Unit conversion helpers
+  const PT_TO_MM = 25.4 / 72;
+  const MM_TO_PT = 72 / 25.4;
+  const ptToMm = (pt: number) => Number((pt * PT_TO_MM).toFixed(1));
+  const mmToPt = (mm: number) => Math.round(mm * MM_TO_PT);
+
+  // Calculate live slot capacity and dimensions scale
   const calcSlots = () => {
     let pw = 841.89; let ph = 1190.55;
     if (paperSize === 'SRA3') {
@@ -74,10 +84,16 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
     const pages = Math.ceil(cardCount / perPage) || 1;
     const totalSlots = pages * perPage;
     const emptySlots = Math.max(0, totalSlots - cardCount);
-    return { totalSlots, perPage, pages, emptySlots };
+
+    const cardW_mm = Number((54.0 + (bleed || 0) * 2).toFixed(1));
+    const cardH_mm = Number((85.6 + (bleed || 0) * 2).toFixed(1));
+    const sheetW_mm = Number((pw * PT_TO_MM).toFixed(1));
+    const sheetH_mm = Number((ph * PT_TO_MM).toFixed(1));
+
+    return { totalSlots, perPage, pages, emptySlots, cols, rows, cardW_mm, cardH_mm, sheetW_mm, sheetH_mm, pw, ph, cw, ch };
   };
 
-  const { totalSlots, emptySlots } = calcSlots();
+  const { totalSlots, perPage, emptySlots, cols, rows, cardW_mm, cardH_mm, sheetW_mm, sheetH_mm, pw, ph, cw, ch } = calcSlots();
 
   useEffect(() => {
     if (step === 4) {
@@ -201,13 +217,18 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
       }
     }
 
-    onCompile({
-      compileType, paperSize, orientation,
-      marginLeft, marginRight, marginTop, marginBottom,
-      colGap, rowGap, bleed, cropMarks, foldLine,
-      emptySlotStrategy: emptySlots > 0 ? strategy : 'LEAVE_BLANK',
-      customCardId: customCardPayload,
-    });
+    try {
+      await onCompile({
+        compileType, paperSize, orientation,
+        marginLeft, marginRight, marginTop, marginBottom,
+        colGap, rowGap, bleed, cropMarks, foldLine,
+        emptySlotStrategy: emptySlots > 0 ? strategy : 'LEAVE_BLANK',
+        customCardId: customCardPayload,
+      });
+    } finally {
+      setPreparingCompile(false);
+      onClose();
+    }
   };
 
   const stepLabels = ['File Type', 'Sheet Size', 'Layout', 'Empty Slots'];
@@ -243,10 +264,32 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
           ))}
         </div>
 
+        {!isElectronApp() && (
+          <div style={{
+            padding: '14px 16px',
+            background: 'rgba(239, 68, 68, 0.1)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: '10px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}>
+            <Monitor size={22} color="#ef4444" style={{ flexShrink: 0 }} />
+            <div>
+              <h4 style={{ margin: '0 0 2px', fontSize: '0.88rem', fontWeight: 600, color: '#f87171' }}>
+                Desktop App Required for PDF Creation
+              </h4>
+              <p style={{ margin: 0, fontSize: '0.78rem', color: '#cbd5e1', lineHeight: '1.4' }}>
+                PDF creation and compilation is restricted exclusively to the <strong>Desktop (Electron) App</strong>. Please launch the Desktop App to create PDFs.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Active Compilation Loading Overlay View */}
         {preparingCompile || compiling ? (
           <PdfCompileLoadingAnimation
-            progress={compiling ? 70 : 25}
+            progress={preparingCompile ? 25 : (progress ?? (compiling ? 70 : 25))}
             message={preparingCompile ? "Preparing custom slot files..." : "Compiling Print-Ready PDF..."}
             subMessage={preparingCompile ? "Encoding per-slot PDF assets into system memory" : `Generating layout sheet for ${cardCount} cardholder(s)`}
           />
@@ -305,25 +348,186 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
             {/* Step 3: Layout Configuration */}
             {step === 3 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Margins (pt)</span>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  {[['Left', marginLeft, setMarginLeft], ['Right', marginRight, setMarginRight], ['Top', marginTop, setMarginTop], ['Bottom', marginBottom, setMarginBottom]].map(([label, val, setter]: any) => (
-                    <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
-                      {label}
-                      <input type="number" min={0} max={200} value={val} onChange={e => setter(Number(e.target.value))} style={{ ...inp, width: '100%' }} />
-                    </label>
-                  ))}
+                {/* Dimensions Scale Banner */}
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: 'rgba(99,102,241,0.08)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#a5b4fc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Layers size={15} /> Card & Sheet Dimensions Scale
+                    </span>
+                    <div style={{
+                      display: 'flex',
+                      gap: '4px',
+                      background: 'rgba(15, 23, 42, 0.8)',
+                      padding: '3px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(99, 102, 241, 0.4)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}>
+                      <button
+                        type="button"
+                        onClick={() => setUnitMode('MM')}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: unitMode === 'MM' ? '1px solid #818cf8' : '1px solid transparent',
+                          background: unitMode === 'MM' ? '#4f46e5' : 'rgba(255, 255, 255, 0.08)',
+                          color: '#ffffff',
+                          boxShadow: unitMode === 'MM' ? '0 2px 6px rgba(79, 70, 229, 0.4)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        mm (Millimeters)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUnitMode('PT')}
+                        style={{
+                          padding: '5px 12px',
+                          borderRadius: '6px',
+                          fontSize: '0.76rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          border: unitMode === 'PT' ? '1px solid #818cf8' : '1px solid transparent',
+                          background: unitMode === 'PT' ? '#4f46e5' : 'rgba(255, 255, 255, 0.08)',
+                          color: '#ffffff',
+                          boxShadow: unitMode === 'PT' ? '0 2px 6px rgba(79, 70, 229, 0.4)' : 'none',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        pt (Points)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.76rem' }}>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '6px' }}>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>Card Scale</div>
+                      <strong style={{ color: '#fff' }}>
+                        {cardW_mm} × {cardH_mm} mm
+                      </strong>
+                      <span style={{ color: 'var(--muted)', fontSize: '0.7rem', marginLeft: '4px' }}>
+                        ({cw.toFixed(1)} × {ch.toFixed(1)} pt)
+                      </span>
+                    </div>
+                    <div style={{ background: 'rgba(255,255,255,0.03)', padding: '6px 10px', borderRadius: '6px' }}>
+                      <div style={{ color: 'var(--muted)', fontSize: '0.7rem' }}>Sheet Scale ({paperSize} {orientation.toLowerCase()})</div>
+                      <strong style={{ color: '#fff' }}>
+                        {sheetW_mm} × {sheetH_mm} mm
+                      </strong>
+                      <span style={{ color: 'var(--muted)', fontSize: '0.7rem', marginLeft: '4px' }}>
+                        ({pw.toFixed(1)} × {ph.toFixed(1)} pt)
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ fontSize: '0.72rem', color: '#a5b4fc', opacity: 0.9 }}>
+                    Grid Capacity: <strong>{cols} columns × {rows} rows</strong> ({perPage} cards per sheet)
+                  </div>
                 </div>
+
+                {/* Margins */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
+                      Margins ({unitMode === 'MM' ? 'mm' : 'pt'})
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
+                      1 pt ≈ 0.35 mm | 1 mm ≈ 2.83 pt
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {[
+                      ['Left', marginLeft, setMarginLeft],
+                      ['Right', marginRight, setMarginRight],
+                      ['Top', marginTop, setMarginTop],
+                      ['Bottom', marginBottom, setMarginBottom]
+                    ].map(([label, valPt, setter]: any) => {
+                      const displayVal = unitMode === 'MM' ? ptToMm(valPt) : valPt;
+                      const subVal = unitMode === 'MM' ? `${valPt} pt` : `${ptToMm(valPt)} mm`;
+                      return (
+                        <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>{label}</span>
+                            <span style={{ fontSize: '0.7rem', color: '#a5b4fc' }}>({subVal})</span>
+                          </div>
+                          <input
+                            type="number"
+                            min={0}
+                            max={unitMode === 'MM' ? 100 : 300}
+                            step={unitMode === 'MM' ? 0.5 : 1}
+                            value={displayVal}
+                            onChange={e => {
+                              const num = Number(e.target.value);
+                              setter(unitMode === 'MM' ? mmToPt(num) : num);
+                            }}
+                            style={{ ...inp, width: '100%' }}
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Gaps & Bleed */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
-                  {[['Col Gap', colGap, setColGap], ['Row Gap', rowGap, setRowGap], ['Bleed', bleed, setBleed]].map(([label, val, setter]: any) => (
-                    <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
-                      {label} (pt)
-                      <input type="number" min={0} max={50} value={val} onChange={e => setter(Number(e.target.value))} style={{ ...inp, width: '100%' }} />
-                    </label>
-                  ))}
+                  {[
+                    ['Col Gap', colGap, setColGap, false],
+                    ['Row Gap', rowGap, setRowGap, false],
+                    ['Bleed', bleed, setBleed, true]
+                  ].map(([label, val, setter, isBleedMm]: any) => {
+                    let displayVal: number;
+                    let subVal: string;
+                    if (isBleedMm) {
+                      displayVal = unitMode === 'MM' ? val : Number((val * 2.83464567).toFixed(1));
+                      subVal = unitMode === 'MM' ? `${(val * 2.83464567).toFixed(1)} pt` : `${val} mm`;
+                    } else {
+                      displayVal = unitMode === 'MM' ? ptToMm(val) : val;
+                      subVal = unitMode === 'MM' ? `${val} pt` : `${ptToMm(val)} mm`;
+                    }
+
+                    return (
+                      <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{label} ({unitMode === 'MM' ? 'mm' : 'pt'})</span>
+                        </div>
+                        <input
+                          type="number"
+                          min={0}
+                          max={unitMode === 'MM' ? 50 : 100}
+                          step={unitMode === 'MM' ? 0.5 : 1}
+                          value={displayVal}
+                          onChange={e => {
+                            const num = Number(e.target.value);
+                            if (isBleedMm) {
+                              setter(unitMode === 'MM' ? num : Number((num / 2.83464567).toFixed(1)));
+                            } else {
+                              setter(unitMode === 'MM' ? mmToPt(num) : num);
+                            }
+                          }}
+                          style={{ ...inp, width: '100%' }}
+                        />
+                        <span style={{ fontSize: '0.68rem', color: '#a5b4fc' }}>({subVal})</span>
+                      </label>
+                    );
+                  })}
                 </div>
-                <div style={{ display: 'flex', gap: '20px' }}>
-                  {[['Crop Marks', cropMarks, setCropMarks], ['Fold Line', foldLine, setFoldLine]].map(([label, val, setter]: any) => (
+
+                <div style={{ display: 'flex', gap: '20px', marginTop: '4px' }}>
+                  {[
+                    ['Crop Marks', cropMarks, setCropMarks],
+                    ['Fold Line', foldLine, setFoldLine]
+                  ].map(([label, val, setter]: any) => (
                     <label key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.875rem', cursor: 'pointer' }}>
                       <input type="checkbox" checked={val} onChange={e => setter(e.target.checked)} style={{ accentColor: 'var(--primary)' }} /> {label}
                     </label>
@@ -540,7 +744,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                   Next
                 </button>
               ) : (
-                <button className="btn btn-primary" onClick={handleCompile} disabled={!!compiling || preparingCompile || (strategy === 'FILL_CUSTOM' && (emptySlots === 0 || filledSlotsCount === 0))}>
+                <button className="btn btn-primary" onClick={handleCompile} disabled={!isElectronApp() || !!compiling || preparingCompile || (strategy === 'FILL_CUSTOM' && (emptySlots === 0 || filledSlotsCount === 0))}>
                   Compile PDF
                 </button>
               )}

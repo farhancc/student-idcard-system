@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSuperAdmin } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,9 @@ export const dynamic = 'force-dynamic';
  *  - Order frequency distribution
  */
 export async function GET() {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const now = new Date();
 

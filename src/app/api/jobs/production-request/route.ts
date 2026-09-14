@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requireRole } from '@/lib/authz';
+import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getCreditSettings } from '@/lib/system-settings';
@@ -26,19 +28,30 @@ const productionRequestSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-
-    let body: unknown;
+    let body: any;
     try {
       body = await request.json();
     } catch {
       return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
+    }
+
+    let pressId: number;
+    let userId: number = 0;
+
+    if (body.orgToken) {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken: body.orgToken },
+      });
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid portal link' }, { status: 403 });
+      }
+      pressId = share.pressId;
+    } else {
+      // Queuing production spends the press's credits — designers must not.
+      const auth = requireRole(request, ['OWNER', 'OPERATOR']);
+      if ('response' in auth) return auth.response;
+      pressId = auth.actor.pressId;
+      userId = auth.actor.userId;
     }
 
     const validation = productionRequestSchema.safeParse(body);
@@ -201,6 +214,19 @@ export async function POST(request: Request) {
       });
 
       return { job, remainingCredits: totalAvailable - cardCountLocked };
+    });
+
+    void writeAuditLog({
+      ...getActorFromRequest(request),
+      action: AuditActions.CREDITS_DEDUCTED,
+      category: 'BILLING',
+      resourceType: 'PdfJob',
+      resourceId: transactionResult.job.id,
+      description: `Queued PDF job ${transactionResult.job.id}, locking ${totalCreditsNeeded} credits`,
+      newValue: {
+        credits: totalCreditsNeeded,
+        creditsBalance: transactionResult.remainingCredits,
+      },
     });
 
     return NextResponse.json({

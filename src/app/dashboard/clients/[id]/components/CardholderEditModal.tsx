@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import { getCustomFieldValueCaseInsensitive } from './utils';
-import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
+import { formatFieldLabel, normalizeGoogleDriveUrl } from '@/lib/pdf/card-renderer-client';
 
 export function CardholderEditModal({
   cardholder,
@@ -265,11 +265,11 @@ export function CardholderEditModal({
 
           {editHasPhoto && (
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
-              <label className="form-label" style={{ fontWeight: '500' }}>Cardholder Photo Image</label>
+              <label className="form-label" style={{ fontWeight: '500' }}>Photo</label>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 {editPhotoUrl && (
                   <img 
-                    src={editPhotoUrl} 
+                    src={normalizeGoogleDriveUrl(editPhotoUrl) || editPhotoUrl} 
                     alt="Preview" 
                     style={{ width: '50px', height: '50px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
                   />
@@ -325,7 +325,7 @@ export function CardholderEditModal({
                         <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
                           {val ? (
                             <img 
-                              src={val} 
+                              src={normalizeGoogleDriveUrl(val) || val} 
                               alt="Preview" 
                               style={{ width: '45px', height: '45px', borderRadius: '4px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
                             />

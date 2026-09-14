@@ -1,23 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCreditSettings } from '@/lib/system-settings';
+import { requireActor } from '@/lib/authz';
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    const userRole = request.headers.get('x-user-role') || 'DESIGNER';
-
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId, role: userRole } = auth.actor;
 
     if (userRole === 'DESIGNER') {
       return NextResponse.json({ error: 'Forbidden: Designers cannot process batch orders' }, { status: 403 });
     }
-
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
 
     const body = await request.json();
     const { clientId: clientIdRaw, templateId: templateIdRaw, pricePerCard: pricePerCardRaw, taxPercent: taxPercentRaw, validTill, cardholders } = body;
@@ -138,7 +132,7 @@ export async function POST(request: Request) {
         }
 
         if (createsToRun.length > 0) {
-          const createdItems = await Promise.all(createsToRun.map(c => tx.cardholder.create({ data: c })));
+          const createdItems = await (tx.cardholder as any).createManyAndReturn({ data: createsToRun });
           for (const created of createdItems) {
             cardholderIds.push(created.id);
           }

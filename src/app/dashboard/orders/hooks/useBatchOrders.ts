@@ -93,7 +93,7 @@ export function useBatchOrders(
     setIsEditingDetail(false);
   };
 
-  const [paperSize, setPaperSize] = useState<'A3' | 'A4' | 'SRA3' | '13x19' | 'CUSTOM'>('SRA3');
+  const [paperSize, setPaperSize] = useState<'A3' | 'A4' | 'SRA3' | '13x19' | 'CUSTOM'>('A4');
   const [orientation, setOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
   const [bleedMm, setBleedMm] = useState<string>('3');
   const [cropMarks, setCropMarks] = useState<boolean>(true);

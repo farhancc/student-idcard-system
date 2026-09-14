@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, enterPressContext } from '@/lib/prisma';
 import crypto from 'crypto';
 
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
@@ -51,6 +51,10 @@ export async function POST(request: Request) {
     if (!press) {
       return NextResponse.json({ error: 'Selected Printing Press not found' }, { status: 404 });
     }
+
+    // The client is signing up *under* this press, which is the tenant for
+    // everything below. Adopted only after confirming the press exists.
+    enterPressContext(press.id);
 
     // Create the Client
     const client = await prisma.client.create({

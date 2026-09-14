@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Clock, Download, RefreshCw, AlertCircle, CheckCircle, XCircle, Eye, X, StopCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 
@@ -142,9 +143,9 @@ export default function PdfJobsPage() {
                   <tr key={job.id}>
                     <td>#{job.id}</td>
                     <td>
-                      <a href={`/dashboard/orders/${job.orderId}`} style={{ color: 'var(--primary)', fontWeight: '500' }}>
+                      <Link href={`/dashboard/orders/${job.orderId}`} style={{ color: 'var(--primary)', fontWeight: '500' }}>
                         Order #{job.orderId}
-                      </a>
+                      </Link>
                     </td>
                     <td style={{ fontWeight: '500' }}>{job.pdfType}</td>
                     <td style={{ fontSize: '0.8rem', fontFamily: 'monospace' }}>{job.fileName}</td>

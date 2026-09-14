@@ -131,10 +131,10 @@ const renderBatchWizard = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', opacity: isActive ? 1 : isCompleted ? 0.8 : 0.4 }}>
                   <div style={{
                     width: '28px', height: '28px', borderRadius: '50%',
-                    background: isActive ? 'var(--primary)' : isCompleted ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                    background: isActive ? '#6366f1' : isCompleted ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
                     border: isActive ? 'none' : isCompleted ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '0.85rem', fontWeight: 'bold', color: isActive ? '#000' : isCompleted ? '#10b981' : '#fff'
+                    fontSize: '0.85rem', fontWeight: 'bold', color: isActive ? '#ffffff' : isCompleted ? '#10b981' : '#fff'
                   }}>
                     {isCompleted ? <Check size={14} /> : stepNum}
                   </div>

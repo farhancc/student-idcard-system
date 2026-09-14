@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import AdmZip from 'adm-zip';
 import sharp from 'sharp';
 import fs from 'fs';
 import path from 'path';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { uploadToR2 } from '@/lib/storage';
 
 // Photo Quality Validation (M4)
 interface ValidationResult {
@@ -69,21 +71,37 @@ export async function POST(request: Request) {
   }
 
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
-
     const formData = await request.formData();
+    const orgToken = formData.get('orgToken') as string | null;
     const clientIdStr = formData.get('clientId');
     const file = formData.get('file') as File | null;
     const matchBy = formData.get('matchBy') || 'uniqueKey'; // uniqueKey | name
 
-    if (!clientIdStr || !file) {
-      return NextResponse.json({ error: 'Client ID and ZIP file are required' }, { status: 400 });
+    let pressId: number;
+    let clientId: number;
+
+    if (orgToken) {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid portal link' }, { status: 403 });
+      }
+      pressId = share.pressId;
+      clientId = share.clientId;
+    } else {
+      const auth = requireActor(request);
+      if ('response' in auth) return auth.response;
+      pressId = auth.actor.pressId;
+      if (!clientIdStr) {
+        return NextResponse.json({ error: 'Client ID is required' }, { status: 400 });
+      }
+      clientId = Number(clientIdStr);
     }
-    const clientId = Number(clientIdStr);
+
+    if (!file) {
+      return NextResponse.json({ error: 'ZIP file is required' }, { status: 400 });
+    }
 
     // Verify client
     const client = await prisma.client.findFirst({
@@ -180,46 +198,14 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const isCloudinaryConfigured = 
-        process.env.CLOUDINARY_CLOUD_NAME && 
-        process.env.CLOUDINARY_API_KEY && 
-        process.env.CLOUDINARY_API_SECRET;
+      const key = `press_${pressId}/client_${clientId}/photos/${cardholder.id}${ext}`;
+      const contentType = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
 
-      let publicUrl = '';
-
-      if (isCloudinaryConfigured) {
-        const { v2: cloudinary } = require('cloudinary');
-        cloudinary.config({
-          cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-          api_key: process.env.CLOUDINARY_API_KEY,
-          api_secret: process.env.CLOUDINARY_API_SECRET,
-        });
-
-        const uploadResult = await new Promise<any>((resolve, reject) => {
-          cloudinary.uploader.upload_stream(
-            {
-              folder: `press_${pressId}/client_${clientId}/photos`,
-              resource_type: 'image',
-              public_id: String(cardholder.id),
-              overwrite: true,
-            },
-            (error: any, result: any) => {
-              if (error) reject(error);
-              else resolve(result);
-            }
-          ).end(imageBuffer);
-        });
-
-        publicUrl = uploadResult.secure_url;
-      } else {
-        // Save file locally in upload directory
-        const destFileName = `${cardholder.id}${ext}`;
-        const destPath = path.join(uploadDir, destFileName);
-        fs.writeFileSync(destPath, imageBuffer);
-
-        // Save URL path relative to public/
-        publicUrl = `/uploads/${pressId}/${clientId}/photos/${destFileName}`;
-      }
+      const publicUrl = await uploadToR2({
+        key,
+        body: imageBuffer,
+        contentType,
+      });
 
       pendingPhotoUpdates.push({ id: cardholder.id, photoUrl: publicUrl });
 

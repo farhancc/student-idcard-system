@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
 import { getClientIp } from '@/lib/rate-limit';
+import { requireSuperAdmin } from '@/lib/authz';
 
 const isCloudinaryConfigured = 
   process.env.CLOUDINARY_CLOUD_NAME && 
@@ -40,6 +41,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { id } = await params;
     const pressId = Number(id);

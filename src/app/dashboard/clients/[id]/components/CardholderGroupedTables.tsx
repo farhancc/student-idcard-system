@@ -3,6 +3,8 @@
 import React from 'react';
 import { AlertTriangle, CreditCard, Zap, Download, ListChecks, Check, Trash2, FileSpreadsheet } from 'lucide-react';
 
+import { normalizeGoogleDriveUrl } from '@/lib/pdf/card-renderer-client';
+
 interface CardholderGroupedTablesProps {
   filteredCardholders: any[];
   clientTemplates: any[];
@@ -140,6 +142,14 @@ export default function CardholderGroupedTables({
 
     const cols = getTemplateColumns(tmpl);
     const hasNameCol = cols.some(c => c.key === 'name' || c.key === 'fullName' || c.key.toLowerCase().includes('name'));
+    const firstNonImgIdx = cols.findIndex(col => {
+      const isImg = col.type === 'image' || 
+        ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(col.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
+        col.key.toLowerCase().includes('photo') ||
+        col.key.toLowerCase().includes('picture') ||
+        col.key.toLowerCase().includes('avatar');
+      return !isImg;
+    });
 
     const selectedInTmpl = tmplCardholders.filter(c => selectedIds.includes(c.id));
     const hasTmplSelection = selectedInTmpl.length > 0;
@@ -161,7 +171,7 @@ export default function CardholderGroupedTables({
               title={hasTmplSelection ? `Compile PDF for ${selectedInTmpl.length} selected cardholders in ${tmpl.name}` : `Compile PDF for all ${tmplCardholders.length} cardholders in ${tmpl.name}`}
             >
               <Zap size={14} />
-              {hasTmplSelection ? `Compile PDF (${selectedInTmpl.length})` : `Compile All PDF (${tmplCardholders.length})`}
+              {hasTmplSelection ? `Compile PDF (${selectedInTmpl.length})` : `Compile PDF (${tmplCardholders.length})`}
             </button>
             <button
               type="button"
@@ -196,24 +206,7 @@ export default function CardholderGroupedTables({
               title="Download ZIP package of photos and Excel metadata for this template"
             >
               <Download size={14} />
-              {zipping ? (zipProgress || 'Zipping...') : 'Download Data ZIP'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              style={{
-                fontSize: '0.8rem',
-                padding: '5px 12px',
-                gap: '6px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
-                color: '#ef4444'
-              }}
-              onClick={onPurgeClient}
-              title="Purge all client data and files permanently"
-            >
-              <Trash2 size={14} />
-              Purge Client Data
+              {zipping ? (zipProgress || 'Zipping...') : 'Download ZIP'}
             </button>
           </div>
         </div>
@@ -268,7 +261,7 @@ export default function CardholderGroupedTables({
 
                       {cols.map((col, idx) => {
                         const val = getFieldValue(ch, col.key);
-                        const isNameCol = col.key === 'name' || col.key === 'fullName' || col.key.toLowerCase().includes('name') || (!hasNameCol && idx === 0);
+                        const isNameCol = col.key === 'name' || col.key === 'fullName' || col.key.toLowerCase().includes('name') || (!hasNameCol && idx === (firstNonImgIdx !== -1 ? firstNonImgIdx : 0));
                         const isImgCol = col.type === 'image' || 
                           ['photo', 'avatar', 'photourl', 'image', 'picture'].includes(col.key.toLowerCase().replace(/[^a-z0-9]/g, '')) ||
                           col.key.toLowerCase().includes('photo') ||
@@ -276,7 +269,7 @@ export default function CardholderGroupedTables({
                           col.key.toLowerCase().includes('avatar');
 
                         if (isImgCol) {
-                          const imgUrl = val || effectivePhoto;
+                          const imgUrl = normalizeGoogleDriveUrl(val || effectivePhoto) || (val || effectivePhoto);
                           return (
                             <td key={col.key}>
                               {imgUrl ? (
@@ -286,18 +279,24 @@ export default function CardholderGroupedTables({
                                   style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
                                 />
                               ) : (
-                                <div style={{
-                                  width: '40px',
-                                  height: '40px',
-                                  borderRadius: '6px',
-                                  background: 'rgba(255,255,255,0.05)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: 'var(--muted)',
-                                  fontSize: '0.75rem'
-                                }}>
-                                  None
+                                <div 
+                                  title={`${col.label} is missing`}
+                                  style={{
+                                    width: '40px',
+                                    height: '40px',
+                                    borderRadius: '6px',
+                                    background: 'rgba(245,158,11,0.12)',
+                                    border: '1px solid rgba(245,158,11,0.3)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#fbbf24',
+                                    fontSize: '0.7rem',
+                                    fontWeight: '500',
+                                    cursor: 'help'
+                                  }}
+                                >
+                                  Missing
                                 </div>
                               )}
                             </td>
@@ -338,7 +337,11 @@ export default function CardholderGroupedTables({
                                 })()}
                               </div>
                             ) : (
-                              val || <span style={{ color: 'var(--muted)' }}>—</span>
+                              val || (
+                                <span title={`${col.label} is missing`} style={{ color: '#f59e0b', opacity: 0.85, cursor: 'help', display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '0.85rem' }}>
+                                  — <span style={{ fontSize: '0.7rem' }}>⚠️</span>
+                                </span>
+                              )
                             )}
                           </td>
                         );
@@ -445,7 +448,7 @@ export default function CardholderGroupedTables({
             title={hasUnassignedSelection ? `Compile PDF for ${unassignedSelected.length} selected unassigned cardholders` : `Compile PDF for all ${unassigned.length} unassigned cardholders`}
           >
             <Zap size={14} />
-            {hasUnassignedSelection ? `Compile PDF (${unassignedSelected.length})` : `Compile All PDF (${unassigned.length})`}
+            {hasUnassignedSelection ? `Compile PDF (${unassignedSelected.length})` : `Compile PDF (${unassigned.length})`}
           </button>
           <button
             type="button"
@@ -480,24 +483,7 @@ export default function CardholderGroupedTables({
             title="Download ZIP package of photos and Excel metadata for unassigned cardholders"
           >
             <Download size={14} />
-            {zipping ? (zipProgress || 'Zipping...') : 'Download Data ZIP'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{
-              fontSize: '0.8rem',
-              padding: '5px 12px',
-              gap: '6px',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.3)',
-              color: '#ef4444'
-            }}
-            onClick={onPurgeClient}
-            title="Purge all client data and files permanently"
-          >
-            <Trash2 size={14} />
-            Purge Client Data
+            {zipping ? (zipProgress || 'Zipping...') : 'Download ZIP'}
           </button>
         </div>
       </div>
@@ -547,7 +533,7 @@ export default function CardholderGroupedTables({
                   <td>
                     {effectivePhoto ? (
                       <img 
-                        src={effectivePhoto} 
+                        src={normalizeGoogleDriveUrl(effectivePhoto) || effectivePhoto} 
                         alt={ch.name} 
                         style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--glass-border)' }} 
                       />
@@ -562,7 +548,38 @@ export default function CardholderGroupedTables({
                       </div>
                     )}
                   </td>
-                  <td style={{ fontWeight: '500' }}>{ch.name}</td>
+                  <td style={{ fontWeight: '500' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {ch.name}
+                      {(() => {
+                        const warnings = getCardholderWarnings(ch);
+                        if (warnings.length > 0) {
+                          return (
+                            <span 
+                              title={warnings.join('\n')}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                background: 'rgba(245,158,11,0.15)',
+                                color: '#fbbf24',
+                                padding: '2px 6px',
+                                borderRadius: '4px',
+                                fontSize: '0.7rem',
+                                fontWeight: 'normal',
+                                border: '1px solid rgba(245,158,11,0.3)',
+                                cursor: 'help'
+                              }}
+                            >
+                              <AlertTriangle size={12} />
+                              {warnings.length} Issue{warnings.length > 1 ? 's' : ''}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </td>
                   <td>{ch.designation || '—'}</td>
                   <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
                   <td>

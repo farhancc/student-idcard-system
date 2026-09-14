@@ -1,38 +1,44 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
+import { normalizeGoogleDriveUrl } from '@/lib/pdf/field-resolver';
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
-
     const formData = await request.formData();
-    const clientIdStr = formData.get('clientId');
+    const orgToken = formData.get('orgToken') as string | null;
+    let pressId: number;
+    let clientId: number;
+
+    if (orgToken) {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid portal link' }, { status: 403 });
+      }
+      pressId = share.pressId;
+      clientId = share.clientId;
+    } else {
+      const auth = requireActor(request);
+      if ('response' in auth) return auth.response;
+      pressId = auth.actor.pressId;
+      const clientIdStr = formData.get('clientId');
+      if (!clientIdStr) {
+        return NextResponse.json({ error: 'Client ID is required' }, { status: 400 });
+      }
+      clientId = Number(clientIdStr);
+    }
+
     const importMode = formData.get('mode') || 'check'; // check | skip | update | overwrite
     const columnMappingJson = formData.get('columnMapping'); // JSON string mapping source cols to {name, designation, uniqueKey, ...}
     const templateIdStr = formData.get('templateId') as string | null;
     const templateId = templateIdStr ? Number(templateIdStr) : null;
     const file = formData.get('file') as File | null;
     const googleSheetsUrl = formData.get('googleSheetsUrl') as string | null;
-
-    if (!clientIdStr) {
-      return NextResponse.json({ error: 'Client ID is required' }, { status: 400 });
-    }
-    const clientId = Number(clientIdStr);
-
-    // Verify client belongs to press
-    const client = await prisma.client.findFirst({
-      where: { id: clientId, pressId },
-    });
-    if (!client) {
-      return NextResponse.json({ error: 'Client not found' }, { status: 404 });
-    }
 
     let rawData: any[] = [];
 
@@ -256,14 +262,20 @@ export async function POST(request: Request) {
       if (!name) continue; // skip blank name rows
 
       const designation = (designationCol && row[designationCol]) ? String(row[designationCol]).trim() : null;
-      const photoUrl = (photoUrlCol && row[photoUrlCol]) ? String(row[photoUrlCol]).trim() : null;
+      const rawPhotoUrl = (photoUrlCol && row[photoUrlCol]) ? String(row[photoUrlCol]).trim() : null;
+      const photoUrl = rawPhotoUrl ? (normalizeGoogleDriveUrl(rawPhotoUrl) || rawPhotoUrl) : null;
 
       // Extract custom fields (all columns not mapped to core fields)
       const custom: Record<string, any> = {};
       Object.keys(row).forEach(key => {
         if (key !== nameCol && key !== designationCol && key !== photoUrlCol) {
           if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
-            custom[key] = row[key];
+            const rawVal = row[key];
+            if (typeof rawVal === 'string' && (rawVal.includes('drive.google.com') || rawVal.includes('docs.google.com'))) {
+              custom[key] = normalizeGoogleDriveUrl(rawVal) || rawVal;
+            } else {
+              custom[key] = rawVal;
+            }
           }
         }
       });
@@ -329,12 +341,7 @@ export async function POST(request: Request) {
         for (let i = 0; i < itemsToCreate.length; i += BATCH_SIZE) {
           const batch = itemsToCreate.slice(i, i + BATCH_SIZE);
           const createdBatch = await prisma.$transaction(async (tx) => {
-            const results = [];
-            for (const item of batch) {
-              const created = await tx.cardholder.create({ data: item });
-              results.push(created);
-            }
-            return results;
+            return await (tx.cardholder as any).createManyAndReturn({ data: batch });
           });
           newItems.push(...createdBatch);
         }
@@ -353,6 +360,12 @@ export async function POST(request: Request) {
     }
 
 
+    // Collect all affected cardholder IDs for downstream workflows (e.g. print wizard)
+    const insertedIds = [
+      ...newItems.map((item: any) => item.id),
+      ...updatedItems.map((item: any) => item.id),
+    ];
+
     return NextResponse.json({
       success: true,
       mode: importMode,
@@ -364,6 +377,7 @@ export async function POST(request: Request) {
       duplicates: importMode === 'check' ? duplicates : [], // Only return duplicate details on check mode
       validationErrors,          // Per-row required field violations
       validationErrorCount: validationErrors.length,
+      insertedIds,               // IDs of all created/updated cardholders
     });
   } catch (error) {
     console.error('Import cardholders error:', error);

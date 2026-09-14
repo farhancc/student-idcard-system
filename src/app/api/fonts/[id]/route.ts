@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 // DELETE /api/fonts/[id] — remove a press font
@@ -8,11 +9,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const fontId  = Number(id);
 
     // Ensure font belongs to this press before deleting

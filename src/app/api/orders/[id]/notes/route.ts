@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(
@@ -6,11 +7,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const orderId = Number(id);
 
@@ -31,15 +30,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    const userNameHeader = request.headers.get('x-user-name');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-    const authorName = userNameHeader ? decodeURIComponent(userNameHeader) : 'Operator';
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId, name: authorName } = auth.actor;
     const { id } = await params;
     const orderId = Number(id);
 

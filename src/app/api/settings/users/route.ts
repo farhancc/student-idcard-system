@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
+import { requireActor, requireRole } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const users = await prisma.pressUser.findMany({
       where: { pressId },
@@ -32,19 +31,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userRole = request.headers.get('x-user-role');
-    
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 401 });
-    }
-    
-    // Only OWNER can add staff users
-    if (userRole !== 'OWNER') {
-      return NextResponse.json({ error: 'Forbidden: Only the Press Owner can manage staff users' }, { status: 403 });
-    }
-
-    const pressId = Number(pressIdStr);
+    const auth = requireRole(request, ['OWNER']);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     let body: unknown;
     try {

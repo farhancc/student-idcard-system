@@ -1,5 +1,20 @@
 import { NextResponse } from 'next/server';
-import { verifyMiddlewareHeaders } from '@/lib/middleware-verify';
+import { getVerifiedContext } from '@/lib/middleware-verify';
+import { getSuperAdminSession, SuperAdminSessionPayload } from '@/lib/auth';
+
+export type { SuperAdminSessionPayload };
+
+export async function requireSuperAdmin(): Promise<
+  { admin: SuperAdminSessionPayload } | { response: NextResponse }
+> {
+  const session = await getSuperAdminSession();
+  if (!session) {
+    return {
+      response: NextResponse.json({ error: 'Unauthorized: SuperAdmin access required' }, { status: 401 }),
+    };
+  }
+  return { admin: session };
+}
 
 export interface Actor {
   userId: number;
@@ -9,34 +24,32 @@ export interface Actor {
 }
 
 export function getActor(request: Request): Actor | null {
-  if (!verifyMiddlewareHeaders(request)) {
-    return null;
-  }
+  const ctx = getVerifiedContext(request);
+  if (!ctx) return null;
 
-  const userIdStr = request.headers.get('x-user-id');
-  const pressIdStr = request.headers.get('x-press-id');
-  const role = request.headers.get('x-user-role');
   const rawName = request.headers.get('x-user-name');
-
-  if (!userIdStr || !pressIdStr || !role) {
-    return null;
-  }
-
-  const userId = Number(userIdStr);
-  const pressId = Number(pressIdStr);
-
-  if (isNaN(userId) || isNaN(pressId)) {
-    return null;
-  }
-
-  const name = rawName ? decodeURIComponent(rawName) : 'Operator';
-
   return {
-    userId,
-    pressId,
-    role,
-    name,
+    userId: ctx.userId,
+    pressId: ctx.pressId,
+    role: ctx.role,
+    name: rawName ? decodeURIComponent(rawName) : 'Operator',
   };
+}
+
+/**
+ * Convenience wrapper: returns the verified Actor or an early 401 Response.
+ * Use in routes that need any authenticated user regardless of role.
+ */
+export function requireActor(
+  request: Request
+): { actor: Actor } | { response: NextResponse } {
+  const actor = getActor(request);
+  if (!actor) {
+    return {
+      response: NextResponse.json({ error: 'Unauthorized session' }, { status: 401 }),
+    };
+  }
+  return { actor };
 }
 
 export function requireRole(

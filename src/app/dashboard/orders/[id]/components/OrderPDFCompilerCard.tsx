@@ -1,5 +1,6 @@
 import React from 'react';
-import { Eye, Download, AlertCircle } from 'lucide-react';
+import { Eye, Download, AlertCircle, Monitor } from 'lucide-react';
+import { isElectronApp } from '@/lib/isElectron';
 
 export function OrderPDFCompilerCard({
   order,
@@ -12,6 +13,8 @@ export function OrderPDFCompilerCard({
   handleWhatsAppShare,
   pdfLoading
 }: any) {
+  const isDesktop = isElectronApp();
+
   return (
     <div className="glass-panel" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -30,6 +33,24 @@ export function OrderPDFCompilerCard({
           {showLayoutSettings ? 'Collapse' : 'Expand'}
         </button>
       </div>
+
+      {!isDesktop && (
+        <div style={{
+          padding: '10px 14px',
+          background: 'rgba(239, 68, 68, 0.1)',
+          border: '1px solid rgba(239, 68, 68, 0.3)',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          marginBottom: '16px',
+          fontSize: '0.8rem',
+          color: '#f87171',
+        }}>
+          <Monitor size={18} style={{ flexShrink: 0 }} />
+          <span>PDF creation is restricted to the Desktop (Electron) App. Launch the Desktop App to compile PDFs.</span>
+        </div>
+      )}
 
       {showLayoutSettings && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -61,16 +82,21 @@ export function OrderPDFCompilerCard({
               </select>
             </div>
             {([
-              { label: 'Left Margin (pt)',   value: layoutConfig.marginLeft,   field: 'marginLeft' },
-              { label: 'Top Margin (pt)',    value: layoutConfig.marginTop,    field: 'marginTop' },
-              { label: 'Right Margin (pt)',  value: layoutConfig.marginRight,  field: 'marginRight' },
-              { label: 'Bottom Margin (pt)', value: layoutConfig.marginBottom, field: 'marginBottom' },
-              { label: 'Col Gap (pt)',       value: layoutConfig.colGap,       field: 'colGap' },
-              { label: 'Row Gap (pt)',       value: layoutConfig.rowGap,       field: 'rowGap' },
-              { label: 'Bleed (pt)',         value: layoutConfig.bleed,        field: 'bleed' },
+              { label: 'Left Margin',   value: layoutConfig.marginLeft,   field: 'marginLeft' },
+              { label: 'Top Margin',    value: layoutConfig.marginTop,    field: 'marginTop' },
+              { label: 'Right Margin',  value: layoutConfig.marginRight,  field: 'marginRight' },
+              { label: 'Bottom Margin', value: layoutConfig.marginBottom, field: 'marginBottom' },
+              { label: 'Col Gap',       value: layoutConfig.colGap,       field: 'colGap' },
+              { label: 'Row Gap',       value: layoutConfig.rowGap,       field: 'rowGap' },
+              { label: 'Bleed',         value: layoutConfig.bleed,        field: 'bleed' },
             ] as const).map(({ label, value, field }) => (
               <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{label}</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>{label} (pt)</label>
+                  <span style={{ fontSize: '0.68rem', color: '#a5b4fc' }}>
+                    ({field === 'bleed' ? `${value} mm` : `${Number((value * 0.352778).toFixed(1))} mm`})
+                  </span>
+                </div>
                 <input
                   type="number" min={0} max={200}
                   className="form-input"
@@ -101,7 +127,7 @@ export function OrderPDFCompilerCard({
                 className="btn btn-primary"
                 style={{ fontSize: '0.8rem', padding: '10px 14px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
                 onClick={() => openCompileWizard('PRODUCTION')}
-                disabled={pdfLoading !== null}
+                disabled={!isDesktop || pdfLoading !== null}
               >
                 Generate PDF Grid...
               </button>
@@ -111,7 +137,7 @@ export function OrderPDFCompilerCard({
                 type="button" className="btn btn-secondary"
                 style={{ fontSize: '0.8rem', padding: '8px 12px', flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                 onClick={() => handleCompilePdf('INDIVIDUAL')}
-                disabled={pdfLoading !== null}
+                disabled={!isDesktop || pdfLoading !== null}
               >
                 Compile CR-80 Cards
               </button>

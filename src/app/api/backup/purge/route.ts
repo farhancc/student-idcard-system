@@ -1,42 +1,13 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
-import { v2 as cloudinary } from 'cloudinary';
-
-const isCloudinaryConfigured = 
-  process.env.CLOUDINARY_CLOUD_NAME && 
-  process.env.CLOUDINARY_API_KEY && 
-  process.env.CLOUDINARY_API_SECRET;
-
-if (isCloudinaryConfigured) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
-
-function getCloudinaryPublicId(url: string): string | null {
-  if (!url.includes('cloudinary.com')) return null;
-  try {
-    const parts = url.split('/upload/');
-    if (parts.length < 2) return null;
-    const pathPart = parts[1];
-    const pathSegments = pathPart.split('/');
-    const startIndex = pathSegments[0].startsWith('v') && !isNaN(Number(pathSegments[0].substring(1))) ? 1 : 0;
-    const relativePath = pathSegments.slice(startIndex).join('/');
-    return relativePath.substring(0, relativePath.lastIndexOf('.'));
-  } catch (err) {
-    return null;
-  }
-}
+import { deleteFromR2 } from '@/lib/storage';
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { year, month, clientIds } = await request.json();
     if (!year || !month || !clientIds || !Array.isArray(clientIds)) {
@@ -59,23 +30,14 @@ export async function POST(request: Request) {
     });
 
     let deletedPhotos = 0;
-    if (isCloudinaryConfigured) {
-      for (const ch of cardholders) {
-        if (ch.photoUrl) {
-          const publicId = getCloudinaryPublicId(ch.photoUrl);
-          if (publicId) {
-            try {
-              await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
-              deletedPhotos++;
-            } catch (err) {
-              console.error(`Failed to destroy Cloudinary photo for cardholder ${ch.id}:`, err);
-            }
-          }
-        }
+    for (const ch of cardholders) {
+      if (ch.photoUrl) {
+        const ok = await deleteFromR2(ch.photoUrl);
+        if (ok) deletedPhotos++;
       }
     }
 
-    // 2. Fetch PDF Jobs to delete from Cloudinary
+    // 2. Fetch PDF Jobs to delete from storage
     const pdfJobs = await prisma.pdfJob.findMany({
       where: {
         order: {
@@ -93,21 +55,14 @@ export async function POST(request: Request) {
     });
 
     let deletedPdfs = 0;
-    if (isCloudinaryConfigured) {
-      for (const job of pdfJobs) {
-        if (job.downloadUrl && job.downloadUrl.startsWith('http')) {
-          try {
-            const publicId = `press_${job.pressId}/pdfs/${job.fileName.replace('.pdf', '')}`;
-            await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
-            deletedPdfs++;
-          } catch (err) {
-            console.error(`Failed to destroy Cloudinary PDF for job ${job.id}:`, err);
-          }
-        }
+    for (const job of pdfJobs) {
+      if (job.downloadUrl) {
+        const ok = await deleteFromR2(job.downloadUrl);
+        if (ok) deletedPdfs++;
       }
     }
 
-    // 3. Delete cardholders (cascades to cardAsset, printRecords, orderCardholders join table)
+    // 3. Delete cardholders
     const deletedCardholdersRes = await prisma.cardholder.deleteMany({
       where: {
         clientId: { in: clientIds },
@@ -116,7 +71,7 @@ export async function POST(request: Request) {
       }
     });
 
-    // 4. Delete orders (cascades to pdfJobs, invoices, activities, notes, delivery records, etc.)
+    // 4. Delete orders
     const deletedOrdersRes = await prisma.cardOrder.deleteMany({
       where: {
         clientId: { in: clientIds },
@@ -129,8 +84,8 @@ export async function POST(request: Request) {
       success: true,
       deletedCardholdersCount: deletedCardholdersRes.count,
       deletedOrdersCount: deletedOrdersRes.count,
-      deletedPhotosCloudinary: deletedPhotos,
-      deletedPdfsCloudinary: deletedPdfs
+      deletedPhotosStorage: deletedPhotos,
+      deletedPdfsStorage: deletedPdfs
     });
   } catch (error: unknown) {
     console.error('Backup purge error:', error);

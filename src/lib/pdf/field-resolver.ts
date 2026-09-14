@@ -4,6 +4,51 @@
  */
 
 /**
+ * Transforms Google Drive / Google Form file upload URLs into direct, high-res renderable image URLs.
+ * Handles formats like:
+ * - https://drive.google.com/file/d/FILE_ID/view?usp=drivesdk
+ * - https://drive.google.com/open?id=FILE_ID
+ * - https://drive.google.com/uc?id=FILE_ID
+ * - https://drive.google.com/thumbnail?id=FILE_ID
+ * - Comma-separated multi-file uploads from Google Forms
+ */
+export function normalizeGoogleDriveUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== 'string') return null;
+  let trimmed = url.trim();
+  if (!trimmed) return null;
+
+  // Handle multi-file upload links separated by commas (e.g. Google Forms multi-file upload)
+  if (trimmed.includes(',')) {
+    trimmed = trimmed.split(',')[0].trim();
+  }
+
+  // Check if it's a Google Drive/Docs/usercontent link
+  if (
+    trimmed.includes('drive.google.com') ||
+    trimmed.includes('docs.google.com') ||
+    trimmed.includes('googleusercontent.com')
+  ) {
+    if (trimmed.includes('lh3.googleusercontent.com/d/')) {
+      return trimmed;
+    }
+
+    const match = trimmed.match(/(?:file\/d\/|id=|\/d\/)([a-zA-Z0-9_-]{20,})/);
+    if (match && match[1]) {
+      const fileId = match[1];
+      return `https://lh3.googleusercontent.com/d/${fileId}`;
+    }
+  }
+
+  // Convert unauthenticated Cloudflare R2 S3 endpoints to local /api/uploads proxy
+  if (trimmed.includes('.r2.cloudflarestorage.com/')) {
+    const key = trimmed.split('.r2.cloudflarestorage.com/')[1];
+    if (key) return `/api/uploads/${key.split('?')[0]}`;
+  }
+
+  return trimmed;
+}
+
+/**
  * Universal photo URL resolver matching the Client Directory table column logic.
  */
 export function resolveCardholderPhotoUrl(
@@ -23,7 +68,7 @@ export function resolveCardholderPhotoUrl(
     cardholder.photoUrl !== 'null' &&
     cardholder.photoUrl !== 'undefined'
   ) {
-    return cardholder.photoUrl.trim();
+    return normalizeGoogleDriveUrl(cardholder.photoUrl.trim());
   }
 
   // 2. Custom fields
@@ -64,7 +109,7 @@ export function resolveCardholderPhotoUrl(
       if (photoKeys.includes(cleanKey)) {
         const val = customObj[key];
         if (val && typeof val === 'string' && val.trim() !== '' && val !== 'null' && val !== 'undefined') {
-          return val.trim();
+          return normalizeGoogleDriveUrl(val.trim());
         }
       }
     }
@@ -86,9 +131,11 @@ export function resolveCardholderPhotoUrl(
           cleanVal.startsWith('/api/uploads/') ||
           cleanVal.startsWith('local://') ||
           cleanVal.startsWith('file://') ||
-          cleanVal.startsWith('blob:')
+          cleanVal.startsWith('blob:') ||
+          cleanVal.includes('drive.google.com') ||
+          cleanVal.includes('docs.google.com')
         ) {
-          return cleanVal;
+          return normalizeGoogleDriveUrl(cleanVal);
         }
       }
     }
@@ -188,13 +235,29 @@ export function getResolvedFieldValue(
 
   // 3. Try customFields JSON if passed as string or object
   let customObj: Record<string, any> = {};
+  let hasCustomObj = false;
   if (cardholder.customFields) {
     if (typeof cardholder.customFields === 'string') {
       try {
         customObj = JSON.parse(cardholder.customFields);
+        hasCustomObj = true;
       } catch (e) {}
     } else if (typeof cardholder.customFields === 'object') {
       customObj = cardholder.customFields;
+      hasCustomObj = true;
+    }
+  }
+
+  // If the target field key is explicitly defined in customFields:
+  if (hasCustomObj && Object.prototype.hasOwnProperty.call(customObj, fieldKey)) {
+    const val = customObj[fieldKey];
+    if (val !== undefined && val !== null && !isPlaceholderValue(val) && String(val).trim() !== '') {
+      if (!isIdField || fieldKey !== 'cardSerial') {
+        return val;
+      }
+    } else if (val === '' || val === null || (typeof val === 'string' && val.trim() === '')) {
+      // Field was explicitly submitted empty on form. Do not fall back to other fields.
+      return undefined;
     }
   }
 
@@ -206,7 +269,8 @@ export function getResolvedFieldValue(
         (targetClean.length >= 3 && (ckClean.includes(targetClean) || targetClean.includes(ckClean)))) &&
       v !== undefined &&
       v !== null &&
-      !isPlaceholderValue(v)
+      !isPlaceholderValue(v) &&
+      String(v).trim() !== ''
     ) {
       if (!isIdField || k !== 'cardSerial') {
         return v;
@@ -492,6 +556,32 @@ export function isImageField(f: any): boolean {
   );
 }
 
+export function getPlaceholderImageForField(fieldKey?: string): string {
+  const clean = (fieldKey || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // 1. Signature fields (signature, sig, sign, parent_signature, guardian_signature)
+  if (clean.includes('sign') || clean.includes('sig')) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="120" viewBox="0 0 300 120" fill="none"><rect width="300" height="120" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="4 4"/><path d="M 40 70 Q 70 30 90 70 T 140 60 T 190 75 T 230 45 T 260 70" stroke="#1E293B" stroke-width="3" stroke-linecap="round" fill="none"/><text x="150" y="102" font-family="sans-serif" font-size="11" font-weight="600" fill="#64748B" text-anchor="middle">SPECIMEN SIGNATURE</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
+
+  // 2. Stamp / Seal / Logo fields
+  if (clean.includes('stamp') || clean.includes('seal') || clean.includes('logo')) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160" fill="none"><rect width="160" height="160" rx="12" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="2"/><circle cx="80" cy="80" r="56" fill="none" stroke="#2563EB" stroke-width="3" stroke-dasharray="6 3"/><circle cx="80" cy="80" r="42" fill="none" stroke="#2563EB" stroke-width="1.5"/><path d="M 80 48 L 84 60 L 96 60 L 86 68 L 90 80 L 80 72 L 70 80 L 74 68 L 64 60 L 76 60 Z" fill="#2563EB"/><text x="80" y="104" font-family="sans-serif" font-size="10" font-weight="700" fill="#1E40AF" text-anchor="middle">OFFICIAL STAMP</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
+
+  // 3. Guardian / Father / Mother / Parent Photo
+  if (clean.includes('guardian') || clean.includes('father') || clean.includes('mother') || clean.includes('parent')) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="240" viewBox="0 0 200 240" fill="none"><rect width="200" height="240" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="2"/><circle cx="100" cy="85" r="40" fill="#94A3B8"/><path d="M 35 200 C 35 145, 165 145, 165 200 Z" fill="#94A3B8"/><rect x="20" y="208" width="160" height="24" rx="6" fill="#334155"/><text x="100" y="224" font-family="sans-serif" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">GUARDIAN PHOTO</text></svg>`;
+    return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  }
+
+  // 4. Default Student / Employee Photo
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="240" viewBox="0 0 200 240" fill="none"><rect width="200" height="240" rx="12" fill="#E2E8F0" stroke="#94A3B8" stroke-width="2"/><circle cx="100" cy="85" r="42" fill="#64748B"/><path d="M 30 205 C 30 145, 170 145, 170 205 Z" fill="#64748B"/><rect x="25" y="208" width="150" height="24" rx="6" fill="#1E293B"/><text x="100" y="224" font-family="sans-serif" font-size="11" font-weight="700" fill="#FFFFFF" text-anchor="middle">PHOTO PLACEHOLDER</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function isDateField(fieldKey?: string, fieldType?: string): boolean {
   if (fieldType && fieldType.toLowerCase() === 'date') return true;
   if (!fieldKey) return false;
@@ -536,8 +626,9 @@ export function resolveFieldRawValue(
   // 1. Try dynamic cardholder resolution first
   let resolved = getResolvedFieldValue(f.field, data, cardholder || {}, f.type);
 
-  // 2. ID type fallback
-  if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && f.type === 'id') {
+  // 2. ID type fallback (ONLY for generic 'uniqueKey' or 'id' field, NOT for distinct custom fields like 'field_2' or 'rollNumber')
+  const fieldClean = f.field.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && (fieldClean === 'uniquekey' || fieldClean === 'id')) {
     let customObj: Record<string, any> = {};
     if (cardholder?.customFields) {
       if (typeof cardholder.customFields === 'string') {
@@ -568,10 +659,16 @@ export function resolveFieldRawValue(
     if (!isValidImageUrl(resolved) && staticImg) {
       resolved = staticImg;
     }
+    if (resolved && typeof resolved === 'string') {
+      resolved = normalizeGoogleDriveUrl(resolved);
+    }
   } else {
     // If dynamic value is empty/null, fall back to staticValue if valid and not a placeholder
     if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
       resolved = staticImg;
+    }
+    if (resolved && typeof resolved === 'string') {
+      resolved = normalizeGoogleDriveUrl(resolved);
     }
   }
 
@@ -647,21 +744,24 @@ export function computeYOffsets(
   return yOffsets;
 }
 
-export function formatFieldLabel(field: string): string {
-  if (!field) return '';
+export function formatFieldLabel(fieldInput: string | any): string {
+  if (!fieldInput) return '';
+  const fieldStr = typeof fieldInput === 'string' 
+    ? fieldInput 
+    : (fieldInput.label || fieldInput.field || fieldInput.prefix || '');
+  if (!fieldStr) return '';
   
-  // Replace underscores and hyphens with spaces
-  let formatted = field.replace(/[_-]+/g, ' ');
+  // Replace underscores and hyphens with spaces and strip trailing colons
+  let formatted = fieldStr.replace(/[_-]+/g, ' ').replace(/:$/, '').trim();
   
   // Insert space before uppercase letters (camelCase / PascalCase)
-  // but don't insert space if it's already separated or between multiple uppercase letters
   formatted = formatted.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   
   // Split into words, capitalize each word unless it's a short acronym (like ID, DOB)
   return formatted
     .split(' ')
     .filter(Boolean)
-    .map(word => {
+    .map((word: string) => {
       // If the word is entirely uppercase
       if (word === word.toUpperCase()) {
         if (word.length <= 3) return word; // Keep DOB, ID, etc.

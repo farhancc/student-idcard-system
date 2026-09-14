@@ -151,8 +151,8 @@ export type CardholderUpdateInput = z.infer<typeof cardholderUpdateSchema>;
 // ── SuperAdmin ────────────────────────────────────────────────────────────────
 
 export const creditUpdateSchema = z.object({
-  pressId: z.union([z.number(), z.string()]).transform(val => Number(val)),
-  amount: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  pressId: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, 'Press ID must be a positive number'),
+  amount: z.union([z.number(), z.string()]).transform(val => Number(val)).refine(val => !isNaN(val) && val > 0, 'Credit amount must be greater than 0'),
 });
 
 export type CreditUpdateInput = z.infer<typeof creditUpdateSchema>;
@@ -210,10 +210,17 @@ export const marketplacePurchaseSchema = z.object({
 });
 
 export const createCardholderSchema = z.object({
+  clientId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
   name: z.string({ message: 'Name is required' }).min(1, 'Name is required').max(150),
   designation: z.string().max(150).nullable().optional(),
-  photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional(),
-  customFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).nullable().optional(),
+  photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional().or(z.literal('')),
+  uniqueKey: z.string().max(500).nullable().optional(),
+  customFields: z.union([
+    z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])),
+    z.string().transform(val => {
+      try { return JSON.parse(val); } catch { return {}; }
+    })
+  ]).nullable().optional(),
   ignoreDuplicate: z.boolean().optional(),
   templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
 });

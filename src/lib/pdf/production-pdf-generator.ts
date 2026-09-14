@@ -311,3 +311,93 @@ export async function generateProductionPdfClient(
   const pdfBytes = await pdfDoc.save();
   return new Blob([pdfBytes as any], { type: 'application/pdf' });
 }
+
+/**
+ * Chunked version of generateProductionPdfClient.
+ * Splits large jobs into multiple PDFs of ≤maxPagesPerChunk pages each
+ * to prevent browser memory exhaustion.
+ */
+export async function generateProductionPdfChunkedClient(
+  template: Parameters<typeof generateProductionPdfClient>[0],
+  cardholders: Parameters<typeof generateProductionPdfClient>[1],
+  options: PdfGeneratorOptions,
+  pressFonts: Array<{ name: string; fileUrl: string }> = [],
+  onProgress?: (percent: number) => void,
+  maxPagesPerChunk: number = 15
+): Promise<Blob[]> {
+  // Calculate layout to determine cards per page
+  const isPortraitTemplate = template.cardWidth < template.cardHeight;
+  const cardBaseWidth = isPortraitTemplate ? 153 : 242.6;
+  const cardBaseHeight = isPortraitTemplate ? 242.6 : 153;
+  const bleed = options.bleed || 0;
+  const cWidth = cardBaseWidth + bleed * 2;
+  const cHeight = cardBaseHeight + bleed * 2;
+
+  let pageWidth = 841.89;
+  let pageHeight = 1190.55;
+  if (options.paperSize === 'A4') {
+    pageWidth = 595.27;
+    pageHeight = 841.89;
+  }
+  if (options.paperSize === 'CUSTOM') {
+    pageWidth = options.customWidth || pageWidth;
+    pageHeight = options.customHeight || pageHeight;
+  } else if (options.orientation === 'LANDSCAPE') {
+    const temp = pageWidth;
+    pageWidth = pageHeight;
+    pageHeight = temp;
+  }
+
+  const marginX = options.marginLeft ?? 40;
+  const marginXR = options.marginRight ?? 40;
+  const marginY = options.marginTop ?? 40;
+  const marginYB = options.marginBottom ?? 40;
+  const colGap = options.colGap ?? 15;
+  const rowGap = options.rowGap ?? 15;
+  const foldGap = 10;
+  const isSingleSided = !template.backImageUrl || (template.backFields === '[]' || !template.backFields);
+  const centerY = pageHeight / 2;
+
+  const cols = Math.floor((pageWidth - marginX - marginXR + colGap) / (cWidth + colGap)) || 1;
+  let cardsPerPage: number;
+
+  if (isSingleSided) {
+    const fullHeight = pageHeight - marginY - marginYB;
+    const rowsPerPage = Math.floor((fullHeight + rowGap) / (cHeight + rowGap)) || 1;
+    cardsPerPage = cols * rowsPerPage;
+  } else {
+    const halfHeight = centerY - Math.max(marginY, marginYB);
+    const rowsPerHalf = Math.floor((halfHeight - foldGap + rowGap) / (cHeight + rowGap)) || 1;
+    cardsPerPage = cols * rowsPerHalf;
+  }
+
+  const totalPages = Math.ceil(cardholders.length / cardsPerPage);
+  const totalChunks = Math.ceil(totalPages / maxPagesPerChunk);
+
+  if (totalChunks <= 1) {
+    const blob = await generateProductionPdfClient(template, cardholders, options, pressFonts, onProgress);
+    return [blob];
+  }
+
+  const blobs: Blob[] = [];
+  const cardsPerChunk = maxPagesPerChunk * cardsPerPage;
+
+  for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
+    const chunkStart = chunkIdx * cardsPerChunk;
+    const chunkEnd = Math.min(chunkStart + cardsPerChunk, cardholders.length);
+    const chunkCardholders = cardholders.slice(chunkStart, chunkEnd);
+
+    const chunkProgress = onProgress
+      ? (percent: number) => {
+          const basePercent = (chunkIdx / totalChunks) * 100;
+          const chunkContribution = (percent / 100) * (100 / totalChunks);
+          onProgress(Math.round(basePercent + chunkContribution));
+        }
+      : undefined;
+
+    const blob = await generateProductionPdfClient(template, chunkCardholders, options, pressFonts, chunkProgress);
+    blobs.push(blob);
+  }
+
+  return blobs;
+}

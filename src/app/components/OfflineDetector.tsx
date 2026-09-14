@@ -34,13 +34,6 @@ export default function OfflineDetector() {
 
   // Check the connection health
   const checkHealth = useCallback(async () => {
-    // 1. Check browser network status first
-    if (!navigator.onLine) {
-      setIsOffline(true);
-      setOfflineType('network');
-      return false;
-    }
-
     try {
       // 2. Ping the server health endpoint
       const response = await fetchWithTimeout('/api/health');
@@ -367,7 +360,12 @@ export default function OfflineDetector() {
                     <svg className="spin-loader" style={{ width: '22px', height: '22px' }} viewBox="0 0 24 24"></svg>
                   ) : offlineType === 'network' ? (
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M1 1l22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.5M5 12.5a10.94 10.94 0 0 1 5.83-2.84M7.36 7.36A15 15 0 0 1 12 6c3.27 0 6.27 1.05 8.72 2.8M10.88 5.4A19.82 19.82 0 0 1 12 5c6.08 0 11.3 3.47 13.9 8.6M10.22 15.65a4.7 4.7 0 0 1 3.56 0M12 18.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+                      <line x1="2" x2="22" y1="2" y2="22"/>
+                      <path d="M8.56 8.56a12 12 0 0 1 10.46 3.42"/>
+                      <path d="M12 12c.55 0 1.09.13 1.58.37"/>
+                      <path d="M14.53 14.53a4 4 0 0 1-5.06 0"/>
+                      <path d="M18.36 18.36a12 12 0 0 1-14.78-7.94"/>
+                      <path d="M5.44 5.44A16 16 0 0 1 20 12"/>
                     </svg>
                   ) : (
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">

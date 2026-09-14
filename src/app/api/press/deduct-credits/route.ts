@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireRole } from '@/lib/authz';
+import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 
 export async function POST(request: Request) {
   try {
@@ -92,6 +93,16 @@ export async function POST(request: Request) {
       });
 
       return updatedPress;
+    });
+
+    void writeAuditLog({
+      ...getActorFromRequest(request),
+      action: AuditActions.CREDITS_DEDUCTED,
+      category: 'BILLING',
+      resourceType: 'PdfJob',
+      resourceId: jobId,
+      description: `Deducted ${amount} credits for job ${jobId}`,
+      newValue: { amount, creditsBalance: result.credits },
     });
 
     return NextResponse.json({

@@ -1,21 +1,38 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withSystemContext } from '@/lib/prisma';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy_key_for_build_purposes_only', {
-  // Use default API version configured in the SDK
-});
+let _stripe: Stripe | null = null;
+function getStripe(): Stripe | null {
+  if (!process.env.STRIPE_SECRET_KEY) return null;
+  if (!_stripe) {
+    _stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+  }
+  return _stripe;
+}
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 export async function POST(request: Request) {
-  try {
+  return withSystemContext(async () => {
+    try {
+    const stripe = getStripe();
+    if (!stripe) {
+      return NextResponse.json(
+        { error: 'Stripe is not configured. Set STRIPE_SECRET_KEY.' },
+        { status: 503 }
+      );
+    }
+
     const body = await request.text();
     const signature = request.headers.get('stripe-signature');
 
     let event: Stripe.Event;
 
-    if (webhookSecret && signature) {
+    if (webhookSecret) {
+      if (!signature) {
+        return NextResponse.json({ error: 'Missing stripe-signature header' }, { status: 400 });
+      }
       try {
         event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
       } catch (err: any) {
@@ -23,11 +40,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 });
       }
     } else {
-      // In production, signature verification is mandatory
-      if (process.env.NODE_ENV === 'production') {
-        return NextResponse.json({ error: 'Webhook signature is required in production' }, { status: 400 });
+      if (process.env.NODE_ENV !== 'development') {
+        return NextResponse.json(
+          { error: 'STRIPE_WEBHOOK_SECRET is required in non-development environments' },
+          { status: 400 }
+        );
       }
-      // Development fallback
+      // Local development fallback only
       event = JSON.parse(body);
     }
 
@@ -150,4 +169,5 @@ export async function POST(request: Request) {
     console.error('Stripe webhook processing error:', error);
     return NextResponse.json({ error: 'Webhook handler error' }, { status: 400 });
   }
+  });
 }

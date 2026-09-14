@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import fsp from 'fs/promises';
 import path from 'path';
+import { fetchPublicAsset, resolveWithinDir, UnsafeAssetError } from '@/lib/safe-fetch';
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -28,56 +29,38 @@ interface FieldCoordinate {
 // ────────────────────────────────────────────────────────────────
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
-const FETCH_TIMEOUT_MS = 10_000;
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
 
 // The only host we store template originals on (see next.config.ts remotePatterns).
-const ALLOWED_HOSTS = new Set(['res.cloudinary.com']);
+const ALLOWED_HOSTS: ReadonlySet<string> = new Set(['res.cloudinary.com']);
 
 /**
  * Load the source PDF.
  *
  * Both branches are attacker-reachable — `originalUrl` comes straight from the
- * request body — so each one is constrained rather than trusted:
- *   - local paths must resolve to somewhere inside public/
- *   - remote URLs must be https on an allowlisted host, with redirects refused
- *     so a 30x cannot walk out of the allowlist
+ * request body — so each one is constrained rather than trusted. The guards
+ * live in `@/lib/safe-fetch` so that this route, `/api/uploads` and
+ * `/api/proxy-image` share one implementation instead of three.
+ *
  * Throws opaque codes; callers must not echo them to the client.
  */
 async function getPdfBuffer(rawUrl: string): Promise<Buffer> {
   if (rawUrl.startsWith('/')) {
-    const resolved = path.resolve(PUBLIC_DIR, rawUrl.replace(/^\/+/, ''));
-    // path.resolve has already collapsed any ../ segments, so a prefix test is sufficient.
-    if (resolved !== PUBLIC_DIR && !resolved.startsWith(PUBLIC_DIR + path.sep)) {
-      throw new Error('INVALID_PATH');
-    }
+    const resolved = resolveWithinDir(PUBLIC_DIR, rawUrl);
+    if (!resolved) throw new UnsafeAssetError('INVALID_PATH');
     const stat = await fsp.stat(resolved).catch(() => null);
-    if (!stat?.isFile()) throw new Error('NOT_FOUND');
-    if (stat.size > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
+    if (!stat?.isFile()) throw new UnsafeAssetError('INVALID_PATH');
+    if (stat.size > MAX_PDF_BYTES) throw new UnsafeAssetError('TOO_LARGE');
     return fsp.readFile(resolved);
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl);
-  } catch {
-    throw new Error('INVALID_URL');
-  }
-  if (parsed.protocol !== 'https:') throw new Error('INVALID_URL');
-  if (!ALLOWED_HOSTS.has(parsed.hostname)) throw new Error('HOST_NOT_ALLOWED');
-
-  const res = await fetch(parsed, {
-    redirect: 'error',
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  // Allowlisted host *and* the public-address guard: this source is known, so
+  // it gets the narrower rule on top of the shared one.
+  const asset = await fetchPublicAsset(rawUrl, {
+    allowedHosts: ALLOWED_HOSTS,
+    maxBytes: MAX_PDF_BYTES,
   });
-  if (!res.ok) throw new Error('FETCH_FAILED');
-
-  const declared = Number(res.headers.get('content-length') ?? NaN);
-  if (Number.isFinite(declared) && declared > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
-
-  const ab = await res.arrayBuffer();
-  if (ab.byteLength > MAX_PDF_BYTES) throw new Error('TOO_LARGE');
-  return Buffer.from(ab);
+  return asset.body;
 }
 
 /**

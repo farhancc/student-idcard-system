@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET(
   request: Request,
@@ -9,6 +11,10 @@ export async function GET(
 ) {
   try {
     const { token } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(token)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     // 1. Check if token matches orgToken in ClientPortalShare
     let share = await prisma.clientPortalShare.findUnique({
@@ -61,14 +67,7 @@ export async function GET(
     }
 
     if (!share) {
-      return NextResponse.json({ error: 'Invalid or expired portal link' }, { status: 404 });
-    }
-
-    // 5. Enforce 30-day expiration policy for security
-    const expirationPeriod = 30 * 24 * 60 * 60 * 1000; // 30 days
-    const isExpired = Date.now() - new Date(share.createdAt).getTime() > expirationPeriod;
-    if (isExpired) {
-      return NextResponse.json({ error: 'This portal link has expired (expired after 30 days)' }, { status: 410 });
+      return NextResponse.json({ error: 'Invalid or deactivated portal link' }, { status: 404 });
     }
 
     // Fetch Client and Template details
@@ -81,7 +80,7 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 });
     }
 
-    const template = await prisma.cardTemplate.findUnique({
+    let template = await prisma.cardTemplate.findUnique({
       where: { id: share.templateId },
       select: {
         id: true,
@@ -90,10 +89,80 @@ export async function GET(
         cardHeight: true,
         frontImageUrl: true,
         backImageUrl: true,
+        frontOriginalUrl: true,
+        backOriginalUrl: true,
         frontFields: true,
         backFields: true,
+        version: true,
+        parentId: true,
+        pressId: true,
+        clientId: true,
       },
     });
+
+    if (template) {
+      // Always resolve the latest updated version of the template so new fields, styles & layout changes apply live
+      const latestVersion = await prisma.cardTemplate.findFirst({
+        where: {
+          OR: [
+            { id: template.id },
+            { parentId: template.id },
+            ...(template.parentId ? [{ id: template.parentId }, { parentId: template.parentId }] : []),
+            ...(template.name ? [{ name: template.name, ...(template.pressId ? { pressId: template.pressId } : {}) }] : [])
+          ],
+          isLatest: true
+        },
+        orderBy: [
+          { version: 'desc' },
+          { id: 'desc' }
+        ],
+        select: {
+          id: true,
+          name: true,
+          cardWidth: true,
+          cardHeight: true,
+          frontImageUrl: true,
+          backImageUrl: true,
+          frontOriginalUrl: true,
+          backOriginalUrl: true,
+          frontFields: true,
+          backFields: true,
+          version: true,
+        }
+      });
+
+      if (latestVersion) {
+        template = { ...template, ...latestVersion };
+      }
+    }
+
+    // Fetch all available templates for this client
+    const assignedTemplates = await prisma.templateClientAssignment.findMany({
+      where: { clientId: share.clientId },
+      include: {
+        template: {
+          select: { id: true, name: true }
+        }
+      }
+    });
+
+    const directTemplates = await prisma.cardTemplate.findMany({
+      where: { clientId: share.clientId },
+      select: { id: true, name: true }
+    });
+
+    const templatesMap = new Map<number, { id: number; name: string }>();
+    if (template) {
+      templatesMap.set(template.id, { id: template.id, name: template.name });
+    }
+    assignedTemplates.forEach(a => {
+      if (a.template) templatesMap.set(a.template.id, { id: a.template.id, name: a.template.name });
+    });
+    directTemplates.forEach(t => {
+      templatesMap.set(t.id, { id: t.id, name: t.name });
+    });
+
+    const clientTemplates = Array.from(templatesMap.values());
 
     const pressFonts = await prisma.pressFont.findMany({
       where: {
@@ -138,7 +207,10 @@ export async function GET(
     return NextResponse.json({
       success: true,
       type,
-      client,
+      client: {
+        ...client,
+        templates: clientTemplates,
+      },
       template,
       departmentName,
       latestApprovalJob,
@@ -157,6 +229,10 @@ export async function DELETE(
 ) {
   try {
     const { token } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(token)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     // Only allow deactivating via orgToken
     const share = await prisma.clientPortalShare.findFirst({
@@ -185,6 +261,10 @@ export async function PATCH(
 ) {
   try {
     const { token } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(token)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     const share = await prisma.clientPortalShare.findFirst({
       where: { orgToken: token },

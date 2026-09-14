@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
+import { requireSuperAdmin } from '@/lib/authz';
 
 const isCloudinaryConfigured =
   process.env.CLOUDINARY_CLOUD_NAME &&
@@ -19,6 +20,9 @@ if (isCloudinaryConfigured) {
 
 // GET /api/superadmin/fonts — list all global (system-wide) fonts
 export async function GET(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const fonts = await prisma.pressFont.findMany({
       where: { pressId: null },
@@ -34,6 +38,9 @@ export async function GET(request: Request) {
 
 // POST /api/superadmin/fonts — upload a global (system-wide) font (multipart/form-data)
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const formData = await request.formData();
     const file     = formData.get('file') as File | null;

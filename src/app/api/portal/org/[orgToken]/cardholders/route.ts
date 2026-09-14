@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 import { clampLimit } from '@/lib/pagination';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +12,10 @@ export async function GET(
 ) {
   try {
     const { orgToken } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(orgToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     const { searchParams } = new URL(request.url);
     const limitStr = searchParams.get('limit') || searchParams.get('take');
@@ -114,6 +119,10 @@ export async function POST(
 ) {
   try {
     const { orgToken } = await params;
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(orgToken)) === null) {
+      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+    }
 
     const share = await prisma.clientPortalShare.findUnique({
       where: { orgToken },

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
+import { requireActor, requireRole } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { calculateInvoice } from '@/lib/invoice';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { searchParams } = new URL(request.url);
     const limitStr = searchParams.get('limit') || searchParams.get('take');
@@ -49,22 +49,9 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userRole   = request.headers.get('x-user-role');
-
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-
-    // Only OWNER and OPERATOR can modify invoice details
-    if (userRole !== 'OWNER' && userRole !== 'OPERATOR') {
-      return NextResponse.json(
-        { error: 'Forbidden: Only the Press Owner or Operator can edit invoice details' },
-        { status: 403 }
-      );
-    }
-
-    const pressId = Number(pressIdStr);
+    const auth = requireRole(request, ['OWNER', 'OPERATOR']);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { id, pricePerCard, cardCount, taxPercent, paymentStatus, paymentMethod, notes } = await request.json();
 
@@ -84,24 +71,22 @@ export async function PUT(request: Request) {
     const newCardCount = cardCount !== undefined ? Number(cardCount) : invoice.cardCount;
     const newTaxPercent = taxPercent !== undefined ? Number(taxPercent) : Number(invoice.taxPercent);
 
-    const subtotal = newPricePerCard * newCardCount;
-    const taxAmount = (subtotal * newTaxPercent) / 100.0;
-    const totalAmount = subtotal + taxAmount;
+    const calc = calculateInvoice(newPricePerCard, newCardCount, newTaxPercent);
 
     const data: any = {
-      pricePerCard: newPricePerCard,
-      cardCount: newCardCount,
-      taxPercent: newTaxPercent,
-      subtotal,
-      taxAmount,
-      totalAmount,
+      pricePerCard: calc.pricePerCard,
+      cardCount: calc.cardCount,
+      taxPercent: calc.taxPercent,
+      subtotal: calc.subtotal,
+      taxAmount: calc.taxAmount,
+      totalAmount: calc.totalAmount,
       notes: notes !== undefined ? notes : invoice.notes,
     };
 
     if (paymentStatus !== undefined) {
       data.paymentStatus = paymentStatus;
       if (paymentStatus === 'PAID') {
-        data.paidAmount = totalAmount;
+        data.paidAmount = calc.totalAmount;
         data.paymentMethod = paymentMethod || 'CASH';
         data.paidAt = new Date();
       } else {

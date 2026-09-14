@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/authz';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -59,6 +58,18 @@ export async function GET(request: Request) {
       where: { id: pressId },
       select: { credits: true, promoCredits: true, plan: true },
     });
+
+    const lockedJobs = await prisma.pdfJob.aggregate({
+      where: {
+        pressId,
+        isLocalJob: true,
+        status: { in: ['PENDING', 'PROCESSING'] },
+      },
+      _sum: {
+        creditsLocked: true,
+      },
+    });
+    const lockedCredits = lockedJobs._sum.creditsLocked || 0;
 
     // Revenue this month (from invoices)
     const invoicesThisMonth = await prisma.orderInvoice.findMany({
@@ -203,7 +214,7 @@ export async function GET(request: Request) {
         revenueThisMonth,
         pendingRevenue,
         credits: (press?.credits ?? 0) + (press?.promoCredits ?? 0),
-        lockedCredits: 0,
+        lockedCredits,
         plan: press?.plan ?? 'FREE',
       },
       breakdowns: { byType, byStatus },

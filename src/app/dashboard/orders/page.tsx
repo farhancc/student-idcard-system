@@ -21,6 +21,7 @@ export default function OrdersPage() {
     pressId,
     page, setPage,
     total,
+    pendingPrinting,
     PAGE_SIZE,
     sortBy,
     sortDir,
@@ -89,7 +90,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <OrderStatsOverview />
+      <OrderStatsOverview totalOrders={total} pendingPrinting={pendingPrinting} />
 
       {showForm && (
         <div className="glass-panel" style={{ marginBottom: '32px', width: '100%' }}>

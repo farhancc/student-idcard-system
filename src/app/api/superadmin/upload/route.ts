@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
 import path from 'path';
+import { requireSuperAdmin } from '@/lib/authz';
+import { sanitizeSvg } from '@/lib/svg-sanitizer';
 
 // Configure separate Cloudinary for templates if set, otherwise fall back to main
 const useTemplateCloudinary = !!(
@@ -105,6 +107,9 @@ async function generatePreviewBuffer(
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -136,7 +141,14 @@ export async function POST(request: Request) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    let buffer = Buffer.from(bytes);
+
+    if (fileExtension === '.svg') {
+      const rawSvg = buffer.toString('utf8');
+      const cleanSvg = sanitizeSvg(rawSvg);
+      buffer = Buffer.from(cleanSvg, 'utf8');
+    }
+
     const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
 
 

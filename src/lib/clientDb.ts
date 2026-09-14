@@ -17,11 +17,17 @@ export function initClientDb(): Promise<IDBDatabase> {
       reject(new Error('IndexedDB is only available in the browser'));
       return;
     }
-    const request = window.indexedDB.open('IdexoClientDb', 1);
+    const request = window.indexedDB.open('IdexoClientDb', 2);
     request.onupgradeneeded = (event: any) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('customCards')) {
         db.createObjectStore('customCards', { keyPath: 'id' });
+      }
+      // v2: transient working store for the Batch Import tab. Holds the parsed
+      // rows + photo Blobs for the batch currently being processed. Cleared once
+      // the batch is compiled (or cancelled) — nothing is meant to persist.
+      if (!db.objectStoreNames.contains('batchImport')) {
+        db.createObjectStore('batchImport', { keyPath: 'id' });
       }
     };
     request.onsuccess = (event: any) => {
@@ -30,6 +36,67 @@ export function initClientDb(): Promise<IDBDatabase> {
     request.onerror = (event: any) => {
       reject(event.target.error);
     };
+  });
+}
+
+/**
+ * A single in-progress Batch Import working set. Held here so the batch data
+ * lives in the local DB (not the cloud) during processing, and can survive a
+ * reload of the wizard. Photos are data-URL strings (matching how the panel
+ * previews and renders them).
+ */
+export interface BatchImportData {
+  /** Parsed + edited rows, keyed by template field name. */
+  rows: Record<string, string>[];
+  /** Template field definitions (name + type) for the selected template. */
+  fieldDefs: Array<{ field: string; type: string; isRequired?: boolean; side?: string }>;
+  /** template field name -> matched excel header. */
+  fieldToHeader: Record<string, string>;
+  /** Excel headers with no matching template field (informational). */
+  unmatchedHeaders: string[];
+  /** Selected template id. */
+  templateId: string;
+  /** ZIP photos keyed by sanitized filename variants -> data URL. */
+  zip: Record<string, string>;
+  /** Per-cell uploaded image overrides: `${rowIdx}:${fieldName}` -> data URL. */
+  overrides: Record<string, string>;
+}
+
+const BATCH_ID = 'current';
+
+export async function saveBatch(data: BatchImportData): Promise<void> {
+  const db = await initClientDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('batchImport', 'readwrite');
+    const req = tx.objectStore('batchImport').put({ id: BATCH_ID, ...data });
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getBatch(): Promise<BatchImportData | null> {
+  const db = await initClientDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('batchImport', 'readonly');
+    const req = tx.objectStore('batchImport').get(BATCH_ID);
+    req.onsuccess = () => {
+      const r = req.result;
+      if (!r) { resolve(null); return; }
+      const data = { ...r };
+      delete data.id;
+      resolve(data as BatchImportData);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearBatch(): Promise<void> {
+  const db = await initClientDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('batchImport', 'readwrite');
+    const req = tx.objectStore('batchImport').delete(BATCH_ID);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
   });
 }
 

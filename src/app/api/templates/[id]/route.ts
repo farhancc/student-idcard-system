@@ -2,19 +2,21 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateTemplateSchema } from '@/lib/schemas';
 import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
+import { getActor, requireActor } from '@/lib/authz';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
+    const actor = getActor(request);
+    const pressId = actor?.pressId ?? null;
     const { id } = await params;
     const templateId = Number(id);
 
     const where: any = { id: templateId };
-    if (pressIdStr) {
-      where.OR = [{ pressId: Number(pressIdStr) }, { pressId: null }];
+    if (pressId !== null) {
+      where.OR = [{ pressId }, { pressId: null }];
     }
 
     const template = await prisma.cardTemplate.findFirst({ where });
@@ -36,11 +38,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const templateId = Number(id);
     const actor = getActorFromRequest(request);
@@ -242,11 +242,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const templateId = Number(id);
     const actor = getActorFromRequest(request);

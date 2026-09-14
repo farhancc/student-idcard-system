@@ -128,20 +128,28 @@ export default function SuperAdminLoginPage() {
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowPassword((prev) => !prev);
+                }}
                 style={{
                   position: 'absolute',
-                  right: '16px',
+                  right: '12px',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
-                  color: 'var(--muted)',
+                  color: showPassword ? '#ffffff' : 'var(--muted)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: 0
+                  padding: '8px',
+                  borderRadius: '6px',
+                  zIndex: 10,
+                  transition: 'color 0.2s ease, background 0.2s ease',
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >

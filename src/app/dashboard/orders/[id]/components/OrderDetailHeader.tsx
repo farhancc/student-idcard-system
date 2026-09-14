@@ -1,4 +1,5 @@
 import React from 'react';
+import Link from 'next/link';
 import { ArrowLeft, Copy, RefreshCw, Zap, CheckCircle, Activity } from 'lucide-react';
 
 export function OrderDetailHeader({
@@ -36,11 +37,9 @@ export function OrderDetailHeader({
       actionDescription = 'This will compile the CMYK print grids on A3 layout sheets and lock printing credits.';
       break;
     case 'PRINTING':
-      if (isOwner) {
-        nextActionLabel = 'Mark as Delivered';
-        nextStatus = 'DELIVERED';
-        actionDescription = 'The cards have been printed and delivered. This will generate the invoice PDF.';
-      }
+      nextActionLabel = 'Mark as Delivered';
+      nextStatus = 'DELIVERED';
+      actionDescription = 'The cards have been printed and delivered. This will generate the invoice PDF.';
       break;
   }
 
@@ -48,13 +47,13 @@ export function OrderDetailHeader({
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <a href="/dashboard/orders" style={{
+          <Link href="/dashboard/orders" style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             width: '36px', height: '36px', borderRadius: '50%', border: '1px solid var(--glass-border)',
             background: 'rgba(255,255,255,0.02)', color: '#fff'
           }}>
             <ArrowLeft size={16} />
-          </a>
+          </Link>
           <div>
             <span style={{ fontSize: '0.8rem', color: 'var(--muted)', textTransform: 'uppercase' }}>Card Print Pipeline</span>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '2px', fontSize: '1.75rem' }}>
@@ -84,20 +83,46 @@ export function OrderDetailHeader({
             }}></div>
           </div>
           {steps.map((step: any) => {
-            const isCompleted = currentStep >= step.num;
+            const isCompleted = currentStep > step.num;
             const isActive = currentStep === step.num;
+
+            let circleBg = '#1e293b';
+            let circleBorder = '2px solid #334155';
+            let circleColor = '#94a3b8';
+            let circleShadow = 'none';
+
+            if (isActive) {
+              circleBg = 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)';
+              circleBorder = '3px solid #a5b4fc';
+              circleColor = '#ffffff';
+              circleShadow = '0 0 16px rgba(99, 102, 241, 0.7)';
+            } else if (isCompleted) {
+              circleBg = 'linear-gradient(135deg, #059669 0%, #10b981 100%)';
+              circleBorder = '2px solid #34d399';
+              circleColor = '#ffffff';
+            }
+
             return (
               <div key={step.num} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, flex: 1, minWidth: '100px' }}>
                 <div style={{
                   width: '44px', height: '44px', borderRadius: '50%',
-                  background: isCompleted ? 'var(--primary-gradient)' : 'var(--secondary)',
-                  border: isActive ? '2px solid #fff' : '2px solid rgba(255,255,255,0.08)',
-                  color: isCompleted ? '#fff' : 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontWeight: '700', boxShadow: isActive ? '0 0 15px var(--primary-glow)' : 'none'
+                  background: circleBg,
+                  border: circleBorder,
+                  color: circleColor,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: '700', fontSize: '1rem',
+                  boxShadow: circleShadow,
+                  transition: 'all 0.2s ease'
                 }}>
-                  {step.num}
+                  {isCompleted ? '✓' : step.num}
                 </div>
-                <span style={{ marginTop: '12px', fontSize: '0.8rem', fontWeight: isActive ? '600' : '400', color: isActive ? '#fff' : 'var(--muted)', textAlign: 'center' }}>
+                <span style={{
+                  marginTop: '12px',
+                  fontSize: '0.82rem',
+                  fontWeight: isActive ? '700' : (isCompleted ? '600' : '500'),
+                  color: isActive ? '#ffffff' : (isCompleted ? '#a5b4fc' : '#e2e8f0'),
+                  textAlign: 'center'
+                }}>
                   {step.label}
                 </span>
               </div>
@@ -119,7 +144,7 @@ export function OrderDetailHeader({
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '600' }}>Pipeline Workflow Controller</h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--muted)', margin: '4px 0 0 0' }}>
+              <p style={{ fontSize: '0.8rem', color: '#cbd5e1', margin: '4px 0 0 0' }}>
                 Current status: <span className="badge badge-info" style={{ textTransform: 'uppercase', fontSize: '0.7rem' }}>{order.status.replace(/_/g, ' ')}</span>
               </p>
             </div>
@@ -144,7 +169,7 @@ export function OrderDetailHeader({
                   )}
                 </button>
                 {actionDescription && (
-                  <span style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'right', maxWidth: '350px' }}>{actionDescription}</span>
+                  <span style={{ fontSize: '0.72rem', color: '#a5b4fc', textAlign: 'right', maxWidth: '350px' }}>{actionDescription}</span>
                 )}
               </div>
             ) : (
@@ -154,19 +179,19 @@ export function OrderDetailHeader({
             )}
             <div style={{ height: '36px', width: '1px', background: 'rgba(255,255,255,0.08)', margin: '0 8px' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <label style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>Force Jump Stage</label>
+              <label style={{ fontSize: '0.65rem', color: '#cbd5e1' }}>Force Jump Stage</label>
               <select
                 className="form-input"
-                style={{ padding: '6px 12px', fontSize: '0.78rem', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', color: 'var(--foreground)', borderRadius: '6px', cursor: 'pointer' }}
+                style={{ padding: '6px 12px', fontSize: '0.78rem', background: '#0f172a', border: '1px solid rgba(255,255,255,0.2)', color: '#ffffff', borderRadius: '6px', cursor: 'pointer' }}
                 value={order.status}
                 onChange={(e) => handleWorkflowAction(e.target.value)}
                 disabled={transitioning || pdfLoading !== null}
               >
-                <option value="DRAFT">1. Draft Config</option>
-                <option value="APPROVAL_PDF_SENT">2. Approval Sent</option>
-                <option value="APPROVED">3. Approved layout</option>
-                <option value="PRINTING">4. Printing Press</option>
-                {isOwner && <option value="DELIVERED">5. Delivered</option>}
+                <option value="DRAFT" style={{ background: '#0f172a', color: '#ffffff' }}>1. Draft Config</option>
+                <option value="APPROVAL_PDF_SENT" style={{ background: '#0f172a', color: '#ffffff' }}>2. Approval Sent</option>
+                <option value="APPROVED" style={{ background: '#0f172a', color: '#ffffff' }}>3. Approved layout</option>
+                <option value="PRINTING" style={{ background: '#0f172a', color: '#ffffff' }}>4. Printing Press</option>
+                <option value="DELIVERED" style={{ background: '#0f172a', color: '#ffffff' }}>5. Delivered</option>
               </select>
             </div>
           </div>

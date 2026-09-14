@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma';
+import { getActor } from '@/lib/authz';
+import { getClientIp } from '@/lib/rate-limit';
 
 export type AuditCategory =
   | 'TEMPLATE'
@@ -69,23 +71,18 @@ export function getActorFromRequest(request: Request): {
   ipAddress: string;
   userAgent: string | null;
 } {
-  const pressIdStr = request.headers.get('x-press-id');
-  const userIdStr = request.headers.get('x-user-id');
-  const userName = request.headers.get('x-user-name') || 'Unknown User';
-  const isSuperAdmin = request.headers.get('x-super-admin') === 'true';
-  const ipAddress =
-    request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
-    request.headers.get('x-real-ip') ||
-    '127.0.0.1';
-  const userAgent = request.headers.get('user-agent');
+  const verified = getActor(request);
+  // Role comes from the signed context, not an `x-super-admin` header that any
+  // caller could set — an audit trail that can be forged is worse than none.
+  const isSuperAdmin = verified?.role === 'SUPERADMIN';
 
   return {
-    pressId: pressIdStr ? Number(pressIdStr) : null,
-    actorId: userIdStr ? Number(userIdStr) : null,
-    actorName: userName,
+    pressId: verified && !isSuperAdmin ? verified.pressId : null,
+    actorId: verified?.userId ?? null,
+    actorName: verified?.name ?? 'Unknown User',
     actorType: isSuperAdmin ? 'SUPER_ADMIN' : 'PRESS_USER',
-    ipAddress,
-    userAgent,
+    ipAddress: getClientIp(request),
+    userAgent: request.headers.get('user-agent'),
   };
 }
 
@@ -108,6 +105,8 @@ export const AuditActions = {
   // Billing / Plan
   PLAN_CHANGED: 'PLAN_CHANGED',
   CREDITS_ADDED: 'CREDITS_ADDED',
+  CREDITS_DEDUCTED: 'CREDITS_DEDUCTED',
+  CREDITS_REFUNDED: 'CREDITS_REFUNDED',
   INVOICE_GENERATED: 'INVOICE_GENERATED',
 
   // Users

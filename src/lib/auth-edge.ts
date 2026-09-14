@@ -1,6 +1,13 @@
 import { jwtVerify } from 'jose';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || '');
+const jwtSecretRaw = process.env.JWT_SECRET;
+if (!jwtSecretRaw) {
+  throw new Error(
+    'FATAL: JWT_SECRET environment variable is not set. ' +
+    'The application cannot verify authentication tokens without it.'
+  );
+}
+const JWT_SECRET = new TextEncoder().encode(jwtSecretRaw);
 
 export interface UserSessionPayload {
   userId: number;

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, enterSystemContext } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { signupSchema } from '@/lib/schemas';
 import { getCreditSettings } from '@/lib/system-settings';
 
 export async function POST(request: Request) {
+  // Signing up creates the tenant, so there is no tenant to scope to yet.
+  enterSystemContext();
   // ── Rate limiting: 5 signups per hour per IP ──────────────────────────────
   const ip = getClientIp(request);
   const rl = await rateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);

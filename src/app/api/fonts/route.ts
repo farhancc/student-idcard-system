@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
@@ -20,11 +21,9 @@ if (isCloudinaryConfigured) {
 // GET /api/fonts — list all press fonts
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const fonts = await prisma.pressFont.findMany({
       where: {
@@ -46,11 +45,9 @@ export async function GET(request: Request) {
 // POST /api/fonts — upload a new font (multipart/form-data)
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const formData = await request.formData();
     const file     = formData.get('file') as File | null;

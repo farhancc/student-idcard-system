@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireSuperAdmin } from '@/lib/authz';
 
 // GET /api/superadmin/audit-logs?page=1&limit=50&category=SECURITY&severity=&search=
 export async function GET(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, Number(searchParams.get('page') || 1));

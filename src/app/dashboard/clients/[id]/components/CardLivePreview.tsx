@@ -22,7 +22,7 @@ export function CardLivePreview({
 
     (async () => {
       try {
-        const { renderCardSideClient } = await import('@/lib/pdf/card-renderer-client');
+        const { renderCardSideClient, normalizeGoogleDriveUrl } = await import('@/lib/pdf/card-renderer-client');
         if (cancelled) return;
         await renderCardSideClient(
           canvasRef.current!,
@@ -41,7 +41,7 @@ export function CardLivePreview({
             id: cardholder.id,
             name: cardholder.name,
             designation: cardholder.designation,
-            photoUrl: cardholder.photoUrl,
+            photoUrl: normalizeGoogleDriveUrl(cardholder.photoUrl) || cardholder.photoUrl,
             cardSerial: cardholder.cardSerial,
             uniqueKey: cardholder.uniqueKey,
             customFields: cardholder.customFields,

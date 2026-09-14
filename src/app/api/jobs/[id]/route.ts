@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requireActor, requireRole } from '@/lib/authz';
+import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 import { prisma } from '@/lib/prisma';
 import { generateSignedUrl } from '@/lib/signed-url';
 
@@ -7,16 +9,33 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
+    const { searchParams } = new URL(request.url);
+    const orgToken = searchParams.get('orgToken');
+    let pressId: number;
+
+    if (orgToken) {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid portal link' }, { status: 403 });
+      }
+      pressId = share.pressId;
+    } else {
+      const auth = requireActor(request);
+      if ('response' in auth) return auth.response;
+      pressId = auth.actor.pressId;
     }
-    const pressId = Number(pressIdStr);
     const { id } = await params;
     const jobId = Number(id);
 
     const job = await prisma.pdfJob.findFirst({
       where: { id: jobId, pressId },
+      include: {
+        chunks: {
+          orderBy: { chunkIndex: 'asc' },
+        },
+      },
     });
 
     if (!job) {
@@ -49,6 +68,12 @@ export async function GET(
         expiresAt: job.expiresAt,
         completedAt: job.completedAt,
         isLocalJob: job.isLocalJob,
+        chunkCount: job.chunks.length > 0 ? job.chunks.length : undefined,
+        chunks: job.chunks.length > 0 ? job.chunks.map((c: any) => ({
+          chunkIndex: c.chunkIndex,
+          fileName: c.fileName,
+          downloadUrl: c.downloadUrl,
+        })) : undefined,
       },
     });
   } catch (error) {
@@ -62,13 +87,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = userIdStr ? Number(userIdStr) : null;
+    // Cancelling refunds credits to the press — a credit movement.
+    const auth = requireRole(request, ['OWNER', 'OPERATOR']);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId } = auth.actor;
     const { id } = await params;
     const jobId = Number(id);
 
@@ -140,6 +162,18 @@ export async function POST(
 
       return { success: true, refundedCredits };
     });
+
+    if (result.refundedCredits > 0) {
+      void writeAuditLog({
+        ...getActorFromRequest(request),
+        action: AuditActions.CREDITS_REFUNDED,
+        category: 'BILLING',
+        resourceType: 'PdfJob',
+        resourceId: jobId,
+        description: `Cancelled job ${jobId}, refunded ${result.refundedCredits} credits`,
+        newValue: { refundedCredits: result.refundedCredits },
+      });
+    }
 
     return NextResponse.json(result);
   } catch (error: unknown) {

@@ -1,20 +1,9 @@
 import { NextResponse } from 'next/server';
-import { v2 as cloudinary } from 'cloudinary';
 import { prisma } from '@/lib/prisma';
+import { enterPortalTenant } from '@/lib/portal-auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
-
-const isCloudinaryConfigured =
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET;
-
-if (isCloudinaryConfigured) {
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
+import { uploadToR2, isR2Configured } from '@/lib/storage';
+import crypto from 'crypto';
 
 function validateImageMagicBytes(buf: Buffer): string | null {
   if (buf.length < 4) return null;
@@ -51,6 +40,11 @@ export async function POST(request: Request) {
 
     if (!token) {
       return NextResponse.json({ error: 'Missing security token' }, { status: 400 });
+    }
+
+    // Resolve the token to its press before any tenant-scoped query runs.
+    if ((await enterPortalTenant(token)) === null) {
+      return NextResponse.json({ error: 'Invalid security token' }, { status: 404 });
     }
 
     let share = await prisma.clientPortalShare.findFirst({
@@ -97,7 +91,7 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Verify magic bytes rather than relying on client header
+    // Verify magic bytes
     const verifiedMimeType = validateImageMagicBytes(buffer);
     if (!verifiedMimeType) {
       return NextResponse.json(
@@ -106,37 +100,21 @@ export async function POST(request: Request) {
       );
     }
 
-    if (isCloudinaryConfigured) {
-      // ── Cloudinary path ───────────────────────────────────────────────────
-      const uploadResult = await new Promise<any>((resolve, reject) => {
-        cloudinary.uploader.upload_stream(
-          {
-            folder: `press_${pressId}/${type}s`,
-            resource_type: 'image',
-          },
-          (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
-          }
-        ).end(buffer);
-      });
+    const ext = verifiedMimeType === 'image/png' ? 'png' : verifiedMimeType === 'image/webp' ? 'webp' : 'jpg';
+    const hash = crypto.randomBytes(8).toString('hex');
+    const key = `press_${pressId}/${type}s/${Date.now()}-${hash}.${ext}`;
 
-      return NextResponse.json({
-        success: true,
-        url: uploadResult.secure_url,
-        provider: 'cloudinary',
-      });
-    } else {
-      // ── Fallback: base64 data URI (no filesystem writes) ──────────────────
-      const base64 = buffer.toString('base64');
-      const dataUri = `data:${verifiedMimeType};base64,${base64}`;
+    const url = await uploadToR2({
+      key,
+      body: buffer,
+      contentType: verifiedMimeType,
+    });
 
-      return NextResponse.json({
-        success: true,
-        url: dataUri,
-        provider: 'base64',
-      });
-    }
+    return NextResponse.json({
+      success: true,
+      url,
+      provider: isR2Configured ? 'r2' : 'local',
+    });
   } catch (error: unknown) {
     console.error('Portal upload handler error:', error);
     return NextResponse.json({ error: 'Failed to upload image' }, { status: 500 });

@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { requireSuperAdmin } from '@/lib/authz';
 
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { pressName, ownerName, email, password, phone, city, plan, credits } = await request.json();
 
@@ -75,6 +79,9 @@ export async function POST(request: Request) {
 
 
 export async function GET() {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     let presses;
     try {
@@ -243,6 +250,9 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const { pressId, plan, isActive, resetPassword, email } = await request.json();
 

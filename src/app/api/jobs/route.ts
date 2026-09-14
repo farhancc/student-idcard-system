@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
+import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
 import { clampLimit } from '@/lib/pagination';
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userIdStr = request.headers.get('x-user-id');
-    if (!pressIdStr || !userIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    const userId = Number(userIdStr);
-    const userRole = request.headers.get('x-user-role') || 'DESIGNER';
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId, role: userRole, name: actorName } = auth.actor;
 
     const {
       orderId, pdfType, paperSize, orientation, bleed, cropMarks, foldLine,
@@ -153,11 +149,9 @@ export async function POST(request: Request) {
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized session' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { searchParams } = new URL(request.url);
     const limit = clampLimit(searchParams.get('limit') || searchParams.get('take'), 50, 100);

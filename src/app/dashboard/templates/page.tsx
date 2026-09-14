@@ -5,7 +5,7 @@ import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, Refr
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
-import { computeYOffsets, wrapWords, formatFieldLabel, FieldCoordinate } from '@/lib/pdf/card-renderer-client';
+import { computeYOffsets, wrapWords, formatFieldLabel, FieldCoordinate, getPlaceholderImageForField } from '@/lib/pdf/card-renderer-client';
 import FieldTooltip from './components/FieldTooltip';
 import { CanvasRuler, GuideDifferences } from './components/CanvasRuler';
 import TemplateListGrid from './components/TemplateListGrid';
@@ -349,15 +349,34 @@ export default function TemplatesPage() {
 
   const handleRemoveField = (side: 'front' | 'back', index: number) => {
     if (side === 'front') {
-      setFrontFields(frontFields.filter((_, i) => i !== index));
+      setFrontFields(prev => prev.filter((_, i) => i !== index));
     } else {
-      setBackFields(backFields.filter((_, i) => i !== index));
+      setBackFields(prev => prev.filter((_, i) => i !== index));
+    }
+
+    setSelectedFieldIndex(prev => {
+      if (selectedSide !== side || prev === null) return prev;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
+
+    setActiveTooltipIndex(prev => {
+      if (activeTooltipSide !== side || prev === null) return prev;
+      if (prev === index) return null;
+      if (prev > index) return prev - 1;
+      return prev;
+    });
+
+    if (activeTooltipSide === side && activeTooltipIndex === index) {
+      setActiveTooltipSide(null);
     }
   };
 
   const handleCopyField = (side: 'front' | 'back', index: number) => {
     const fields = side === 'front' ? frontFields : backFields;
     const original = fields[index];
+    if (!original) return;
     const newField: FieldCoordinate = {
       ...original,
       x: Math.min(cardWidth - 50, original.x + 15),
@@ -383,12 +402,16 @@ export default function TemplatesPage() {
 
   const handleFieldChange = (side: 'front' | 'back', index: number, key: keyof FieldCoordinate, val: any) => {
     const fields = side === 'front' ? [...frontFields] : [...backFields];
+    if (index < 0 || index >= fields.length || !fields[index]) {
+      console.warn(`[handleFieldChange] Invalid field index ${index} for side ${side}`);
+      return;
+    }
     const oldField = fields[index];
     
     let updatedField = { ...oldField, [key]: val };
     
     // Auto-update prefix if field name changes and prefix was default or empty
-    if (key === 'field') {
+    if (key === 'field' && oldField?.field) {
       const formatLabel = (name: string) => formatFieldLabel(name);
       const oldDefaultPrefix1 = `${oldField.field}: `;
       const oldDefaultPrefix2 = `${oldField.field} : `;
@@ -1164,11 +1187,7 @@ export default function TemplatesPage() {
     };
 
     const deleteField = () => {
-      const updated = fields.filter((_, i) => i !== index);
-      setFields(updated);
-      setSelectedFieldIndex(null);
-      setActiveTooltipIndex(null);
-      setActiveTooltipSide(null);
+      handleRemoveField(side, index);
     };
 
     return (
@@ -1606,35 +1625,75 @@ export default function TemplatesPage() {
           <h1>Card Templates</h1>
           <p style={{ marginTop: '4px' }}>Upload design layouts and configure placement coordinate fields.</p>
         </div>
-        <button id="btn-create-template" className="btn btn-primary" onClick={() => {
-          if (showForm) {
-            setEditingTemplateId(null);
-            setName('');
-            setCardWidth(673);
-            setCardHeight(1039);
-            setFrontImageUrl('');
-            setBackImageUrl('');
-            setFrontFields([]);
-            setBackFields([]);
-            setTestData({});
-            setActiveTooltipIndex(null);
-            setActiveTooltipSide(null);
-            setCategory('OTHER');
-            setSides(1);
-            setSelectedClientIds([]);
-          }
-          setShowForm(!showForm);
-          if (!showForm) {
-            setTimeout(() => scrollAndFocus('template-name'), 50);
-          }
-        }}>
-          <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {showForm && (
+            <button
+              id="btn-top-save-update-template"
+              className="btn btn-primary"
+              disabled={submitting}
+              onClick={() => handleSave()}
+              style={{
+                background: editingTemplateId
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: '#ffffff',
+                boxShadow: editingTemplateId
+                  ? '0 4px 14px rgba(16, 185, 129, 0.3)'
+                  : '0 4px 14px rgba(59, 130, 246, 0.3)'
+              }}
+            >
+              <Save size={18} /> {submitting ? 'Saving...' : editingTemplateId ? 'Update Template' : 'Save Template'}
+            </button>
+          )}
+          <button id="btn-create-template" className="btn btn-secondary" onClick={() => {
+            if (showForm) {
+              setEditingTemplateId(null);
+              setName('');
+              setCardWidth(673);
+              setCardHeight(1039);
+              setFrontImageUrl('');
+              setBackImageUrl('');
+              setFrontFields([]);
+              setBackFields([]);
+              setTestData({});
+              setActiveTooltipIndex(null);
+              setActiveTooltipSide(null);
+              setCategory('OTHER');
+              setSides(1);
+              setSelectedClientIds([]);
+            }
+            setShowForm(!showForm);
+            if (!showForm) {
+              setTimeout(() => scrollAndFocus('template-name'), 50);
+            }
+          }}>
+            <Plus size={18} /> {showForm ? 'Hide Form' : 'Create Template'}
+          </button>
+        </div>
       </div>
 
       {showForm && (
         <div id="template-editor-form" className="glass-panel" style={{ marginBottom: '32px' }}>
-          <h3 style={{ marginBottom: '24px' }}>{editingTemplateId ? `Edit Template: ${name}` : 'Template Designer Setup'}</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h3 style={{ margin: 0 }}>{editingTemplateId ? `Edit Template: ${name}` : 'Template Designer Setup'}</h3>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={submitting}
+              onClick={() => handleSave()}
+              style={{
+                background: editingTemplateId
+                  ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                  : 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                color: '#ffffff',
+                boxShadow: editingTemplateId
+                  ? '0 4px 14px rgba(16, 185, 129, 0.3)'
+                  : '0 4px 14px rgba(59, 130, 246, 0.3)'
+              }}
+            >
+              <Save size={18} /> {submitting ? 'Saving...' : editingTemplateId ? 'Update Template' : 'Save Template'}
+            </button>
+          </div>
           {error && (
             <div style={{ padding: '10px 14px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f77', borderRadius: '6px', marginBottom: '20px', fontSize: '0.85rem' }}>
               {error}
@@ -2698,7 +2757,7 @@ export default function TemplatesPage() {
                                     {f.staticValue !== undefined && f.staticValue !== null ? (
                                       f.type === 'image' ? (
                                         <img 
-                                          src={f.staticValue || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          src={f.staticValue || getPlaceholderImageForField(f.field || (f as any).label)}
                                           alt="Static Image"
                                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }}
                                           draggable={false}
@@ -2709,7 +2768,7 @@ export default function TemplatesPage() {
                                     ) : showTestData ? (
                                       f.type === 'image' ? (
                                         <img 
-                                          src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          src={testData[f.field] || getPlaceholderImageForField(f.field || (f as any).label)}
                                           alt="Test Avatar" 
                                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
                                           draggable={false}
@@ -2726,6 +2785,13 @@ export default function TemplatesPage() {
                                       ) : (
                                         getTestDataValue(f)
                                       )
+                                    ) : f.type === 'image' ? (
+                                      <img 
+                                        src={getPlaceholderImageForField(f.field || (f as any).label)} 
+                                        alt="Image Placeholder" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
+                                        draggable={false}
+                                      />
                                     ) : (
                                       f.field
                                     )}
@@ -3149,7 +3215,7 @@ export default function TemplatesPage() {
                                     {f.staticValue !== undefined && f.staticValue !== null ? (
                                       f.type === 'image' ? (
                                         <img 
-                                          src={f.staticValue || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          src={f.staticValue || getPlaceholderImageForField(f.field || (f as any).label)}
                                           alt="Static Image"
                                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }}
                                           draggable={false}
@@ -3160,7 +3226,7 @@ export default function TemplatesPage() {
                                     ) : showTestData ? (
                                       f.type === 'image' ? (
                                         <img 
-                                          src={testData[f.field] || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&h=200&fit=crop"} 
+                                          src={testData[f.field] || getPlaceholderImageForField(f.field || (f as any).label)}
                                           alt="Test Avatar" 
                                           style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
                                           draggable={false}
@@ -3177,6 +3243,13 @@ export default function TemplatesPage() {
                                       ) : (
                                         getTestDataValue(f)
                                       )
+                                    ) : f.type === 'image' ? (
+                                      <img 
+                                        src={getPlaceholderImageForField(f.field || (f as any).label)} 
+                                        alt="Image Placeholder" 
+                                        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: f.borderRadius ? `${f.borderRadius * scale}px` : '0px' }} 
+                                        draggable={false}
+                                      />
                                     ) : (
                                       f.field
                                     )}

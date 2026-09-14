@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useToast } from '@/components/ui/toast';
 import {
   Users, FileText, Layers, TrendingUp, ArrowRight, PlusCircle,
@@ -173,9 +174,9 @@ function GettingStartedSection() {
           <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
             Register the schools, colleges, or organizations you'll be printing ID cards for.
           </p>
-          <a href="/dashboard/clients" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+          <Link href="/dashboard/clients" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
             Go to Clients <ArrowRight size={12} style={{ marginLeft: '6px' }} />
-          </a>
+          </Link>
         </div>
 
         {/* Step 2 */}
@@ -188,9 +189,9 @@ function GettingStartedSection() {
           <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
             Set up the card layouts, dimensions (vertical/horizontal), background graphics, and dynamic text fields.
           </p>
-          <a href="/dashboard/templates" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+          <Link href="/dashboard/templates" className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
             Design Template <ArrowRight size={12} style={{ marginLeft: '6px' }} />
-          </a>
+          </Link>
         </div>
 
         {/* Step 3 */}
@@ -203,9 +204,9 @@ function GettingStartedSection() {
           <p style={{ fontSize: '0.78rem', color: 'var(--muted)', margin: '0 0 20px 0', flex: 1, lineHeight: '1.5' }}>
             Upload student records (names, photos, designations) and generate high-fidelity print-ready PDFs.
           </p>
-          <a href="/dashboard/orders" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
+          <Link href="/dashboard/orders" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', fontSize: '0.8rem', padding: '8px' }}>
             Create First Order <ArrowRight size={12} style={{ marginLeft: '6px' }} />
-          </a>
+          </Link>
         </div>
       </div>
 
@@ -247,7 +248,10 @@ export default function DashboardPage() {
       const res = await fetch('/api/analytics');
       if (res.ok) {
         const json = await res.json();
-        if (json.success) setData(json);
+        if (json.success) {
+          setData(json);
+          window.dispatchEvent(new Event('refresh-profile'));
+        }
       }
     } catch (err) {
       console.error('Fetch analytics error:', err);
@@ -372,9 +376,9 @@ export default function DashboardPage() {
             <RefreshCw size={14} /> Refresh
           </button>
           {canSeeOrders && (
-            <a href="/dashboard/orders" className="btn btn-primary" style={{ gap: '8px', padding: '8px 16px' }}>
+            <Link href="/dashboard/orders" className="btn btn-primary" style={{ gap: '8px', padding: '8px 16px' }}>
               <PlusCircle size={14} /> New Order
-            </a>
+            </Link>
           )}
         </div>
       </div>
@@ -563,9 +567,9 @@ export default function DashboardPage() {
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Activity size={18} color="#6366f1" /> Recent PDF Jobs
               </h3>
-              <a href="/dashboard/pdf-jobs" style={{ fontSize: '0.78rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Link href="/dashboard/pdf-jobs" style={{ fontSize: '0.78rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 View all <ArrowRight size={12} />
-              </a>
+              </Link>
             </div>
             {recentJobs.length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>No PDF jobs run yet.</p>
@@ -604,9 +608,9 @@ export default function DashboardPage() {
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Package size={18} color="#6366f1" /> Recent Orders
               </h3>
-              <a href="/dashboard/orders" style={{ fontSize: '0.78rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Link href="/dashboard/orders" style={{ fontSize: '0.78rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 View all <ArrowRight size={12} />
-              </a>
+              </Link>
             </div>
             {recentOrders.length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem', textAlign: 'center', padding: '20px 0' }}>No orders created yet.</p>
@@ -727,9 +731,9 @@ export default function DashboardPage() {
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <Users size={18} color="#6366f1" /> Top Clients
               </h3>
-              <a href="/dashboard/clients" style={{ fontSize: '0.75rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Link href="/dashboard/clients" style={{ fontSize: '0.75rem', color: 'var(--primary)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                 All <ArrowRight size={12} />
-              </a>
+              </Link>
             </div>
             {topClients.length === 0 ? (
               <p style={{ color: 'var(--muted)', fontSize: '0.82rem', textAlign: 'center', padding: '14px 0' }}>No clients yet.</p>
@@ -738,7 +742,7 @@ export default function DashboardPage() {
                 {topClients.map((c: any, i: number) => {
                   const maxCards = topClients[0]?.cardCount || 1;
                   return (
-                    <a key={c.id} href={`/dashboard/clients/${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', padding: '8px', borderRadius: '8px', transition: 'background 0.15s' }}
+                    <Link key={c.id} href={`/dashboard/clients/${c.id}`} style={{ display: 'flex', alignItems: 'center', gap: '12px', textDecoration: 'none', padding: '8px', borderRadius: '8px', transition: 'background 0.15s' }}
                       onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
@@ -752,7 +756,7 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0 }}>{c.cardCount}</span>
-                    </a>
+                    </Link>
                   );
                 })}
               </div>

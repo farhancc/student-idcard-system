@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { templateSchema } from '@/lib/schemas';
+import { requireSuperAdmin } from '@/lib/authz';
 
 export async function GET() {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const templates = await prisma.cardTemplate.findMany({
       where: { pressId: null, isLatest: true },
@@ -17,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const body = await request.json();
     const result = templateSchema.safeParse(body);

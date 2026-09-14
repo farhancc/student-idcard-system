@@ -1,18 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr || pressIdStr === 'undefined' || pressIdStr === 'null') {
-      return NextResponse.json({ error: 'Missing or invalid Press ID context' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    if (isNaN(pressId)) {
-      return NextResponse.json({ error: 'Invalid Press ID context' }, { status: 401 });
-    }
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const requests = await prisma.creditRequest.findMany({
       where: { pressId },
@@ -28,14 +24,9 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr || pressIdStr === 'undefined' || pressIdStr === 'null') {
-      return NextResponse.json({ error: 'Missing or invalid Press ID context' }, { status: 401 });
-    }
-    const pressId = Number(pressIdStr);
-    if (isNaN(pressId)) {
-      return NextResponse.json({ error: 'Invalid Press ID context' }, { status: 401 });
-    }
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     let body: unknown;
     try {
       body = await request.json();

@@ -2,7 +2,9 @@ import bcrypt from 'bcryptjs';
 import { SignJWT, jwtVerify } from 'jose';
 import { cookies } from 'next/headers';
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { config } from './config';
+import { isTokenRevoked } from './token-blocklist';
 
 const JWT_SECRET = new TextEncoder().encode(config.jwtSecret);
 
@@ -13,6 +15,7 @@ export interface UserSessionPayload {
   role: 'OWNER' | 'OPERATOR' | 'DESIGNER';
   name: string;
   isSuperAdmin?: boolean;
+  jti?: string;
 }
 
 export interface SuperAdminSessionPayload {
@@ -20,6 +23,7 @@ export interface SuperAdminSessionPayload {
   email: string;
   name: string;
   isSuperAdmin: true;
+  jti?: string;
 }
 
 // Password operations
@@ -33,16 +37,20 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 // JWT signing for Press Users
 export async function signUserToken(payload: UserSessionPayload): Promise<string> {
-  return new SignJWT({ ...payload })
+  const jti = payload.jti || crypto.randomUUID();
+  return new SignJWT({ ...payload, jti })
+    .setJti(jti)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
-    .setExpirationTime('7d')
+    .setExpirationTime('24h')
     .sign(JWT_SECRET);
 }
 
 // JWT signing for Super Admins
 export async function signSuperAdminToken(payload: SuperAdminSessionPayload): Promise<string> {
-  return new SignJWT({ ...payload })
+  const jti = payload.jti || crypto.randomUUID();
+  return new SignJWT({ ...payload, jti })
+    .setJti(jti)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('12h')
@@ -53,6 +61,9 @@ export async function signSuperAdminToken(payload: SuperAdminSessionPayload): Pr
 export async function verifyToken(token: string): Promise<UserSessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (payload.jti && (await isTokenRevoked(payload.jti as string))) {
+      return null;
+    }
     return payload as unknown as UserSessionPayload;
   } catch (error) {
     return null;

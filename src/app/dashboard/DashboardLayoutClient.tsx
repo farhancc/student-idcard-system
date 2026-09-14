@@ -20,6 +20,7 @@ import {
   X,
   Store,
   HelpCircle,
+  Hash,
 } from 'lucide-react';
 import { ToastProvider } from '@/components/ui/toast';
 
@@ -104,6 +105,7 @@ export default function DashboardLayoutClient({
     { label: 'Invoices',   path: '/dashboard/invoices',  icon: <CreditCard size={18} />,      roles: ['OWNER', 'OPERATOR'] },
     { label: 'Templates',  path: '/dashboard/templates',   icon: <Layers size={18} />,          roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
     { label: 'Marketplace', path: '/dashboard/marketplace', icon: <Store size={18} />,           roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
+    { label: 'Serial Printer', path: '/dashboard/serial-printer', icon: <Hash size={18} />,     roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
     { label: 'PDF Jobs',   path: '/dashboard/pdf-jobs',    icon: <Clock size={18} />,           roles: ['OWNER', 'OPERATOR'] },
     { label: 'Settings',   path: '/dashboard/settings',  icon: <Settings size={18} />,        roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
   ];

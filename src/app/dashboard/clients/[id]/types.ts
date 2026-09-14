@@ -65,6 +65,9 @@ export interface QuickJobResult {
   downloadUrl?: string;
   errorMsg?: string;
   orderId?: number;
+  autoDownloaded?: boolean;
+  chunkCount?: number;
+  chunks?: Array<{ chunkIndex: number; fileName: string; downloadUrl: string }>;
 }
 
 

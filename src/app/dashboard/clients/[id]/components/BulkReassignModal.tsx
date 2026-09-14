@@ -34,7 +34,7 @@ export function BulkReassignModal({
           </button>
         </div>
         <p style={{ color: 'var(--muted)', fontSize: '0.88rem', marginBottom: '20px' }}>
-          Reassign <strong style={{ color: 'var(--text)' }}>{selectedCount} cardholder(s)</strong> to a new template. Their card assets will be marked as stale and regenerated on next use.
+          Reassign <strong style={{ color: 'var(--text)' }}>{selectedCount} cardholder(s)</strong> to a new template.
         </p>
         <div className="form-group" style={{ marginBottom: '24px' }}>
           <label className="form-label">Select New Template</label>

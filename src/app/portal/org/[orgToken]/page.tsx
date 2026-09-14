@@ -6,7 +6,9 @@ import ImageCropper from '@/app/components/ImageCropper';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
 import { ToastProvider, useToast } from '@/components/ui/toast';
-import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel } from '@/lib/pdf/card-renderer-client';
+import { getResolvedFieldValue, isPlaceholderStaticValue, formatFieldLabel, normalizeGoogleDriveUrl } from '@/lib/pdf/card-renderer-client';
+
+
 
 import { 
   Users, 
@@ -78,6 +80,7 @@ interface Client {
   id: number;
   name: string;
   type: string;
+  templates?: { id: number; name: string }[];
 }
 
 interface Template {
@@ -177,6 +180,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [activeCropField, setActiveCropField] = useState<string | null>(null);
 
+
+
   // Confirm dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -214,25 +219,23 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       setFieldTypeMap(typeMap);
       setFieldCoordsMap(coordsMap);
 
-      // Identify fields that are mapped to 'qr', 'barcode' or static fields to exclude from user forms
+      // Identify fields that are mapped to 'qr', 'barcode', or static elements to exclude from user forms
       const restrictedFields = new Set(
         allFields
-          .filter(f => f.type === 'qr' || f.type === 'barcode' || (f as any).staticValue !== undefined)
+          .filter(f => f.type === 'qr' || f.type === 'barcode' || f.type === 'static_text' || f.type === 'static_image' || (f as any).isStatic === true)
           .map(f => f.field)
       );
 
       // Include user-fillable text, date, number, and ID fields
-      const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || f.type === 'id' || !f.type) && (f as any).staticValue === undefined && !restrictedFields.has(f.field));
+      const textFields = allFields.filter(f => (f.type === 'text' || f.type === 'date' || f.type === 'number' || f.type === 'id' || !f.type) && !restrictedFields.has(f.field));
       const keys = Array.from(new Set(textFields.map(f => f.field)));
       
       const filteredKeys = keys.filter(k => {
         const clean = cleanFieldKey(k);
-        const meta = coordsMap[k];
         return clean !== 'photo' && 
           clean !== 'avatar' &&
           clean !== 'cardserial' &&
-          !clean.includes('serial') &&
-          (meta as any)?.staticValue === undefined;
+          !clean.includes('serial');
       });
       setFormFields(filteredKeys);
 
@@ -677,53 +680,64 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
   function getEffectivePhotoUrl(ch: any): string | null {
     if (!ch) return null;
+    let rawUrl: string | null = null;
     if (ch.photoUrl && ch.photoUrl.trim() !== '' && ch.photoUrl !== 'null' && ch.photoUrl !== 'undefined') {
-      return ch.photoUrl;
-    }
-    if (ch.customFields) {
+      rawUrl = ch.photoUrl;
+    } else if (ch.customFields) {
       try {
         const parsed = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
         if (parsed && typeof parsed === 'object') {
           for (const [key, val] of Object.entries(parsed)) {
             if (val && typeof val === 'string' && (val.startsWith('http://') || val.startsWith('https://') || val.startsWith('data:image/'))) {
-              return val;
+              rawUrl = val;
+              break;
             }
           }
         }
       } catch (e) {}
     }
-    return null;
+    return normalizeGoogleDriveUrl(rawUrl);
   }
 
   const getCardholderWarnings = (ch: Cardholder) => {
     const warnings: string[] = [];
-    if (!template) return warnings;
+
+    let parsedCustom: Record<string, any> = {};
+    if (ch.customFields) {
+      try {
+        parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
+      } catch (e) {}
+    }
+
+    const cardholderData = {
+      name: ch.name,
+      designation: ch.designation,
+      uniqueKey: ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key || '',
+      photoUrl: ch.photoUrl,
+      cardSerial: ch.cardSerial,
+      customFields: parsedCustom
+    };
+
+    if (!template) {
+      if (!ch.name || ch.name.trim() === '') warnings.push('Name is required');
+      if (!ch.photoUrl || ch.photoUrl.trim() === '') warnings.push('Photo is missing');
+      if (!ch.designation || ch.designation.trim() === '') warnings.push('Designation is missing');
+      const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key;
+      if (!rawId || String(rawId).trim() === '' || String(rawId).startsWith('C-')) warnings.push('ID is missing');
+      return warnings;
+    }
 
     try {
       const front = JSON.parse(template.frontFields || '[]');
       const back = JSON.parse(template.backFields || '[]');
       const allFields: any[] = [...front, ...back];
 
-      let parsedCustom: Record<string, any> = {};
-      if (ch.customFields) {
-        parsedCustom = typeof ch.customFields === 'string' ? JSON.parse(ch.customFields) : ch.customFields;
-      }
-
-      const cardholderData = {
-        name: ch.name,
-        designation: ch.designation,
-        uniqueKey: ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key || '',
-        photoUrl: ch.photoUrl,
-        cardSerial: ch.cardSerial,
-        customFields: parsedCustom
-      };
-
       const checkedFields = new Set<string>();
 
       allFields.forEach((f: any) => {
         if (!f || !f.field) return;
 
-        if (f.staticValue !== undefined && f.staticValue !== null && !isPlaceholderStaticValue(f.staticValue, f.field)) {
+        if (f.isStatic === true || f.type === 'static_text' || f.type === 'static_image') {
           return;
         }
 
@@ -735,44 +749,74 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
         if (checkedFields.has(f.field)) return;
         checkedFields.add(f.field);
 
-        if (fieldClean === 'name' || fieldClean === 'fullname' || fieldClean === 'studentname') {
-          if (!ch.name || ch.name.trim() === '') {
+        if (fieldClean === 'name' || fieldClean === 'fullname' || fieldClean === 'studentname' || f.isName) {
+          const nameVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.name;
+          if (!nameVal || String(nameVal).trim() === '') {
             warnings.push('Name is required');
           }
           return;
         }
 
         if (fieldClean === 'designation' || fieldClean === 'role') {
-          if (!ch.designation || ch.designation.trim() === '') {
+          const desVal = getResolvedFieldValue(f.field, cardholderData, ch) || ch.designation;
+          if (!desVal || String(desVal).trim() === '') {
             warnings.push('Designation is missing');
           }
           return;
         }
 
-        if (f.type === 'id' || fieldClean === 'uniquekey' || fieldClean === 'id' || fieldClean === 'studentid' || fieldClean === 'rollnumber' || fieldClean === 'admissionnumber' || fieldClean.includes('id')) {
-          const idVal = getResolvedFieldValue(f.field, cardholderData, ch, f.type) || ch.uniqueKey || parsedCustom.uniqueKey || parsedCustom.id || parsedCustom.unique_key;
-          if (!idVal || String(idVal).trim() === '' || String(idVal).startsWith('C-')) {
-            const label = formatFieldLabel(f.field) || 'ID';
+        const isIdField = f.type === 'id' || 
+          fieldClean === 'uniquekey' || fieldClean === 'id' || 
+          fieldClean === 'studentid' || fieldClean === 'empid' || fieldClean === 'employeeid' ||
+          fieldClean === 'rollnumber' || fieldClean === 'rollno' || fieldClean === 'admissionnumber' || fieldClean === 'admno' ||
+          fieldClean.endsWith('id') || fieldClean.startsWith('id') || fieldClean.includes('idnumber');
+
+        if (isIdField) {
+          const valInCustom = parsedCustom[f.field];
+          const idVal = (valInCustom !== undefined && valInCustom !== null && String(valInCustom).trim() !== '')
+            ? valInCustom
+            : (getResolvedFieldValue(f.field, cardholderData, ch, f.type) || (f.field === 'uniqueKey' ? ch.uniqueKey : null));
+          if (!idVal || String(idVal).trim() === '' || String(idVal).startsWith('C-') || String(idVal) === 'null' || String(idVal) === 'undefined') {
+            const label = formatFieldLabel(f) || 'ID';
             warnings.push(`${label} is missing`);
           }
           return;
         }
 
-        if (f.type === 'image') {
+        if (f.type === 'image' || f.type === 'photo' || fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('signature')) {
           const imgVal = getResolvedFieldValue(f.field, cardholderData, ch) || (fieldClean.includes('photo') || fieldClean.includes('avatar') || fieldClean.includes('profile') ? ch.photoUrl : null);
           if (!imgVal || String(imgVal).trim() === '' || String(imgVal) === 'null' || String(imgVal) === 'undefined') {
-            const label = formatFieldLabel(f.field);
+            const label = formatFieldLabel(f);
             warnings.push(`${label} is missing`);
           }
           return;
         }
 
         const val = getResolvedFieldValue(f.field, cardholderData, ch);
-        if (val === undefined || val === null || String(val).trim() === '' || String(val) === 'null' || String(val) === 'undefined') {
-          const label = formatFieldLabel(f.field);
+        const valStr = val === undefined || val === null ? '' : String(val).trim();
+        if (valStr === '' || valStr === 'null' || valStr === 'undefined') {
+          const label = formatFieldLabel(f);
           warnings.push(`${label} is missing`);
         }
       });
+
+      // ── Any custom fields present in cardholder data that are empty (only fallback if templateFields is empty) ──────
+      if (templateFields.length === 0) {
+        Object.entries(parsedCustom).forEach(([k, v]) => {
+          const kClean = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if (kClean === 'validtill' || kClean === 'validtilldate' || kClean === 'cardserial') return;
+          if (checkedFields.has(k) || checkedFields.has(kClean)) return;
+          checkedFields.add(k);
+
+          const valStr = v === undefined || v === null ? '' : String(v).trim();
+          if (valStr === '' || valStr === 'null' || valStr === 'undefined') {
+            const label = formatFieldLabel(k);
+            if (label) {
+              warnings.push(`${label} is missing`);
+            }
+          }
+        });
+      }
     } catch (e) {
       console.error('Error validating cardholder in org portal', e);
     }
@@ -1198,9 +1242,23 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     )}
                   </div>
 
-                  <button className="btn btn-secondary portal-add-btn" onClick={openAddModal} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Plus size={16} /> Add Cardholder
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary portal-add-btn" onClick={openAddModal} style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '8px',
+                      padding: '10px 18px',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
+                      boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}>
+                      <Plus size={16} /> Add Cardholder
+                    </button>
+                  </div>
                 </div>
 
                 {/* Cardholders Tables Grouped By Template */}
@@ -1365,9 +1423,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
                                         let val = parsedCustom[tf.field];
                                         if (!val) {
-                                          if (tf.isName) val = ch.name;
+                                          if (tf.isName && ch.name && ch.name !== 'Cardholder') val = ch.name;
                                           else if (tf.field === 'designation') val = ch.designation || '';
-                                          else if (tf.type === 'id' || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '').includes('id') || tf.field.toLowerCase().replace(/[^a-z0-9]/g, '') === 'uniquekey') {
+                                          else if (tf.field === 'uniqueKey') {
                                             const rawId = ch.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key;
                                             if (rawId && !String(rawId).startsWith('C-')) val = rawId;
                                           }
@@ -1691,6 +1749,35 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                       )}
                     </div>
 
+                    {/* Missing Field Warnings Alert */}
+                    {(() => {
+                      const warnings = getCardholderWarnings(selectedCh);
+                      if (warnings.length === 0) return null;
+                      return (
+                        <div style={{
+                          background: 'rgba(245, 158, 11, 0.12)',
+                          border: '1px solid rgba(245, 158, 11, 0.35)',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          color: '#fbbf24',
+                          fontSize: '0.82rem',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
+                            <AlertCircle size={15} />
+                            <span>{warnings.length} Issue{warnings.length > 1 ? 's' : ''} (Missing Data)</span>
+                          </div>
+                          <ul style={{ margin: 0, paddingLeft: '18px', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            {warnings.map((w, idx) => (
+                              <li key={idx}>{w}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
+
                     {/* Cardholder metadata */}
                     <div style={{
                       borderTop: '1px solid var(--glass-border)',
@@ -1703,47 +1790,64 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                       <div style={{ fontSize: '0.75rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Cardholder Information</div>
                       
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--muted)' }}>Name:</span>
-                        <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{selectedCh.name}</span>
-                      </div>
-
-                      {hasDesignation && selectedCh.designation && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--muted)' }}>Designation:</span>
-                          <span style={{ color: 'var(--foreground)' }}>{selectedCh.designation}</span>
-                        </div>
-                      )}
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ color: 'var(--muted)' }}>Department:</span>
                         <span style={{ color: 'var(--foreground)' }}>{getCardholderDeptName(selectedCh)}</span>
                       </div>
 
-                      {/* Custom fields */}
+                      {/* Custom fields strictly filtered by templateFields */}
                       {(() => {
                         let parsedCustom: Record<string, string> = {};
                         try {
                           parsedCustom = typeof selectedCh.customFields === 'string' ? JSON.parse(selectedCh.customFields) : (selectedCh.customFields || {});
                         } catch { parsedCustom = {}; }
-                        
-                        const entries = Object.entries(parsedCustom).filter(([k, v]) => {
-                          return v && typeof v === 'string' && !v.startsWith('data:') && !v.startsWith('http');
-                        });
 
-                        if (entries.length === 0) return null;
+                        const displayFields = templateFields.filter(tf => !tf.isMainPhoto && tf.type !== 'image');
 
+                        if (displayFields.length > 0) {
+                          return (
+                            <>
+                              {displayFields.map(tf => {
+                                const label = formatFieldLabel(tf.field);
+                                let val = parsedCustom[tf.field];
+                                if (!val) {
+                                  if (tf.isName && selectedCh.name && selectedCh.name !== 'Cardholder') {
+                                    val = selectedCh.name;
+                                  } else if (tf.field === 'designation') {
+                                    val = selectedCh.designation || '';
+                                  } else if (tf.field === 'uniqueKey') {
+                                    const rawId = selectedCh.uniqueKey || parsedCustom.id || parsedCustom.uniqueKey || parsedCustom.unique_key;
+                                    if (rawId && !String(rawId).startsWith('C-')) val = rawId;
+                                  }
+                                }
+
+                                return (
+                                  <div key={tf.field} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                    <span style={{ color: 'var(--muted)' }}>{label}:</span>
+                                    <span style={{ fontWeight: tf.isName ? 600 : 400, color: 'var(--foreground)', textAlign: 'right' }}>
+                                      {val || <span style={{ color: 'var(--muted)' }}>—</span>}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          );
+                        }
+
+                        // Fallback if no template fields defined/loaded
                         return (
                           <>
-                            <div style={{ borderTop: '1px solid var(--glass-border)', margin: '4px 0' }} />
-                            {entries.map(([key, val]) => {
-                              const label = formatFieldLabel(key);
-                              return (
-                                <div key={key} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                  <span style={{ color: 'var(--muted)' }}>{label}:</span>
-                                  <span style={{ color: 'var(--foreground)', textAlign: 'right' }}>{val}</span>
-                                </div>
-                              );
-                            })}
+                            {selectedCh.name && selectedCh.name !== 'Cardholder' && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--muted)' }}>Name:</span>
+                                <span style={{ fontWeight: 600, color: 'var(--foreground)' }}>{selectedCh.name}</span>
+                              </div>
+                            )}
+                            {hasDesignation && selectedCh.designation && (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--muted)' }}>Designation:</span>
+                                <span style={{ color: 'var(--foreground)' }}>{selectedCh.designation}</span>
+                              </div>
+                            )}
                           </>
                         );
                       })()}
@@ -2229,6 +2333,8 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           </div>
         </div>
       )}
+
+
 
       {confirmConfig && (
         <ConfirmDialog

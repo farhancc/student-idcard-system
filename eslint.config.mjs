@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored, minified pdf.js worker — not our source, and it accounted for
+    // 1557 of the 2826 problems this config used to report.
+    "public/pdf.worker.min.mjs",
   ]),
 ]);
 

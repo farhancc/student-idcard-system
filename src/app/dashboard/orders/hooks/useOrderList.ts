@@ -11,6 +11,7 @@ export function useOrderList() {
 
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [pendingPrinting, setPendingPrinting] = useState(0);
   const PAGE_SIZE = 30;
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('desc');
@@ -44,6 +45,7 @@ export function useOrderList() {
         const json = await res.json();
         setOrders(json.orders || []);
         setTotal(json.total ?? 0);
+        setPendingPrinting(json.pendingPrintingCount ?? 0);
       }
     } catch (err) {
       console.error(err);
@@ -122,6 +124,7 @@ export function useOrderList() {
     pressId, setPressId,
     page, setPage,
     total, setTotal,
+    pendingPrinting, setPendingPrinting,
     PAGE_SIZE,
     sortBy, setSortBy,
     sortDir, setSortDir,

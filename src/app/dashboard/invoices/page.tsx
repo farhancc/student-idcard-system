@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useToast } from '@/components/ui/toast';
 import { 
   CreditCard, Search, Filter, Calendar, Edit, XCircle, 
@@ -309,9 +310,9 @@ export default function InvoicesPage() {
                       <td style={{ fontWeight: '600', color: 'var(--info)' }}>#INV-{inv.id}</td>
                       <td style={{ fontWeight: '500' }}>{inv.order?.client?.name || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                       <td>
-                        <a href={`/dashboard/orders/${inv.orderId}`} style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                        <Link href={`/dashboard/orders/${inv.orderId}`} style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
                           #{inv.orderId}
-                        </a>
+                        </Link>
                       </td>
                       <td>{inv.cardCount}</td>
                       <td>Rs. {Number(inv.pricePerCard).toFixed(2)}</td>

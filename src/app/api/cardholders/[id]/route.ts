@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cardholderUpdateSchema } from '@/lib/schemas';
+import { requireActor } from '@/lib/authz';
+import { normalizeGoogleDriveUrl } from '@/lib/pdf/field-resolver';
 
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const cardholderId = Number(id);
 
@@ -39,7 +39,7 @@ export async function PUT(
       data: {
         name: name !== undefined ? name : cardholder.name,
         designation: designation !== undefined ? designation : cardholder.designation,
-        photoUrl: photoUrl !== undefined ? photoUrl : cardholder.photoUrl,
+        photoUrl: photoUrl !== undefined ? (photoUrl ? (normalizeGoogleDriveUrl(photoUrl) || photoUrl) : null) : cardholder.photoUrl,
         customFields: customFields !== undefined ? (customFields ? JSON.stringify(customFields) : null) : cardholder.customFields,
         active: active !== undefined ? active : cardholder.active,
       },
@@ -70,11 +70,9 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Missing Press ID' }, { status: 400 });
-    }
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
     const { id } = await params;
     const cardholderId = Number(id);
 

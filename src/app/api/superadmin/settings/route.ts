@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCreditSettings } from '@/lib/system-settings';
+import { requireSuperAdmin } from '@/lib/authz';
 
 export async function GET() {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const settings = await getCreditSettings();
     return NextResponse.json({ success: true, settings });
@@ -13,6 +17,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireSuperAdmin();
+  if ('response' in auth) return auth.response;
+
   try {
     const {
       costSingleSided,

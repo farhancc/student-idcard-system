@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Cardholder, QuickTemplate, QuickJobResult } from '../types';
 import { EmptySlotStrategyType } from '../components/EmptySlotModal';
 import { useToast } from '@/components/ui/toast';
+import { autoDownloadJobFile } from '@/lib/downloadHelper';
 
 export function useCompileWorkflow({
   clientId,
@@ -21,7 +22,7 @@ export function useCompileWorkflow({
   const [showCompileModal, setShowCompileModal] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
   const [wizardCompileType, setWizardCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
-  const [wizardPaperSize, setWizardPaperSize] = useState('A3');
+  const [wizardPaperSize, setWizardPaperSize] = useState('A4');
   const [wizardOrientation, setWizardOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
   const [wizardMarginLeft, setWizardMarginLeft] = useState(40);
   const [wizardMarginRight, setWizardMarginRight] = useState(40);
@@ -49,7 +50,7 @@ export function useCompileWorkflow({
   const [validationResult, setValidationResult] = useState<any>(null);
   const [emptySlotStrategy, setEmptySlotStrategy] = useState<EmptySlotStrategyType>('LEAVE_BLANK');
   const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
-  const [pendingPaperSize, setPendingPaperSize] = useState('A3');
+  const [pendingPaperSize, setPendingPaperSize] = useState('A4');
   const [pendingOrientation, setPendingOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
   const [pendingLayoutConfig, setPendingLayoutConfig] = useState<{ marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean; } | null>(null);
   const [pendingCustomCardId, setPendingCustomCardId] = useState<string | undefined>(undefined);
@@ -277,11 +278,13 @@ export function useCompileWorkflow({
         orderId: orderData.order.id,
       });
       
+      setShowCompileModal(false);
       window.dispatchEvent(new Event('refresh-profile'));
     } catch (e: any) {
       toast(e.message || 'Compile failed', 'error');
     } finally {
       setQCompiling(null);
+      setShowCompileModal(false);
     }
   };
 
@@ -447,12 +450,30 @@ export function useCompileWorkflow({
         const res = await fetch(`/api/jobs/${qJobResult.id}`);
         const data = await res.json();
         if (data.success && data.job) {
+          if (data.job.status === 'COMPLETED' && data.job.downloadUrl && !qJobResult.autoDownloaded) {
+            if (!data.job.isLocalJob) {
+              autoDownloadJobFile(data.job.downloadUrl, data.job.fileName);
+            }
+          }
           setQJobResult((prev: any) => {
             if (!prev) return null;
-            return { ...prev, status: data.job.status, progress: data.job.progress, errorMsg: data.job.errorMsg, isLocalJob: data.job.isLocalJob, downloadUrl: data.job.downloadUrl };
+            return {
+              ...prev,
+              status: data.job.status,
+              progress: data.job.progress,
+              errorMsg: data.job.errorMsg,
+              isLocalJob: data.job.isLocalJob,
+              downloadUrl: data.job.downloadUrl,
+              chunkCount: data.job.chunkCount,
+              chunks: data.job.chunks,
+              autoDownloaded: data.job.status === 'COMPLETED' ? true : prev.autoDownloaded
+            };
           });
           if (data.job.status === 'COMPLETED' || data.job.status === 'FAILED') {
             window.dispatchEvent(new Event('refresh-profile'));
+            setTimeout(() => {
+              setQJobResult(null);
+            }, 6000);
           }
         }
       } catch (e) {}

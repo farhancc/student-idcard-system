@@ -1,11 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import crypto from 'crypto';
 import { getActor, requireRole } from '@/lib/authz';
+import {
+  SIGNATURE_HEX_LENGTH,
+  TenantScope,
+  middlewareSigPayload,
+} from '@/lib/middleware-context';
 
-function computeSig(userId: string, pressId: string, role: string): string {
+// Signs with the same payload builder the middleware uses, so this test fails
+// if the two ever disagree rather than silently testing a stale format.
+function computeSig(userId: string, pressId: string, role: string, scope: TenantScope = 'tenant'): string {
   const secret = process.env.JWT_SECRET || 'dev-middleware-secret';
-  const payload = `${userId}:${pressId}:${role}`;
-  return crypto.createHmac('sha256', secret).update(payload).digest('hex').slice(0, 32);
+  const payload = middlewareSigPayload({
+    userId: Number(userId),
+    pressId: Number(pressId),
+    role,
+    scope,
+  });
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex').slice(0, SIGNATURE_HEX_LENGTH);
 }
 
 describe('authz helper', () => {

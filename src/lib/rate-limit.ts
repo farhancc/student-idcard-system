@@ -121,14 +121,28 @@ export async function rateLimit(
 }
 
 /**
- * Extract client IP from a Next.js Request, falling back gracefully.
+ * Extract the client IP, trusting only headers a proxy we control has set.
+ *
+ * `x-forwarded-for` and `x-real-ip` are attacker-supplied unless something in
+ * front of the app overwrites them. Trusting them unconditionally makes every
+ * IP-keyed limit bypassable by rotating a header, so they are only honoured
+ * when the deployment says a trusted proxy is in front.
  */
 export function getClientIp(request: Request): string {
-  const headers = (request as any).headers as Headers;
-  return (
-    headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim() ??
-    headers.get('x-real-ip') ??
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    'unknown'
-  );
+  const headers = request.headers;
+
+  // Vercel sets this itself and strips any client-supplied copy.
+  const vercelIp = headers.get('x-vercel-forwarded-for')?.split(',')[0]?.trim();
+  if (vercelIp) return vercelIp;
+
+  if (process.env.TRUST_PROXY_HEADERS === 'true') {
+    const forwarded =
+      headers.get('x-real-ip')?.trim() ??
+      headers.get('x-forwarded-for')?.split(',')[0]?.trim();
+    if (forwarded) return forwarded;
+  }
+
+  // No trustworthy source. Callers should pair IP limits with an identity-keyed
+  // limit (see the login route) rather than rely on this bucket alone.
+  return 'unknown';
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,9 +8,9 @@ export const dynamic = 'force-dynamic';
 // Body: { templateId, price, description }
 export async function POST(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const body = await request.json();
     const { templateId, price = 0, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = body;
@@ -90,9 +91,9 @@ export async function POST(request: Request) {
 // DELETE /api/marketplace/publish?templateId=X  — unpublish (delist)
 export async function DELETE(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { searchParams } = new URL(request.url);
     const templateId = Number(searchParams.get('templateId'));

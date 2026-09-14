@@ -1,40 +1,77 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import crypto from 'crypto';
+import { createCardholderSchema } from '@/lib/schemas';
+import { authenticateApiKey } from '@/lib/api-key-auth';
+import { clampLimit } from '@/lib/pagination';
 
-async function getPressIdFromApiKey(request: Request): Promise<number | null> {
-  const apiKey = request.headers.get('x-api-key') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-  if (!apiKey) return null;
+export async function GET(request: Request) {
+  try {
+    const auth = await authenticateApiKey(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth;
 
-  const keyHash = crypto.createHash('sha256').update(apiKey).digest('hex');
-  const keyRecord = await prisma.pressApiKey.findUnique({
-    where: { keyHash },
-  });
+    const { searchParams } = new URL(request.url);
+    const clientIdParam = searchParams.get('clientId');
+    const page = Math.max(1, Number(searchParams.get('page')) || 1);
+    const limit = clampLimit(searchParams.get('limit'), 50, 100);
 
-  if (!keyRecord) return null;
+    const whereClause: { pressId: number; clientId?: number } = { pressId };
+    if (clientIdParam) {
+      const clientId = Number(clientIdParam);
+      if (isNaN(clientId)) {
+        return NextResponse.json({ error: 'Invalid clientId query parameter' }, { status: 400 });
+      }
+      whereClause.clientId = clientId;
+    }
 
-  // Track usage
-  await prisma.pressApiKey.update({
-    where: { id: keyRecord.id },
-    data: { lastUsed: new Date() },
-  });
+    const [cardholders, total] = await Promise.all([
+      prisma.cardholder.findMany({
+        where: whereClause,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { id: 'desc' },
+      }),
+      prisma.cardholder.count({ where: whereClause }),
+    ]);
 
-  return keyRecord.pressId;
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return NextResponse.json({
+      success: true,
+      cardholders,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    });
+  } catch (error) {
+    console.error('REST get cardholders error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
   try {
-    const pressId = await getPressIdFromApiKey(request);
-    if (!pressId) {
-      return NextResponse.json({ error: 'Unauthorized: Invalid API Key' }, { status: 401 });
+    const auth = await authenticateApiKey(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth;
+
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    const body = await request.json();
-    const { clientId, name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = body;
-
-    if (!clientId || !name) {
-      return NextResponse.json({ error: 'Missing clientID or name' }, { status: 400 });
+    const result = createCardholderSchema.safeParse(body);
+    if (!result.success) {
+      const messages = result.error.issues.map(i => i.message).join('; ');
+      return NextResponse.json({ error: messages || 'Invalid input' }, { status: 400 });
     }
+
+    const { clientId, name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = result.data;
 
     // Verify client belongs to this press
     const client = await prisma.client.findFirst({

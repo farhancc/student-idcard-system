@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Lock, Mail, AlertTriangle, Eye, EyeOff, Key } from 'lucide-react';
+import { Lock, Mail, AlertTriangle, Eye, EyeOff, Key, RotateCcw } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -15,6 +15,7 @@ export default function LoginPage() {
 
   const [rememberMe, setRememberMe] = useState(true);
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [savedEmailHint, setSavedEmailHint] = useState<string | null>(null);
   const [isElectron, setIsElectron] = useState(false);
 
   const runAutoBackupFlow = async () => {
@@ -91,37 +92,80 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      setIsElectron(true);
-      (window as any).electronAPI.loadCredentials().then((creds: any) => {
-        if (creds && creds.email && creds.password) {
-          setHasSavedCredentials(true);
-        }
-      }).catch(() => {});
+    const checkSaved = async () => {
+      let foundCreds: { email?: string; password?: string } | null = null;
 
-      // On mount: if today is the 15th, check if we have a valid session and trigger backup
+      if (typeof window !== 'undefined') {
+        const local = localStorage.getItem('last_successful_login');
+        if (local) {
+          try {
+            const parsed = JSON.parse(local);
+            if (parsed && parsed.email && parsed.password) {
+              foundCreds = parsed;
+            }
+          } catch (e) {}
+        }
+
+        if (!foundCreds && (window as any).electronAPI) {
+          try {
+            const creds = await (window as any).electronAPI.loadCredentials();
+            if (creds && creds.email && creds.password) {
+              foundCreds = creds;
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (typeof window !== 'undefined' && (window as any).electronAPI) {
+        setIsElectron(true);
+      }
+
+      if (foundCreds) {
+        setHasSavedCredentials(true);
+        if (foundCreds.email) {
+          setSavedEmailHint(foundCreds.email);
+        }
+      }
+
       const today = new Date();
       if (today.getDate() === 15) {
         runAutoBackupFlow();
       }
-    }
+    };
+
+    checkSaved();
   }, []);
 
-  const handleAutofill = async () => {
+  const handleAutoRefill = async () => {
     setError('');
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      try {
-        const creds = await (window as any).electronAPI.loadCredentials();
-        if (creds && creds.email && creds.password) {
-          setEmail(creds.email);
-          setPassword(creds.password);
-        } else {
-          setError('No saved credentials found. Please log in with "Remember Credentials" checked to save them.');
-        }
-      } catch (err) {
-        console.error('Failed to load credentials for autofill:', err);
-        setError('Failed to load credentials.');
+    let credsToFill: { email?: string; password?: string } | null = null;
+
+    if (typeof window !== 'undefined') {
+      const local = localStorage.getItem('last_successful_login');
+      if (local) {
+        try {
+          const parsed = JSON.parse(local);
+          if (parsed && parsed.email && parsed.password) {
+            credsToFill = parsed;
+          }
+        } catch (e) {}
       }
+
+      if (!credsToFill && (window as any).electronAPI) {
+        try {
+          const creds = await (window as any).electronAPI.loadCredentials();
+          if (creds && creds.email && creds.password) {
+            credsToFill = creds;
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (credsToFill && credsToFill.email && credsToFill.password) {
+      setEmail(credsToFill.email);
+      setPassword(credsToFill.password);
+    } else {
+      setError('No previously saved login credentials found. Please log in once to save credentials.');
     }
   };
 
@@ -142,18 +186,24 @@ export default function LoginPage() {
         throw new Error(data.error || 'Authentication failed');
       }
 
-      // If running inside Electron, handle credentials saving/clearing
-      if (typeof window !== 'undefined' && (window as any).electronAPI) {
-        if (rememberMe) {
-          await (window as any).electronAPI.saveCredentials(email, password);
-        } else {
-          await (window as any).electronAPI.clearCredentials();
-        }
+      // Store credentials locally on successful login for Auto Refill
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(
+          'last_successful_login',
+          JSON.stringify({ email, password, savedAt: new Date().toISOString() })
+        );
 
-        // Successful login: trigger backup check immediately
-        const today = new Date();
-        if (today.getDate() === 15) {
-          await runAutoBackupFlow();
+        if ((window as any).electronAPI) {
+          if (rememberMe) {
+            await (window as any).electronAPI.saveCredentials(email, password);
+          } else {
+            await (window as any).electronAPI.clearCredentials();
+          }
+
+          const today = new Date();
+          if (today.getDate() === 15) {
+            await runAutoBackupFlow();
+          }
         }
       }
 
@@ -209,6 +259,8 @@ export default function LoginPage() {
           </div>
         )}
 
+
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email Address</label>
@@ -255,20 +307,28 @@ export default function LoginPage() {
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(!showPassword)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowPassword((prev) => !prev);
+                }}
                 style={{
                   position: 'absolute',
-                  right: '16px',
+                  right: '12px',
                   top: '50%',
                   transform: 'translateY(-50%)',
                   background: 'none',
                   border: 'none',
-                  color: 'var(--muted)',
+                  color: showPassword ? '#ffffff' : 'var(--muted)',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: 0
+                  padding: '8px',
+                  borderRadius: '6px',
+                  zIndex: 10,
+                  transition: 'color 0.2s ease, background 0.2s ease',
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -307,29 +367,6 @@ export default function LoginPage() {
                 />
                 Remember Credentials
               </label>
-
-              <button
-                type="button"
-                onClick={handleAutofill}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  background: 'none',
-                  border: 'none',
-                  color: 'var(--primary)',
-                  cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  opacity: hasSavedCredentials ? 1 : 0.6,
-                  transition: 'all 0.2s',
-                }}
-              >
-                <Key size={14} />
-                Autofill Saved
-              </button>
             </div>
           )}
 
@@ -342,6 +379,47 @@ export default function LoginPage() {
             {loading ? <div className="spinner" style={{ width: '20px', height: '20px' }}></div> : 'Access Portal'}
           </button>
         </form>
+
+        {/* Dedicated Auto Refill Button below the login form */}
+        <div style={{
+          marginTop: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px'
+        }}>
+          <button
+            type="button"
+            onClick={handleAutoRefill}
+            style={{
+              width: '100%',
+              padding: '10px 16px',
+              borderRadius: '8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: 'var(--text-main, #ffffff)',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+              e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+            }}
+          >
+            <Key size={16} style={{ color: 'var(--primary, #3b82f6)' }} />
+            <span>Auto Refill Last Credentials</span>
+          </button>
+        </div>
 
         <div style={{ 
           textAlign: 'center', 
@@ -360,3 +438,4 @@ export default function LoginPage() {
     </div>
   );
 }
+

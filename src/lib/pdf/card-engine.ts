@@ -4,6 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
 
 // Helper to resolve SVG to high-resolution PNG URL
@@ -92,39 +93,87 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
     return fs.readFileSync(cleanUrl);
   }
 
-  // Extract relative /uploads/... path if present in URL (even HTTP URLs)
-  let cleanRelPath = cleanUrl;
-  if (cleanUrl.includes('/uploads/')) {
-    cleanRelPath = cleanUrl.substring(cleanUrl.indexOf('/uploads/'));
-  } else if (cleanUrl.includes('uploads/')) {
-    cleanRelPath = '/' + cleanUrl.substring(cleanUrl.indexOf('uploads/'));
-  } else if (cleanUrl.startsWith('/')) {
-    cleanRelPath = cleanUrl;
+  // Handle Cloudflare R2 URLs, /api/uploads/, /uploads/ and R2 key paths
+  let r2Key: string | null = null;
+  if (cleanUrl.includes('.r2.cloudflarestorage.com/')) {
+    r2Key = cleanUrl.split('.r2.cloudflarestorage.com/')[1];
+  } else if (cleanUrl.includes('/api/uploads/')) {
+    r2Key = cleanUrl.split('/api/uploads/')[1];
+  } else if (cleanUrl.includes('/uploads/')) {
+    r2Key = cleanUrl.split('/uploads/')[1];
   }
 
-  if (cleanRelPath.startsWith('/')) {
-    const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', cleanRelPath);
-    if (fs.existsSync(publicPath)) {
-      return fs.readFileSync(publicPath);
-    }
+  if (r2Key) {
+    r2Key = r2Key.split('?')[0];
+    const tmpPath = path.join('/tmp', 'idexo', 'uploads', r2Key);
+    const publicPath = path.join(process.cwd(), 'public', 'uploads', r2Key);
+    if (fs.existsSync(tmpPath)) return fs.readFileSync(tmpPath);
+    if (fs.existsSync(publicPath)) return fs.readFileSync(publicPath);
 
-    // Remote fallback for relative uploads when running in desktop app or remote runner
-    const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app';
-    const remoteUrl = `${portalUrl}${cleanRelPath}`;
-    try {
-      const res = await fetch(remoteUrl, { cache: 'no-store' });
-      if (res.ok) {
-        const arrayBuffer = await res.arrayBuffer();
-        return Buffer.from(arrayBuffer);
+    const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+    const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '';
+    const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
+    const R2_BUCKET_NAME = process.env.R2_BUCKET_NAME || 'idexo-card-photos';
+
+    if (R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY) {
+      try {
+        const s3 = new S3Client({
+          region: 'auto',
+          endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+          credentials: {
+            accessKeyId: R2_ACCESS_KEY_ID,
+            secretAccessKey: R2_SECRET_ACCESS_KEY,
+          },
+        });
+        const r2Response = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: r2Key }));
+        if (r2Response.Body) {
+          const byteArray = await r2Response.Body.transformToByteArray();
+          return Buffer.from(byteArray);
+        }
+      } catch (r2Err: any) {
+        console.warn(`[card-engine] R2 direct S3 fetch failed for key "${r2Key}":`, r2Err?.message || r2Err);
       }
-    } catch (e) {
-      console.warn(`[card-engine] Could not fetch relative image from portal ${remoteUrl}:`, e);
     }
   }
 
-  if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
+  // Extract relative /uploads/... path if present in URL (only for relative paths or local portal domain)
+  const isExternalUrl = cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://');
+  const isLocalPortal = cleanUrl.includes('localhost') || cleanUrl.includes('127.0.0.1') || cleanUrl.includes('idexocards.vercel.app');
+
+  if (!isExternalUrl || isLocalPortal) {
+    let cleanRelPath = cleanUrl;
+    if (cleanUrl.includes('/uploads/')) {
+      cleanRelPath = cleanUrl.substring(cleanUrl.indexOf('/uploads/'));
+    } else if (cleanUrl.includes('uploads/')) {
+      cleanRelPath = '/' + cleanUrl.substring(cleanUrl.indexOf('uploads/'));
+    } else if (cleanUrl.startsWith('/')) {
+      cleanRelPath = cleanUrl;
+    }
+
+    if (cleanRelPath.startsWith('/')) {
+      const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', cleanRelPath);
+      if (fs.existsSync(publicPath)) {
+        return fs.readFileSync(publicPath);
+      }
+
+      // Remote fallback for relative uploads when running in desktop app or remote runner
+      const portalUrl = (typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'http://localhost:3000';
+      const remoteUrl = `${portalUrl}${cleanRelPath}`;
+      try {
+        const res = await fetch(remoteUrl, { cache: 'no-store' });
+        if (res.ok) {
+          const arrayBuffer = await res.arrayBuffer();
+          return Buffer.from(arrayBuffer);
+        }
+      } catch (e) {
+        console.warn(`[card-engine] Could not fetch relative image from portal ${remoteUrl}:`, e);
+      }
+    }
+  }
+
+  if (isExternalUrl) {
     const res = await fetch(fileUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Failed to download file: ${res.statusText}`);
+    if (!res.ok) throw new Error(`Failed to download file (${res.status}): ${res.statusText}`);
     const arrayBuffer = await res.arrayBuffer();
     return Buffer.from(arrayBuffer);
   }
@@ -936,15 +985,12 @@ export async function renderCardSideToPdfBytes(
   }
 
   const data: Record<string, any> = {
-    name: cardholder.name || '',
-    designation: cardholder.designation || '',
-    photo: effectivePhotoUrl || cardholder.photoUrl || '',
-    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
-    cardSerial: cardholder.cardSerial || '',
-    uniqueKey: chUniqueKey,
-    id: chUniqueKey,
-    validTill: formattedValidTill,
     ...customData,
+    ...(cardholder.name && cardholder.name !== 'Cardholder' ? { name: cardholder.name } : {}),
+    ...(cardholder.designation ? { designation: cardholder.designation } : {}),
+    ...(effectivePhotoUrl ? { photo: effectivePhotoUrl, photoUrl: effectivePhotoUrl } : {}),
+    cardSerial: cardholder.cardSerial || '',
+    validTill: formattedValidTill,
   };
 
   if (effectivePhotoUrl) {

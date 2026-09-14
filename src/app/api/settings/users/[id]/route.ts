@@ -1,28 +1,19 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hashPassword } from '@/lib/auth';
+import { requireRole } from '@/lib/authz';
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userRole = request.headers.get('x-user-role');
-    const currentUserIdStr = request.headers.get('x-user-id');
-
-    if (!pressIdStr || !currentUserIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (userRole !== 'OWNER') {
-      return NextResponse.json({ error: 'Forbidden: Only the Press Owner can delete staff users' }, { status: 403 });
-    }
+    const auth = requireRole(request, ['OWNER']);
+    if ('response' in auth) return auth.response;
+    const { pressId, userId: currentUserId } = auth.actor;
 
     const { id } = await params;
-    const pressId = Number(pressIdStr);
     const userIdToDelete = Number(id);
-    const currentUserId = Number(currentUserIdStr);
 
     if (isNaN(userIdToDelete)) {
       return NextResponse.json({ error: 'Invalid User ID' }, { status: 400 });
@@ -61,22 +52,11 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    const userRole = request.headers.get('x-user-role');
-
-    if (!pressIdStr) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (userRole !== 'OWNER') {
-      return NextResponse.json(
-        { error: 'Forbidden: Only the Press Owner can reset staff passwords' },
-        { status: 403 }
-      );
-    }
+    const auth = requireRole(request, ['OWNER']);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const { id } = await params;
-    const pressId = Number(pressIdStr);
     const targetUserId = Number(id);
 
     if (isNaN(targetUserId)) {

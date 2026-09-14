@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireActor } from '@/lib/authz';
 
 // GET /api/marketplace/my-purchases — list templates this press has purchased
 export async function GET(request: Request) {
   try {
-    const pressIdStr = request.headers.get('x-press-id');
-    if (!pressIdStr) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    const pressId = Number(pressIdStr);
+    const auth = requireActor(request);
+    if ('response' in auth) return auth.response;
+    const { pressId } = auth.actor;
 
     const purchases = await prisma.templatePurchase.findMany({
       where: { buyerPressId: pressId },
