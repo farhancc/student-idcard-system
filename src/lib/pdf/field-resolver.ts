@@ -17,9 +17,19 @@ export function normalizeGoogleDriveUrl(url: string | null | undefined): string 
   let trimmed = url.trim();
   if (!trimmed) return null;
 
-  // Handle multi-file upload links separated by commas (e.g. Google Forms multi-file upload)
-  if (trimmed.includes(',')) {
-    trimmed = trimmed.split(',')[0].trim();
+  // A data: URI is already a direct, renderable source and must be returned
+  // untouched. Everything below assumes a remote URL, and the comma handling in
+  // particular would cut the URI at the separator before its base64 payload.
+  if (/^data:/i.test(trimmed)) return trimmed;
+
+  // Google Forms multi-file uploads arrive as a comma-separated list of URLs —
+  // take the first one. Only treat a comma as a list separator when what follows
+  // it actually begins another URL: Cloudinary puts commas between transformation
+  // parameters (".../upload/w_200,h_200/sample.jpg"), and splitting on those
+  // truncates a perfectly valid image URL.
+  const listSep = trimmed.indexOf(',');
+  if (listSep !== -1 && /^\s*https?:\/\//i.test(trimmed.slice(listSep + 1))) {
+    trimmed = trimmed.slice(0, listSep).trim();
   }
 
   // Check if it's a Google Drive/Docs/usercontent link
@@ -661,6 +671,264 @@ export function isDateField(fieldKey?: string, fieldType?: string): boolean {
   );
 }
 
+/**
+ * ── Field rules: conditional visibility and computed values ─────────────────
+ *
+ * Both are optional properties on a field object inside a template's
+ * `frontFields` / `backFields` JSON. A field carrying neither behaves exactly as
+ * it always has, which is what keeps every existing template working untouched.
+ *
+ * Rules arrive from the client essentially unvalidated — `templateSchema` caps
+ * the field JSON at 10MB and does not inspect its shape, and a template can also
+ * come in through a marketplace purchase. So every entry point below is total:
+ * a malformed rule means "no rule", never a thrown error. A rule must not be
+ * able to fail a 5,000-card compile.
+ */
+
+/** Bounds both `conditions` and `compute.parts`; these run per field per card. */
+export const MAX_RULE_ITEMS = 20;
+
+/**
+ * The closed operator set. Exported so the write-path validator in `schemas.ts`
+ * accepts exactly what the evaluator below understands — if the two lists drifted,
+ * the API would happily store an operator that silently does nothing at render time.
+ */
+export const FIELD_CONDITION_OPS = [
+  'notEmpty', 'isEmpty', 'eq', 'neq', 'contains', 'startsWith', 'gt', 'lt',
+] as const;
+
+export const FIELD_COMPUTE_TRANSFORMS = ['upper', 'lower', 'capitalize'] as const;
+
+export type FieldConditionOp = typeof FIELD_CONDITION_OPS[number];
+
+export interface FieldCondition {
+  field: string;
+  op: FieldConditionOp;
+  value?: string | number | null;
+}
+
+export interface FieldVisibilityRule {
+  match?: 'all' | 'any';
+  conditions: FieldCondition[];
+}
+
+export type FieldComputeTransform = typeof FIELD_COMPUTE_TRANSFORMS[number];
+
+export interface FieldComputePart {
+  kind: 'field' | 'literal';
+  /** Set when kind === 'field'. */
+  field?: string;
+  /** Set when kind === 'literal'. */
+  text?: string;
+  transform?: FieldComputeTransform;
+}
+
+export interface FieldComputeRule {
+  parts: FieldComputePart[];
+}
+
+/** The same three transforms the renderer's `textTransform` already implements. */
+function applyComputeTransform(s: string, transform?: FieldComputeTransform): string {
+  if (transform === 'upper') return s.toUpperCase();
+  if (transform === 'lower') return s.toLowerCase();
+  if (transform === 'capitalize') return s.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+  return s;
+}
+
+/**
+ * Evaluate one condition.
+ *
+ * The referenced key is resolved through `getResolvedFieldValue` — the same
+ * lookup the renderer uses — so a rule always sees exactly the value that would
+ * have been printed, including alias resolution and the deliberate rule that an
+ * explicitly-blanked form field resolves to undefined rather than inheriting a
+ * sibling's value. A second lookup path here would let rules and rendering
+ * disagree about the very same field.
+ *
+ * An unrecognised operator returns true, i.e. the condition does not constrain
+ * anything, which is the per-condition form of "a malformed rule is no rule".
+ */
+function evaluateCondition(
+  cond: FieldCondition,
+  data: Record<string, any>,
+  cardholder: Record<string, any>
+): boolean {
+  if (!cond || typeof cond !== 'object' || typeof cond.field !== 'string' || !cond.field) return true;
+
+  const raw = getResolvedFieldValue(cond.field, data, cardholder);
+  const actual = raw === undefined || raw === null ? '' : String(raw).trim();
+  const expected = cond.value === undefined || cond.value === null ? '' : String(cond.value).trim();
+
+  switch (cond.op) {
+    case 'isEmpty':
+      return actual === '';
+    case 'notEmpty':
+      return actual !== '';
+    case 'eq':
+      return actual.toLowerCase() === expected.toLowerCase();
+    case 'neq':
+      return actual.toLowerCase() !== expected.toLowerCase();
+    case 'contains':
+      return actual.toLowerCase().includes(expected.toLowerCase());
+    case 'startsWith':
+      return actual.toLowerCase().startsWith(expected.toLowerCase());
+    case 'gt':
+    case 'lt': {
+      const a = parseFloat(actual.replace(/[^0-9.-]/g, ''));
+      const b = parseFloat(expected.replace(/[^0-9.-]/g, ''));
+      // A non-numeric operand makes the comparison meaningless — say false
+      // rather than letting NaN decide.
+      if (isNaN(a) || isNaN(b)) return false;
+      return cond.op === 'gt' ? a > b : a < b;
+    }
+    default:
+      return true;
+  }
+}
+
+/**
+ * Whether a field should be drawn for this cardholder.
+ *
+ * Deliberately separate from `resolveFieldRawValue`, because "hidden" is not the
+ * same as "empty": an empty image field still draws a placeholder, whereas a
+ * hidden one draws nothing at all.
+ */
+export function isFieldVisible(
+  f: { visibleIf?: unknown; [key: string]: any } | null | undefined,
+  data: Record<string, any>,
+  cardholder: Record<string, any> | null | undefined
+): boolean {
+  const rule = f?.visibleIf as FieldVisibilityRule | undefined;
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return true;
+  if (!Array.isArray(rule.conditions) || rule.conditions.length === 0) return true;
+
+  const conditions = rule.conditions.slice(0, MAX_RULE_ITEMS);
+  const ch = cardholder || {};
+  try {
+    return rule.match === 'any'
+      ? conditions.some(c => evaluateCondition(c, data, ch))
+      : conditions.every(c => evaluateCondition(c, data, ch));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Concatenate a computed value from its parts, or undefined when the field
+ * carries no `compute` rule.
+ *
+ * Returns '' (not undefined) when every part resolves empty — an author who
+ * wants the field to disappear in that case pairs `compute` with `visibleIf`,
+ * which keeps the two features composable instead of overlapping.
+ */
+export function computeFieldValue(
+  f: { compute?: unknown; [key: string]: any } | null | undefined,
+  data: Record<string, any>,
+  cardholder: Record<string, any> | null | undefined
+): string | undefined {
+  const rule = f?.compute as FieldComputeRule | undefined;
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return undefined;
+  if (!Array.isArray(rule.parts) || rule.parts.length === 0) return undefined;
+
+  const ch = cardholder || {};
+  let out = '';
+  try {
+    for (const part of rule.parts.slice(0, MAX_RULE_ITEMS)) {
+      if (!part || typeof part !== 'object') continue;
+      if (part.kind === 'literal') {
+        out += typeof part.text === 'string' ? part.text : '';
+      } else if (part.kind === 'field' && typeof part.field === 'string' && part.field) {
+        const raw = getResolvedFieldValue(part.field, data, ch);
+        const str = raw === undefined || raw === null ? '' : String(raw);
+        out += applyComputeTransform(str, part.transform);
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return out;
+}
+
+/**
+ * Build the `data` object every renderer passes to `resolveFieldRawValue`.
+ *
+ * This exists because the preview path and the production-PDF path used to build
+ * it differently: the preview spread `customFields` *first* (so core keys won)
+ * and omitted `id`/`uniqueKey` entirely, while the PDF path spread it *last* (so
+ * a sheet column named `name` beat the cardholder's own name) and included both
+ * keys. A template whose sheet happened to use a core key therefore rendered one
+ * way on screen and another way in print.
+ *
+ * The PDF path's semantics are the canonical ones here, because the PDF is the
+ * artifact that actually ships: custom data wins, and `id`/`uniqueKey` are
+ * present. The resolved photo URL is re-applied afterwards so an empty `photo`
+ * column cannot blank out a photo that did resolve.
+ */
+export function buildFieldDataContext(
+  cardholder: {
+    name?: string | null;
+    designation?: string | null;
+    photoUrl?: string | null;
+    cardSerial?: string | null;
+    uniqueKey?: string | null;
+    customFields?: string | null | Record<string, any>;
+  } | null | undefined,
+  validTillDate?: Date | string | null
+): Record<string, any> {
+  let customData: Record<string, any> = {};
+  const raw = cardholder?.customFields;
+  if (raw) {
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      // Only attempt a parse on something that actually looks like JSON — a bare
+      // string here used to throw straight out of the preview renderer.
+      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') customData = parsed;
+        } catch {
+          customData = {};
+        }
+      }
+    } else if (typeof raw === 'object') {
+      customData = raw;
+    }
+  }
+
+  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
+
+  let formattedValidTill = '';
+  if (validTillDate) {
+    const date = validTillDate instanceof Date ? validTillDate : new Date(validTillDate);
+    if (!isNaN(date.getTime())) {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
+    }
+  }
+
+  const resolvedId =
+    cardholder?.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '';
+
+  const data: Record<string, any> = {
+    name: cardholder?.name || '',
+    designation: cardholder?.designation || '',
+    photo: effectivePhotoUrl || cardholder?.photoUrl || '',
+    photoUrl: effectivePhotoUrl || cardholder?.photoUrl || '',
+    cardSerial: cardholder?.cardSerial || '',
+    uniqueKey: resolvedId,
+    id: resolvedId,
+    validTill: formattedValidTill,
+    ...customData,
+  };
+
+  if (effectivePhotoUrl) {
+    data.photo = effectivePhotoUrl;
+    data.photoUrl = effectivePhotoUrl;
+  }
+
+  return data;
+}
+
 export function resolveFieldRawValue(
   f: { field: string; type?: string; staticValue?: string | null; prefix?: string; suffix?: string; dateFormat?: string; [key: string]: any },
   data: Record<string, any>,
@@ -678,12 +946,19 @@ export function resolveFieldRawValue(
 
   const staticImg = f.staticValue || (f as any).imageUrl || (f as any).sampleValue || (f as any).value || (f as any).src || (f as any).url || (f as any).defaultUrl || (f as any).defaultValue;
 
+  // 0. A computed field owns its value: it replaces the normal data binding
+  //    (steps 1-3) but still falls through to the type post-processing below, so
+  //    a computed date is still formatted and a computed string still honours
+  //    the max-character cap.
+  const computed = computeFieldValue(f, data, cardholder || {});
+  const isComputed = computed !== undefined;
+
   // 1. Try dynamic cardholder resolution first
-  let resolved = getResolvedFieldValue(f.field, data, cardholder || {}, f.type);
+  let resolved = isComputed ? computed : getResolvedFieldValue(f.field, data, cardholder || {}, f.type);
 
   // 2. ID type fallback (ONLY for generic 'uniqueKey' or 'id' field, NOT for distinct custom fields like 'field_2' or 'rollNumber')
   const fieldClean = f.field.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && (fieldClean === 'uniquekey' || fieldClean === 'id')) {
+  if (!isComputed && (resolved === undefined || resolved === null || String(resolved).trim() === '') && (fieldClean === 'uniquekey' || fieldClean === 'id')) {
     let customObj: Record<string, any> = {};
     if (cardholder?.customFields) {
       if (typeof cardholder.customFields === 'string') {
@@ -718,8 +993,10 @@ export function resolveFieldRawValue(
       resolved = normalizeGoogleDriveUrl(resolved);
     }
   } else {
-    // If dynamic value is empty/null, fall back to staticValue if valid and not a placeholder
-    if ((resolved === undefined || resolved === null || String(resolved).trim() === '') && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
+    // If dynamic value is empty/null, fall back to staticValue if valid and not a placeholder.
+    // A computed field is exempt: its rule is the author's explicit intent, so an
+    // all-empty computation must stay empty rather than silently revert to static text.
+    if (!isComputed && (resolved === undefined || resolved === null || String(resolved).trim() === '') && staticImg && !isPlaceholderStaticValue(staticImg, f.field)) {
       resolved = staticImg;
     }
     if (resolved && typeof resolved === 'string') {
@@ -758,45 +1035,6 @@ export function resolveFieldRawValue(
   }
 
   return resolved;
-}
-
-export function computeYOffsets(
-  fields: Array<any>,
-  measureTextWidth: (field: any, text: string) => number,
-  getFieldValueStr: (field: any) => string
-): Map<number, number> {
-  const yOffsets = new Map<number, number>();
-
-  for (let i = 0; i < fields.length; i++) {
-    const f = fields[i];
-    if (f.verticalAlign !== 'bottom') continue;
-
-    const baseValStr = getFieldValueStr(f);
-    if (!baseValStr) continue;
-
-    const baseWidth = measureTextWidth(f, baseValStr);
-    const textHeight = f.fontSize || 20;
-
-    let shiftY = 0;
-    for (let j = 0; j < i; j++) {
-      const topF = fields[j];
-      if (topF.verticalAlign === 'bottom') continue;
-
-      const topValStr = getFieldValueStr(topF);
-      if (!topValStr) continue;
-
-      const topWidth = measureTextWidth(topF, topValStr);
-      const leftOverlap = Math.max(f.x, topF.x);
-      const rightOverlap = Math.min(f.x + baseWidth, topF.x + topWidth);
-
-      if (leftOverlap < rightOverlap) {
-        shiftY += textHeight;
-      }
-    }
-    yOffsets.set(i, shiftY);
-  }
-
-  return yOffsets;
 }
 
 export function formatFieldLabel(fieldInput: string | any): string {

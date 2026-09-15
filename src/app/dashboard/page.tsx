@@ -3,6 +3,16 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/toast';
+import ConfirmDialog from '@/app/components/ConfirmDialog';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import { RETENTION_MONTHS } from '@/lib/retention-constants';
+import {
+  backupClientBatch,
+  describeBackups,
+  fetchRetentionCandidates,
+  purgeBackedUpBatch,
+} from '@/lib/retention-client';
+import type { SavedBackup } from '@/lib/downloadHelper';
 import {
   Users, FileText, Layers, TrendingUp, ArrowRight, PlusCircle,
   FileSpreadsheet, Zap, CheckCircle, AlertCircle, Clock, CreditCard,
@@ -222,6 +232,8 @@ export default function DashboardPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string>('OWNER'); // default to most permissive until fetched
+  const [roleLoaded, setRoleLoaded] = useState(false);
+  const { confirmOpen, confirmConfig, showConfirm, closeConfirm } = useConfirmDialog();
 
   // Fetch current user's role
   useEffect(() => {
@@ -233,6 +245,7 @@ export default function DashboardPage() {
           if (json.user?.role) setRole(json.user.role);
         }
       } catch { /* silent */ }
+      finally { setRoleLoaded(true); }
     })();
   }, []);
 
@@ -262,57 +275,72 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchAnalytics(); }, []);
 
-  // 6-month archive automatic backup logic for Desktop client
+  // Automatic 6-month archive (desktop client only).
+  //
+  // Backs old records up to the operator's machine, then asks before deleting
+  // anything. The previous version purged silently on every dashboard mount,
+  // trusting an id list that included records whose photo download had failed.
   useEffect(() => {
+    // `role` starts as OWNER before /settings/me answers, so wait for the real
+    // value — only an owner may purge, and we do not want a doomed 403 round.
+    if (!roleLoaded || role !== 'OWNER') return;
+
+    const isDesktop = typeof window !== 'undefined' && Boolean((window as any).electronAPI?.isDesktop);
+    if (!isDesktop) return;
+
+    // Prompting once per session is enough; the panel in Settings is always available.
+    if (sessionStorage.getItem('retention_prompted') === 'true') return;
+
     const runArchiveBackup = async () => {
-      // Check if running in desktop Electron client
-      const isDesktop = typeof window !== 'undefined' && (window as any).electronAPI?.isDesktop;
-      if (!isDesktop) return;
-
       try {
-        const response = await fetch('/api/archive/expired');
-        if (!response.ok) return;
+        const { clients, from, to } = await fetchRetentionCandidates({
+          olderThanMonths: RETENTION_MONTHS,
+        });
+        if (clients.length === 0) return;
+        sessionStorage.setItem('retention_prompted', 'true');
 
-        const resData = await response.json();
-        if (resData.success && resData.data && resData.data.length > 0) {
-          console.log(`[Archive]: Found ${resData.data.length} client groups with expired records (> 6 months).`);
-          let totalPurged = 0;
+        const fromDate = new Date(from);
+        const toDate = new Date(to);
+        const saved: Array<{ clientName: string; saved: SavedBackup }> = [];
 
-          for (const group of resData.data) {
-            if (!group.records || group.records.length === 0) continue;
-
-            // Trigger Electron backup
-            const backupResult = await (window as any).electronAPI.runBackup({
-              clientName: group.clientName,
-              templateName: group.templateName,
-              templateFields: group.templateFields,
-              records: group.records
+        for (const client of clients) {
+          try {
+            saved.push({
+              clientName: client.clientName,
+              saved: await backupClientBatch(client, fromDate, toDate),
             });
-
-            if (backupResult && backupResult.success && backupResult.savedIds && backupResult.savedIds.length > 0) {
-              // Send purge request to Next.js API
-              const purgeRes = await fetch('/api/archive/purge', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ ids: backupResult.savedIds })
-              });
-
-              if (purgeRes.ok) {
-                const purgeData = await purgeRes.json();
-                if (purgeData.success) {
-                  totalPurged += purgeData.deletedCount;
-                }
-              }
-            }
-          }
-
-          if (totalPurged > 0) {
-            toast(`Storage: Archived ${totalPurged} expired records (> 6 months) to Documents/IDexo_Backups. Server storage freed.`, 'success', 8000);
-            fetchAnalytics();
+          } catch (err) {
+            console.error(`[Retention] Backup failed for ${client.clientName}:`, err);
           }
         }
+        if (saved.length === 0) return;
+
+        showConfirm({
+          title: 'Archive data older than 6 months?',
+          message: describeBackups(saved),
+          confirmLabel: 'Delete from server',
+          variant: 'danger',
+          onConfirm: async () => {
+            closeConfirm();
+            let records = 0;
+            let files = 0;
+            for (const { clientName, saved: backup } of saved) {
+              try {
+                const result = await purgeBackedUpBatch(backup.manifest);
+                records += result.cardholdersDeleted;
+                files += result.filesDeleted;
+              } catch (err) {
+                console.error(`[Retention] Purge failed for ${clientName}:`, err);
+              }
+            }
+            toast(
+              `Archived ${records.toLocaleString()} record(s) and freed ${files.toLocaleString()} stored file(s). Backups are in your Documents folder.`,
+              'success',
+              8000
+            );
+            fetchAnalytics();
+          },
+        });
       } catch (err) {
         console.error('Automatic archive backup failed:', err);
       }
@@ -321,7 +349,7 @@ export default function DashboardPage() {
     // Run slightly after mount to not block initial page render
     const timer = setTimeout(runArchiveBackup, 3000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [role, roleLoaded, showConfirm, closeConfirm, toast]);
 
   const s = data?.summary || {};
   const breakdowns = data?.breakdowns || { byType: {}, byStatus: {} };
@@ -767,6 +795,17 @@ export default function DashboardPage() {
       </div>
     </>
   )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={confirmConfig?.title ?? ''}
+        message={confirmConfig?.message ?? ''}
+        confirmLabel={confirmConfig?.confirmLabel}
+        cancelLabel="Keep on server"
+        variant={confirmConfig?.variant}
+        onConfirm={() => confirmConfig?.onConfirm()}
+        onCancel={closeConfirm}
+      />
 
       <style>{`
         @keyframes pulse {

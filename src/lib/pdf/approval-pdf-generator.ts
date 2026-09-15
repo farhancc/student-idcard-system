@@ -1,6 +1,6 @@
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, FieldCoordinate, clearTemplateBgCache } from './card-renderer-client';
-import { getResolvedFieldValue, resolveFieldRawValue, formatFieldLabel } from './field-resolver';
+import { getResolvedFieldValue, resolveFieldRawValue, formatFieldLabel, isFieldVisible } from './field-resolver';
 
 async function safeDrawText(
   page: any,
@@ -314,6 +314,10 @@ export async function generateApprovalPdfClient(
         for (const [fieldKey, fieldConfig] of uniqueFieldsMap.entries()) {
           const kClean = fieldKey.toLowerCase().replace(/[^a-z0-9]/g, '');
           if (kClean === 'name' || kClean.includes('name')) continue;
+          // A field hidden by its rule will not print, so it must not be listed
+          // on the proof sheet either — otherwise the client signs off on a line
+          // that never reaches the card.
+          if (!isFieldVisible(fieldConfig, cardholderData, cardholder)) continue;
           const val = resolveFieldRawValue(fieldConfig, cardholderData, cardholder);
           if (val !== undefined && val !== null && String(val).trim() !== '') {
             let label = fieldConfig.prefix ? fieldConfig.prefix.trim().replace(/:$/, '') : '';

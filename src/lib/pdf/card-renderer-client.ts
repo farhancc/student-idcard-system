@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import type { FieldVisibilityRule, FieldComputeRule } from './field-resolver';
 
 export interface FieldCoordinate {
   field: string; // name | designation | photo | cardSerial | validTill | custom_field_key...
@@ -29,6 +30,10 @@ export interface FieldCoordinate {
   opacity?: number;
   staticValue?: string;
   dateFormat?: string;
+  /** Draw this field only when the rule matches. Absent = always drawn. */
+  visibleIf?: FieldVisibilityRule;
+  /** Compose this field's value from other keys instead of binding to one. */
+  compute?: FieldComputeRule;
 }
 
 // Map to keep track of loaded font families in the browser
@@ -74,8 +79,8 @@ export function clearFontBytesCache() {
   globalFontBytesCache.clear();
 }
 
-import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField, normalizeGoogleDriveUrl, getPlaceholderImageForField } from './field-resolver';
-export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, normalizeGoogleDriveUrl, getPlaceholderImageForField };
+import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField, normalizeGoogleDriveUrl, getPlaceholderImageForField, buildFieldDataContext, isFieldVisible } from './field-resolver';
+export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, normalizeGoogleDriveUrl, getPlaceholderImageForField, buildFieldDataContext, isFieldVisible };
 
 /**
  * Loads a custom font using the browser's FontFace API.
@@ -144,6 +149,13 @@ export async function loadGoogleFontInBrowser(fontFamily?: string) {
 }
 
 /**
+ * A fully transparent 1x1 PNG, used when an image asset cannot be loaded so the
+ * field renders as empty space rather than a coloured placeholder.
+ */
+const BLANK_PIXEL_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNgYGBgAAAABQABeqhXUAAAAABJRU5ErkJggg==';
+
+/**
  * Loads an image in the browser with robust CORS fallback and relative URL resolution.
  */
 function loadImageClient(url: string): Promise<HTMLImageElement> {
@@ -153,7 +165,10 @@ function loadImageClient(url: string): Promise<HTMLImageElement> {
       const dummy = new Image();
       dummy.onload = () => resolve(dummy);
       dummy.onerror = () => resolve(dummy);
-      dummy.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      // Fully transparent 1x1 PNG. Callers stretch this across the whole field
+      // box, so any colour here paints a solid block over the card wherever a
+      // photo/signature is missing from the ZIP or its link is broken.
+      dummy.src = BLANK_PIXEL_PNG;
     };
 
     if (!url || typeof url !== 'string' || !url.trim()) {
@@ -539,43 +554,18 @@ export async function renderCardSideClient(
     ctx.fillRect(0, 0, width, height);
   }
 
-  // 3. Parse Custom Fields JSON
-  const customData = cardholder.customFields
-    ? typeof cardholder.customFields === 'string'
-      ? JSON.parse(cardholder.customFields)
-      : cardholder.customFields
-    : {};
-
-  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
-
-  // Formatted date string for validTill
-  let formattedValidTill = '';
-  if (validTillDate) {
-    const date = new Date(validTillDate);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    formattedValidTill = `${months[date.getMonth()]} ${date.getFullYear()}`;
-  }
-
-  const data: Record<string, any> = {
-    ...customData,
-    ...(cardholder.name && cardholder.name !== 'Cardholder' ? { name: cardholder.name } : {}),
-    ...(cardholder.designation ? { designation: cardholder.designation } : {}),
-    ...(effectivePhotoUrl ? { photo: effectivePhotoUrl, photoUrl: effectivePhotoUrl } : {}),
-    cardSerial: cardholder.cardSerial || '',
-    validTill: formattedValidTill,
-  };
-
-  // Ensure effectivePhotoUrl overwrites any empty photo key from customData
-  if (effectivePhotoUrl) {
-    data.photo = effectivePhotoUrl;
-    data.photoUrl = effectivePhotoUrl;
-  }
+  // 3. Build the field data context (shared with the production-PDF path, so a
+  //    preview and its compiled output resolve every key identically)
+  const data = buildFieldDataContext(cardholder, validTillDate);
 
   // 4. Pre-compute Y offsets
   const tempCanvas = document.createElement('canvas');
   const tempCtx = tempCanvas.getContext('2d');
 
   const getClientValueStr = (f: FieldCoordinate) => {
+    // A field hidden by its rule occupies no height, so it must not push the
+    // fields below it down via computeYOffsets' overflow reflow.
+    if (!isFieldVisible(f, data, cardholder)) return '';
     const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv ?? ''}${f.suffix || ''}`;
@@ -610,6 +600,10 @@ export async function renderCardSideClient(
   // 5. Draw fields
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
+    // Hidden by rule: draw nothing at all. This is decided before the
+    // empty-value handling below, because a hidden field must not fall through
+    // to an image placeholder the way an empty one does.
+    if (!isFieldVisible(f, data, cardholder)) continue;
     const yOffset = yOffsets.get(fi) ?? 0;
     const isImgField = isImageField(f) || f.type === 'image';
     let rawValue = resolveFieldRawValue(f, data, cardholder);
@@ -1212,38 +1206,9 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   // ── 3. Prepare data ──────────────────────────────────────────────────────
-  const customData = cardholder.customFields
-    ? typeof cardholder.customFields === 'string'
-      ? (cardholder.customFields.trim().startsWith('{') || cardholder.customFields.trim().startsWith('[')
-          ? JSON.parse(cardholder.customFields)
-          : {})
-      : cardholder.customFields
-    : {};
-
-  const effectivePhotoUrl = resolveCardholderPhotoUrl(cardholder, customData);
-
-  let formattedValidTill = '';
-  if (validTillDate) {
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    formattedValidTill = `${months[validTillDate.getMonth()]} ${validTillDate.getFullYear()}`;
-  }
-
-  const data: Record<string, any> = {
-    name: cardholder.name || '',
-    designation: cardholder.designation || '',
-    photo: effectivePhotoUrl || cardholder.photoUrl || '',
-    photoUrl: effectivePhotoUrl || cardholder.photoUrl || '',
-    cardSerial: cardholder.cardSerial || '',
-    uniqueKey: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
-    id: cardholder.uniqueKey || customData.uniqueKey || customData.id || customData.unique_key || '',
-    validTill: formattedValidTill,
-    ...customData,
-  };
-
-  if (effectivePhotoUrl) {
-    data.photo = effectivePhotoUrl;
-    data.photoUrl = effectivePhotoUrl;
-  }
+  // Shared with the preview path, so a preview and its compiled output resolve
+  // every key identically.
+  const data = buildFieldDataContext(cardholder, validTillDate);
 
   // \u2500\u2500 4. Pre-embed fonts \u2500\u2500
   const fontCache = new Map<string, any>();
@@ -1385,6 +1350,9 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   const getPdfValueStr = (f: FieldCoordinate) => {
+    // A field hidden by its rule occupies no height, so it must not push the
+    // fields below it down via computeYOffsets' overflow reflow.
+    if (!isFieldVisible(f, data, cardholder)) return '';
     const rv = resolveFieldRawValue(f, data, cardholder);
     if (rv === undefined || rv === null) return '';
     return `${f.prefix || ''}${rv ?? ''}${f.suffix || ''}`;
@@ -1421,6 +1389,9 @@ export async function renderCardSideToPdfBytesClient(
   // ── 5. Draw fields ───────────────────────────────────────────────────────
   for (let fi = 0; fi < fields.length; fi++) {
     const f = fields[fi];
+    // Hidden by rule: draw nothing at all. Must match the preview path's guard
+    // exactly, or a preview and its compiled PDF disagree about what is printed.
+    if (!isFieldVisible(f, data, cardholder)) continue;
     const yOffsetPx = pdfYOffsets.get(fi) ?? 0;
     let rawValue = resolveFieldRawValue(f, data, cardholder);
     const isImgField = isImageField(f) || (f.type || '').toLowerCase() === 'image';

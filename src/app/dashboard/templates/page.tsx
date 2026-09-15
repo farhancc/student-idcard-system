@@ -5,7 +5,7 @@ import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, Refr
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
-import { computeYOffsets, wrapWords, formatFieldLabel, FieldCoordinate, getPlaceholderImageForField } from '@/lib/pdf/card-renderer-client';
+import { computeYOffsets, wrapWords, formatFieldLabel, FieldCoordinate, getPlaceholderImageForField, isFieldVisible } from '@/lib/pdf/card-renderer-client';
 import FieldTooltip from './components/FieldTooltip';
 import { CanvasRuler, GuideDifferences } from './components/CanvasRuler';
 import TemplateListGrid from './components/TemplateListGrid';
@@ -1200,6 +1200,10 @@ export default function TemplatesPage() {
         cardHeight={cardHeight}
         pressFonts={pressFonts}
         zoom={zoom}
+        availableFields={[...frontFields, ...backFields]
+          .map(cf => cf?.field)
+          .filter((key): key is string => !!key)
+          .filter((key, i, all) => all.indexOf(key) === i)}
         onUpdate={updateField}
         onDelete={deleteField}
         onClose={() => {
@@ -1516,6 +1520,26 @@ export default function TemplatesPage() {
     ? baseTemplates
     : baseTemplates.filter((t: any) => (t.category || 'OTHER') === filterCategory);
 
+  // Visibility rules are evaluated against the designer's own test data. With
+  // test data switched off every field shows its key rather than a value, so a
+  // rule has nothing meaningful to test and every field stays visible.
+  const ruleTestContext: Record<string, string> = {};
+  for (const f of [...frontFields, ...backFields]) {
+    if (!f?.field) continue;
+    const customVal = testData[f.field];
+    ruleTestContext[f.field] =
+      customVal !== undefined && customVal !== '' ? customVal : getFieldDefaultValue(f.field, f.type);
+  }
+
+  /**
+   * Unlike the renderers, the designer does NOT skip a rule-hidden field: it
+   * dims it and keeps it selectable, because an operator still has to be able to
+   * position and edit a field whose rule happens to be false for the current
+   * test data. Only the output preview hides it outright.
+   */
+  const isFieldHiddenByRule = (f: FieldCoordinate) =>
+    showTestData && !isFieldVisible(f, ruleTestContext, null);
+
   // Pre-calculate designer Y offsets for front and back sides
   const getDesignerYOffsets = (fields: FieldCoordinate[]) => {
     if (typeof window === 'undefined') return new Map<number, number>();
@@ -1525,6 +1549,9 @@ export default function TemplatesPage() {
     if (!ctx) return new Map<number, number>();
 
     const getValueStr = (f: FieldCoordinate) => {
+      // A field hidden by its rule occupies no height, so it must not push the
+      // fields below it down — matching the renderers' value callbacks.
+      if (isFieldHiddenByRule(f)) return '';
       if (f.staticValue !== undefined && f.staticValue !== null) {
         return `${f.prefix || ''}${f.staticValue}${f.suffix || ''}`;
       }
@@ -2708,6 +2735,7 @@ export default function TemplatesPage() {
                               const h = (f.height + selfOverflow) * scale;
                               const isSelected = selectedFieldIndex === i && selectedSide === 'front';
                               const style = getBoxStyle(f, isSelected, scale);
+                              const hiddenByRule = isFieldHiddenByRule(f);
 
                               const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
@@ -2734,6 +2762,7 @@ export default function TemplatesPage() {
                                 <React.Fragment key={i}>
                                   <div
                                     onMouseDown={(e) => handleMouseDown(e, 'front', i, 'move', scale)}
+                                    title={hiddenByRule ? 'Hidden by its visibility rule for this test data — it will not print, but stays editable here.' : undefined}
                                     style={{
                                       position: 'absolute',
                                       left: `${x}px`,
@@ -2751,7 +2780,9 @@ export default function TemplatesPage() {
                                       textAlign: f.align || 'center',
                                       wordBreak: 'break-all',
                                       ...style,
-                                      ...testDataStyle
+                                      ...testDataStyle,
+                                      // Hidden by rule: dimmed but still selectable and draggable.
+                                      ...(hiddenByRule ? { opacity: 0.3, outline: '1px dashed #f59e0b', outlineOffset: '1px' } : {}),
                                     }}
                                   >
                                     {f.staticValue !== undefined && f.staticValue !== null ? (
@@ -2796,6 +2827,27 @@ export default function TemplatesPage() {
                                       f.field
                                     )}
                                     
+                                    {hiddenByRule && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: '0',
+                                          top: '-14px',
+                                          fontSize: '0.5rem',
+                                          fontWeight: 700,
+                                          letterSpacing: '0.04em',
+                                          color: '#78350f',
+                                          background: '#f59e0b',
+                                          borderRadius: '3px',
+                                          padding: '1px 4px',
+                                          pointerEvents: 'none',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        RULE: HIDDEN
+                                      </div>
+                                    )}
+
                                     {/* Resize Handle */}
                                     <div
                                       onMouseDown={(e) => handleMouseDown(e, 'front', i, 'resize', scale)}
@@ -3166,6 +3218,7 @@ export default function TemplatesPage() {
                               const h = (f.height + selfOverflow) * scale;
                               const isSelected = selectedFieldIndex === i && selectedSide === 'back';
                               const style = getBoxStyle(f, isSelected, scale);
+                              const hiddenByRule = isFieldHiddenByRule(f);
 
                               const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
                               const testDataStyle: React.CSSProperties = isTextLike ? {
@@ -3192,6 +3245,7 @@ export default function TemplatesPage() {
                                 <React.Fragment key={i}>
                                   <div
                                     onMouseDown={(e) => handleMouseDown(e, 'back', i, 'move', scale)}
+                                    title={hiddenByRule ? 'Hidden by its visibility rule for this test data — it will not print, but stays editable here.' : undefined}
                                     style={{
                                       position: 'absolute',
                                       left: `${x}px`,
@@ -3209,7 +3263,9 @@ export default function TemplatesPage() {
                                       textAlign: f.align || 'center',
                                       wordBreak: 'break-all',
                                       ...style,
-                                      ...testDataStyle
+                                      ...testDataStyle,
+                                      // Hidden by rule: dimmed but still selectable and draggable.
+                                      ...(hiddenByRule ? { opacity: 0.3, outline: '1px dashed #f59e0b', outlineOffset: '1px' } : {}),
                                     }}
                                   >
                                     {f.staticValue !== undefined && f.staticValue !== null ? (
@@ -3254,6 +3310,27 @@ export default function TemplatesPage() {
                                       f.field
                                     )}
                                     
+                                    {hiddenByRule && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          left: '0',
+                                          top: '-14px',
+                                          fontSize: '0.5rem',
+                                          fontWeight: 700,
+                                          letterSpacing: '0.04em',
+                                          color: '#78350f',
+                                          background: '#f59e0b',
+                                          borderRadius: '3px',
+                                          padding: '1px 4px',
+                                          pointerEvents: 'none',
+                                          whiteSpace: 'nowrap',
+                                        }}
+                                      >
+                                        RULE: HIDDEN
+                                      </div>
+                                    )}
+
                                     {/* Resize Handle */}
                                     <div
                                       onMouseDown={(e) => handleMouseDown(e, 'back', i, 'resize', scale)}

@@ -60,25 +60,35 @@ export interface BatchImportData {
   zip: Record<string, string>;
   /** Per-cell uploaded image overrides: `${rowIdx}:${fieldName}` -> data URL. */
   overrides: Record<string, string>;
+  /**
+   * Indices of the rows the operator selected to compile. Optional: batches
+   * saved before selection existed restore with every row selected.
+   */
+  selectedRows?: number[];
 }
 
-const BATCH_ID = 'current';
+/**
+ * Working-set key. Each import surface owns its own slot so two tabs with a
+ * batch in progress do not overwrite each other: 'current' is the Batch Import
+ * tab, 'gform' the Google Form tab.
+ */
+export type BatchKey = 'current' | 'gform';
 
-export async function saveBatch(data: BatchImportData): Promise<void> {
+export async function saveBatch(data: BatchImportData, key: BatchKey = 'current'): Promise<void> {
   const db = await initClientDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('batchImport', 'readwrite');
-    const req = tx.objectStore('batchImport').put({ id: BATCH_ID, ...data });
+    const req = tx.objectStore('batchImport').put({ id: key, ...data });
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
 }
 
-export async function getBatch(): Promise<BatchImportData | null> {
+export async function getBatch(key: BatchKey = 'current'): Promise<BatchImportData | null> {
   const db = await initClientDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('batchImport', 'readonly');
-    const req = tx.objectStore('batchImport').get(BATCH_ID);
+    const req = tx.objectStore('batchImport').get(key);
     req.onsuccess = () => {
       const r = req.result;
       if (!r) { resolve(null); return; }
@@ -90,11 +100,11 @@ export async function getBatch(): Promise<BatchImportData | null> {
   });
 }
 
-export async function clearBatch(): Promise<void> {
+export async function clearBatch(key: BatchKey = 'current'): Promise<void> {
   const db = await initClientDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('batchImport', 'readwrite');
-    const req = tx.objectStore('batchImport').delete(BATCH_ID);
+    const req = tx.objectStore('batchImport').delete(key);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });

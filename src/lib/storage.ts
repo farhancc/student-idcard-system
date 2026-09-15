@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
@@ -186,4 +186,93 @@ export function parseR2KeyFromUrl(url: string): string | null {
   } catch {
     return url.replace(/^\//, '');
   }
+}
+
+/** R2/S3 accepts at most 1000 keys per DeleteObjects request. */
+export const R2_DELETE_BATCH_SIZE = 1000;
+
+/**
+ * Narrow a mixed list of stored URLs down to the object keys we can actually
+ * delete from our own bucket, de-duplicated.
+ *
+ * Objects hosted elsewhere are dropped rather than passed through: a Cloudinary
+ * URL parses into a Cloudinary path, and `local://` files never left the
+ * operator's machine. Asking R2 to delete either burns a Class A operation that
+ * cannot match anything.
+ */
+export function toDeletableR2Keys(urlsOrKeys: string[]): string[] {
+  const keys = new Set<string>();
+  for (const raw of urlsOrKeys) {
+    if (!raw || raw.startsWith('local://') || raw.includes('cloudinary.com')) continue;
+    const key = parseR2KeyFromUrl(raw);
+    if (key) keys.add(key);
+  }
+  return Array.from(keys);
+}
+
+/**
+ * Delete many objects in as few round trips as possible.
+ *
+ * Retention purges routinely touch thousands of objects (a photo, two rendered
+ * card faces and a PDF per cardholder). Looping `deleteFromR2` costs one billed
+ * operation each; batching by 1000 turns a 3,700-call purge into four.
+ *
+ * @returns the number of keys confirmed deleted, and the keys that failed so the
+ *          caller can record them for a later sweep.
+ */
+export async function deleteManyFromR2(
+  urlsOrKeys: string[]
+): Promise<{ deleted: number; failed: string[] }> {
+  const keys = toDeletableR2Keys(urlsOrKeys);
+  if (keys.length === 0) return { deleted: 0, failed: [] };
+
+  const client = getR2Client();
+
+  // ── Local Fallback (dev, or R2 env vars absent) ──────────────────────────
+  if (!client) {
+    let deleted = 0;
+    const failed: string[] = [];
+    for (const key of keys) {
+      // Keys come from our own DB, but a bulk unlink is not the place to trust that.
+      if (key.includes('..')) {
+        failed.push(key);
+        continue;
+      }
+      try {
+        const localPath = path.join(process.cwd(), 'public', 'uploads', key);
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        deleted++;
+      } catch (err) {
+        console.error(`Failed to delete local file "${key}":`, err);
+        failed.push(key);
+      }
+    }
+    return { deleted, failed };
+  }
+
+  let deleted = 0;
+  const failed: string[] = [];
+
+  for (let i = 0; i < keys.length; i += R2_DELETE_BATCH_SIZE) {
+    const batch = keys.slice(i, i + R2_DELETE_BATCH_SIZE);
+    try {
+      const result = await client.send(
+        new DeleteObjectsCommand({
+          Bucket: R2_BUCKET_NAME,
+          Delete: { Objects: batch.map((Key) => ({ Key })), Quiet: true },
+        })
+      );
+      // With Quiet: true only errors come back; everything else succeeded.
+      const errored = (result.Errors ?? [])
+        .map((e) => e.Key)
+        .filter((k): k is string => Boolean(k));
+      failed.push(...errored);
+      deleted += batch.length - errored.length;
+    } catch (err) {
+      console.error(`[Storage] Batch delete of ${batch.length} keys failed:`, err);
+      failed.push(...batch);
+    }
+  }
+
+  return { deleted, failed };
 }

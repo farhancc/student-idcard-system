@@ -120,7 +120,7 @@ export default function ConfirmDialog({
         </h3>
 
         {/* Message */}
-        <p style={{ fontSize: '0.875rem', color: 'var(--muted)', lineHeight: 1.6, marginBottom: '24px' }}>
+        <p style={{ fontSize: '0.875rem', color: 'var(--muted)', lineHeight: 1.6, marginBottom: '24px', whiteSpace: 'pre-line' }}>
           {message}
         </p>
 

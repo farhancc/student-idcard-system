@@ -5,6 +5,11 @@
  */
 
 import { z } from 'zod';
+import {
+  FIELD_CONDITION_OPS,
+  FIELD_COMPUTE_TRANSFORMS,
+  MAX_RULE_ITEMS,
+} from '@/lib/pdf/field-resolver';
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -111,7 +116,133 @@ export const TEMPLATE_CATEGORIES = [
 
 export type TemplateCategory = typeof TEMPLATE_CATEGORIES[number];
 
-export const templateSchema = z.object({
+/**
+ * Field rules (`visibleIf` / `compute`) are the only part of the field JSON this
+ * schema inspects. Everything else in a field object stays deliberately opaque —
+ * the JSON carries a long tail of renderer-only properties, and tightening the
+ * whole shape here would reject templates that render perfectly well today.
+ *
+ * The render-time evaluator is independently tolerant of malformed rules, so this
+ * is the boundary check, not the only line of defence: rows already in the
+ * database, and templates arriving through a marketplace purchase, never pass
+ * through here.
+ */
+const fieldConditionSchema = z.object({
+  field: z.string({ message: 'A condition must name a field' }).min(1, 'A condition must name a field'),
+  op: z.enum(FIELD_CONDITION_OPS, { message: 'Unsupported condition operator' }),
+  value: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const fieldVisibilityRuleSchema = z.object({
+  match: z.enum(['all', 'any']).optional(),
+  conditions: z.array(fieldConditionSchema).max(
+    MAX_RULE_ITEMS,
+    `A visibility rule may have at most ${MAX_RULE_ITEMS} conditions`
+  ),
+});
+
+const fieldComputePartSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('field'),
+    field: z.string({ message: 'A computed part must name a field' }).min(1, 'A computed part must name a field'),
+    transform: z.enum(FIELD_COMPUTE_TRANSFORMS, { message: 'Unsupported text transform' }).optional(),
+  }),
+  z.object({
+    kind: z.literal('literal'),
+    text: z.string({ message: 'A literal part needs its text' }),
+  }),
+]);
+
+const fieldComputeRuleSchema = z.object({
+  parts: z.array(fieldComputePartSchema).max(
+    MAX_RULE_ITEMS,
+    `A computed value may have at most ${MAX_RULE_ITEMS} parts`
+  ),
+});
+
+/**
+ * Validate the rule properties across one side's field JSON, and reject a
+ * computed field that references another computed field.
+ *
+ * `resolveFieldRawValue` is a pure per-field function with no knowledge of its
+ * siblings, so a chained computation cannot be resolved in any defined order.
+ * Rejecting it here makes that a clear error at save time rather than silent
+ * nonsense on the printed card.
+ */
+function addFieldRuleIssues(
+  rawJson: unknown,
+  sideLabel: string,
+  ctx: z.RefinementCtx
+): void {
+  if (typeof rawJson !== 'string' || !rawJson.trim()) return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    // The field JSON has never been required to parse here, and the renderer
+    // degrades to an empty field list. Keep that behaviour.
+    return;
+  }
+  if (!Array.isArray(parsed)) return;
+
+  const isFieldObject = (v: unknown): v is Record<string, unknown> =>
+    !!v && typeof v === 'object' && !Array.isArray(v);
+
+  const fields = parsed.filter(isFieldObject);
+
+  const computedKeys = new Set(
+    fields
+      .filter(f => f.compute !== undefined)
+      .map(f => String(f.field ?? ''))
+      .filter(Boolean)
+  );
+
+  fields.forEach((f, index) => {
+    const field = f.field ?? `#${index + 1}`;
+    const where = `${sideLabel} field "${String(field)}"`;
+
+    if (f.visibleIf !== undefined) {
+      const result = fieldVisibilityRuleSchema.safeParse(f.visibleIf);
+      if (!result.success) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${where}: ${result.error.issues[0]?.message ?? 'invalid visibility rule'}`,
+        });
+      }
+    }
+
+    const compute = f.compute;
+    if (compute !== undefined) {
+      const result = fieldComputeRuleSchema.safeParse(compute);
+      if (!result.success) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${where}: ${result.error.issues[0]?.message ?? 'invalid computed value'}`,
+        });
+        return;
+      }
+      for (const part of result.data.parts) {
+        if (part.kind === 'field' && computedKeys.has(part.field)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: `${where}: a computed value cannot reference "${part.field}", which is itself computed`,
+          });
+        }
+      }
+    }
+  });
+}
+
+const templateFieldRulesRefinement = (
+  val: { frontFields?: unknown; backFields?: unknown },
+  ctx: z.RefinementCtx
+) => {
+  addFieldRuleIssues(val.frontFields, 'Front', ctx);
+  addFieldRuleIssues(val.backFields, 'Back', ctx);
+};
+
+const templateBaseSchema = z.object({
   name: z.string({ message: 'Template name is required' }).min(1, 'Template name is required').max(150),
   cardWidth: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
   cardHeight: z.union([z.number(), z.string()]).transform(val => Number(val)).optional(),
@@ -131,8 +262,9 @@ export const templateSchema = z.object({
   pdfFileUrl: z.string().nullable().optional(),
 });
 
+export const templateSchema = templateBaseSchema.superRefine(templateFieldRulesRefinement);
 export type TemplateInput = z.infer<typeof templateSchema>;
-export const updateTemplateSchema = templateSchema.partial();
+export const updateTemplateSchema = templateBaseSchema.partial().superRefine(templateFieldRulesRefinement);
 export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
 
 // ── Cardholders ───────────────────────────────────────────────────────────────

@@ -68,6 +68,8 @@ export interface QuickJobResult {
   autoDownloaded?: boolean;
   chunkCount?: number;
   chunks?: Array<{ chunkIndex: number; fileName: string; downloadUrl: string }>;
+  /** Set when status polling has failed repeatedly, so a stalled bar can say why. */
+  pollError?: string | null;
 }
 
 

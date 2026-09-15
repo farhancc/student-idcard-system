@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, withSystemContext } from '@/lib/prisma';
+import { deleteManyFromR2, isR2Configured } from '@/lib/storage';
 import { v2 as cloudinary } from 'cloudinary';
 import crypto from 'crypto';
 import fs from 'fs';
@@ -64,6 +65,24 @@ async function handleCleanup(request: Request) {
     let deletedFilesCount = 0;
     let failedDeletionsCount = 0;
 
+    // R2-hosted job files, plus every chunk of a chunked job, go in one batched
+    // delete. Until this was added nothing ever removed them from R2: the DB
+    // rows were dropped (chunks by cascade) and the objects were orphaned.
+    const chunks = await prisma.pdfJobChunk.findMany({
+      where: { pdfJobId: { in: expiredJobs.map((j: { id: number }) => j.id) } },
+      select: { downloadUrl: true },
+    });
+    const r2Urls = [
+      ...expiredJobs.map((j: { downloadUrl: string | null }) => j.downloadUrl),
+      ...chunks.map((c: { downloadUrl: string | null }) => c.downloadUrl),
+    ].filter((url: string | null): url is string => Boolean(url) && !url!.includes('cloudinary.com'));
+
+    if (isR2Configured) {
+      const r2Result = await deleteManyFromR2(r2Urls);
+      deletedFilesCount += r2Result.deleted;
+      failedDeletionsCount += r2Result.failed.length;
+    }
+
     for (const job of expiredJobs) {
       if (!job.downloadUrl) continue;
 
@@ -86,8 +105,10 @@ async function handleCleanup(request: Request) {
           console.error(`Failed to delete Cloudinary asset for job #${job.id}:`, err);
           failedDeletionsCount++;
         }
-      } else if (!job.downloadUrl.startsWith('local://')) {
-        // Delete from local filesystem
+      } else if (!job.downloadUrl.startsWith('local://') && !isR2Configured) {
+        // Delete from local filesystem. Only reached when R2 is unconfigured:
+        // otherwise the batched delete above already removed this object, and
+        // this branch resolves a different path layout than the R2 fallback.
         try {
           const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
           const fileName = path.basename(job.downloadUrl);

@@ -2,8 +2,6 @@ const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage, 
 const path = require('path');
 const fs = require('fs');
 const { autoUpdater } = require('electron-updater');
-const ExcelJS = require('exceljs');
-const AdmZip = require('adm-zip');
 
 function setupApplicationMenu() {
   const template = [
@@ -934,83 +932,10 @@ ipcMain.handle('reload-app', () => {
   }
 });
 
-// IPC handler for automatic 6-month exceeded data backup
-ipcMain.handle('run-backup', async (event, { clientName, templateName, templateFields, records }) => {
-  try {
-    const documentsPath = app.getPath('documents');
-    const safeClientName = clientName.replace(/[^a-z0-9_-]/gi, '_');
-    const safeTemplateName = templateName.replace(/[^a-z0-9_-]/gi, '_');
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    
-    const targetDir = path.join(documentsPath, 'IDexo_Backups', safeClientName, safeTemplateName, dateStr);
-    
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    // 1. Generate Excel sheet
-    const headers = ['ID', 'Photo Filename', ...templateFields];
-    const rows = records.map(r => {
-      const row = {
-        'ID': r.id,
-        'Photo Filename': r.photoUrl ? `${r.id}${path.extname(new URL(r.photoUrl).pathname) || '.jpg'}` : 'N/A'
-      };
-      templateFields.forEach(field => {
-        row[field] = r.fields[field] || '';
-      });
-      return row;
-    });
-
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('Backup_Data');
-
-    sheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
-    rows.forEach(r => {
-      sheet.addRow(r);
-    });
-
-    const excelPath = path.join(targetDir, 'backup_data.xlsx');
-    await workbook.xlsx.writeFile(excelPath);
-
-    // 2. Download photos and package them into ZIP
-    const zip = new AdmZip();
-    const savedIds = [];
-
-    for (const r of records) {
-      if (r.photoUrl) {
-        try {
-          const extension = path.extname(new URL(r.photoUrl).pathname) || '.jpg';
-          const filename = `${r.id}${extension}`;
-          
-          const response = await fetch(r.photoUrl);
-          if (response.ok) {
-            const arrayBuffer = await response.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            zip.addFile(filename, buffer);
-            savedIds.push(r.id);
-          } else {
-            console.error(`Failed to download photo for ID ${r.id}: ${response.statusText}`);
-            savedIds.push(r.id);
-          }
-        } catch (downloadErr) {
-          console.error(`Error downloading photo for ID ${r.id}:`, downloadErr);
-          savedIds.push(r.id);
-        }
-      } else {
-        savedIds.push(r.id);
-      }
-    }
-
-    if (savedIds.length > 0) {
-      const zipPath = path.join(targetDir, 'photos.zip');
-      zip.writeZip(zipPath);
-    }
-
-    return { success: true, savedIds, path: targetDir };
-  } catch (error) {
-    console.error('Failed to execute backup:', error);
-  }
-});
+// The former 'run-backup' handler lived here. The server now builds the backup
+// ZIP (see /api/retention/export) and this process only writes the bytes via
+// 'save-backup', which removes a per-photo download loop through Cloudflare and
+// the id accounting that used to mark failed downloads as successfully backed up.
 
 // IPC handlers for secure credentials storage
 ipcMain.handle('save-credentials', async (event, { email, password }) => {

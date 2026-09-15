@@ -9,8 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('get-portal-url'),
   reloadApp: () => 
     ipcRenderer.invoke('reload-app'),
-  runBackup: (data) =>
-    ipcRenderer.invoke('run-backup', data),
   saveTemplateImage: (data) =>
     ipcRenderer.invoke('save-template-image', data),
   getLocalTemplatePath: (data) =>

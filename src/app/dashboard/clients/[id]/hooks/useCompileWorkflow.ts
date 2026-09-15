@@ -445,11 +445,18 @@ export function useCompileWorkflow({
 
   useEffect(() => {
     if (!qJobResult || qJobResult.status === 'COMPLETED' || qJobResult.status === 'FAILED') return;
+    // A poll that fails silently is indistinguishable from a job that is simply
+    // slow: the bar sits at its last value forever. Tolerate the odd blip, then
+    // say so rather than leaving the operator watching a frozen percentage.
+    let consecutiveFailures = 0;
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/jobs/${qJobResult.id}`);
+        if (!res.ok) throw new Error(`Status check failed (HTTP ${res.status})`);
         const data = await res.json();
         if (data.success && data.job) {
+          consecutiveFailures = 0;
+          setQJobResult(prev => (prev && prev.pollError ? { ...prev, pollError: null } : prev));
           if (data.job.status === 'COMPLETED' && data.job.downloadUrl && !qJobResult.autoDownloaded) {
             if (!data.job.isLocalJob) {
               autoDownloadJobFile(data.job.downloadUrl, data.job.fileName);
@@ -476,7 +483,13 @@ export function useCompileWorkflow({
             }, 6000);
           }
         }
-      } catch (e) {}
+      } catch (e) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= 3) {
+          const message = e instanceof Error ? e.message : 'Lost contact with the server.';
+          setQJobResult(prev => (prev ? { ...prev, pollError: message } : prev));
+        }
+      }
     }, 2000);
     return () => clearInterval(interval);
   }, [qJobResult]);

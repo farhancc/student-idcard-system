@@ -9,7 +9,6 @@ import CompileWizardModal from '@/app/components/CompileWizardModal';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
 import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X } from 'lucide-react';
 
-import CSVImportWizard from './components/CSVImportWizard';
 import CardholderGroupedTables from './components/CardholderGroupedTables';
 import { CardholderViewModal } from './components/CardholderViewModal';
 import { CardholderEditModal } from './components/CardholderEditModal';
@@ -134,7 +133,7 @@ export default function ClientDetailsPage() {
             {tab === 'list' && `Cardholders (${cardholders.length})`}
             {tab === 'portal' && <><Building2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Portal Links</>}
             {tab === 'add' && '+ Add Cardholder'}
-            {tab === 'csv' && 'Import CSV'}
+            {tab === 'csv' && 'Google Form'}
             {tab === 'zip' && 'Batch Import'}
           </button>
         ))}
@@ -205,7 +204,58 @@ export default function ClientDetailsPage() {
             />
           )}
 
-          {compileHooks.qJobResult && (
+          {/* While the job is still running, hold here with live progress rather
+              than handing the operator off to the background daemon widget. */}
+          {compileHooks.qJobResult
+            && compileHooks.qJobResult.status !== 'COMPLETED'
+            && compileHooks.qJobResult.status !== 'FAILED' && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Compiling PDF"
+              style={{
+                position: 'fixed', inset: 0, zIndex: 1000,
+                background: 'rgba(3,6,15,0.78)', backdropFilter: 'blur(3px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+              }}
+            >
+              <div style={{ width: '100%', maxWidth: '520px', background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '26px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+                <PdfCompileLoadingAnimation
+                  progress={compileHooks.qJobResult.progress ?? 0}
+                  message={
+                    compileHooks.qJobResult.status === 'PENDING'
+                      ? 'Queued \u2014 waiting for the renderer\u2026'
+                      : 'Compiling Print-Ready PDF\u2026'
+                  }
+                  subMessage={
+                    (compileHooks.qJobResult.chunkCount ?? 0) > 1
+                      ? `Part ${Math.min((compileHooks.qJobResult.chunks?.length ?? 0) + 1, compileHooks.qJobResult.chunkCount!)} of ${compileHooks.qJobResult.chunkCount}`
+                      : `${compileHooks.qJobResult.pdfType === 'PRODUCTION' ? 'Production' : 'Proof'} PDF \u00b7 job #${compileHooks.qJobResult.id}`
+                  }
+                />
+
+                {compileHooks.qJobResult.pollError && (
+                  <div style={{ marginTop: '14px', padding: '10px 12px', borderRadius: '8px', fontSize: '0.78rem', color: '#fca5a5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                    {compileHooks.qJobResult.pollError} The PDF may still be compiling \u2014 progress will resume if the
+                    connection recovers.
+                  </div>
+                )}
+
+                <div style={{ marginTop: '18px', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => compileHooks.setQJobResult(null)}
+                    style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '0.76rem', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Hide this and keep compiling in the background
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {compileHooks.qJobResult
+            && (compileHooks.qJobResult.status === 'COMPLETED' || compileHooks.qJobResult.status === 'FAILED') && (
             <div style={{ marginTop: '24px', padding: '16px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--glass-border)', borderRadius: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
@@ -238,33 +288,14 @@ export default function ClientDetailsPage() {
       )}
 
       {activeTab === 'add' && <CardholderAddForm clientId={clientId} clientTemplates={clientTemplates} onSuccess={() => { handleRefresh(); setActiveTab('list'); }} onCancel={() => setActiveTab('list')} />}
-      {activeTab === 'csv' && <CSVImportWizard
-        clientId={clientId}
-        clientTemplates={clientTemplates}
-        onImported={handleRefresh}
-        onCancel={() => setActiveTab('list')}
-        onPrintImported={(ids, templateId) => {
-          // Set the imported cardholder IDs as the selection
-          setSelectedIds(ids);
-          // Pre-set the template if available
-          if (templateId) {
-            compileHooks.setQTemplateId(String(templateId));
-            const tpl = compileHooks.qDetectedTemplateName
-              ? null
-              : clientTemplates.find((t: any) => String(t.id) === String(templateId));
-            if (tpl) {
-              compileHooks.setQDetectedTemplateName(tpl.name || null);
-              compileHooks.setQTemplateMixed(false);
-            }
-          }
-          // Switch to list tab and open compile modal
-          setActiveTab('list');
-          // Use a small delay to ensure state updates propagate before opening modal
-          setTimeout(() => {
-            compileHooks.setShowCompileModal(true);
-          }, 100);
-        }}
-      />}
+      {activeTab === 'csv' && (
+        <BatchCompilePanel
+          source="googleForm"
+          clientName={client?.name}
+          clientTemplates={clientTemplates}
+          onCancel={() => setActiveTab('list')}
+        />
+      )}
       {activeTab === 'zip' && <BatchCompilePanel clientName={client?.name} clientTemplates={clientTemplates} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'serials' && <SerialAssignmentPanel clientId={clientId} onComplete={handleRefresh} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'portal' && <PortalSharesPanel clientId={clientId} />}

@@ -126,5 +126,6 @@ export const AuditActions = {
 
   // System
   CRON_CLEANUP_RUN: 'CRON_CLEANUP_RUN',
+  DATA_PURGED: 'DATA_PURGED',
   SETTINGS_UPDATED: 'SETTINGS_UPDATED',
 } as const;

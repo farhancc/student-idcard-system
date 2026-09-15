@@ -1,6 +1,7 @@
 import React from 'react';
 import { Copy, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { FieldCoordinate } from '@/lib/pdf/card-renderer-client';
+import FieldRulesEditor from './FieldRulesEditor';
 
 export interface FieldTooltipProps {
   side: 'front' | 'back';
@@ -11,6 +12,8 @@ export interface FieldTooltipProps {
   cardHeight: number;
   pressFonts: any[];
   zoom: number;
+  /** Every field key on the template, for the rule-builder dropdowns. */
+  availableFields: string[];
   onUpdate: (updatedProps: Partial<FieldCoordinate>) => void;
   onDelete: () => void;
   onClose: () => void;
@@ -27,6 +30,7 @@ export default function FieldTooltip({
   cardHeight,
   pressFonts,
   zoom,
+  availableFields,
   onUpdate,
   onDelete,
   onClose,
@@ -349,6 +353,14 @@ export default function FieldTooltip({
           </div>
         )}
       </div>
+
+      <FieldRulesEditor
+        side={side}
+        index={index}
+        field={f}
+        availableFields={availableFields}
+        onUpdate={onUpdate}
+      />
 
       {/* Typography Styles (Only for Text / ID) */}
       {isTextLike && (

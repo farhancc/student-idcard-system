@@ -60,3 +60,94 @@ export async function autoDownloadJobFile(downloadUrl: string, fileName?: string
   }
 }
 
+
+/** The slice of the Electron preload bridge this module uses. */
+interface ElectronBackupBridge {
+  saveBackupLocally?: (
+    clientName: string,
+    label: string,
+    base64ZipData: string
+  ) => Promise<{ success: boolean; path?: string; error?: string }>;
+}
+
+/** The `manifest.json` entry written as the last file of a retention backup ZIP. */
+export interface BackupManifest {
+  client: { id: number; name: string };
+  range: { from: string; to: string };
+  generatedAt: string;
+  /** Records that verifiably made it into this archive — the only ones a purge may touch. */
+  exportedIds: number[];
+  /** Records left out because their photo could not be archived. */
+  skipped: number;
+  /** Records still matching the scope beyond this batch. */
+  remainingInScope: number;
+  purgeToken: string;
+}
+
+export interface SavedBackup {
+  manifest: BackupManifest;
+  /** Absolute path on disk (desktop), or null when the browser handled the download. */
+  path: string | null;
+  bytes: number;
+}
+
+/**
+ * Fetch a retention backup ZIP, store it on the operator's machine, and return
+ * the manifest that authorises purging what it contains.
+ *
+ * Throws rather than returning partial success: the caller uses the result to
+ * decide whether to permanently delete the records, so "saved" must mean saved.
+ */
+export async function downloadBackupArchive(
+  url: string,
+  fileName: string,
+  clientName: string
+): Promise<SavedBackup> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.error || `Backup download failed (${res.status})`);
+  }
+
+  const bytes = new Uint8Array(await (await res.blob()).arrayBuffer());
+
+  // Read the manifest before saving — a ZIP we cannot parse is not a backup we
+  // should be deleting anything on the strength of.
+  const JSZip = (await import('jszip')).default;
+  const entry = (await JSZip.loadAsync(bytes)).file('manifest.json');
+  if (!entry) throw new Error('Backup archive is missing its manifest; refusing to purge.');
+  const manifest: BackupManifest = JSON.parse(await entry.async('string'));
+
+  const electronAPI = (globalThis as { electronAPI?: ElectronBackupBridge }).electronAPI;
+
+  if (typeof electronAPI?.saveBackupLocally === 'function') {
+    const saveRes = await electronAPI.saveBackupLocally(
+      clientName,
+      fileName.replace(/\.zip$/i, ''),
+      uint8ArrayToBase64(bytes)
+    );
+    if (!saveRes?.success) {
+      throw new Error(saveRes?.error || 'Could not write the backup to disk.');
+    }
+    return { manifest, path: saveRes.path ?? null, bytes: bytes.byteLength };
+  }
+
+  // Browser: hand the file to the download manager. The browser gives no
+  // completion signal for a blob download, so the caller must have the operator
+  // confirm the file arrived before purging anything.
+  const blobUrl = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/zip' }));
+  try {
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  } finally {
+    // These archives can be hundreds of MB; do not leak them for the tab's life.
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+  }
+
+  return { manifest, path: null, bytes: bytes.byteLength };
+}

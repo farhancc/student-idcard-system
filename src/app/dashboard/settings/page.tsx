@@ -27,6 +27,7 @@ import {
   PlayCircle
 } from 'lucide-react';
 import { resetTour } from '@/components/ui/PlatformTour';
+import DataRetentionPanel from './components/DataRetentionPanel';
 
 interface ApiKey {
   id: number;
@@ -1010,6 +1011,9 @@ export default function SettingsPage() {
               </div>
             )}
           </div>
+
+          {/* ── Data Retention & Storage ─────────────────────────────────── */}
+          {currentUserRole === 'OWNER' && <DataRetentionPanel />}
         </div>
 
         {/* Right Column: Print vendors directory and Credit Requests */}
