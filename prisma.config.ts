@@ -9,6 +9,9 @@ export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    // Moved here from the deprecated `package.json#prisma` block, which Prisma 7
+    // drops. `prisma db seed` reads this and nothing else now.
+    seed: "npx tsx prisma/seed.ts",
   },
   engine: "classic",
   datasource: {
