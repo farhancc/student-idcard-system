@@ -133,7 +133,7 @@ function MiniBarChart({ data }: { data: { month: string; cards: number }[] }) {
         <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
           <div style={{
             width: '100%', height: `${Math.max(4, (d.cards / max) * 70)}px`,
-            background: i === data.length - 1 ? 'var(--primary-gradient)' : 'rgba(99,102,241,0.25)',
+            background: i === data.length - 1 ? '#6366f1' : 'rgba(99,102,241,0.25)',
             borderRadius: '4px 4px 0 0', transition: 'height 0.4s ease'
           }} title={`${d.cards} cards`} />
           <span style={{ fontSize: '0.6rem', color: 'var(--muted)' }}>{d.month}</span>
@@ -411,24 +411,36 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Top KPI row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '28px' }}>
-        <StatCard icon={<TrendingUp size={22} />} label="Cards This Month" value={s.cardsGenerated ?? 0} sub={cardChange} color="#10b981" />
+      {/* Top KPI row — flex-wrap (not grid) so a card that wraps alone onto
+          the last row still grows to fill it, instead of grid's auto-fit
+          leaving it stranded at track-width with empty space beside it. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '20px', marginBottom: '28px' }}>
+        <div style={{ flex: '1 1 220px' }}>
+          <StatCard icon={<TrendingUp size={22} />} label="Cards This Month" value={s.cardsGenerated ?? 0} sub={cardChange} color="#10b981" />
+        </div>
         {canSeeOrders && (
-          <StatCard icon={<ShoppingCart size={22} />} label="Orders This Month" value={s.ordersThisMonth ?? 0} sub={`${s.totalCardholders ?? 0} total cardholders`} color="#6366f1" />
+          <div style={{ flex: '1 1 220px' }}>
+            <StatCard icon={<ShoppingCart size={22} />} label="Orders This Month" value={s.ordersThisMonth ?? 0} sub={`${s.totalCardholders ?? 0} total cardholders`} color="#6366f1" />
+          </div>
         )}
         {canSeeOrders && (
-          <StatCard icon={<Users size={22} />} label="Active Clients" value={s.clientsServed ?? 0} color="#0ea5e9" badge={`${s.pdfsGenerated ?? 0} PDFs`} />
+          <div style={{ flex: '1 1 220px' }}>
+            <StatCard icon={<Users size={22} />} label="Active Clients" value={s.clientsServed ?? 0} color="#0ea5e9" badge={`${s.pdfsGenerated ?? 0} PDFs`} />
+          </div>
         )}
-        <StatCard icon={<CreditCard size={22} />} label="Print Credits" value={s.credits ?? 0} sub={(s.lockedCredits ?? 0) > 0 ? `${s.lockedCredits} locked` : 'Available'} color="#f59e0b" />
+        <div style={{ flex: '1 1 220px' }}>
+          <StatCard icon={<CreditCard size={22} />} label="Print Credits" value={s.credits ?? 0} sub={(s.lockedCredits ?? 0) > 0 ? `${s.lockedCredits} locked` : 'Available'} color="#f59e0b" />
+        </div>
         {canSeeFinancials && (
-          <StatCard
-            icon={<FileText size={22} />}
-            label="Revenue (This Month)"
-            value={`Rs. ${(s.revenueThisMonth ?? 0).toLocaleString('en-IN')}`}
-            sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
-            color="#a855f7"
-          />
+          <div style={{ flex: '1 1 220px' }}>
+            <StatCard
+              icon={<FileText size={22} />}
+              label="Revenue (This Month)"
+              value={`Rs. ${(s.revenueThisMonth ?? 0).toLocaleString('en-IN')}`}
+              sub={(s.pendingRevenue ?? 0) > 0 ? `Rs. ${(s.pendingRevenue ?? 0).toLocaleString('en-IN')} pending` : 'All collected'}
+              color="#a855f7"
+            />
+          </div>
         )}
       </div>
 
@@ -540,7 +552,7 @@ export default function DashboardPage() {
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <div style={{ flex: 1, height: '6px', background: 'rgba(255,255,255,0.06)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#10b981' : 'var(--primary-gradient)', borderRadius: '3px' }} />
+                            <div style={{ width: `${pct}%`, height: '100%', background: pct === 100 ? '#10b981' : '#6366f1', borderRadius: '3px' }} />
                           </div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--muted)', minWidth: '28px', textAlign: 'right' }}>{pct}%</span>
                         </div>
@@ -621,7 +633,7 @@ export default function DashboardPage() {
                     </div>
                     {job.status === 'PROCESSING' && (
                       <div style={{ width: '50px', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ width: `${job.progress ?? 0}%`, height: '100%', background: 'var(--primary-gradient)', transition: 'width 0.3s' }} />
+                        <div style={{ width: `${job.progress ?? 0}%`, height: '100%', background: '#6366f1', transition: 'width 0.3s' }} />
                       </div>
                     )}
                   </div>
@@ -780,7 +792,7 @@ export default function DashboardPage() {
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: '0.82rem', fontWeight: '500', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                         <div style={{ height: '3px', background: 'rgba(255,255,255,0.06)', borderRadius: '2px', marginTop: '4px' }}>
-                          <div style={{ width: `${Math.round((c.cardCount / maxCards) * 100)}%`, height: '100%', background: 'var(--primary-gradient)', borderRadius: '2px' }} />
+                          <div style={{ width: `${Math.round((c.cardCount / maxCards) * 100)}%`, height: '100%', background: '#6366f1', borderRadius: '2px' }} />
                         </div>
                       </div>
                       <span style={{ fontSize: '0.78rem', color: 'var(--muted)', flexShrink: 0 }}>{c.cardCount}</span>
