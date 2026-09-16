@@ -78,8 +78,32 @@ export default function ClientDetailsPage() {
       .finally(() => setPreviewLoading(false));
   }, [viewingCardholder]);
 
+  const handleDeleteCardholder = (id: number) => {
+    const cardholder = cardholders.find((c: any) => c.id === id);
+    showConfirm({
+      title: 'Delete Cardholder',
+      message: `Permanently delete ${cardholder?.name || 'this cardholder'}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const res = await fetch(`/api/cardholders/${id}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to delete cardholder');
+          toast('Cardholder deleted permanently.', 'success');
+          setSelectedIds(prev => prev.filter(x => x !== id));
+          handleRefresh();
+        } catch (err: any) {
+          toast(err.message || 'Failed to delete cardholder', 'error');
+        } finally {
+          closeConfirm();
+        }
+      },
+    });
+  };
+
   // Fallbacks
-  const handleExportExcel = () => {}; 
+  const handleExportExcel = () => {};
   const handleDownloadZip = () => {};
   const handlePurgeClient = () => {};
 
@@ -191,7 +215,7 @@ export default function ClientDetailsPage() {
             filterTemplate={filterTemplate}
             onViewDetails={setViewingCardholder}
             onEdit={setEditingCardholder}
-            onDelete={(id) => {}}
+            onDelete={handleDeleteCardholder}
             onCompileTable={compileHooks.handleCompileTable}
             onExportExcel={handleExportExcel}
             onDownloadZip={handleDownloadZip}
