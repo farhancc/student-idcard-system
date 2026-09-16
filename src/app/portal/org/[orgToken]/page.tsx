@@ -876,7 +876,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', color: 'var(--foreground)' }}>
         <div style={{ textAlign: 'center' }}>
-          <Loader className="animate-spin" size={48} style={{ margin: '0 auto 16px', color: 'var(--primary)' }} />
+          <Loader className="animate-spin" size={48} style={{ margin: '0 auto 16px', color: 'var(--primary-hover)' }} />
           <p style={{ color: 'var(--muted)' }}>Loading client portal...</p>
         </div>
       </div>
@@ -1013,16 +1013,29 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         
         {/* Header Section */}
-        <div className="portal-header" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'flex-start', gap: '24px', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--glass-border)' }}>
+        <div className="portal-header" style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '24px',
+          marginBottom: '28px',
+          paddingBottom: '24px',
+          borderBottom: '1px solid var(--glass-border)',
+        }}>
           <div>
-            <span style={{ fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              {client?.type} MANAGEMENT PORTAL (ORGANISATION HEAD)
+            <span style={{ fontSize: '0.78rem', color: 'var(--primary-hover)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {client?.type} Management Portal
             </span>
-            <h1 style={{ fontSize: '2.2rem', marginTop: '8px', marginBottom: '4px' }}>{client?.name}</h1>
+            <h1 style={{ fontSize: '1.9rem', marginTop: '6px', marginBottom: 0 }}>{client?.name}</h1>
           </div>
 
           <div className="portal-header-actions" style={{ display: 'flex', gap: '12px' }}>
-            <button className="btn btn-secondary" onClick={copyEnrollmentLink} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              className="btn btn-primary"
+              onClick={copyEnrollmentLink}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
               {copied ? <Check size={16} /> : <Copy size={16} />}
               Copy Global Staff Link
             </button>
@@ -1042,7 +1055,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               border: 'none',
               cursor: 'pointer',
               background: activeTab === 'cardholders' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-              color: activeTab === 'cardholders' ? 'var(--primary)' : 'var(--muted)',
+              color: activeTab === 'cardholders' ? 'var(--primary-hover)' : 'var(--muted)',
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
@@ -1063,7 +1076,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               border: 'none',
               cursor: 'pointer',
               background: activeTab === 'departments' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-              color: activeTab === 'departments' ? 'var(--primary)' : 'var(--muted)',
+              color: activeTab === 'departments' ? 'var(--primary-hover)' : 'var(--muted)',
               transition: 'all 0.2s',
               display: 'flex',
               alignItems: 'center',
@@ -1100,7 +1113,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     fontWeight: 600,
                     borderRadius: '8px',
                     border: showPreview ? '1px solid rgba(16,185,129,0.7)' : '1px solid var(--glass-border)',
-                    background: showPreview ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.05)',
+                    background: showPreview ? 'rgba(16, 185, 129, 0.12)' : '#ffffff',
                     color: showPreview ? '#10b981' : 'var(--muted)',
                     cursor: togglingPreview ? 'not-allowed' : 'pointer',
                     transition: 'all 0.2s',
@@ -1115,7 +1128,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                   href={`/portal/enroll/${enrollToken}`} 
                   target="_blank" 
                   rel="noreferrer" 
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary)', fontWeight: 'bold' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', color: 'var(--primary-hover)', fontWeight: 'bold' }}
                 >
                   Open Global Enrollment Form <ExternalLink size={14} />
                 </a>
@@ -1206,9 +1219,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                             fontSize: '0.8rem',
                             fontWeight: '600',
                             borderRadius: '6px',
-                            border: selectedTemplateFilter === 'ALL' ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                            background: selectedTemplateFilter === 'ALL' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                            color: selectedTemplateFilter === 'ALL' ? 'var(--primary)' : 'var(--muted)',
+                            border: selectedTemplateFilter === 'ALL' ? '1px solid var(--primary-hover)' : '1px solid var(--glass-border)',
+                            background: selectedTemplateFilter === 'ALL' ? 'rgba(59, 130, 246, 0.15)' : 'var(--secondary)',
+                            color: selectedTemplateFilter === 'ALL' ? 'var(--primary-hover)' : 'var(--muted)',
                             cursor: 'pointer',
                             transition: 'all 0.2s',
                           }}
@@ -1227,9 +1240,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                 fontSize: '0.8rem',
                                 fontWeight: '600',
                                 borderRadius: '6px',
-                                border: selectedTemplateFilter === tName ? '1px solid var(--primary)' : '1px solid var(--glass-border)',
-                                background: selectedTemplateFilter === tName ? 'rgba(59, 130, 246, 0.15)' : 'rgba(255,255,255,0.03)',
-                                color: selectedTemplateFilter === tName ? 'var(--primary)' : 'var(--muted)',
+                                border: selectedTemplateFilter === tName ? '1px solid var(--primary-hover)' : '1px solid var(--glass-border)',
+                                background: selectedTemplateFilter === tName ? 'rgba(59, 130, 246, 0.15)' : 'var(--secondary)',
+                                color: selectedTemplateFilter === tName ? 'var(--primary-hover)' : 'var(--muted)',
                                 cursor: 'pointer',
                                 transition: 'all 0.2s',
                               }}
@@ -1251,8 +1264,6 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                       fontSize: '0.88rem',
                       fontWeight: 700,
                       borderRadius: '10px',
-                      background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-                      boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
                       border: 'none',
                       cursor: 'pointer'
                     }}>
@@ -1280,7 +1291,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           {/* Template Header Banner */}
                           <div style={{
                             padding: '16px 20px',
-                            background: 'rgba(255, 255, 255, 0.03)',
+                            background: 'var(--secondary)',
                             borderBottom: '1px solid var(--glass-border)',
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -1294,7 +1305,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                 height: '32px',
                                 borderRadius: '8px',
                                 background: 'rgba(59, 130, 246, 0.15)',
-                                color: 'var(--primary)',
+                                color: 'var(--primary-hover)',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center'
@@ -1312,7 +1323,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               padding: '4px 12px',
                               borderRadius: '20px',
                               background: 'rgba(59, 130, 246, 0.15)',
-                              color: 'var(--primary)',
+                              color: 'var(--primary-hover)',
                               border: '1px solid rgba(59, 130, 246, 0.3)'
                             }}>
                               {tCardholders.length} Enrolled {tCardholders.length === 1 ? 'Record' : 'Records'}
@@ -1507,7 +1518,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                         <span style={{
                                           padding: '2px 8px',
                                           borderRadius: '4px',
-                                          background: 'rgba(255,255,255,0.05)',
+                                          background: 'var(--secondary)',
                                           fontSize: '0.78rem',
                                           color: 'var(--muted)'
                                         }}>
@@ -1521,7 +1532,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                       <td className="sticky-actions">
                                         <div style={{ display: 'flex', gap: '8px' }}>
                                           <button className="btn btn-secondary" style={{ padding: '6px 10px', borderColor: 'rgba(59, 130, 246, 0.3)' }} onClick={(e) => { e.stopPropagation(); setSelectedCh(ch); }} title="Preview ID Card">
-                                            <Eye size={14} style={{ color: 'var(--primary)' }} />
+                                            <Eye size={14} style={{ color: 'var(--primary-hover)' }} />
                                           </button>
                                           <button className="btn btn-secondary" style={{ padding: '6px 10px' }} onClick={(e) => { e.stopPropagation(); openEditModal(ch); }} title="Edit Cardholder">
                                             <Edit2 size={14} />
@@ -1555,7 +1566,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                   key={ch.id} 
                                   style={{
                                     background: selectedCh?.id === ch.id ? '#eff6ff' : 'var(--card-bg)',
-                                    border: selectedCh?.id === ch.id ? '2px solid var(--primary)' : '1px solid var(--glass-border)',
+                                    border: selectedCh?.id === ch.id ? '2px solid var(--primary-hover)' : '1px solid var(--glass-border)',
                                     borderRadius: '12px',
                                     padding: '16px',
                                     display: 'flex',
@@ -1613,7 +1624,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                                         }
                                       }}
                                     >
-                                      <Eye size={14} style={{ color: 'var(--primary)' }} /> Preview
+                                      <Eye size={14} style={{ color: 'var(--primary-hover)' }} /> Preview
                                     </button>
                                     <button 
                                       type="button"
@@ -1685,7 +1696,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           borderRadius: '50%',
                           transition: 'background 0.2s'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--secondary)'}
                         onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
                       >
                         <X size={18} />
@@ -1712,7 +1723,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
 
                       {/* Front / Back switch */}
                       {template.backImageUrl && (
-                        <div style={{ display: 'flex', background: 'rgba(255,255,255,0.05)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                        <div style={{ display: 'flex', background: 'var(--secondary)', padding: '4px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
                           <button
                             onClick={() => setPreviewSide('front')}
                             style={{
@@ -1722,7 +1733,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               fontSize: '0.8rem',
                               fontWeight: 600,
                               cursor: 'pointer',
-                              background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
+                              background: previewSide === 'front' ? 'var(--primary-hover)' : 'transparent',
                               color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
                               transition: 'all 0.2s'
                             }}
@@ -1738,7 +1749,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                               fontSize: '0.8rem',
                               fontWeight: 600,
                               cursor: 'pointer',
-                              background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
+                              background: previewSide === 'back' ? 'var(--primary-hover)' : 'transparent',
                               color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
                               transition: 'all 0.2s'
                             }}
@@ -1862,7 +1873,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
           <div>
             <div className="card" style={{ padding: '24px', background: 'var(--card-bg)', border: '1px solid var(--glass-border)', borderRadius: '12px', marginBottom: '32px' }}>
               <h3 style={{ fontSize: '1.1rem', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Building size={18} style={{ color: 'var(--primary)' }} /> Create a Department
+                <Building size={18} style={{ color: 'var(--primary-hover)' }} /> Create a Department
               </h3>
               <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>
                 Create a department to generate a separate Department Head link (for managing department-level data) and a Staff Enrollment Link (for staff to submit their data).
@@ -1912,12 +1923,12 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     {/* Dept Title and Stats */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }} />
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary-hover)' }} />
                         <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{dept.name}</h3>
                         <span style={{
                           fontSize: '0.75rem',
                           background: 'rgba(59, 130, 246, 0.1)',
-                          color: 'var(--primary)',
+                          color: 'var(--primary-hover)',
                           padding: '3px 8px',
                           borderRadius: '12px',
                           fontWeight: 'bold'
@@ -2147,7 +2158,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                     <label className="form-label">
                       {label}{isNameLike ? ' *' : ''}
                       {isNumber && (minCap !== undefined || maxCap !== undefined) && (
-                        <span style={{ fontSize: '0.7rem', color: '#94a3b8', marginLeft: '6px', fontWeight: 'normal' }}>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--muted)', marginLeft: '6px', fontWeight: 'normal' }}>
                           ({minCap !== undefined && maxCap !== undefined ? `Range: ${minCap} - ${maxCap}` : (minCap !== undefined ? `Min: ${minCap}` : `Max: ${maxCap}`)})
                         </span>
                       )}
@@ -2286,9 +2297,9 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
               {(() => {
                 const custom = previewCardholder.customFields ? (typeof previewCardholder.customFields === 'string' ? JSON.parse(previewCardholder.customFields) : previewCardholder.customFields) : {};
                 const idVal = previewCardholder.uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
-                return idVal ? <div style={{ fontSize: '0.8rem', color: 'var(--primary)' }}>ID: {idVal}</div> : null;
+                return idVal ? <div style={{ fontSize: '0.8rem', color: 'var(--primary-hover)' }}>ID: {idVal}</div> : null;
               })()}
-              <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--muted)', padding: '8px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
+              <div style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--muted)', padding: '8px', background: 'var(--secondary)', borderRadius: '6px', border: '1px solid var(--glass-border)' }}>
                 ℹ️ Card template preview is available in the Desktop App only.
               </div>
             </div>
@@ -2301,7 +2312,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                 const hasBack = backParsed.length > 0;
                 if (!hasBack) return <div />;
                 return (
-                  <div style={{ display: 'flex', gap: '4px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px' }}>
+                  <div style={{ display: 'flex', gap: '4px', background: 'var(--secondary)', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '3px' }}>
                     {(['front', 'back'] as const).map(s => (
                       <button
                         key={s}
@@ -2314,7 +2325,7 @@ function OrgPortalPageContent({ params }: { params: Promise<{ orgToken: string }
                           borderRadius: '6px',
                           border: 'none',
                           cursor: 'pointer',
-                          background: previewSide === s ? 'var(--primary)' : 'transparent',
+                          background: previewSide === s ? 'var(--primary-hover)' : 'transparent',
                           color: previewSide === s ? '#fff' : 'var(--muted)',
                           transition: 'all 0.2s',
                         }}

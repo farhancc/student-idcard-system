@@ -6,7 +6,7 @@ import ImageCropper from '@/app/components/ImageCropper';
 import CardPreview from '@/app/components/CardPreview';
 import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
-import { Upload, Check, AlertCircle, Loader, CreditCard, Camera, X } from 'lucide-react';
+import { Upload, Check, AlertCircle, Loader, CreditCard, Camera, X, Info } from 'lucide-react';
 
 interface FieldCoordinate {
   field: string;
@@ -427,7 +427,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', color: 'var(--foreground)' }}>
         <div style={{ textAlign: 'center' }}>
-          <Loader className="animate-spin" size={48} style={{ margin: '0 auto 16px', color: 'var(--primary)' }} />
+          <Loader className="animate-spin" size={48} style={{ margin: '0 auto 16px', color: 'var(--primary-hover)' }} />
           <p style={{ color: 'var(--muted)' }}>Loading enrollment form...</p>
         </div>
       </div>
@@ -449,7 +449,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   if (success) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', padding: '24px', color: 'var(--foreground)' }}>
-        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '32px', textAlign: 'center', border: '1px solid var(--glass-border)', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.4)', background: 'var(--card-bg)' }}>
+        <div className="card" style={{ maxWidth: '450px', width: '100%', padding: '32px', textAlign: 'center', borderLeft: '1px solid var(--glass-border)', borderRight: '1px solid var(--glass-border)', borderBottom: '1px solid var(--glass-border)', borderTop: '3px solid #10b981', borderRadius: '16px', boxShadow: 'var(--shadow-md)', background: 'var(--card-bg)' }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
             <Check size={32} style={{ color: '#10b981' }} />
           </div>
@@ -510,95 +510,79 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
     : 0.75; // Default 3:4 portrait
 
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.15) 0%, rgba(15, 23, 42, 0) 50%), var(--page-bg)', 
-      color: 'var(--foreground)', 
-      padding: '48px 24px', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      alignItems: 'center' 
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--page-bg)',
+      color: 'var(--foreground)',
+      padding: '48px 24px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center'
     }}>
       <div style={{ maxWidth: showPreview ? '1120px' : '560px', width: '100%', transition: 'max-width 0.3s ease' }}>
-        
-        {/* Header Hero */}
-        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '6px 16px',
-            borderRadius: '9999px',
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            marginBottom: '16px',
-            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.12)'
-          }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#6366f1', boxShadow: '0 0 10px #6366f1' }} />
-            <span style={{ fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#a5b4fc' }}>
-              {client?.type} Official Registration Portal
-            </span>
-          </div>
 
-          <h1 style={{ 
-            fontSize: '2.2rem', 
-            fontWeight: 800, 
-            letterSpacing: '-0.02em', 
-            margin: '0 0 8px 0',
-            background: 'linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
+        {/* Header Hero */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--primary-hover)' }}>
+            {client?.type} Registration Portal
+          </span>
+
+          <h1 style={{
+            fontSize: '2.1rem',
+            fontWeight: 800,
+            letterSpacing: '-0.02em',
+            margin: '6px 0 0 0',
           }}>
             {client?.name}
           </h1>
 
           {departmentName && (
-            <div style={{ 
+            <div style={{
               display: 'inline-block',
-              margin: '4px 0 8px',
+              marginTop: '10px',
               padding: '4px 14px',
-              background: 'rgba(59, 130, 246, 0.12)',
-              border: '1px solid rgba(59, 130, 246, 0.3)',
+              background: 'var(--primary-hover)',
               borderRadius: '8px',
-              color: '#60a5fa',
+              color: '#ffffff',
               fontWeight: 600,
-              fontSize: '0.9rem'
+              fontSize: '0.85rem'
             }}>
               Department: {departmentName}
             </div>
           )}
 
-          <p style={{ color: 'var(--muted)', fontSize: '0.95rem', margin: '4px 0 16px' }}>
-            Please fill in your information below to submit your official ID card details.
+          <p style={{ color: 'var(--muted)', fontSize: '0.92rem', margin: '14px 0 0' }}>
+            Fill in your details below to submit your official ID card information.
           </p>
+        </div>
 
-          <div style={{ 
-            padding: '8px 18px', 
-            background: 'rgba(255, 255, 255, 0.03)', 
-            border: '1px solid var(--glass-border)', 
-            borderRadius: '20px', 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            backdropFilter: 'blur(8px)',
-          }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
-              💡 <strong>Note:</strong> To correct or edit details after submitting, please contact your department head.
-            </span>
-          </div>
+        <div style={{
+          padding: '10px 18px',
+          background: 'var(--secondary)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '28px',
+        }}>
+          <Info size={15} style={{ color: 'var(--secondary-text)', flexShrink: 0 }} />
+          <span style={{ fontSize: '0.82rem', color: 'var(--secondary-text)', fontWeight: 500 }}>
+            To correct or edit details after submitting, please contact your department head.
+          </span>
         </div>
 
         {error && (
-          <div className="alert alert-danger" style={{ 
-            marginBottom: '24px', 
-            display: 'flex', 
-            gap: '10px', 
+          <div className="alert alert-danger" style={{
+            marginBottom: '24px',
+            display: 'flex',
+            gap: '10px',
             alignItems: 'center',
             padding: '14px 18px',
             borderRadius: '12px',
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            color: '#f87171',
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#b91c1c',
             fontSize: '0.88rem'
           }}>
             <AlertCircle size={18} style={{ flexShrink: 0 }} />
@@ -608,16 +592,12 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
 
         <div className={showPreview ? "portal-layout" : ""}>
           <div className={showPreview ? "portal-form-col" : ""}>
-            <form onSubmit={handleSubmit} className="card" style={{ 
-              padding: '36px', 
-              background: 'rgba(15, 23, 42, 0.65)', 
-              backdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255, 255, 255, 0.12)', 
-              borderRadius: '20px', 
-              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '22px' 
+            <form onSubmit={handleSubmit} className="card" style={{
+              padding: '36px',
+              borderRadius: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '22px'
             }}>
               <input type="file" id="photo-input" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
               <canvas ref={webcamCanvasRef} style={{ display: 'none' }} />
@@ -626,9 +606,9 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 <div style={{
                   padding: '14px 18px',
                   borderRadius: '10px',
-                  background: 'rgba(245, 158, 11, 0.12)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  color: '#fbbf24',
+                  background: '#fffbeb',
+                  border: '1px solid #fde68a',
+                  color: '#92400e',
                   fontSize: '0.85rem',
                   display: 'flex',
                   alignItems: 'center',
@@ -640,17 +620,17 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   </div>
                 </div>
               )}
-          
+
               {/* Photo upload + Cropper trigger */}
               {hasPhoto && (
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   padding: '20px',
-                  background: 'rgba(255,255,255,0.02)',
+                  background: 'var(--secondary)',
                   borderRadius: '14px',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  border: '1px solid var(--glass-border)',
                   marginBottom: '8px'
                 }}>
                   <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '14px' }}>
@@ -659,25 +639,25 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   <div style={{
                     width: `${mainBoxWidth}px`,
                     height: `${mainBoxHeight}px`,
-                    background: '#0b0f19',
+                    background: '#ffffff',
                     borderRadius: `${mainBoxBorderRadius}px`,
-                    border: `2px dashed ${photoUrl ? 'var(--primary)' : 'rgba(255,255,255,0.2)'}`,
+                    border: `2px dashed ${photoUrl ? 'var(--primary-hover)' : '#cbd5e1'}`,
                     position: 'relative',
                     overflow: 'hidden',
                     cursor: 'pointer',
                     marginBottom: '14px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                    boxShadow: '0 4px 12px rgba(37,99,235,0.08)',
                     transition: 'all 0.2s ease',
                   }} onClick={() => triggerUpload('photo')}>
                     {photoUrl ? (
                       <img src={photoUrl} alt="Cropped profile" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     ) : uploadingPhoto && activeCropField === 'photo' ? (
                       <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                        <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
+                        <Loader className="animate-spin" size={24} style={{ color: 'var(--primary-hover)' }} />
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                        <Upload size={22} style={{ color: 'var(--primary)' }} />
+                        <Upload size={22} style={{ color: 'var(--primary-hover)' }} />
                         <span style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'center', fontWeight: 500 }}>Click to Upload</span>
                       </div>
                     )}
@@ -687,7 +667,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                     <button type="button" className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', gap: '6px', borderRadius: '8px' }} onClick={() => triggerUpload('photo')}>
                       <Upload size={14} /> Upload File
                     </button>
-                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', gap: '6px', borderRadius: '8px', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8' }} onClick={() => startWebcam('photo')}>
+                    <button type="button" className="btn btn-secondary" style={{ fontSize: '0.78rem', padding: '7px 14px', gap: '6px', borderRadius: '8px' }} onClick={() => startWebcam('photo')}>
                       <Camera size={14} /> Camera
                     </button>
                   </div>
@@ -701,28 +681,28 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 const value = customFields[field.field] || '';
                 const fieldWidth = field.width || 120;
                 const fieldHeight = field.height || 160;
-                
+
                 const boxWidth = 120;
                 const boxHeight = (fieldHeight / fieldWidth) * boxWidth;
                 const boxBorderRadius = field.borderRadius ? (field.borderRadius / fieldWidth) * boxWidth : 8;
 
                 return (
-                  <div key={field.field} style={{ 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    alignItems: 'center', 
+                  <div key={field.field} style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
                     padding: '16px',
-                    background: 'rgba(255,255,255,0.02)',
+                    background: 'var(--secondary)',
                     borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.06)'
+                    border: '1px solid var(--glass-border)'
                   }}>
                     <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: '10px' }}>{label}</label>
                     <div style={{
                       width: `${boxWidth}px`,
                       height: `${boxHeight}px`,
-                      background: '#0b0f19',
+                      background: '#ffffff',
                       borderRadius: `${boxBorderRadius}px`,
-                      border: '2px dashed rgba(255,255,255,0.2)',
+                      border: '2px dashed #cbd5e1',
                       position: 'relative',
                       overflow: 'hidden',
                       cursor: 'pointer',
@@ -732,11 +712,11 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                         <img src={value} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       ) : uploadingPhoto && activeCropField === field.field ? (
                         <div style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' }}>
-                          <Loader className="animate-spin" size={24} style={{ color: 'var(--primary)' }} />
+                          <Loader className="animate-spin" size={24} style={{ color: 'var(--primary-hover)' }} />
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                          <Upload size={18} style={{ color: 'var(--primary)' }} />
+                          <Upload size={18} style={{ color: 'var(--primary-hover)' }} />
                           <span style={{ fontSize: '0.7rem', color: 'var(--muted)', textAlign: 'center' }}>Upload</span>
                         </div>
                       )}
@@ -831,14 +811,11 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                           ? (minCap !== undefined && maxCap !== undefined ? `Enter number (${minCap} to ${maxCap})` : `Enter number for ${label.toLowerCase()}`)
                           : (isDate ? 'YYYY-MM-DD' : `Enter ${label.toLowerCase()}`)
                       }
-                      style={{ 
+                      style={{
                         cursor: isDate ? 'pointer' : 'text',
                         padding: '12px 16px',
                         fontSize: '0.9rem',
                         borderRadius: '10px',
-                        background: 'rgba(15, 23, 42, 0.8)',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        color: '#fff',
                         transition: 'all 0.2s ease',
                       }}
                     />
@@ -856,8 +833,6 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   fontSize: '0.95rem',
                   fontWeight: 700,
                   borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
-                  boxShadow: '0 8px 24px rgba(79, 70, 229, 0.35)',
                   border: 'none',
                   cursor: 'pointer',
                   display: 'flex',
@@ -897,7 +872,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                 backdropFilter: 'blur(12px)',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CreditCard size={16} style={{ color: 'var(--primary)' }} />
+                  <CreditCard size={16} style={{ color: 'var(--primary-hover)' }} />
                   <span style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', fontWeight: 700 }}>
                     Live ID Card Preview
                   </span>
@@ -991,7 +966,7 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
           <div style={{ background: 'var(--card-bg)', borderRadius: '16px', overflow: 'hidden', maxWidth: '480px', width: '100%', border: '1px solid var(--glass-border)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--glass-border)' }}>
               <span style={{ fontWeight: '600', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Camera size={16} color="var(--primary)" /> Take Photo
+                <Camera size={16} color="var(--primary-hover)" /> Take Photo
               </span>
               <button type="button" onClick={stopWebcam} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: '4px' }}>
                 <X size={18} />
