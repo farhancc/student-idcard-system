@@ -15,8 +15,8 @@ interface CardholderGroupedTablesProps {
   onEdit: (ch: any) => void;
   onDelete: (id: number) => void;
   onCompileTable: (targetCardholders: any[], targetTemplate?: any) => void;
-  onExportExcel: (targetCardholders: any[], templateName?: string) => void;
-  onDownloadZip: (targetCardholders: any[], templateName?: string) => void;
+  onExportExcel: (targetCardholders: any[], templateName?: string, templateId?: number) => void;
+  onDownloadZip: (targetCardholders: any[], templateName?: string, templateId?: number) => void;
   onPurgeClient: () => void;
   onCompileIndividual: (ch: any) => void;
   getTemplateColumns: (tmpl: any) => any[];
@@ -184,7 +184,7 @@ export default function CardholderGroupedTables({
                 border: '1px solid rgba(16,185,129,0.3)',
                 color: '#34d399'
               }}
-              onClick={() => onExportExcel(targetTmplList, tmpl.name)}
+              onClick={() => onExportExcel(targetTmplList, tmpl.name, tmpl.id)}
               title={hasTmplSelection ? `Export Excel for ${selectedInTmpl.length} selected cardholders in ${tmpl.name}` : `Export Excel spreadsheet for ${tmpl.name}`}
             >
               <FileSpreadsheet size={14} />
@@ -201,7 +201,7 @@ export default function CardholderGroupedTables({
                 border: '1px solid rgba(59,130,246,0.3)',
                 color: '#60a5fa'
               }}
-              onClick={() => onDownloadZip(targetTmplList, tmpl.name)}
+              onClick={() => onDownloadZip(targetTmplList, tmpl.name, tmpl.id)}
               disabled={zipping}
               title="Download ZIP package of photos and Excel metadata for this template"
             >

@@ -105,7 +105,8 @@ export default function ClientDetailsPage() {
   const downloadCardholderExport = async (
     targetCardholders: any[],
     format: 'xlsx' | 'zip',
-    fileName?: string
+    fileName?: string,
+    templateId?: number
   ) => {
     if (targetCardholders.length === 0) {
       toast('No cardholders to export.', 'warning');
@@ -120,6 +121,7 @@ export default function ClientDetailsPage() {
           cardholderIds: targetCardholders.map((c: any) => c.id),
           format,
           fileName,
+          templateId,
         }),
       });
       if (!res.ok) {
@@ -144,10 +146,10 @@ export default function ClientDetailsPage() {
     }
   };
 
-  const handleExportExcel = (targetCardholders: any[], templateName?: string) =>
-    downloadCardholderExport(targetCardholders, 'xlsx', templateName);
-  const handleDownloadZip = (targetCardholders: any[], templateName?: string) =>
-    downloadCardholderExport(targetCardholders, 'zip', templateName);
+  const handleExportExcel = (targetCardholders: any[], templateName?: string, templateId?: number) =>
+    downloadCardholderExport(targetCardholders, 'xlsx', templateName, templateId);
+  const handleDownloadZip = (targetCardholders: any[], templateName?: string, templateId?: number) =>
+    downloadCardholderExport(targetCardholders, 'zip', templateName, templateId);
   // Fallback
   const handlePurgeClient = () => {};
 
