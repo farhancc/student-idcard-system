@@ -1,16 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useParams } from 'next/navigation';
 import { useOrderDetail } from './hooks/useOrderDetail';
 import { useOrderPDFJob } from './hooks/useOrderPDFJob';
 import { OrderDetailHeader } from './components/OrderDetailHeader';
-import { OrderPDFCompilerCard } from './components/OrderPDFCompilerCard';
 import { OrderCardholderTable } from './components/OrderCardholderTable';
 import { CardholderEditModal } from './components/CardholderEditModal';
 import { PressDispatchModal } from './components/PressDispatchModal';
-import { BatchImportWizard } from './components/BatchImportWizard';
-import { Users, Upload } from 'lucide-react';
 
 export default function OrderDetailsPage() {
   const params = useParams();
@@ -19,21 +16,13 @@ export default function OrderDetailsPage() {
   const {
     order, logs, notes, loading, isOwner, transitioning, noteContent,
     setNoteContent, fetchData, handleWorkflowAction, handleClone,
-    handleWhatsAppShare, handleAddNote
+    handleAddNote
   } = useOrderDetail(orderId);
 
   const {
     pdfLoading, setPdfLoading, previewJob, setPreviewJob,
     pendingCompileType, setPendingCompileType, getLatestJob,
-    proceedWithCompile
-  } = useOrderPDFJob(orderId, order, fetchData);
-
-  const [layoutConfig] = useState({
-    paperSize: 'A4', orientation: 'PORTRAIT',
-    marginLeft: 40, marginTop: 40, marginRight: 40, marginBottom: 40,
-    colGap: 15, rowGap: 15, bleed: 0, cropMarks: true, foldLine: true
-  });
-  const [activeTab, setActiveTab] = useState<'cardholders' | 'batch-import'>('cardholders');
+  } = useOrderPDFJob(order, fetchData);
 
   if (loading) return <div>Loading...</div>;
 
@@ -57,8 +46,6 @@ export default function OrderDetailsPage() {
     }
   };
 
-  const cardholderCount = order?._count?.cardholders ?? order?.cardholders?.length ?? 0;
-
   return (
     <div>
       <OrderDetailHeader
@@ -67,98 +54,11 @@ export default function OrderDetailsPage() {
         handleWorkflowAction={handleWorkflowAction} activeJobsNode={null}
       />
 
-      {/* Tab Bar */}
-      <div className="glass-panel" style={{
-        marginBottom: '24px',
-        padding: '4px',
-        display: 'inline-flex',
-        gap: '4px',
-        borderRadius: '10px',
-      }}>
-        <button
-          type="button"
-          onClick={() => setActiveTab('cardholders')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: activeTab === 'cardholders' ? 600 : 400,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-            background: activeTab === 'cardholders'
-              ? 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(99,102,241,0.08))'
-              : 'transparent',
-            color: activeTab === 'cardholders' ? '#a5b4fc' : 'var(--muted)',
-            boxShadow: activeTab === 'cardholders'
-              ? '0 2px 8px rgba(99,102,241,0.15)'
-              : 'none',
-          }}
-        >
-          <Users size={16} />
-          Cardholders
-          {cardholderCount > 0 && (
-            <span style={{
-              background: 'rgba(99,102,241,0.2)',
-              padding: '2px 8px',
-              borderRadius: '12px',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: '#818cf8',
-            }}>
-              {cardholderCount}
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('batch-import')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: '8px',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            fontWeight: activeTab === 'batch-import' ? 600 : 400,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s',
-            background: activeTab === 'batch-import'
-              ? 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(99,102,241,0.08))'
-              : 'transparent',
-            color: activeTab === 'batch-import' ? '#a5b4fc' : 'var(--muted)',
-            boxShadow: activeTab === 'batch-import'
-              ? '0 2px 8px rgba(99,102,241,0.15)'
-              : 'none',
-          }}
-        >
-          <Upload size={16} />
-          Batch Import
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      {activeTab === 'cardholders' && (
-        <div className="dashboard-grid-32">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            <OrderPDFCompilerCard handleWhatsAppShare={handleWhatsAppShare} />
-            <OrderCardholderTable />
-          </div>
+      <div className="dashboard-grid-32">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <OrderCardholderTable />
         </div>
-      )}
-
-      {activeTab === 'batch-import' && (
-        <BatchImportWizard
-          orderId={orderId}
-          order={order}
-          fetchData={fetchData}
-          proceedWithCompile={(type: string) => proceedWithCompile(type, false, 'LEAVE_BLANK', layoutConfig)}
-        />
-      )}
+      </div>
 
       <CardholderEditModal />
       <PressDispatchModal />

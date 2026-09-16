@@ -80,17 +80,6 @@ export function useOrderDetail(orderId: number) {
     }
   };
 
-  const handleWhatsAppShare = async () => {
-    try {
-      const res = await fetch(`/api/orders/${orderId}/whatsapp-link`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Could not construct share link');
-      window.open(data.whatsappUrl, '_blank');
-    } catch (err: any) {
-      toast(err.message || 'Error occurred', 'error');
-    }
-  };
-
   const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noteContent.trim()) return;
@@ -122,7 +111,6 @@ export function useOrderDetail(orderId: number) {
     fetchData,
     handleWorkflowAction,
     handleClone,
-    handleWhatsAppShare,
     handleAddNote
   };
 }
