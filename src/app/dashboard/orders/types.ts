@@ -23,6 +23,7 @@ export interface Order {
   invoice?: {
     totalAmount: string | number;
     paymentStatus: string;
+    cardCount?: number;
   };
 }
 

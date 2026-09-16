@@ -106,7 +106,10 @@ export function OrderTable({
           </thead>
           <tbody>
             {orders.map((ord) => {
-              const cardholderCount = ord._count?.cardholders ?? (ord.cardholders?.length ?? 0);
+              // Batch Import orders have no linked roster by design (see
+              // src/app/api/orders/batch-import/route.ts) — fall back to the
+              // invoice's card count so those don't show "0 cards".
+              const cardholderCount = (ord._count?.cardholders ?? (ord.cardholders?.length ?? 0)) || ord.invoice?.cardCount || 0;
               const totalInvoiceAmount = ord.invoice ? `Rs. ${Number(ord.invoice.totalAmount).toFixed(2)}` : '—';
               const paymentStatus = ord.invoice ? (
                 ord.invoice.paymentStatus === 'PAID' ? (

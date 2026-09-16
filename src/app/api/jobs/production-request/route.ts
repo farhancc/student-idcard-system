@@ -79,7 +79,11 @@ export async function POST(request: Request) {
     }
 
     const cardCount = order._count.cardholders;
-    if (cardCount === 0) {
+    // An INVOICE PDF only ever prints order/client/pricing summary data (see
+    // ProductionDaemon.compileInvoiceLocally) — never a roster — so a Batch
+    // Import order recorded with no linked cardholders (src/app/api/orders/
+    // batch-import/route.ts) can still have its invoice compiled.
+    if (cardCount === 0 && pdfType !== 'INVOICE') {
       return NextResponse.json({ error: 'Order does not contain any cardholders' }, { status: 400 });
     }
 

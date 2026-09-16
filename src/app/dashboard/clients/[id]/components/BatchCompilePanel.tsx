@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import NextLink from 'next/link';
 import { FileText, ImageIcon, CheckCircle, AlertTriangle, Upload, FolderOpen, Search, X, Link as LinkIcon, HelpCircle, Eye, Trash2 } from 'lucide-react';
 import CompileWizardModal, { CompileWizardConfig } from '@/app/components/CompileWizardModal';
 import { isElectronApp } from '@/lib/isElectron';
@@ -69,11 +70,13 @@ const isUrlLike = (v: string) =>
   /^(https?:)?\/\//i.test(v) || v.startsWith('data:image/') || v.includes('drive.google.com') || v.includes('docs.google.com');
 
 export function BatchCompilePanel({
+  clientId,
   clientName,
   clientTemplates = [],
   onCancel,
   source = 'files',
 }: {
+  clientId: number;
   clientName?: string;
   clientTemplates?: ClientTemplate[];
   onCancel: () => void;
@@ -135,7 +138,7 @@ export function BatchCompilePanel({
   const [compiling, setCompiling] = useState(false);
   const [compileProgress, setCompileProgress] = useState(0);
   const [savedResult, setSavedResult] = useState<
-    { count: number; type: string; parts: number; creditsCharged: number; remaining: number; savedPath: string } | null
+    { count: number; type: string; parts: number; creditsCharged: number; remaining: number; savedPath: string; orderId?: number; invoiceError?: string } | null
   >(null);
   // Set when the operator has been shown the missing-photo count and chose to proceed.
   const [ackMissingPhotos, setAckMissingPhotos] = useState(false);
@@ -744,7 +747,32 @@ export function BatchCompilePanel({
       // 6. Render + save succeeded — capture the hold.
       await settleHold(true);
 
-      // 7. Batch processed — clear the local working data (do not persist).
+      // 7. Record a billing order + invoice for this batch — same financial
+      //    trail a Cardholders-tab compile gets, but with no cardholder rows
+      //    (the roster stays local, per this tab's whole design). Best-effort:
+      //    the PDF is already saved and credits already captured, so a
+      //    failure here surfaces as a warning, not a lost compile.
+      let orderId: number | undefined;
+      let invoiceError: string | undefined;
+      try {
+        const orderRes = await fetch('/api/orders/batch-import', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId,
+            templateId: Number(templateId),
+            cardCount: cardholders.length,
+            pdfType: cfg.compileType,
+          }),
+        });
+        const orderJson = await orderRes.json();
+        if (!orderRes.ok) throw new Error(orderJson.error || 'Failed to record order/invoice.');
+        orderId = orderJson.order?.id;
+      } catch (invoiceErr: any) {
+        invoiceError = invoiceErr.message || 'Failed to record order/invoice.';
+      }
+
+      // 8. Batch processed — clear the local working data (do not persist).
       await clearBatch().catch(() => {});
 
       setSavedResult({
@@ -753,6 +781,8 @@ export function BatchCompilePanel({
         parts: total,
         creditsCharged: holdJson.creditsCharged ?? 0,
         remaining: holdJson.remainingCredits ?? 0,
+        orderId,
+        invoiceError,
         savedPath,
       });
       setShowWizard(false);
@@ -1277,6 +1307,17 @@ export function BatchCompilePanel({
             {savedResult.savedPath && (
               <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '6px', wordBreak: 'break-all', fontFamily: 'monospace' }}>
                 {savedResult.savedPath}
+              </div>
+            )}
+            {savedResult.orderId && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--success)', marginTop: '6px' }}>
+                Order #{savedResult.orderId} and invoice recorded — view it on the{' '}
+                <NextLink href="/dashboard/invoices" style={{ color: 'var(--success)', textDecoration: 'underline' }}>Invoices</NextLink> page to generate the invoice PDF.
+              </div>
+            )}
+            {savedResult.invoiceError && (
+              <div style={{ fontSize: '0.78rem', color: '#f59e0b', marginTop: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertTriangle size={13} /> Could not record an order/invoice for this batch: {savedResult.invoiceError}
               </div>
             )}
           </div>

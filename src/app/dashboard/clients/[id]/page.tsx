@@ -304,12 +304,13 @@ export default function ClientDetailsPage() {
       {activeTab === 'csv' && (
         <BatchCompilePanel
           source="googleForm"
+          clientId={clientId}
           clientName={client?.name}
           clientTemplates={clientTemplates}
           onCancel={() => setActiveTab('list')}
         />
       )}
-      {activeTab === 'zip' && <BatchCompilePanel clientName={client?.name} clientTemplates={clientTemplates} onCancel={() => setActiveTab('list')} />}
+      {activeTab === 'zip' && <BatchCompilePanel clientId={clientId} clientName={client?.name} clientTemplates={clientTemplates} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'serials' && <SerialAssignmentPanel clientId={clientId} onComplete={handleRefresh} onCancel={() => setActiveTab('list')} />}
       {activeTab === 'portal' && <PortalSharesPanel clientId={clientId} />}
 

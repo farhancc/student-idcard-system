@@ -14,23 +14,40 @@ export async function GET(request: Request) {
 
     // ── Core Metrics ───────────────────────────────────────────────────────────
 
-    // Cards generated this month (from completed production jobs' cardholders)
-    const productionJobsThisMonth = await prisma.pdfJob.findMany({
-      where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfMonth } },
-      include: { order: { include: { _count: { select: { cardholders: true } } } } },
-    });
+    // Cards generated this month (from completed production jobs' cardholders,
+    // PLUS Batch Import orders — those never get a PdfJob at all, since the
+    // whole point of that tab is rendering locally without queuing one; a
+    // batch-import order is identified by reaching PRINTING with no linked
+    // roster, which a normal order can never do — see
+    // src/app/api/orders/batch-import/route.ts).
+    const [productionJobsThisMonth, batchOrdersThisMonth] = await Promise.all([
+      prisma.pdfJob.findMany({
+        where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfMonth } },
+        include: { order: { include: { _count: { select: { cardholders: true } } } } },
+      }),
+      prisma.cardOrder.findMany({
+        where: { pressId, status: 'PRINTING', createdAt: { gte: startOfMonth }, cardholders: { none: {} } },
+        include: { invoice: { select: { cardCount: true } } },
+      }),
+    ]);
     const cardsGenerated = productionJobsThisMonth.reduce((acc: number, job: any) => {
       return acc + (job.order?._count?.cardholders || 0);
-    }, 0);
+    }, 0) + batchOrdersThisMonth.reduce((acc, o) => acc + (o.invoice?.cardCount || 0), 0);
 
     // Cards last month
-    const productionJobsLastMonth = await prisma.pdfJob.findMany({
-      where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfLastMonth, lt: startOfMonth } },
-      include: { order: { include: { _count: { select: { cardholders: true } } } } },
-    });
+    const [productionJobsLastMonth, batchOrdersLastMonth] = await Promise.all([
+      prisma.pdfJob.findMany({
+        where: { pressId, pdfType: 'PRODUCTION', status: 'COMPLETED', completedAt: { gte: startOfLastMonth, lt: startOfMonth } },
+        include: { order: { include: { _count: { select: { cardholders: true } } } } },
+      }),
+      prisma.cardOrder.findMany({
+        where: { pressId, status: 'PRINTING', createdAt: { gte: startOfLastMonth, lt: startOfMonth }, cardholders: { none: {} } },
+        include: { invoice: { select: { cardCount: true } } },
+      }),
+    ]);
     const cardsLastMonth = productionJobsLastMonth.reduce((acc: number, job: any) => {
       return acc + (job.order?._count?.cardholders || 0);
-    }, 0);
+    }, 0) + batchOrdersLastMonth.reduce((acc, o) => acc + (o.invoice?.cardCount || 0), 0);
 
     // PDFs generated this month
     const pdfsGenerated = await prisma.pdfJob.count({
@@ -135,15 +152,16 @@ export async function GET(request: Request) {
       include: {
         client: { select: { name: true } },
         template: { select: { name: true } },
-        _count: { select: { cardholders: true } }
+        _count: { select: { cardholders: true } },
+        invoice: { select: { cardCount: true } },
       },
     });
 
     // ── Monthly production and financial trend (single 6-month range query) ───
 
     const sixMonthsAgoStart = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    
-    const [allJobs6Months, allInvoices6Months] = await Promise.all([
+
+    const [allJobs6Months, allInvoices6Months, allBatchOrders6Months] = await Promise.all([
       prisma.pdfJob.findMany({
         where: {
           pressId,
@@ -162,6 +180,14 @@ export async function GET(request: Request) {
         take: 100,
         select: { createdAt: true, totalAmount: true, paidAmount: true },
       }),
+      // Batch Import orders never get a PdfJob (rendered locally, see above),
+      // so they're invisible to allJobs6Months — fetched separately here and
+      // bucketed by createdAt alongside it below.
+      prisma.cardOrder.findMany({
+        where: { pressId, status: 'PRINTING', createdAt: { gte: sixMonthsAgoStart }, cardholders: { none: {} } },
+        take: 100,
+        include: { invoice: { select: { cardCount: true } } },
+      }),
     ]);
 
     const monthlyTrend: { month: string; cards: number }[] = [];
@@ -174,9 +200,12 @@ export async function GET(request: Request) {
       const monthJobs = allJobs6Months.filter(
         j => j.completedAt && j.completedAt >= start && j.completedAt < end
       );
+      const monthBatchOrders = allBatchOrders6Months.filter(
+        o => o.createdAt >= start && o.createdAt < end
+      );
       const cards = monthJobs.reduce((acc: number, job: any) => {
         return acc + (job.order?._count?.cardholders || 0);
-      }, 0);
+      }, 0) + monthBatchOrders.reduce((acc, o) => acc + (o.invoice?.cardCount || 0), 0);
 
       monthlyTrend.push({
         month: start.toLocaleString('default', { month: 'short' }),
@@ -236,7 +265,7 @@ export async function GET(request: Request) {
         templateName: o.template.name,
         status: o.status,
         createdAt: o.createdAt,
-        cardCount: o._count.cardholders,
+        cardCount: o._count.cardholders || o.invoice?.cardCount || 0,
       })),
       monthlyTrend,
       financialTrend,
