@@ -6,10 +6,9 @@ import Image from 'next/image';
 import dynamic from 'next/dynamic';
 import PlatformTour, { resetTour } from '@/components/ui/PlatformTour';
 import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  Layers, 
+  LayoutDashboard,
+  Users,
+  Layers,
   Clock, 
   Settings, 
   LogOut, 
@@ -101,7 +100,6 @@ export default function DashboardLayoutClient({
   const allMenuItems = [
     { label: 'Overview',   path: '/dashboard',           icon: <LayoutDashboard size={18} />, roles: ['OWNER', 'OPERATOR'] },
     { label: 'Clients',    path: '/dashboard/clients',   icon: <Users size={18} />,           roles: ['OWNER', 'OPERATOR'] },
-    { label: 'Orders',     path: '/dashboard/orders',    icon: <FileText size={18} />,        roles: ['OWNER', 'OPERATOR'] },
     { label: 'Invoices',   path: '/dashboard/invoices',  icon: <CreditCard size={18} />,      roles: ['OWNER', 'OPERATOR'] },
     { label: 'Templates',  path: '/dashboard/templates',   icon: <Layers size={18} />,          roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
     { label: 'Marketplace', path: '/dashboard/marketplace', icon: <Store size={18} />,           roles: ['OWNER', 'OPERATOR', 'DESIGNER'] },
