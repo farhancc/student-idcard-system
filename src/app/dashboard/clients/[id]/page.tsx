@@ -102,9 +102,53 @@ export default function ClientDetailsPage() {
     });
   };
 
-  // Fallbacks
-  const handleExportExcel = () => {};
-  const handleDownloadZip = () => {};
+  const downloadCardholderExport = async (
+    targetCardholders: any[],
+    format: 'xlsx' | 'zip',
+    fileName?: string
+  ) => {
+    if (targetCardholders.length === 0) {
+      toast('No cardholders to export.', 'warning');
+      return;
+    }
+    try {
+      if (format === 'zip') { setZipping(true); setZipProgress('Preparing ZIP…'); }
+      const res = await fetch('/api/cardholders/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cardholderIds: targetCardholders.map((c: any) => c.id),
+          format,
+          fileName,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Export failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${(fileName || 'cardholders').replace(/[^a-zA-Z0-9_-]/g, '_')}.${format}`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (err: any) {
+      toast(err.message || 'Export failed', 'error');
+    } finally {
+      setZipping(false);
+      setZipProgress('');
+    }
+  };
+
+  const handleExportExcel = (targetCardholders: any[], templateName?: string) =>
+    downloadCardholderExport(targetCardholders, 'xlsx', templateName);
+  const handleDownloadZip = (targetCardholders: any[], templateName?: string) =>
+    downloadCardholderExport(targetCardholders, 'zip', templateName);
+  // Fallback
   const handlePurgeClient = () => {};
 
   if (loading) {

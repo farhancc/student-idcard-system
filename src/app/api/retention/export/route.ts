@@ -1,12 +1,9 @@
-import path from 'path';
-import fs from 'fs/promises';
 import { Readable } from 'stream';
 import { NextResponse } from 'next/server';
 import { ZipArchive } from 'archiver';
-import ExcelJS from 'exceljs';
 import { requireActor } from '@/lib/authz';
 import { basePrisma } from '@/lib/prisma';
-import { fetchPublicAsset, resolveWithinDir } from '@/lib/safe-fetch';
+import { readPhoto, photoEntryName, buildCardholderWorkbook } from '@/lib/cardholder-export';
 import {
   PURGE_BATCH_LIMIT,
   collectPurgeTargets,
@@ -18,42 +15,6 @@ export const runtime = 'nodejs';
 
 /** Photos fetched in parallel. Keeps peak memory at ~8 images, not the whole batch. */
 const FETCH_CONCURRENCY = 8;
-
-const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
-
-function photoExtension(url: string): string {
-  const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
-  return ext && IMAGE_EXTENSIONS.includes(ext) ? ext : 'jpg';
-}
-
-function photoEntryName(id: number, name: string, url: string): string {
-  return `photos/${id}_${name.replace(/[^a-zA-Z0-9]/g, '_')}.${photoExtension(url)}`;
-}
-
-/**
- * Read one cardholder photo.
- *
- * Local `/uploads/...` paths are read from disk rather than fetched over HTTP:
- * `fetchPublicAsset` blocks private addresses, so a loopback round trip to our
- * own dev server would be refused — and it would be a pointless hop in any case.
- */
-async function readPhoto(url: string): Promise<Buffer | null> {
-  try {
-    if (url.startsWith('/')) {
-      const key = url.replace(/^\/(uploads\/)?/, '');
-      const baseDir = path.join(process.cwd(), 'public', 'uploads');
-      const resolved = resolveWithinDir(baseDir, key);
-      if (!resolved) return null;
-      return await fs.readFile(resolved);
-    }
-    const asset = await fetchPublicAsset(url, {
-      allowedContentTypePrefixes: ['image/'],
-    });
-    return asset.body;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Stream a backup ZIP (photos + Excel + manifest) for one client and date range.
@@ -148,7 +109,7 @@ export async function GET(request: Request) {
         }
       }
 
-      archive.append(await buildWorkbook(cardholders, photoEntry), { name: 'cardholders.xlsx' });
+      archive.append(await buildCardholderWorkbook(cardholders, photoEntry), { name: 'cardholders.xlsx' });
 
       const token = await signPurgeToken({
         pressId,
@@ -199,51 +160,4 @@ export async function GET(request: Request) {
     console.error('Retention export error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-/** Excel sheet of the batch, flagging any record whose photo could not be archived. */
-async function buildWorkbook(
-  cardholders: Array<{
-    id: number; name: string; designation: string | null; cardSerial: string | null;
-    photoUrl: string | null; customFields: string | null; createdAt: Date;
-  }>,
-  photoEntry: Map<number, string>
-): Promise<Buffer> {
-  const rows = cardholders.map((ch) => {
-    const row: Record<string, string | number> = {
-      ID: ch.id,
-      Name: ch.name,
-      Designation: ch.designation ?? '',
-      'Card Serial': ch.cardSerial ?? '',
-      'Date Added': ch.createdAt.toISOString(),
-      'Photo File': ch.photoUrl
-        ? photoEntry.get(ch.id) ?? 'MISSING — not archived, not purged'
-        : 'None',
-      'Original Photo URL': ch.photoUrl ?? '',
-    };
-    if (ch.customFields) {
-      try {
-        const parsed = JSON.parse(ch.customFields);
-        if (parsed && typeof parsed === 'object') {
-          for (const [key, val] of Object.entries(parsed)) {
-            row[`Field: ${key}`] = val == null ? '' : String(val);
-          }
-        }
-      } catch {
-        /* a malformed custom-fields blob must not sink the whole backup */
-      }
-    }
-    return row;
-  });
-
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet('Cardholders');
-
-  // Union of keys — custom fields vary per record, so the first row is not enough.
-  const columns = new Set<string>();
-  for (const row of rows) for (const key of Object.keys(row)) columns.add(key);
-  sheet.columns = Array.from(columns).map((key) => ({ header: key, key, width: 20 }));
-  rows.forEach((row) => sheet.addRow(row));
-
-  return Buffer.from(await workbook.xlsx.writeBuffer());
 }
