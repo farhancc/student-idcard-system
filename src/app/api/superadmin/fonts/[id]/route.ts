@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireSuperAdmin } from '@/lib/authz';
+import { deleteManyFromR2 } from '@/lib/storage';
 
 // DELETE /api/superadmin/fonts/[id] — remove a global (system-wide) font
 export async function DELETE(
@@ -24,6 +25,7 @@ export async function DELETE(
     }
 
     await prisma.pressFont.delete({ where: { id: fontId } });
+    await deleteManyFromR2([font.fileUrl]);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

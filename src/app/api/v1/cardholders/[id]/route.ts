@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { cardholderUpdateSchema } from '@/lib/schemas';
 import { authenticateApiKey } from '@/lib/api-key-auth';
+import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
 export async function GET(
   request: Request,
@@ -143,9 +144,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cardholder not found or access denied' }, { status: 404 });
     }
 
-    await prisma.cardholder.delete({
-      where: { id: cardholderId },
-    });
+    await hardDeleteCardholder(cardholderId);
 
     return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
   } catch (error) {

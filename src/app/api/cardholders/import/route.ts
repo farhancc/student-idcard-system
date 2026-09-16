@@ -5,6 +5,7 @@ import Papa from 'papaparse';
 import ExcelJS from 'exceljs';
 import { z } from 'zod';
 import { normalizeGoogleDriveUrl } from '@/lib/pdf/field-resolver';
+import { deleteManyFromR2 } from '@/lib/storage';
 
 export async function POST(request: Request) {
   try {
@@ -255,6 +256,10 @@ export async function POST(request: Request) {
 
     const itemsToCreate: any[] = [];
     const txOps: Array<(tx: any) => Promise<{ type: 'update' | 'create'; data: any }>> = [];
+    // Files belonging to cardholders this import overwrites — collected as
+    // rows are processed, reclaimed from R2 once the transaction commits.
+    const overwriteR2Keys: string[] = [];
+    const overwriteDuplicateIds: number[] = [];
 
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
@@ -320,7 +325,14 @@ export async function POST(request: Request) {
             return { type: 'update', data: updated };
           });
         } else if (importMode === 'overwrite') {
+          if (duplicate.photoUrl) overwriteR2Keys.push(duplicate.photoUrl);
+          overwriteDuplicateIds.push(duplicate.id);
           txOps.push(async (tx) => {
+            // Clear the RESTRICT-protected order-membership rows first —
+            // without this the delete below throws for any cardholder that
+            // has already been added to a print order (see
+            // src/lib/cardholder-delete.ts for the same pattern elsewhere).
+            await tx.orderCardholder.deleteMany({ where: { cardholderId: duplicate.id } });
             await tx.cardholder.delete({ where: { id: duplicate.id } });
             const created = await tx.cardholder.create({ data: cardholderPayload });
             return { type: 'create', data: created };
@@ -348,6 +360,20 @@ export async function POST(request: Request) {
       }
 
       if (txOps.length > 0) {
+        // Rendered card faces are cascade-deleted with the cardholder row —
+        // read their URLs before that happens, or there is nothing left to
+        // reclaim from R2 afterward.
+        if (overwriteDuplicateIds.length > 0) {
+          const overwrittenAssets = await prisma.cardAsset.findMany({
+            where: { cardholderId: { in: overwriteDuplicateIds } },
+            select: { frontUrl: true, backUrl: true },
+          });
+          for (const asset of overwrittenAssets) {
+            if (asset.frontUrl) overwriteR2Keys.push(asset.frontUrl);
+            if (asset.backUrl) overwriteR2Keys.push(asset.backUrl);
+          }
+        }
+
         const txResults = await prisma.$transaction(async (tx) => {
           return Promise.all(txOps.map(op => op(tx)));
         });
@@ -355,6 +381,10 @@ export async function POST(request: Request) {
         for (const res of txResults) {
           if (res.type === 'update') updatedItems.push(res.data);
           else if (res.type === 'create') newItems.push(res.data);
+        }
+
+        if (overwriteR2Keys.length > 0) {
+          await deleteManyFromR2(overwriteR2Keys);
         }
       }
     }

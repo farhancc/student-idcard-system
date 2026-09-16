@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateTemplateSchema } from '@/lib/schemas';
 import { requireSuperAdmin } from '@/lib/authz';
+import { deleteOrHideTemplate } from '@/lib/template-delete';
 
 export async function GET(
   request: Request,
@@ -119,13 +120,20 @@ export async function DELETE(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    await prisma.cardTemplate.delete({
-      where: { id: templateId },
-    });
+    const result = await deleteOrHideTemplate(templateId);
+
+    if (result.status === 'in_use') {
+      return NextResponse.json(
+        { error: 'Template is used by an existing order and cannot be deleted' },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      message: 'Global template deleted successfully',
+      message: result.status === 'hidden'
+        ? 'Global template hidden — kept available to presses that already purchased it.'
+        : 'Global template deleted successfully',
     });
   } catch (error) {
     console.error('Superadmin delete template error:', error);

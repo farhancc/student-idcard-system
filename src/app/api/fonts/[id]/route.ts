@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { deleteManyFromR2 } from '@/lib/storage';
 
 // DELETE /api/fonts/[id] — remove a press font
 export async function DELETE(
@@ -24,6 +25,7 @@ export async function DELETE(
     }
 
     await prisma.pressFont.delete({ where: { id: fontId } });
+    await deleteManyFromR2([font.fileUrl]);
 
     return NextResponse.json({ success: true });
   } catch (err: any) {

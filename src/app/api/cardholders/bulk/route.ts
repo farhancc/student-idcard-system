@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
+import { hardDeleteCardholders } from '@/lib/cardholder-delete';
 
 const bulkSchema = z.object({
   ids: z.array(z.number()).min(1, 'At least one cardholder ID is required'),
@@ -33,8 +34,8 @@ export async function POST(request: Request) {
 
     switch (action) {
       case 'delete': {
-        await prisma.cardholder.deleteMany({ where: { id: { in: ids }, pressId } });
-        return NextResponse.json({ success: true, affected: ids.length, action: 'delete' });
+        const { filesDeleted, filesFailed } = await hardDeleteCardholders(ids);
+        return NextResponse.json({ success: true, affected: ids.length, action: 'delete', filesDeleted, filesFailed });
       }
 
       case 'activate': {

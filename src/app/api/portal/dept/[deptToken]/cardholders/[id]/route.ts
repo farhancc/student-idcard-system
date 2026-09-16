@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
+import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
 export async function PUT(
   request: Request,
@@ -109,9 +110,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
     }
 
-    await prisma.cardholder.delete({
-      where: { id: cardholderId },
-    });
+    await hardDeleteCardholder(cardholderId);
 
     return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
   } catch (error) {

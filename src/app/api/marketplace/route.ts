@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     const where: any = {
       isPublic: true,
       isModerated: false,
+      deletedAt: null,
     };
 
     if (category) where.category = category;

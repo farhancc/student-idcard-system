@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const { pressId } = auth.actor;
 
     const templates = await prisma.cardTemplate.findMany({
-      where: { pressId, isLatest: true },
+      where: { pressId, isLatest: true, deletedAt: null },
       orderBy: { name: 'asc' },
       include: {
         clientAssignments: {
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     });
 
     const globalTemplates = await prisma.cardTemplate.findMany({
-      where: { pressId: null, isLatest: true },
+      where: { pressId: null, isLatest: true, deletedAt: null },
       orderBy: { name: 'asc' },
       include: {
         clientAssignments: {

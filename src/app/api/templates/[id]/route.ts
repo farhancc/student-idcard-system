@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { updateTemplateSchema } from '@/lib/schemas';
 import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 import { getActor, requireActor } from '@/lib/authz';
+import { deleteOrHideTemplate } from '@/lib/template-delete';
 
 export async function GET(
   request: Request,
@@ -257,7 +258,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    await prisma.cardTemplate.delete({ where: { id: templateId } });
+    const result = await deleteOrHideTemplate(templateId);
+
+    if (result.status === 'in_use') {
+      return NextResponse.json(
+        { error: 'Template is used by an existing order and cannot be deleted' },
+        { status: 409 }
+      );
+    }
 
     // Audit log
     writeAuditLog({
@@ -266,12 +274,19 @@ export async function DELETE(
       category: 'TEMPLATE',
       resourceType: 'CardTemplate',
       resourceId: templateId,
-      description: `Template "${template.name}" (v${template.version}) deleted`,
+      description: result.status === 'hidden'
+        ? `Template "${template.name}" (v${template.version}) hidden — kept for existing marketplace buyers`
+        : `Template "${template.name}" (v${template.version}) deleted`,
       oldValue: { name: template.name, version: template.version },
       severity: 'WARN',
     });
 
-    return NextResponse.json({ success: true, message: 'Template deleted successfully' });
+    return NextResponse.json({
+      success: true,
+      message: result.status === 'hidden'
+        ? 'Template removed from your library. It stays available to presses that already purchased it.'
+        : 'Template deleted successfully',
+    });
   } catch (error) {
     console.error('Delete template error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

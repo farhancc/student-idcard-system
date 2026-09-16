@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { cardholderUpdateSchema } from '@/lib/schemas';
 import { requireActor } from '@/lib/authz';
 import { normalizeGoogleDriveUrl } from '@/lib/pdf/field-resolver';
+import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
 export async function PUT(
   request: Request,
@@ -77,26 +78,26 @@ export async function DELETE(
     const cardholderId = Number(id);
 
     const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, pressId, deletedAt: null },
+      where: { id: cardholderId, pressId },
     });
 
     if (!cardholder) {
       return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
     }
 
-    // Soft-delete: mark cardholder as deleted and inactive.
-    // Historical order membership (OrderCardholder) and print records are preserved.
-    await prisma.cardholder.update({
-      where: { id: cardholderId },
-      data: { deletedAt: new Date(), active: false },
-    });
+    // Hard delete: the row and its photo/rendered-face files are removed for
+    // good, freeing DB and R2 storage immediately rather than leaving an
+    // inactive row and orphaned files behind.
+    const { filesDeleted, filesFailed } = await hardDeleteCardholder(cardholderId);
 
     return NextResponse.json({
       success: true,
-      message: 'Cardholder archived successfully',
+      message: 'Cardholder deleted permanently',
+      filesDeleted,
+      filesFailed,
     });
   } catch (error) {
-    console.error('Archive cardholder error:', error);
+    console.error('Delete cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

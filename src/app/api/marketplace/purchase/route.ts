@@ -33,6 +33,7 @@ export async function POST(request: Request) {
       where: {
         id: Number(templateId),
         isModerated: false,
+        deletedAt: null,
         OR: [
           { isPublic: true },
           { pressId: null },

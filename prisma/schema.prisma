@@ -148,6 +148,10 @@ model CardTemplate {
   parentId        Int?     @map("parent_id") // Reference to parent template version
   isLatest        Boolean  @default(true) @map("is_latest")
   createdAt       DateTime @default(now()) @map("created_at")
+  // Set instead of a hard delete when the template has marketplace purchases:
+  // hides it from its owner's library and the marketplace while keeping the
+  // row and its files alive for buyers' clones and the download gateway.
+  deletedAt       DateTime? @map("deleted_at")
 
   orders        CardOrder[]
   cardholders   Cardholder[]

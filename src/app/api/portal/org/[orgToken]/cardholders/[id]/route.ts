@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
+import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
 export async function PUT(
   request: Request,
@@ -120,10 +121,16 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    // Delete the cardholder
-    await prisma.cardholder.delete({
+    // Verify the cardholder belongs to this org before deleting it.
+    const cardholder = await prisma.cardholder.findFirst({
       where: { id: cardholderId, clientId: share.clientId },
+      select: { id: true },
     });
+    if (!cardholder) {
+      return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
+    }
+
+    await hardDeleteCardholder(cardholderId);
 
     return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
   } catch (error) {
