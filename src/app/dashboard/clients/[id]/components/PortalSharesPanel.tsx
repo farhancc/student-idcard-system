@@ -4,9 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
-import { AlertTriangle, CheckCircle, Copy, Download, X } from 'lucide-react';
-import { autoDownloadJobFile } from '@/lib/downloadHelper';
+import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
+import { AlertTriangle, CheckCircle, CheckCircle2, Copy, Download, X } from 'lucide-react';
 import { getEffectivePhotoUrl } from './utils';
+import { useCompileWorkflow } from '../hooks/useCompileWorkflow';
+import { ValidationModal } from './ValidationModal';
+import { EmptySlotModal } from './EmptySlotModal';
 
 export function PortalSharesPanel({ clientId }: { clientId: number }) {
   const { toast } = useToast();
@@ -31,18 +34,19 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
   const [batchCardholders, setBatchCardholders] = useState<any[]>([]);
   const [selectedCardholderIds, setSelectedCardholderIds] = useState<number[]>([]);
   const [batchLoading, setBatchLoading] = useState(false);
-
-  // Batch Order form state
-  const [batchPricePerCard, setBatchPricePerCard] = useState('50');
-  const [batchValidTill, setBatchValidTill] = useState('');
-
-  // Wizard modal state for batch compile
-  const [showBatchWizard, setShowBatchWizard] = useState(false);
-
-  // Compilation progress state
-  const [batchPdfLoading, setBatchPdfLoading] = useState<string | null>(null);
-  const [batchJob, setBatchJob] = useState<any | null>(null);
   const [previewJob, setPreviewJob] = useState<any | null>(null);
+
+  // Same compile pipeline the Cardholders tab uses — pre-compile field
+  // validation, empty-slot handling, credit lock/capture-or-refund via
+  // production-request/production-complete, and the same full-screen
+  // progress animation. Scoped to this share's cardholders/selection.
+  const compileHooks = useCompileWorkflow({
+    clientId,
+    cardholders: batchCardholders,
+    selectedIds: selectedCardholderIds,
+    quickTemplates: templates,
+    setSelectedIds: setSelectedCardholderIds,
+  });
 
   const fetchShares = async () => {
     try {
@@ -72,35 +76,11 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
     fetchShares();
   }, [clientId]);
 
-  // Poll for active batch compile job
+  // Refresh the share list once a compile finishes so "Previously Compiled
+  // PDFs" picks up the new job.
   useEffect(() => {
-    if (!batchJob || batchJob.status === 'COMPLETED' || batchJob.status === 'FAILED') return;
-
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/jobs/${batchJob.id}`);
-        const data = await res.json();
-        if (data.success && data.job) {
-          if (data.job.status === 'COMPLETED' && data.job.downloadUrl && !batchJob.autoDownloaded) {
-            if (!data.job.isLocalJob) {
-              autoDownloadJobFile(data.job.downloadUrl, data.job.fileName);
-            }
-          }
-          setBatchJob({
-            ...data.job,
-            autoDownloaded: data.job.status === 'COMPLETED' ? true : batchJob.autoDownloaded
-          });
-          if (data.job.status === 'COMPLETED') {
-            fetchShares();
-          }
-        }
-      } catch (e) {
-        console.error('Error polling batch job:', e);
-      }
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [batchJob]);
+    if (compileHooks.qJobResult?.status === 'COMPLETED') fetchShares();
+  }, [compileHooks.qJobResult?.status]);
 
   // Keep selectedShareForBatch in sync with shares
   useEffect(() => {
@@ -158,7 +138,7 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
   const handleOpenBatchManager = async (share: any) => {
     setSelectedShareForBatch(share);
     setBatchLoading(true);
-    setBatchJob(null);
+    compileHooks.setQJobResult(null);
     try {
       const res = await fetch(`/api/portal/shares/${share.orgToken}/cardholders`);
       const data = await res.json();
@@ -187,72 +167,25 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
     }
   };
 
-  const handleBatchCompile = async (cfg: import('@/app/components/CompileWizardModal').CompileWizardConfig) => {
+  // Opens the shared compile wizard pre-set to this share's fixed template —
+  // Portal Links never has a "mixed template" case the way the Cardholders
+  // tab's auto-detect does, since every cardholder here enrolled through one
+  // share that already maps to exactly one template.
+  const handleOpenBatchCompile = (matchedTemplate: any) => {
     if (selectedCardholderIds.length === 0) {
       toast('Please select at least one cardholder to compile.', 'warning');
       return;
     }
-    const type = cfg.compileType;
-    setBatchPdfLoading(type);
-    setBatchJob(null);
-    try {
-      // 1. Create client order from selected batch cardholders
-      const orderRes = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientId: Number(clientId),
-          templateId: Number(selectedShareForBatch.templateId),
-          cardholderIds: selectedCardholderIds,
-          pricePerCard: Number(batchPricePerCard) || 0,
-          validTill: batchValidTill ? new Date(batchValidTill) : null,
-          status: type === 'PRODUCTION' ? 'APPROVED' : 'DRAFT',
-        }),
-      });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create order for batch');
-
-      const createdOrderId = orderData.order.id;
-
-      // 2. Queue background compilation PDF Job using all wizard config
-      const jobRes = await fetch('/api/jobs/production-request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          orderId: createdOrderId,
-          pdfType: type,
-          paperSize: cfg.paperSize,
-          orientation: cfg.orientation,
-          bleed: cfg.bleed,
-          cropMarks: cfg.cropMarks,
-          foldLine: cfg.foldLine,
-          marginLeft: cfg.marginLeft,
-          marginTop: cfg.marginTop,
-          marginRight: cfg.marginRight,
-          marginBottom: cfg.marginBottom,
-          colGap: cfg.colGap,
-          rowGap: cfg.rowGap,
-          emptySlotStrategy: cfg.emptySlotStrategy,
-          customCardId: cfg.customCardId,
-        }),
-      });
-      const jobData = await jobRes.json();
-      if (!jobRes.ok) throw new Error(jobData.error || 'Failed to queue PDF job');
-
-      setBatchJob({ id: jobData.jobId, status: 'PENDING', progress: 0, isLocalJob: true });
-      window.dispatchEvent(new Event('refresh-profile'));
-      setShowBatchWizard(false);
-
-      if (type === 'PRODUCTION') {
-        toast(`Production print job #${jobData.jobId} queued successfully!`, 'success');
-      } else {
-        toast(`Approval draft job #${jobData.jobId} queued successfully!`, 'success');
-      }
-    } catch (e: any) {
-      toast(e.message || 'Error occurred during batch compilation', 'error');
-    } finally {
-      setBatchPdfLoading(null);
-    }
+    compileHooks.setQTemplateId(String(selectedShareForBatch.templateId));
+    compileHooks.setQDetectedTemplateName(matchedTemplate?.name || null);
+    compileHooks.setQTemplateMixed(false);
+    compileHooks.setQJobResult(null);
+    compileHooks.setWizardStep(1);
+    compileHooks.setWizardCompileType(null);
+    compileHooks.setWizardPaperSize('A3');
+    compileHooks.setWizardOrientation('PORTRAIT');
+    compileHooks.setWizardEmptySlotStrategy('LEAVE_BLANK');
+    compileHooks.setShowCompileModal(true);
   };
 
   if (loading) {
@@ -491,8 +424,8 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                 type="number"
                                 className="form-input"
                                 style={{ padding: '6px 10px', fontSize: '0.85rem' }}
-                                value={batchPricePerCard}
-                                onChange={e => setBatchPricePerCard(e.target.value)}
+                                value={compileHooks.qPricePerCard}
+                                onChange={e => compileHooks.setQPricePerCard(e.target.value)}
                               />
                             </div>
                             <button
@@ -506,10 +439,10 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                 fontSize: '0.9rem', fontWeight: 600,
                                 marginTop: '18px',
                               }}
-                              disabled={selectedCardholderIds.length === 0 || batchPdfLoading !== null}
-                              onClick={() => setShowBatchWizard(true)}
+                              disabled={selectedCardholderIds.length === 0 || !!compileHooks.qCompiling}
+                              onClick={() => handleOpenBatchCompile(matchedTemplate)}
                             >
-                              {batchPdfLoading ? (
+                              {compileHooks.qCompiling ? (
                                 <><div className="spinner" style={{ width: '15px', height: '15px' }} /> Queueing...</>
                               ) : (
                                 <>⚡ Compile PDF ({selectedCardholderIds.length} card{selectedCardholderIds.length !== 1 ? 's' : ''})</>
@@ -517,48 +450,104 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                             </button>
                           </div>
 
-                          {/* Compile Wizard Modal */}
-                          {showBatchWizard && (
+                          {/* Compile Wizard Modal — same validation, empty-slot
+                              handling and credit lock/settle as the Cardholders tab */}
+                          {compileHooks.showCompileModal && (
                             <CompileWizardModal
                               cardCount={selectedCardholderIds.length}
-                              onClose={() => setShowBatchWizard(false)}
-                              compiling={batchPdfLoading !== null}
-                              onCompile={handleBatchCompile}
+                              onClose={() => compileHooks.setShowCompileModal(false)}
+                              compiling={!!compileHooks.qCompiling}
+                              onCompile={async (cfg) => {
+                                await compileHooks.handleQuickCompile(cfg.compileType as any, cfg as any);
+                                compileHooks.setShowCompileModal(false);
+                              }}
                             />
                           )}
 
-                          {/* Live compilation progress status */}
-                          {batchJob && (
-                            <div style={{ 
-                              background: 'rgba(255,255,255,0.02)', 
-                              border: '1px solid var(--glass-border)', 
-                              borderRadius: '8px', 
-                              padding: '12px',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              gap: '8px'
-                            }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
-                                <strong>Job #{batchJob.id} Status:</strong>
-                                <span>{batchJob.status}</span>
-                              </div>
-                              <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                                <div style={{ width: `${batchJob.progress ?? 0}%`, height: '100%', background: 'var(--primary-gradient)', transition: 'width 0.3s ease' }}></div>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--muted)' }}>
-                                <span>Progress: {batchJob.progress}%</span>
-                                {batchJob.status === 'COMPLETED' && (
-                                  <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓ PDF Downloaded & Saved to File</span>
+                          {/* Live compilation progress — full-screen while the
+                              job is running, same as the Cardholders tab */}
+                          {compileHooks.qJobResult
+                            && compileHooks.qJobResult.status !== 'COMPLETED'
+                            && compileHooks.qJobResult.status !== 'FAILED' && (
+                            <div
+                              role="dialog"
+                              aria-modal="true"
+                              aria-label="Compiling PDF"
+                              style={{
+                                position: 'fixed', inset: 0, zIndex: 1000,
+                                background: 'rgba(3,6,15,0.78)', backdropFilter: 'blur(3px)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+                              }}
+                            >
+                              <div style={{ width: '100%', maxWidth: '520px', background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '26px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}>
+                                <PdfCompileLoadingAnimation
+                                  progress={compileHooks.qJobResult.progress ?? 0}
+                                  message={
+                                    compileHooks.qJobResult.status === 'PENDING'
+                                      ? 'Queued — waiting for the renderer…'
+                                      : 'Compiling Print-Ready PDF…'
+                                  }
+                                  subMessage={
+                                    (compileHooks.qJobResult.chunkCount ?? 0) > 1
+                                      ? `Part ${Math.min((compileHooks.qJobResult.chunks?.length ?? 0) + 1, compileHooks.qJobResult.chunkCount!)} of ${compileHooks.qJobResult.chunkCount}`
+                                      : `${compileHooks.qJobResult.pdfType === 'PRODUCTION' ? 'Production' : 'Proof'} PDF · job #${compileHooks.qJobResult.id}`
+                                  }
+                                />
+                                {compileHooks.qJobResult.pollError && (
+                                  <div style={{ marginTop: '14px', padding: '10px 12px', borderRadius: '8px', fontSize: '0.78rem', color: '#fca5a5', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
+                                    {compileHooks.qJobResult.pollError} The PDF may still be compiling — progress will resume if the
+                                    connection recovers.
+                                  </div>
                                 )}
-                                {batchJob.status === 'FAILED' && batchJob.errorMsg && (
-                                  <span style={{ color: 'var(--danger)' }}>Error: {batchJob.errorMsg}</span>
-                                )}
+                                <div style={{ marginTop: '18px', textAlign: 'center' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => compileHooks.setQJobResult(null)}
+                                    style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '0.76rem', cursor: 'pointer', textDecoration: 'underline' }}
+                                  >
+                                    Hide this and keep compiling in the background
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           )}
 
+                          {compileHooks.qJobResult
+                            && (compileHooks.qJobResult.status === 'COMPLETED' || compileHooks.qJobResult.status === 'FAILED') && (
+                            <div style={{
+                              background: 'rgba(255,255,255,0.02)',
+                              border: '1px solid var(--glass-border)',
+                              borderRadius: '8px',
+                              padding: '12px',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                            }}>
+                              <div>
+                                <strong style={{ fontSize: '0.85rem' }}>Job #{compileHooks.qJobResult.id} Status: {compileHooks.qJobResult.status}</strong>
+                                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Progress: {compileHooks.qJobResult.progress}%</div>
+                              </div>
+                              {compileHooks.qJobResult.status === 'COMPLETED' && (
+                                <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <CheckCircle2 size={14} /> PDF Downloaded &amp; Saved to File
+                                </div>
+                              )}
+                              {compileHooks.qJobResult.status === 'FAILED' && (
+                                <div style={{ color: 'var(--danger)', fontSize: '0.8rem' }}>{compileHooks.qJobResult.errorMsg}</div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => compileHooks.setQJobResult(null)}
+                                style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px' }}
+                                title="Dismiss notification"
+                              >
+                                <X size={16} />
+                              </button>
+                            </div>
+                          )}
+
                           {/* Previously compiled files */}
-                          {!batchJob && (selectedShareForBatch?.latestApprovalJob || selectedShareForBatch?.latestProductionJob) && (
+                          {!compileHooks.qJobResult && (selectedShareForBatch?.latestApprovalJob || selectedShareForBatch?.latestProductionJob) && (
                             <div style={{ 
                               background: 'rgba(255,255,255,0.02)', 
                               border: '1px solid var(--glass-border)', 
@@ -702,6 +691,34 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
           variant={confirmConfig.variant}
           onConfirm={confirmConfig.onConfirm}
           onCancel={closeConfirm}
+        />
+      )}
+
+      {compileHooks.showValidationModal && (
+        <ValidationModal
+          validationResult={compileHooks.validationResult}
+          onFixRecords={() => compileHooks.setShowValidationModal(false)}
+          onSkipAndPrint={() => {
+            compileHooks.setShowValidationModal(false);
+            if (compileHooks.validationResult.totalSlots > compileHooks.validationResult.totalCards) {
+              compileHooks.setShowEmptySlotModal(true);
+            } else {
+              compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
+            }
+          }}
+        />
+      )}
+
+      {compileHooks.showEmptySlotModal && (
+        <EmptySlotModal
+          validationResult={compileHooks.validationResult}
+          emptySlotStrategy={compileHooks.emptySlotStrategy}
+          onStrategyChange={compileHooks.setEmptySlotStrategy}
+          onCancel={() => compileHooks.setShowEmptySlotModal(false)}
+          onConfirm={() => {
+            compileHooks.setShowEmptySlotModal(false);
+            compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
+          }}
         />
       )}
     </div>
