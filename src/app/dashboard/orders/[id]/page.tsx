@@ -28,12 +28,11 @@ export default function OrderDetailsPage() {
     proceedWithCompile
   } = useOrderPDFJob(orderId, order, fetchData);
 
-  const [layoutConfig, setLayoutConfig] = useState({
+  const [layoutConfig] = useState({
     paperSize: 'A4', orientation: 'PORTRAIT',
     marginLeft: 40, marginTop: 40, marginRight: 40, marginBottom: 40,
     colGap: 15, rowGap: 15, bleed: 0, cropMarks: true, foldLine: true
   });
-  const [showLayoutSettings, setShowLayoutSettings] = useState(true);
   const [activeTab, setActiveTab] = useState<'cardholders' | 'batch-import'>('cardholders');
 
   if (loading) return <div>Loading...</div>;
@@ -146,13 +145,7 @@ export default function OrderDetailsPage() {
       {activeTab === 'cardholders' && (
         <div className="dashboard-grid-32">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            <OrderPDFCompilerCard
-              order={order} layoutConfig={layoutConfig} updateLayoutConfig={(f: string, v: any) => setLayoutConfig(p => ({...p, [f]: v}))}
-              showLayoutSettings={showLayoutSettings} setShowLayoutSettings={setShowLayoutSettings}
-              openCompileWizard={(t: string) => proceedWithCompile(t, false, 'LEAVE_BLANK', layoutConfig)}
-              handleCompilePdf={(t: string) => proceedWithCompile(t, false, 'LEAVE_BLANK', layoutConfig)}
-              handleWhatsAppShare={handleWhatsAppShare} pdfLoading={pdfLoading}
-            />
+            <OrderPDFCompilerCard handleWhatsAppShare={handleWhatsAppShare} />
             <OrderCardholderTable />
           </div>
         </div>
