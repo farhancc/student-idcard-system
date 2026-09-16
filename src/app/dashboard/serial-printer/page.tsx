@@ -1,22 +1,41 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Upload, 
-  Hash, 
-  Printer, 
-  Download, 
-  RefreshCw, 
-  Type, 
-  CheckCircle, 
+import {
+  Upload,
+  Hash,
+  Printer,
+  Download,
+  RefreshCw,
+  Type,
+  CheckCircle,
   AlertCircle,
   Grid,
   Sparkles,
   Move,
   FileText,
-  FileCheck
+  FileCheck,
+  FolderArchive,
+  FolderOpen,
 } from 'lucide-react';
 import { autoDownloadJobFile } from '@/lib/downloadHelper';
+import { isElectronApp } from '@/lib/isElectron';
+
+const SERIAL_ZIP_MAX_PAGES = 15;
+
+/** One PDF extracted from an uploaded ZIP batch, validated before it can be combined. */
+interface ZipBatchDoc {
+  name: string;
+  buffer: ArrayBuffer;
+  pageCount: number;
+  width: number;
+  height: number;
+}
+
+interface ClientOption {
+  id: number;
+  name: string;
+}
 
 export default function SerialPrinterPage() {
   // Step State: 1 = Upload PDF, 2 = Position & Style, 3 = Print Settings, 4 = Print / Export
@@ -69,6 +88,16 @@ export default function SerialPrinterPage() {
   const [renderProgress, setRenderProgress] = useState<number>(0);
   const [previewSampleSerial, setPreviewSampleSerial] = useState<string>('');
 
+  // ── ZIP Batch Mode: combine N same-size PDFs into one serialized PDF ──
+  const [uploadMode, setUploadMode] = useState<'single' | 'zip'>('single');
+  const [zipDocs, setZipDocs] = useState<ZipBatchDoc[]>([]);
+  const [zipProcessing, setZipProcessing] = useState<boolean>(false);
+  const [zipValidationError, setZipValidationError] = useState<string>('');
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [clientsLoading, setClientsLoading] = useState<boolean>(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [creditsInfo, setCreditsInfo] = useState<{ charged: number; remaining: number } | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -82,6 +111,24 @@ export default function SerialPrinterPage() {
   useEffect(() => {
     setPreviewSampleSerial(formatSerial(startSeq));
   }, [prefix, suffix, startSeq, padLength]);
+
+  // Client list is only needed once the operator picks ZIP batch mode — that's
+  // the only flow that saves into a specific client's folder.
+  useEffect(() => {
+    if (uploadMode !== 'zip' || clients.length > 0 || clientsLoading) return;
+    (async () => {
+      setClientsLoading(true);
+      try {
+        const res = await fetch('/api/clients?limit=1000');
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) setClients(json.clients || json.data || []);
+      } catch {
+        // Non-fatal — the client select simply stays empty and generation is blocked.
+      } finally {
+        setClientsLoading(false);
+      }
+    })();
+  }, [uploadMode, clients.length, clientsLoading]);
 
   // Load PDF page into canvas data URL using pdfjs-dist
   const loadPdfTemplate = async (buffer: ArrayBuffer, pageNum: number = 1) => {
@@ -157,10 +204,92 @@ export default function SerialPrinterPage() {
     }
   };
 
+  /**
+   * Process an uploaded ZIP of same-size PDFs: extract every PDF entry,
+   * validate page count (<=15) and page dimensions (must match each other),
+   * then hand the first (sorted) PDF to the existing single-PDF flow so field
+   * positioning uses the same Step 2 UI. The full validated set is kept in
+   * `zipDocs` for the combine step.
+   */
+  const processZipFile = async (file: File) => {
+    const isZip = file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip');
+    if (!isZip) {
+      setPdfError(`Invalid file "${file.name}". ZIP batch mode strictly accepts .zip files only.`);
+      return;
+    }
+
+    setPdfError('');
+    setZipValidationError('');
+    setZipProcessing(true);
+    try {
+      const JSZip = (await import('jszip')).default;
+      const { PDFDocument } = await import('pdf-lib');
+
+      const zip = await JSZip.loadAsync(await file.arrayBuffer());
+      const entries = Object.entries(zip.files)
+        .filter(([name, entry]) => {
+          if (entry.dir) return false;
+          const base = name.split('/').pop() || name;
+          if (name.startsWith('__MACOSX/') || base.startsWith('._')) return false;
+          return base.toLowerCase().endsWith('.pdf');
+        })
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+      if (entries.length === 0) {
+        throw new Error('No PDF files were found inside that ZIP.');
+      }
+
+      const docs: ZipBatchDoc[] = [];
+      const tooManyPages: string[] = [];
+      for (const [name, entry] of entries) {
+        const buffer = await entry.async('arraybuffer');
+        const pdfDoc = await PDFDocument.load(buffer.slice(0), { ignoreEncryption: true });
+        const pageCount = pdfDoc.getPageCount();
+        if (pageCount > SERIAL_ZIP_MAX_PAGES) {
+          tooManyPages.push(`${name.split('/').pop()} (${pageCount} pages)`);
+          continue;
+        }
+        const { width, height } = pdfDoc.getPage(0).getSize();
+        docs.push({ name: name.split('/').pop() || name, buffer, pageCount, width, height });
+      }
+
+      if (tooManyPages.length > 0) {
+        throw new Error(
+          `Each PDF must be at most ${SERIAL_ZIP_MAX_PAGES} pages. Over the limit: ${tooManyPages.join(', ')}.`
+        );
+      }
+
+      const ref = docs[0];
+      const EPS = 1; // pt — tolerates rounding, not a real size difference
+      const mismatched = docs.filter(
+        d => Math.abs(d.width - ref.width) > EPS || Math.abs(d.height - ref.height) > EPS
+      );
+      if (mismatched.length > 0) {
+        throw new Error(
+          `All PDFs in the ZIP must be the same page size as "${ref.name}" (${ref.width.toFixed(0)}×${ref.height.toFixed(0)}pt). ` +
+          `Different size: ${mismatched.map(d => `${d.name} (${d.width.toFixed(0)}×${d.height.toFixed(0)}pt)`).join(', ')}.`
+        );
+      }
+
+      setZipDocs(docs);
+      setPdfFile(new File([ref.buffer.slice(0)], ref.name, { type: 'application/pdf' }));
+      setPdfBuffer(ref.buffer.slice(0));
+      setSelectedPageNum(1);
+      await loadPdfTemplate(ref.buffer.slice(0), 1);
+    } catch (err: any) {
+      setZipValidationError(err.message || 'Failed to process the ZIP file.');
+      setZipDocs([]);
+    } finally {
+      setZipProcessing(false);
+    }
+  };
+
   // Handle file input change
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) processPdfFile(file);
+    if (!file) return;
+    if (uploadMode === 'zip') processZipFile(file);
+    else processPdfFile(file);
   };
 
   // Handle Drag & Drop
@@ -177,7 +306,9 @@ export default function SerialPrinterPage() {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
-    if (file) processPdfFile(file);
+    if (!file) return;
+    if (uploadMode === 'zip') processZipFile(file);
+    else processPdfFile(file);
   };
 
   // Generate Sample PDF Template in Memory
@@ -666,11 +797,185 @@ export default function SerialPrinterPage() {
     }
   };
 
+  /**
+   * ZIP Batch Mode generation: stamp the next serial onto the mapped page of
+   * every PDF in the ZIP, keep every page of every source document, and
+   * combine the lot into a single output PDF saved into the selected
+   * client's folder. PDF creation stays entirely in this (Electron) client —
+   * the server is only ever asked to reserve/settle credits.
+   */
+  const handleGenerateZipCombine = async (action: 'print' | 'download') => {
+    if (zipDocs.length === 0) {
+      alert('No validated PDFs to combine. Please re-upload the ZIP.');
+      return;
+    }
+    if (!isElectronApp()) {
+      alert('PDF creation runs only in the Desktop (Electron) app. Please open this in the desktop client.');
+      return;
+    }
+    const electronAPI = (window as any).electronAPI;
+    if (!electronAPI?.savePdfLocally) {
+      alert('Local save is unavailable in this environment.');
+      return;
+    }
+    const client = clients.find(c => String(c.id) === selectedClientId);
+    if (!client) {
+      alert('Please select the client to save this batch into.');
+      return;
+    }
+    const shortDocs = zipDocs.filter(d => d.pageCount < selectedPageNum);
+    if (shortDocs.length > 0) {
+      alert(`These files don't have a page ${selectedPageNum} to place the serial on: ${shortDocs.map(d => d.name).join(', ')}`);
+      return;
+    }
+
+    setIsGenerating(true);
+    setRenderProgress(2);
+    setDownloadFallbackUrl('');
+    setCreditsInfo(null);
+
+    const pdfCount = zipDocs.length;
+    let holdId: number | null = null;
+    let holdJson: any = null;
+
+    try {
+      const holdRes = await fetch('/api/jobs/serial-credits-hold', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfCount }),
+      });
+      holdJson = await holdRes.json();
+      if (!holdRes.ok) throw new Error(holdJson.error || 'Credit reservation failed.');
+      holdId = holdJson.holdId;
+
+      const settleHold = async (success: boolean) => {
+        try {
+          await fetch('/api/jobs/batch-credits-settle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdId, success }),
+          });
+        } catch {
+          // Best-effort: an unreachable server here leaves the hold PENDING
+          // for the periodic cleanup sweep to resolve, rather than the
+          // credits being stuck silently.
+        }
+      };
+
+      let savedPath = '';
+      try {
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const targetPdfDoc = await PDFDocument.create();
+        const font = await selectPdfFont(targetPdfDoc, fontFamily, fontWeight, fontStyle, StandardFonts);
+        const textRgb = parseColorToRgbAndOpacity(textColor, rgb);
+        const badgeRgb = parseColorToRgbAndOpacity(badgeBg, rgb);
+
+        for (let i = 0; i < zipDocs.length; i++) {
+          const doc = zipDocs[i];
+          const sourceDoc = await PDFDocument.load(doc.buffer.slice(0), { ignoreEncryption: true });
+          const pageIndices = Array.from({ length: sourceDoc.getPageCount() }, (_, k) => k);
+          const copiedPages = await targetPdfDoc.copyPages(sourceDoc, pageIndices);
+          copiedPages.forEach(p => targetPdfDoc.addPage(p));
+
+          const stampPage = copiedPages[selectedPageNum - 1];
+          const pSize = stampPage.getSize();
+
+          const currentSeq = startSeq + i * stepSeq;
+          const rawSerialText = formatSerial(currentSeq);
+          const serialText = sanitizeWinAnsiText(rawSerialText) || String(currentSeq);
+
+          const textPt = fontSize;
+          const textWidth = font.widthOfTextAtSize(serialText, textPt);
+          const rawX = (posX / 100) * pSize.width;
+          const rawY = pSize.height - (posY / 100) * pSize.height;
+
+          let alignX = rawX - textWidth / 2;
+          if (textAlign === 'left') alignX = rawX;
+          if (textAlign === 'right') alignX = rawX - textWidth;
+
+          if (useBadge && badgeBg) {
+            const pad = badgePadding;
+            const bW = textWidth + pad * 2;
+            const bH = textPt * 1.2 + pad;
+            const bX = alignX - pad;
+            const bY = rawY - textPt * 0.3 - pad / 2;
+
+            stampPage.drawRectangle({
+              x: bX,
+              y: bY,
+              width: bW,
+              height: bH,
+              color: badgeRgb.color,
+              opacity: badgeRgb.opacity,
+            });
+          }
+
+          stampPage.drawText(serialText, {
+            x: alignX,
+            y: rawY - textPt * 0.3,
+            size: textPt,
+            font,
+            color: textRgb.color,
+            opacity: textRgb.opacity,
+          });
+
+          setRenderProgress(Math.round(5 + ((i + 1) / zipDocs.length) * 85));
+        }
+
+        const pdfBytes = await targetPdfDoc.save();
+        const blob = new Blob([pdfBytes as any], { type: 'application/pdf' });
+        const blobUrl = URL.createObjectURL(blob);
+        setDownloadFallbackUrl(blobUrl);
+
+        const cleanPrefix = prefix.replace(/[^a-zA-Z0-9_-]/g, '') || 'Serial';
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const fileName = `Combined_${cleanPrefix}_${zipDocs.length}pdfs_${dateStr}.pdf`;
+        setDownloadFileName(fileName);
+        setRenderProgress(95);
+
+        if (action === 'download') {
+          const path = await autoDownloadJobFile(blobUrl, fileName, client.name);
+          if (path) savedPath = path;
+        } else {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = blobUrl;
+          document.body.appendChild(iframe);
+          iframe.onload = () => {
+            iframe.contentWindow?.print();
+            setTimeout(() => {
+              if (document.body.contains(iframe)) document.body.removeChild(iframe);
+            }, 10000);
+          };
+        }
+      } catch (renderErr) {
+        await settleHold(false);
+        throw renderErr;
+      }
+
+      await settleHold(true);
+      if (savedPath) setSavedFilePath(savedPath);
+      setCreditsInfo({ charged: holdJson.creditsCharged ?? 0, remaining: holdJson.remainingCredits ?? 0 });
+      setRenderProgress(100);
+    } catch (err: any) {
+      console.error('ZIP combine PDF generation error:', err);
+      alert(`Failed to generate combined PDF: ${err?.message || err}`);
+    } finally {
+      setIsGenerating(false);
+      setTimeout(() => setRenderProgress(0), 600);
+    }
+  };
+
   const resetAll = () => {
     setImageSrc('');
     setPdfFile(null);
     setPdfBuffer(null);
     setPdfError('');
+    setUploadMode('single');
+    setZipDocs([]);
+    setZipValidationError('');
+    setSelectedClientId('');
+    setCreditsInfo(null);
     setActiveStep(1);
   };
 
@@ -700,7 +1005,7 @@ export default function SerialPrinterPage() {
         {[
           { num: 1, label: '1. Upload PDF', icon: <FileText size={14} /> },
           { num: 2, label: '2. Position & Style', icon: <Type size={14} /> },
-          { num: 3, label: '3. Print Settings', icon: <Grid size={14} /> },
+          { num: 3, label: uploadMode === 'zip' ? '3. Combine Settings' : '3. Print Settings', icon: <Grid size={14} /> },
           { num: 4, label: '4. Export', icon: <Printer size={14} /> },
         ].map((s) => {
           const isActive = activeStep === s.num;
@@ -741,15 +1046,54 @@ export default function SerialPrinterPage() {
           <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'rgba(99,102,241,0.15)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
             <FileText size={28} />
           </div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '6px' }}>Upload PDF Template</h2>
+          <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '6px' }}>
+            {uploadMode === 'zip' ? 'Upload ZIP of PDFs' : 'Upload PDF Template'}
+          </h2>
           <p style={{ color: 'var(--muted)', fontSize: '0.85rem', maxWidth: '500px', margin: '0 auto 20px' }}>
-            Select a PDF document or card template file (.pdf).
+            {uploadMode === 'zip'
+              ? 'Upload a ZIP containing multiple same-size PDFs. One serial number is stamped onto each, and all of them are combined into a single PDF saved to the client folder.'
+              : 'Select a PDF document or card template file (.pdf).'}
           </p>
+
+          {/* Mode toggle */}
+          <div style={{ display: 'inline-flex', gap: '6px', padding: '4px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '24px' }}>
+            <button
+              type="button"
+              onClick={() => { setUploadMode('single'); setPdfError(''); setZipValidationError(''); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px',
+                fontSize: '0.82rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                background: uploadMode === 'single' ? '#6366f1' : 'transparent',
+                color: uploadMode === 'single' ? '#fff' : 'var(--muted)',
+              }}
+            >
+              <FileText size={14} /> Single PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => { setUploadMode('zip'); setPdfError(''); setZipValidationError(''); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px',
+                fontSize: '0.82rem', fontWeight: 600, border: 'none', cursor: 'pointer',
+                background: uploadMode === 'zip' ? '#6366f1' : 'transparent',
+                color: uploadMode === 'zip' ? '#fff' : 'var(--muted)',
+              }}
+            >
+              <FolderArchive size={14} /> ZIP Batch (combine PDFs)
+            </button>
+          </div>
 
           {pdfError && (
             <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '8px', textAlign: 'left' }}>
               <AlertCircle size={18} style={{ flexShrink: 0 }} />
               <div>{pdfError}</div>
+            </div>
+          )}
+
+          {zipValidationError && (
+            <div style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', marginBottom: '20px', fontSize: '0.85rem', display: 'flex', alignItems: 'flex-start', gap: '8px', textAlign: 'left' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '1px' }} />
+              <div>{zipValidationError}</div>
             </div>
           )}
 
@@ -770,29 +1114,38 @@ export default function SerialPrinterPage() {
           >
             <FileCheck size={36} color={isDragging ? '#818cf8' : 'var(--muted)'} style={{ marginBottom: '10px' }} />
             <div style={{ fontSize: '0.92rem', fontWeight: 600, marginBottom: '4px' }}>
-              Drag & Drop PDF Here
+              {uploadMode === 'zip' ? 'Drag & Drop ZIP Here' : 'Drag & Drop PDF Here'}
             </div>
             <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginBottom: '14px' }}>
-              PDF files only (*.pdf)
+              {uploadMode === 'zip'
+                ? `ZIP of PDFs — each file max ${SERIAL_ZIP_MAX_PAGES} pages, all the same page size`
+                : 'PDF files only (*.pdf)'}
             </div>
 
             <label className="btn btn-primary" style={{ display: 'inline-flex', padding: '10px 20px', fontSize: '0.9rem', cursor: 'pointer', gap: '8px' }}>
-              <Upload size={16} /> Select PDF File
-              <input type="file" accept="application/pdf,.pdf" onChange={handleFileInputChange} style={{ display: 'none' }} />
+              <Upload size={16} /> {uploadMode === 'zip' ? 'Select ZIP File' : 'Select PDF File'}
+              <input
+                type="file"
+                accept={uploadMode === 'zip' ? 'application/zip,.zip' : 'application/pdf,.pdf'}
+                onChange={handleFileInputChange}
+                style={{ display: 'none' }}
+              />
             </label>
           </div>
 
-          {isLoadingPdf && (
+          {(isLoadingPdf || zipProcessing) && (
             <div style={{ fontSize: '0.85rem', color: 'var(--primary)', marginTop: '12px' }}>
-              Loading PDF...
+              {zipProcessing ? 'Validating PDFs in ZIP...' : 'Loading PDF...'}
             </div>
           )}
 
-          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <button type="button" className="btn btn-secondary" disabled={isLoadingPdf} onClick={loadSamplePdfTemplate} style={{ fontSize: '0.85rem' }}>
-              <Sparkles size={14} color="#f59e0b" /> Use Sample Template
-            </button>
-          </div>
+          {uploadMode === 'single' && (
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+              <button type="button" className="btn btn-secondary" disabled={isLoadingPdf} onClick={loadSamplePdfTemplate} style={{ fontSize: '0.85rem' }}>
+                <Sparkles size={14} color="#f59e0b" /> Use Sample Template
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -822,7 +1175,13 @@ export default function SerialPrinterPage() {
               )}
             </div>
 
-            <div 
+            {uploadMode === 'zip' && (
+              <div style={{ fontSize: '0.78rem', color: 'var(--primary)', background: 'rgba(99,102,241,0.1)', padding: '8px 12px', borderRadius: '6px' }}>
+                Positioning shown here is applied to page {selectedPageNum} of every one of the <strong>{zipDocs.length}</strong> PDF(s) in the ZIP.
+              </div>
+            )}
+
+            <div
               ref={containerRef}
               style={{ 
                 position: 'relative', 
@@ -972,8 +1331,50 @@ export default function SerialPrinterPage() {
         </div>
       )}
 
-      {/* ── STEP 3: Quantity & Print Layout Wizard ── */}
-      {activeStep === 3 && (
+      {/* ── STEP 3: Quantity & Print Layout Wizard (or ZIP Combine Settings) ── */}
+      {activeStep === 3 && uploadMode === 'zip' && (
+        <div className="glass-panel" style={{ padding: '28px', maxWidth: '780px', margin: '0 auto' }}>
+          <h3 style={{ margin: '0 0 20px 0', fontSize: '1.05rem', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+            Combine Settings
+          </h3>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', fontSize: '0.85rem', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)', marginBottom: '20px' }}>
+            This ZIP has <strong>{zipDocs.length}</strong> PDF(s). Each will receive one serial number
+            (<strong>{formatSerial(startSeq)}</strong> to <strong>{formatSerial(startSeq + (zipDocs.length - 1) * stepSeq)}</strong>)
+            and all pages from all of them will be combined into a single output PDF.
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" style={{ fontWeight: 600, color: 'var(--primary)' }}>
+              Client <span style={{ color: 'var(--muted)', fontWeight: 'normal', fontSize: '0.75rem' }}>(required — the combined PDF is saved into this client's folder)</span>
+            </label>
+            <select
+              className="form-select"
+              value={selectedClientId}
+              onChange={e => setSelectedClientId(e.target.value)}
+              disabled={clientsLoading}
+            >
+              <option value="">{clientsLoading ? 'Loading clients…' : '— Select a Client —'}</option>
+              {clients.map(c => (
+                <option key={c.id} value={String(c.id)}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--muted)', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', marginTop: '8px' }}>
+            Cost: <strong>20 credits per PDF</strong> × {zipDocs.length} = <strong>{zipDocs.length * 20} credits</strong>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '28px', paddingTop: '16px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setActiveStep(2)}>← Back</button>
+            <button type="button" className="btn btn-primary" disabled={!selectedClientId} onClick={() => setActiveStep(4)}>
+              Next: Export →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeStep === 3 && uploadMode === 'single' && (
         <div className="glass-panel" style={{ padding: '28px', maxWidth: '780px', margin: '0 auto' }}>
           <h3 style={{ margin: '0 0 20px 0', fontSize: '1.05rem', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
             Print Settings
@@ -1054,7 +1455,9 @@ export default function SerialPrinterPage() {
           </div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '6px' }}>Generate & Export</h2>
           <p style={{ color: 'var(--muted)', fontSize: '0.85rem', marginBottom: '20px' }}>
-            Printing <strong>{quantity} documents</strong> ({formatSerial(startSeq)} to {formatSerial(startSeq + (quantity - 1) * stepSeq)})
+            {uploadMode === 'zip'
+              ? <>Combining <strong>{zipDocs.length} PDF(s)</strong> ({formatSerial(startSeq)} to {formatSerial(startSeq + (zipDocs.length - 1) * stepSeq)}) into one PDF for <strong>{clients.find(c => String(c.id) === selectedClientId)?.name || 'the selected client'}</strong></>
+              : <>Printing <strong>{quantity} documents</strong> ({formatSerial(startSeq)} to {formatSerial(startSeq + (quantity - 1) * stepSeq)})</>}
           </p>
 
           {isGenerating && (
@@ -1073,21 +1476,21 @@ export default function SerialPrinterPage() {
             <button
               type="button"
               className="btn btn-primary"
-              disabled={isGenerating}
-              onClick={() => handleGenerateAndPrint('print')}
+              disabled={isGenerating || (uploadMode === 'zip' && !selectedClientId)}
+              onClick={() => uploadMode === 'zip' ? handleGenerateZipCombine('print') : handleGenerateAndPrint('print')}
               style={{ padding: '10px 22px', fontSize: '0.9rem', gap: '8px' }}
             >
-              <Printer size={16} /> Print Batch
+              <Printer size={16} /> {uploadMode === 'zip' ? 'Combine & Print' : 'Print Batch'}
             </button>
 
             <button
               type="button"
               className="btn btn-secondary"
-              disabled={isGenerating}
-              onClick={() => handleGenerateAndPrint('download')}
+              disabled={isGenerating || (uploadMode === 'zip' && !selectedClientId)}
+              onClick={() => uploadMode === 'zip' ? handleGenerateZipCombine('download') : handleGenerateAndPrint('download')}
               style={{ padding: '10px 22px', fontSize: '0.9rem', gap: '8px' }}
             >
-              <Download size={16} /> Download PDF
+              <Download size={16} /> {uploadMode === 'zip' ? 'Combine & Save to Client Folder' : 'Download PDF'}
             </button>
           </div>
 
@@ -1096,6 +1499,11 @@ export default function SerialPrinterPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: '#10b981', fontWeight: 600, fontSize: '0.95rem', marginBottom: '6px' }}>
                 <CheckCircle size={18} /> PDF Ready
               </div>
+              {creditsInfo && (
+                <div style={{ fontSize: '0.8rem', color: '#a7f3d0', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  <FolderOpen size={14} /> {creditsInfo.charged} credit(s) charged · {creditsInfo.remaining} remaining
+                </div>
+              )}
               {savedFilePath && (
                 <div style={{ fontSize: '0.8rem', color: '#a7f3d0', marginBottom: '10px', wordBreak: 'break-all' }}>
                   Saved to: <code>{savedFilePath}</code>
