@@ -5,7 +5,7 @@ import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
-import { AlertTriangle, CheckCircle, CheckCircle2, Copy, Download, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle, CheckCircle2, Copy, Download, FileText, Link as LinkIcon, Users, X } from 'lucide-react';
 import { getEffectivePhotoUrl } from './utils';
 import { useCompileWorkflow } from '../hooks/useCompileWorkflow';
 import { ValidationModal } from './ValidationModal';
@@ -197,60 +197,54 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
       
       {/* Creation form */}
       <div className="glass-panel" style={{ maxWidth: '640px' }}>
-        <h3 style={{ marginBottom: '16px' }}>Generate Client Portal Share</h3>
-        <p style={{ marginBottom: '24px', fontSize: '0.85rem', color: 'var(--muted)' }}>
-          Create secure, shareable links mapping a specific ID card template to this organization. The client organization can log in to manage their members, and share the enrollment form with their members to collect profiles and photos.
+        <h3 style={{ marginBottom: '6px' }}>Create a Portal Link</h3>
+        <p style={{ marginBottom: '20px', fontSize: '0.85rem', color: 'var(--muted)' }}>
+          Lets this client manage their own members and collect enrollment photos, tied to one template.
         </p>
 
         {templates.length === 0 ? (
           <div style={{ padding: '16px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <AlertTriangle size={16} color="#f59e0b" />
             <div style={{ fontSize: '0.875rem' }}>
-              <strong style={{ color: '#f59e0b' }}>No templates available for this client.</strong>
+              <strong style={{ color: '#f59e0b' }}>No templates available.</strong>
               <span style={{ color: 'var(--muted)', marginLeft: '6px' }}>
                 {hasClientAssignments
-                  ? 'The assigned templates may have been removed. Please check template assignments in the Templates tab.'
-                  : 'Design or upload a template, then assign it to this client from the Templates dashboard.'}
+                  ? 'The assigned templates may have been removed — check the Templates tab.'
+                  : 'Assign a template to this client from the Templates tab first.'}
               </span>
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {hasClientAssignments && (
-              <div style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <CheckCircle size={12} color="var(--success)" />
-                Showing {templates.length} template{templates.length !== 1 ? 's' : ''} assigned to this client
-              </div>
-            )}
-            <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
-              <div className="form-group" style={{ flex: 1, margin: 0 }}>
-                <label className="form-label">Select Template</label>
-                <select 
-                  className="form-select" 
-                  value={selectedTemplateId} 
-                  onChange={e => setSelectedTemplateId(e.target.value)}
-                >
-                  {templates.map(t => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <button id="btn-generate-links" type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
-                {creating ? 'Generating...' : 'Generate Links'}
-              </button>
-            </form>
-          </div>
+          <form onSubmit={handleCreateShare} style={{ display: 'flex', gap: '16px', alignItems: 'flex-end' }}>
+            <div className="form-group" style={{ flex: 1, margin: 0 }}>
+              <label className="form-label">Template</label>
+              <select
+                className="form-select"
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+              >
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button id="btn-generate-links" type="submit" className="btn btn-primary" disabled={creating} style={{ height: '42px' }}>
+              {creating ? 'Creating...' : 'Create Link'}
+            </button>
+          </form>
         )}
       </div>
 
       {/* Active Shares List */}
       <div>
-        <h3 style={{ marginBottom: '16px' }}>Active Share Links</h3>
+        {shares.length > 0 && (
+          <h3 style={{ marginBottom: '16px' }}>Portal Links <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({shares.length})</span></h3>
+        )}
         {shares.length === 0 ? (
           <div className="glass-panel" style={{ padding: '32px', textAlign: 'center', color: 'var(--muted)' }}>
-            No portal links generated yet. Use the form above to generate links.
+            No portal links yet — create one above to get started.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -266,15 +260,16 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                    border: share.active ? (isSelected ? '2px solid var(--primary)' : '1px solid var(--glass-border)') : '1px solid rgba(239, 68, 68, 0.2)',
                    opacity: share.active ? 1 : 0.6,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
                     <div>
                       <strong style={{ fontSize: '1rem', color: '#fff' }}>
-                        Template: {matchedTemplate?.name || `ID #${share.templateId}`}
+                        {matchedTemplate?.name || `Template #${share.templateId}`}
                       </strong>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px' }}>
-                        Created on {new Date(share.createdAt).toLocaleDateString()} · <strong>Enrolled: {share.enrolledCount ?? 0} members</strong>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Users size={13} /> {share.enrolledCount ?? 0} enrolled
+                        <span style={{ opacity: 0.5 }}>·</span>
+                        {new Date(share.createdAt).toLocaleDateString()}
                       </div>
-
                     </div>
 
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -285,17 +280,17 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                           style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                           onClick={() => isSelected ? setSelectedShareForBatch(null) : handleOpenBatchManager(share)}
                         >
-                          {isSelected ? 'Close Batch Manager' : 'Manage Batch & Compile'}
+                          {isSelected ? 'Close' : 'Manage & Print'}
                         </button>
                       )}
                       {share.active ? (
-                        <button 
+                        <button
                           type="button"
-                          className="btn btn-danger" 
+                          className="btn btn-danger"
                           style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                           onClick={() => handleDeactivate(share.orgToken)}
                         >
-                          Deactivate Links
+                          Deactivate
                         </button>
                       ) : (
                         <span className="badge badge-warning">Deactivated</span>
@@ -303,49 +298,41 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                     </div>
                   </div>
 
-                  {share.active && !isSelected && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      
-                      <div style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.15)', padding: '12px 16px', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
-                        <strong>Multi-department Workflow:</strong> Copy the Organization Head portal link below and send it to the client's organization head. From that portal, they can create separate department heads and staff data collection links for their respective departments.
-                      </div>
-
-                      {/* Organization Management Link */}
-                      <div style={{ background: 'rgba(0,0,0,0.2)', padding: '12px', borderRadius: '6px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#10b981' }}>
-                            Organization Head Portal Link (For Client Managers)
-                          </span>
-                          <button 
-                            type="button"
-                            className="btn btn-secondary" 
-                            style={{ padding: '4px 8px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' }}
-                            onClick={() => copyToClipboard(orgUrl, `org-${share.id}`)}
-                          >
-                            {copiedToken === `org-${share.id}` ? <CheckCircle size={12} style={{ color: 'var(--success)' }} /> : <Copy size={12} />}
-                            Copy
-                          </button>
-                        </div>
-                        <code style={{ fontSize: '0.8rem', color: 'var(--muted)', wordBreak: 'break-all' }}>{orgUrl}</code>
-                      </div>
-
+                  {share.active && (
+                    <div style={{ background: 'rgba(0,0,0,0.2)', borderRadius: '6px', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <LinkIcon size={14} color="var(--muted)" style={{ flexShrink: 0 }} />
+                      <code style={{ fontSize: '0.78rem', color: 'var(--muted)', wordBreak: 'break-all', flex: 1 }}>{orgUrl}</code>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+                        onClick={() => copyToClipboard(orgUrl, `org-${share.id}`)}
+                      >
+                        {copiedToken === `org-${share.id}` ? <CheckCircle size={12} style={{ color: 'var(--success)' }} /> : <Copy size={12} />}
+                        Copy
+                      </button>
                     </div>
+                  )}
+                  {share.active && !isSelected && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: '8px 0 0' }}>
+                      Send this to the client&rsquo;s admin — they&rsquo;ll manage members and can invite their own departments.
+                    </p>
                   )}
 
                   {/* Batch Manager Section */}
                   {isSelected && (
-                    <div style={{ 
-                      marginTop: '20px', 
-                      paddingTop: '20px', 
+                    <div style={{
+                      marginTop: '20px',
+                      paddingTop: '20px',
                       borderTop: '1px dashed var(--glass-border)',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '20px'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--primary)' }}>Batch Cardholders Manager</h4>
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', color: 'var(--primary)' }}>Enrolled Members</h4>
                         <span style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>
-                          Selected: {selectedCardholderIds.length} of {batchCardholders.length}
+                          {selectedCardholderIds.length} of {batchCardholders.length} selected
                         </span>
                       </div>
 
@@ -355,7 +342,7 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                         </div>
                       ) : batchCardholders.length === 0 ? (
                         <div style={{ padding: '20px', textAlign: 'center', color: 'var(--muted)', fontSize: '0.85rem' }}>
-                          No cardholders have enrolled through this link yet.
+                          No one has enrolled through this link yet.
                         </div>
                       ) : (
                         <>
@@ -379,7 +366,6 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                   </th>
                                   <th style={{ padding: '10px' }}>Photo</th>
                                   <th style={{ padding: '10px' }}>Name</th>
-                                  <th style={{ padding: '10px' }}>Template Name</th>
                                   <th style={{ padding: '10px' }}>Designation</th>
                                   <th style={{ padding: '10px' }}>Serial / Key</th>
                                 </tr>
@@ -406,7 +392,6 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                         )}
                                       </td>
                                       <td style={{ padding: '10px', fontWeight: '500' }}>{ch.name}</td>
-                                      <td style={{ padding: '10px' }}>{ch.templateName || '—'}</td>
                                       <td style={{ padding: '10px' }}>{ch.designation || '—'}</td>
                                       <td style={{ padding: '10px', fontSize: '0.8rem', color: 'var(--muted)' }}>{ch.cardSerial || '—'}</td>
                                     </tr>
@@ -443,9 +428,9 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                               onClick={() => handleOpenBatchCompile(matchedTemplate)}
                             >
                               {compileHooks.qCompiling ? (
-                                <><div className="spinner" style={{ width: '15px', height: '15px' }} /> Queueing...</>
+                                <><div className="spinner" style={{ width: '15px', height: '15px' }} /> Starting...</>
                               ) : (
-                                <>⚡ Compile PDF ({selectedCardholderIds.length} card{selectedCardholderIds.length !== 1 ? 's' : ''})</>
+                                <>Compile PDF ({selectedCardholderIds.length} card{selectedCardholderIds.length !== 1 ? 's' : ''})</>
                               )}
                             </button>
                           </div>
@@ -484,13 +469,13 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                   progress={compileHooks.qJobResult.progress ?? 0}
                                   message={
                                     compileHooks.qJobResult.status === 'PENDING'
-                                      ? 'Queued — waiting for the renderer…'
+                                      ? 'Queued — starting shortly…'
                                       : 'Compiling Print-Ready PDF…'
                                   }
                                   subMessage={
                                     (compileHooks.qJobResult.chunkCount ?? 0) > 1
                                       ? `Part ${Math.min((compileHooks.qJobResult.chunks?.length ?? 0) + 1, compileHooks.qJobResult.chunkCount!)} of ${compileHooks.qJobResult.chunkCount}`
-                                      : `${compileHooks.qJobResult.pdfType === 'PRODUCTION' ? 'Production' : 'Proof'} PDF · job #${compileHooks.qJobResult.id}`
+                                      : `${compileHooks.qJobResult.pdfType === 'PRODUCTION' ? 'Production' : 'Proof'} PDF`
                                   }
                                 />
                                 {compileHooks.qJobResult.pollError && (
@@ -505,7 +490,7 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                                     onClick={() => compileHooks.setQJobResult(null)}
                                     style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: '0.76rem', cursor: 'pointer', textDecoration: 'underline' }}
                                   >
-                                    Hide this and keep compiling in the background
+                                    Keep compiling in the background
                                   </button>
                                 </div>
                               </div>
@@ -524,12 +509,11 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                               alignItems: 'center',
                             }}>
                               <div>
-                                <strong style={{ fontSize: '0.85rem' }}>Job #{compileHooks.qJobResult.id} Status: {compileHooks.qJobResult.status}</strong>
-                                <div style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>Progress: {compileHooks.qJobResult.progress}%</div>
+                                <strong style={{ fontSize: '0.85rem' }}>{compileHooks.qJobResult.status === 'COMPLETED' ? 'Done' : 'Failed'}</strong>
                               </div>
                               {compileHooks.qJobResult.status === 'COMPLETED' && (
                                 <div style={{ color: '#10b981', fontWeight: 600, fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <CheckCircle2 size={14} /> PDF Downloaded &amp; Saved to File
+                                  <CheckCircle2 size={14} /> Saved to your computer
                                 </div>
                               )}
                               {compileHooks.qJobResult.status === 'FAILED' && (
@@ -557,35 +541,35 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
                               flexDirection: 'column',
                               gap: '10px'
                             }}>
-                              <strong style={{ fontSize: '0.8rem', color: '#fff' }}>Previously Compiled PDFs for this share link:</strong>
+                              <strong style={{ fontSize: '0.8rem', color: '#fff' }}>Previous PDFs</strong>
                               <div style={{ display: 'flex', gap: '16px' }}>
                                 {selectedShareForBatch.latestApprovalJob && (
                                   selectedShareForBatch.latestApprovalJob.isLocalJob ? (
-                                    <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                      📄 Approval Proof (Saved)
+                                    <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                      <FileText size={13} /> Approval Proof (saved)
                                     </span>
                                   ) : (
-                                    <button 
+                                    <button
                                       type="button"
                                       onClick={() => setPreviewJob({ id: selectedShareForBatch.latestApprovalJob.id, pdfType: 'APPROVAL', fileName: `Approval_Proof_Share_${selectedShareForBatch.id}.pdf` })}
-                                      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                                      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
                                     >
-                                      📄 View Approval Proof
+                                      <FileText size={13} /> Approval Proof
                                     </button>
                                   )
                                 )}
                                 {selectedShareForBatch.latestProductionJob && (
                                   selectedShareForBatch.latestProductionJob.isLocalJob ? (
-                                    <span style={{ color: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                      📄 Production PDF (Saved)
+                                    <span style={{ color: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                      <FileText size={13} /> Production PDF (saved)
                                     </span>
                                   ) : (
-                                    <button 
+                                    <button
                                       type="button"
                                       onClick={() => setPreviewJob({ id: selectedShareForBatch.latestProductionJob.id, pdfType: 'PRODUCTION', fileName: `Production_Grid_Share_${selectedShareForBatch.id}.pdf` })}
-                                      style={{ background: 'none', border: 'none', padding: 0, color: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                                      style={{ background: 'none', border: 'none', padding: 0, color: '#10b981', fontSize: '0.8rem', fontWeight: 'bold', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '5px', cursor: 'pointer' }}
                                     >
-                                      📄 View Production PDF
+                                      <FileText size={13} /> Production PDF
                                     </button>
                                   )
                                 )}
@@ -640,10 +624,10 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
             }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: '600' }}>
-                  Preview: {previewJob.fileName}
+                  {previewJob.pdfType === 'PRODUCTION' ? 'Production PDF' : 'Approval Proof'}
                 </h3>
                 <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                  Type: {previewJob.pdfType} • Job #{previewJob.id}
+                  {previewJob.fileName}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
