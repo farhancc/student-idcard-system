@@ -6,18 +6,19 @@ import { z } from 'zod';
 import { getCreditSettings } from '@/lib/system-settings';
 
 /**
- * POST /api/jobs/consume-credits
+ * POST /api/jobs/batch-credits-hold
  *
- * Authoritative credit deduction for a LOCAL Batch Import compile. The batch
- * data lives only in the user's browser (IndexedDB) and is rendered/saved
- * locally, so there is no order or PdfJob to hang the deduction off — but
- * credits are a billing asset and must be spent server-side. This mirrors the
- * credit math + atomic deduction in `jobs/production-request` without creating
- * any order/job records.
+ * Reserves credits for a LOCAL Batch Import compile, before the expensive
+ * render runs. The batch data lives only in the user's browser (IndexedDB)
+ * and is rendered/saved locally, so there is no order or PdfJob to hang a
+ * `creditsLocked` reservation off — this CreditHold row is that job's
+ * equivalent, scoped to just the credit lifecycle. Same math as
+ * jobs/production-request; settle it via batch-credits-settle once the
+ * compile finishes (capture) or fails (refund).
  *
  * NOTE: because the roster is client-side, `cardCount` is client-reported. The
- * per-card rate is authoritative (derived from the template) and the balance is
- * enforced server-side, but the count cannot be independently verified.
+ * per-card rate is authoritative (derived from the template) and the balance
+ * is enforced server-side, but the count cannot be independently verified.
  */
 
 const schema = z.object({
@@ -80,7 +81,8 @@ export async function POST(request: Request) {
         : creditSettings.costApprovalPdfSingle;
     }
 
-    // Atomic check-and-deduct under a pessimistic lock on the press row.
+    // Atomic check-and-deduct under a pessimistic lock on the press row, then
+    // record the hold so it can be captured or refunded later.
     let insufficient = false;
     const result = await prisma.$transaction(async (tx) => {
       const presses = await tx.$queryRaw<any[]>`
@@ -95,7 +97,7 @@ export async function POST(request: Request) {
 
       if (totalAvailable < totalCreditsNeeded) {
         insufficient = true;
-        return { totalAvailable, remaining: totalAvailable };
+        return { totalAvailable, remaining: totalAvailable, holdId: 0 };
       }
 
       if (totalCreditsNeeded > 0) {
@@ -109,7 +111,16 @@ export async function POST(request: Request) {
           },
         });
       }
-      return { totalAvailable, remaining: totalAvailable - totalCreditsNeeded };
+
+      const hold = await tx.creditHold.create({
+        data: {
+          pressId,
+          amount: totalCreditsNeeded,
+          reason: `BATCH_IMPORT_${pdfType}`,
+        },
+      });
+
+      return { totalAvailable, remaining: totalAvailable - totalCreditsNeeded, holdId: hold.id };
     });
 
     if (insufficient) {
@@ -127,17 +138,19 @@ export async function POST(request: Request) {
       ...getActorFromRequest(request),
       action: AuditActions.CREDITS_DEDUCTED,
       category: 'BILLING',
-      resourceType: 'BatchCompile',
-      description: `Local batch ${pdfType} compile by user ${userId}: spent ${totalCreditsNeeded} credits for ${Math.ceil(cardCount)} card(s)`,
+      resourceType: 'CreditHold',
+      resourceId: result.holdId,
+      description: `Local batch ${pdfType} compile by user ${userId}: reserved ${totalCreditsNeeded} credits for ${Math.ceil(cardCount)} card(s)`,
       newValue: { credits: totalCreditsNeeded, creditsBalance: result.remaining },
     });
 
     return NextResponse.json({
       success: true,
+      holdId: result.holdId,
       creditsCharged: totalCreditsNeeded,
       remainingCredits: result.remaining,
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || 'Failed to consume credits' }, { status: 500 });
+    return NextResponse.json({ error: e.message || 'Failed to reserve credits' }, { status: 500 });
   }
 }

@@ -38,6 +38,7 @@ model Press {
   jobs           PdfJob[]
   activities     OrderActivityLog[]
   creditRequests CreditRequest[]
+  creditHolds    CreditHold[]
   templatePurchases TemplatePurchase[] @relation("TemplatePurchases")
   templateLikes     TemplateLike[]
   templateReports   TemplateReport[]
@@ -619,6 +620,25 @@ model CreditRequest {
   @@index([pressId])
   @@index([status])
   @@map("credit_requests")
+}
+
+// Credit reservation for a Batch Import compile: there is no CardOrder/PdfJob
+// to hang creditsLocked off (the batch is rendered and saved entirely on the
+// operator's machine, never persisted server-side), so this is its own
+// minimal lock -> capture-or-refund record, mirroring PdfJob's credit
+// lifecycle without any of its cardholder/order machinery.
+model CreditHold {
+  id         Int       @id @default(autoincrement())
+  pressId    Int       @map("press_id")
+  press      Press     @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  amount     Int
+  status     String    @default("PENDING") // PENDING | CAPTURED | REFUNDED
+  reason     String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  settledAt  DateTime? @map("settled_at")
+
+  @@index([pressId, status])
+  @@map("credit_holds")
 }
 
 // ── TEMPLATE MARKETPLACE ──────────────────────────────────────────────────────

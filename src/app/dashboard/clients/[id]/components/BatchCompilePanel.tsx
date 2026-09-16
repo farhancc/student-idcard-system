@@ -641,9 +641,13 @@ export function BatchCompilePanel({
       );
       if (cardholders.length === 0) throw new Error('No records to compile.');
 
-      // 3. Authoritative credit deduction BEFORE the expensive render.
+      // 3. Reserve credits BEFORE the expensive render — captured on success,
+      //    automatically refunded below if rendering or saving fails. Same
+      //    lock-then-settle guarantee the Cardholders tab gets from
+      //    PdfJob.creditsLocked, scoped to a CreditHold since a local batch
+      //    has no order/job row to hang that state off.
       setCompileProgress(8);
-      const credRes = await fetch('/api/jobs/consume-credits', {
+      const holdRes = await fetch('/api/jobs/batch-credits-hold', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -652,79 +656,103 @@ export function BatchCompilePanel({
           pdfType: cfg.compileType,
         }),
       });
-      const credJson = await credRes.json();
-      if (!credRes.ok) throw new Error(credJson.error || 'Credit deduction failed.');
+      const holdJson = await holdRes.json();
+      if (!holdRes.ok) throw new Error(holdJson.error || 'Credit reservation failed.');
+      const holdId = holdJson.holdId as number;
 
-      // 4. Render locally (chunked so no single file/IPC payload is too large).
-      const dateStr = new Date().toISOString().slice(0, 10);
-      const kind = cfg.compileType === 'PRODUCTION' ? 'production' : 'approval';
-      let blobs: Blob[];
-
-      if (cfg.compileType === 'PRODUCTION') {
-        const custom =
-          cfg.paperSize === 'SRA3'
-            ? { w: cfg.orientation === 'PORTRAIT' ? 907.09 : 1275.59, h: cfg.orientation === 'PORTRAIT' ? 1275.59 : 907.09 }
-            : cfg.paperSize === '13x19'
-            ? { w: cfg.orientation === 'PORTRAIT' ? 936 : 1368, h: cfg.orientation === 'PORTRAIT' ? 1368 : 936 }
-            : null;
-        const { generateProductionPdfChunkedClient } = await import('@/lib/pdf/production-pdf-generator');
-        blobs = await generateProductionPdfChunkedClient(
-          template,
-          cardholders,
-          {
-            paperSize: custom ? 'CUSTOM' : (cfg.paperSize as any),
-            orientation: cfg.orientation,
-            customWidth: custom?.w,
-            customHeight: custom?.h,
-            bleed: (cfg.bleed || 0) * MM_TO_PT,
-            cropMarks: cfg.cropMarks,
-            foldLine: cfg.foldLine,
-            marginLeft: cfg.marginLeft,
-            marginRight: cfg.marginRight,
-            marginTop: cfg.marginTop,
-            marginBottom: cfg.marginBottom,
-            colGap: cfg.colGap,
-            rowGap: cfg.rowGap,
-            emptySlotStrategy: cfg.emptySlotStrategy === 'FILL_CUSTOM' ? 'LEAVE_BLANK' : cfg.emptySlotStrategy,
-          },
-          pressFonts,
-          (pct) => setCompileProgress(Math.min(94, Math.max(10, Math.round(pct))))
-        );
-      } else {
-        const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
-        const hasBack = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
-        const perChunk = (hasBack ? 4 : 8) * 15;
-        const totalChunks = Math.max(1, Math.ceil(cardholders.length / perChunk));
-        blobs = [];
-        for (let i = 0; i < totalChunks; i++) {
-          setCompileProgress(Math.round(10 + (i / totalChunks) * 84));
-          const slice = cardholders.slice(i * perChunk, (i + 1) * perChunk);
-          blobs.push(await generateApprovalPdfClient(clientName || 'Client', 'Batch Import', template, slice, pressFonts));
+      const settleHold = async (success: boolean) => {
+        try {
+          await fetch('/api/jobs/batch-credits-settle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ holdId, success }),
+          });
+        } catch {
+          // Best-effort: an unreachable server here means the hold stays
+          // PENDING and the periodic cleanup sweep resolves it later rather
+          // than the credits being stuck silently.
         }
-      }
+      };
 
-      // 5. Save each chunk into the client folder.
-      const total = blobs.length;
+      let total = 0;
       let savedPath = '';
-      for (let i = 0; i < total; i++) {
-        const part = total > 1 ? `_part${i + 1}of${total}` : '';
-        const fileName = `${kind}_batch_${cardholders.length}cards_${dateStr}${part}.pdf`;
-        const base64 = uint8ArrayToBase64(new Uint8Array(await blobs[i].arrayBuffer()));
-        const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
-        if (res && res.success === false) throw new Error(res.error || 'Failed to save PDF.');
-        if (!savedPath && res?.path) savedPath = res.path;
-        setCompileProgress(Math.min(100, Math.round(94 + ((i + 1) / total) * 6)));
+      try {
+        // 4. Render locally (chunked so no single file/IPC payload is too large).
+        const dateStr = new Date().toISOString().slice(0, 10);
+        const kind = cfg.compileType === 'PRODUCTION' ? 'production' : 'approval';
+        let blobs: Blob[];
+
+        if (cfg.compileType === 'PRODUCTION') {
+          const custom =
+            cfg.paperSize === 'SRA3'
+              ? { w: cfg.orientation === 'PORTRAIT' ? 907.09 : 1275.59, h: cfg.orientation === 'PORTRAIT' ? 1275.59 : 907.09 }
+              : cfg.paperSize === '13x19'
+              ? { w: cfg.orientation === 'PORTRAIT' ? 936 : 1368, h: cfg.orientation === 'PORTRAIT' ? 1368 : 936 }
+              : null;
+          const { generateProductionPdfChunkedClient } = await import('@/lib/pdf/production-pdf-generator');
+          blobs = await generateProductionPdfChunkedClient(
+            template,
+            cardholders,
+            {
+              paperSize: custom ? 'CUSTOM' : (cfg.paperSize as any),
+              orientation: cfg.orientation,
+              customWidth: custom?.w,
+              customHeight: custom?.h,
+              bleed: (cfg.bleed || 0) * MM_TO_PT,
+              cropMarks: cfg.cropMarks,
+              foldLine: cfg.foldLine,
+              marginLeft: cfg.marginLeft,
+              marginRight: cfg.marginRight,
+              marginTop: cfg.marginTop,
+              marginBottom: cfg.marginBottom,
+              colGap: cfg.colGap,
+              rowGap: cfg.rowGap,
+              emptySlotStrategy: cfg.emptySlotStrategy === 'FILL_CUSTOM' ? 'LEAVE_BLANK' : cfg.emptySlotStrategy,
+            },
+            pressFonts,
+            (pct) => setCompileProgress(Math.min(94, Math.max(10, Math.round(pct))))
+          );
+        } else {
+          const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
+          const hasBack = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
+          const perChunk = (hasBack ? 4 : 8) * 15;
+          const totalChunks = Math.max(1, Math.ceil(cardholders.length / perChunk));
+          blobs = [];
+          for (let i = 0; i < totalChunks; i++) {
+            setCompileProgress(Math.round(10 + (i / totalChunks) * 84));
+            const slice = cardholders.slice(i * perChunk, (i + 1) * perChunk);
+            blobs.push(await generateApprovalPdfClient(clientName || 'Client', 'Batch Import', template, slice, pressFonts));
+          }
+        }
+
+        // 5. Save each chunk into the client folder.
+        total = blobs.length;
+        for (let i = 0; i < total; i++) {
+          const part = total > 1 ? `_part${i + 1}of${total}` : '';
+          const fileName = `${kind}_batch_${cardholders.length}cards_${dateStr}${part}.pdf`;
+          const base64 = uint8ArrayToBase64(new Uint8Array(await blobs[i].arrayBuffer()));
+          const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
+          if (res && res.success === false) throw new Error(res.error || 'Failed to save PDF.');
+          if (!savedPath && res?.path) savedPath = res.path;
+          setCompileProgress(Math.min(100, Math.round(94 + ((i + 1) / total) * 6)));
+        }
+      } catch (renderErr) {
+        await settleHold(false);
+        throw renderErr;
       }
 
-      // 6. Batch processed — clear the local working data (do not persist).
+      // 6. Render + save succeeded — capture the hold.
+      await settleHold(true);
+
+      // 7. Batch processed — clear the local working data (do not persist).
       await clearBatch().catch(() => {});
 
       setSavedResult({
         count: cardholders.length,
         type: cfg.compileType,
         parts: total,
-        creditsCharged: credJson.creditsCharged ?? 0,
-        remaining: credJson.remainingCredits ?? 0,
+        creditsCharged: holdJson.creditsCharged ?? 0,
+        remaining: holdJson.remainingCredits ?? 0,
         savedPath,
       });
       setShowWizard(false);

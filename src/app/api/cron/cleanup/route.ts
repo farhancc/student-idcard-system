@@ -136,12 +136,29 @@ async function handleCleanup(request: Request) {
       }
     });
 
+    // Refund any Batch Import credit hold left PENDING for over an hour — the
+    // operator's machine crashed or the tab closed between the hold and the
+    // settle call, so nothing was ever going to resolve it otherwise.
+    const staleHolds = await prisma.creditHold.findMany({
+      where: { status: 'PENDING', createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } },
+      select: { id: true, pressId: true, amount: true },
+    });
+    let holdsRefunded = 0;
+    for (const hold of staleHolds) {
+      await prisma.$transaction([
+        prisma.press.update({ where: { id: hold.pressId }, data: { credits: { increment: hold.amount } } }),
+        prisma.creditHold.update({ where: { id: hold.id }, data: { status: 'REFUNDED', settledAt: new Date() } }),
+      ]);
+      holdsRefunded++;
+    }
+
     return NextResponse.json({
       success: true,
       message: `Successfully cleaned up expired PDF jobs.`,
       jobsDeleted: deleteResult.count,
       filesDeleted: deletedFilesCount,
-      failedDeletions: failedDeletionsCount
+      failedDeletions: failedDeletionsCount,
+      creditHoldsRefunded: holdsRefunded,
     });
   } catch (error: unknown) {
     console.error('Expired PDF cleanup error:', error);

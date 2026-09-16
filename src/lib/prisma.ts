@@ -264,7 +264,7 @@ export const TENANT_MODELS = [
   'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
   'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
   'PressApiKey', 'PrintVendor', 'ClientPortalShare',
-  'PdfJob', 'CardAsset', 'CreditRequest',
+  'PdfJob', 'CardAsset', 'CreditRequest', 'CreditHold',
   'TemplatePurchase', 'TemplateLike', 'TemplateReport'
 ];
 
