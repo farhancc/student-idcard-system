@@ -87,6 +87,26 @@ async function safeDrawTextClient(
   }
 }
 
+/**
+ * Base64 of the compiled PDF, for the Electron save bridge only.
+ *
+ * Nothing else needs it now that the server takes the raw bytes, and a base64
+ * copy of a large sheet is a third again as much memory — so in the browser it
+ * is never built.
+ */
+async function toBase64ForNativeSave(pdfBytes: Uint8Array): Promise<string> {
+  if (typeof window === 'undefined' || !(window as any).electronAPI) return '';
+  return new Promise<string>((resolve) => {
+    const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      resolve(dataUrl.split(',')[1]);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
 interface CompilerJob {
   id: number;
   pdfType: string;
@@ -136,34 +156,105 @@ export default function ProductionDaemon() {
     }
   };
 
-  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, pdfBase64?: string, localPath?: string, chunkCount?: number) => {
+  /**
+   * Hand the compiled bytes to the server as their own request.
+   *
+   * Best-effort on purpose: the file is already on this machine, and a server
+   * copy that cannot be stored (too large to send, or the network blinked) must
+   * not stop the job from settling — that is exactly how jobs used to sit at
+   * 100% with their credits locked.
+   */
+  const storeCompiledPdf = async (jobId: number, pdfBytes: Uint8Array, chunkIndex?: number) => {
+    const query = chunkIndex === undefined ? '' : `?chunk=${chunkIndex}`;
     try {
-      const res = await fetch('/api/jobs/production-complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId, success, errorMsg, pdfBase64, localPath, chunkCount }),
-        credentials: 'same-origin'
+      const res = await fetch(`/api/jobs/${jobId}/pdf${query}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/pdf' },
+        body: new Blob([pdfBytes.buffer as any], { type: 'application/pdf' }),
+        credentials: 'same-origin',
       });
-      if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      if (success) {
-        addLog(`Successfully completed compilation for job #${jobId}`);
-      } else {
-        addLog(`Reported job #${jobId} compilation failure: ${errorMsg}`);
+      if (!res.ok) {
+        addLog(`No server copy kept for job #${jobId} (HTTP ${res.status}). The saved file on this machine is the master copy.`);
+        return false;
       }
-      window.dispatchEvent(new Event('refresh-profile'));
+      return true;
     } catch (err: any) {
-      addLog(`Network error reporting job #${jobId}. Queuing for offline sync...`);
-      // Fallback: queue the completion payload locally
+      addLog(`Could not send job #${jobId} to server storage: ${err.message}. The saved file on this machine is the master copy.`);
+      return false;
+    }
+  };
+
+  const postCompletion = async (payload: Record<string, unknown>) => {
+    const res = await fetch('/api/jobs/production-complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      credentials: 'same-origin',
+    });
+    if (!res.ok) {
+      const err: any = new Error(`Server returned ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return res;
+  };
+
+  /**
+   * Settle the job with the server.
+   *
+   * Until this call lands the job's credits stay locked, so a single failure is
+   * never the end of it: transient errors are retried, and a request the server
+   * refuses outright is turned into a reported failure so the credits are
+   * refunded and the operator is told why, instead of the job sitting at 100%
+   * for ever.
+   */
+  const reportJobComplete = async (jobId: number, success: boolean, errorMsg?: string, localPath?: string, chunkCount?: number) => {
+    const payload = { jobId, success, errorMsg, localPath, chunkCount };
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        const electronAPI = (window as any).electronAPI;
-        if (electronAPI?.queuePrintLog) {
-          const result = await electronAPI.queuePrintLog({ jobId, success, errorMsg, pdfBase64: undefined, localPath });
-          setOfflineQueueCount(result?.queueLength ?? 0);
-          addLog(`Queued offline. Total pending: ${result?.queueLength ?? '?'}`);
-          wasOfflineRef.current = true;
+        await postCompletion(payload);
+        if (success) {
+          addLog(`Successfully completed compilation for job #${jobId}`);
+        } else {
+          addLog(`Reported job #${jobId} compilation failure: ${errorMsg}`);
         }
-      } catch (queueErr: any) {
-        addLog(`Failed to queue offline: ${queueErr.message}`);
+        window.dispatchEvent(new Event('refresh-profile'));
+        return;
+      } catch (err: any) {
+        const status = err?.status;
+        const isPermanent = typeof status === 'number' && status >= 400 && status < 500;
+
+        if (isPermanent) {
+          addLog(`Server rejected the completion of job #${jobId} (HTTP ${status}).`);
+          if (success) {
+            // Release the locked credits rather than leave them held against a
+            // job the server will never accept as done.
+            await reportJobComplete(jobId, false, errorMsg || `Completion rejected by server (HTTP ${status})`, localPath, chunkCount);
+          }
+          return;
+        }
+
+        if (attempt < 3) {
+          addLog(`Completion of job #${jobId} failed (${err.message}). Retrying (${attempt}/3)...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+          continue;
+        }
+
+        addLog(`Network error reporting job #${jobId}. Queuing for offline sync...`);
+        try {
+          const electronAPI = (window as any).electronAPI;
+          if (electronAPI?.queuePrintLog) {
+            const result = await electronAPI.queuePrintLog({ payload });
+            setOfflineQueueCount(result?.queueLength ?? 0);
+            addLog(`Queued offline. Total pending: ${result?.queueLength ?? '?'}`);
+            wasOfflineRef.current = true;
+          } else {
+            addLog(`Job #${jobId} could not be settled — its credits stay locked until it is retried or cancelled.`);
+          }
+        } catch (queueErr: any) {
+          addLog(`Failed to queue offline: ${queueErr.message}`);
+        }
       }
     }
   };
@@ -183,7 +274,8 @@ export default function ProductionDaemon() {
       }
       addLog(`Saved successfully to: ${saveResult.path}`);
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, base64Data, saveResult.path);
+      await storeCompiledPdf(job.id, pdfBytes);
+      await reportJobComplete(job.id, true, undefined, saveResult.path);
     } else {
       addLog('Web client detected. Triggering browser file download and uploading to server...');
       
@@ -198,7 +290,8 @@ export default function ProductionDaemon() {
       URL.revokeObjectURL(downloadUrl);
 
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, base64Data, undefined);
+      await storeCompiledPdf(job.id, pdfBytes);
+      await reportJobComplete(job.id, true, undefined, undefined);
       addLog('Job completed successfully. Download started.');
     }
   };
@@ -241,21 +334,23 @@ export default function ProductionDaemon() {
       addLog(`Chunk ${chunkIndex + 1} download triggered.`);
     }
 
-    // Report chunk to server
+    // Record the chunk first — its bytes are sent separately, against the row
+    // this call creates.
     try {
-      await fetch('/api/jobs/production-chunk-complete', {
+      const res = await fetch('/api/jobs/production-chunk-complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           jobId: job.id,
           chunkIndex,
           totalChunks,
-          pdfBase64: base64Data,
           localPath,
           fileName: chunkFileName,
         }),
         credentials: 'same-origin',
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      await storeCompiledPdf(job.id, pdfBytes, chunkIndex);
     } catch (err: any) {
       addLog(`Warning: Failed to report chunk ${chunkIndex + 1} to server: ${err.message}`);
     }
@@ -441,17 +536,7 @@ export default function ProductionDaemon() {
     const pdfBytes = await pdfDoc.save();
     await updateProgress(job.id, 95);
 
-    addLog('Converting PDF buffer to base64...');
-    const base64Data = await new Promise<string>((resolve) => {
-      const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const base64 = dataUrl.split(',')[1];
-        resolve(base64);
-      };
-      reader.readAsDataURL(blob);
-    });
+    const base64Data = await toBase64ForNativeSave(pdfBytes);
 
     await saveAndCompleteJob(job, order, pdfBytes, base64Data);
   };
@@ -513,17 +598,7 @@ export default function ProductionDaemon() {
 
       const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
 
-      addLog('Converting PDF buffer to base64...');
-      const base64Data = await new Promise<string>((resolve) => {
-        const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.split(',')[1];
-          resolve(base64);
-        };
-        reader.readAsDataURL(blob);
-      });
+      const base64Data = await toBase64ForNativeSave(pdfBytes);
 
       await saveAndCompleteJob(job, order, pdfBytes, base64Data);
     } else {
@@ -547,16 +622,7 @@ export default function ProductionDaemon() {
         );
 
         const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
-        const base64Data = await new Promise<string>((resolve) => {
-          const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const dataUrl = reader.result as string;
-            const base64 = dataUrl.split(',')[1];
-            resolve(base64);
-          };
-          reader.readAsDataURL(blob);
-        });
+        const base64Data = await toBase64ForNativeSave(pdfBytes);
 
         const baseName = (job.fileName || 'approval.pdf').replace(/\.pdf$/i, '');
         const chunkFileName = `${baseName}_part${chunkIdx + 1}.pdf`;
@@ -570,7 +636,7 @@ export default function ProductionDaemon() {
 
       // Final completion — no base64 payload since chunks uploaded individually
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, undefined, undefined, totalChunks);
+      await reportJobComplete(job.id, true, undefined, undefined, totalChunks);
       addLog(`Approval job completed: ${totalChunks} chunks generated.`);
     }
   };
@@ -1021,16 +1087,7 @@ export default function ProductionDaemon() {
       addLog(`Finalizing PDF (pages ${startPage + 1}–${endPage})...`);
       const pdfBytes = await pdfDoc.save();
 
-      const base64Data = await new Promise<string>((resolve) => {
-        const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const dataUrl = reader.result as string;
-          const base64 = dataUrl.split(',')[1];
-          resolve(base64);
-        };
-        reader.readAsDataURL(blob);
-      });
+      const base64Data = await toBase64ForNativeSave(pdfBytes);
 
       return { pdfBytes, base64Data };
     };
@@ -1064,7 +1121,7 @@ export default function ProductionDaemon() {
 
       // Final job completion — chunks were uploaded individually
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, undefined, undefined, totalChunks);
+      await reportJobComplete(job.id, true, undefined, undefined, totalChunks);
       addLog(`Production job completed: ${totalChunks} chunks generated successfully.`);
     }
   };

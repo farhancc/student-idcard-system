@@ -7,7 +7,6 @@ const productionCompleteSchema = z.object({
   jobId: z.union([z.number(), z.string().transform(Number)]),
   success: z.boolean(),
   errorMsg: z.string().optional(),
-  pdfBase64: z.string().optional(),
   localPath: z.string().optional(),
   chunkCount: z.number().optional(),
 });
@@ -29,14 +28,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid request parameters', details: validation.error.format() }, { status: 400 });
     }
 
-    const { jobId, success, errorMsg, pdfBase64, localPath, chunkCount } = validation.data;
+    const { jobId, success, errorMsg, localPath, chunkCount } = validation.data;
 
 
     // Process the entire completion flow inside an interactive transaction to prevent race conditions / double refunds
     const result = await prisma.$transaction(async (tx) => {
       // 1. Lock the PDF job row
       const jobs = await tx.$queryRaw<any[]>`
-        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked", rate_applied AS "rateApplied", revenue_generated AS "revenueGenerated", error_msg AS "errorMsg"
+        SELECT id, status, pdf_type AS "pdfType", order_id AS "orderId", credits_locked AS "creditsLocked", rate_applied AS "rateApplied", revenue_generated AS "revenueGenerated", error_msg AS "errorMsg", download_url AS "downloadUrl"
         FROM "pdf_jobs"
         WHERE id = ${Number(jobId)} AND press_id = ${pressId}
         FOR UPDATE
@@ -54,65 +53,15 @@ export async function POST(request: Request) {
       }
 
       if (success) {
+        // The bytes themselves arrive on PUT /api/jobs/[id]/pdf, which sets
+        // downloadUrl when it manages to store them. That copy wins; otherwise
+        // point at the operator's own file so the job still has a source.
         let downloadUrl = '';
         if (chunkCount && chunkCount > 1) {
           // Multi-chunk job: chunks were already uploaded individually.
           // Set downloadUrl to indicate multi-part.
           downloadUrl = `multi-part://${chunkCount}`;
-        } else if (pdfBase64) {
-          try {
-            const pdfBuffer = Buffer.from(pdfBase64, 'base64');
-            const isCloudinaryConfigured = !!(
-              process.env.CLOUDINARY_CLOUD_NAME &&
-              process.env.CLOUDINARY_API_KEY &&
-              process.env.CLOUDINARY_API_SECRET
-            );
-
-            const fileName = `${job.pdfType.toLowerCase()}_order_${job.orderId}_job_${job.id}.pdf`;
-
-            if (isCloudinaryConfigured) {
-              const { v2: cloudinary } = require('cloudinary');
-              cloudinary.config({
-                cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-                api_key: process.env.CLOUDINARY_API_KEY,
-                api_secret: process.env.CLOUDINARY_API_SECRET,
-              });
-
-              const uploadResult = await new Promise<any>((resolve, reject) => {
-                cloudinary.uploader.upload_stream(
-                  {
-                    folder: `press_${pressId}/compiled_pdfs`,
-                    resource_type: 'raw',
-                    public_id: fileName,
-                  },
-                  (err: any, res: any) => {
-                    if (err) reject(err);
-                    else resolve(res);
-                  }
-                ).end(pdfBuffer);
-              });
-
-              downloadUrl = uploadResult.secure_url;
-            } else {
-              const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
-              const fs = require('fs');
-              const path = require('path');
-              const pdfDir = isProd
-                ? path.join('/tmp', 'idexo', 'uploads', String(pressId), 'pdfs')
-                : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
-              fs.mkdirSync(pdfDir, { recursive: true });
-
-              const filePath = path.join(pdfDir, fileName);
-              fs.writeFileSync(filePath, pdfBuffer);
-
-              downloadUrl = `/uploads/${pressId}/pdfs/${fileName}`;
-            }
-          } catch (uploadErr) {
-            console.error('Failed to save PDF on server storage:', uploadErr);
-          }
-        }
-
-        if (!downloadUrl && localPath) {
+        } else if (!job.downloadUrl && localPath) {
           const formattedPath = localPath.replace(/\\/g, '/');
           const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
           downloadUrl = `local://${prefix}${formattedPath}`;

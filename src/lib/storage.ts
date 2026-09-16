@@ -276,3 +276,69 @@ export async function deleteManyFromR2(
 
   return { deleted, failed };
 }
+
+// ── Compiled job PDFs ───────────────────────────────────────────────────────
+
+export interface CompiledPdfOptions {
+  pressId: number;
+  fileName: string;
+  bytes: Buffer | Uint8Array;
+}
+
+/**
+ * Persist the bytes of a compiled job PDF and return the URL that
+ * `/api/jobs/[id]/download` knows how to resolve.
+ *
+ * Compiled sheets keep the Cloudinary/disk path they have always used rather
+ * than the R2 helpers above: the download route resolves `/uploads/...` off
+ * disk and would treat an `/api/uploads/...` key as a filesystem path, so
+ * moving these objects into R2 is a change of its own.
+ */
+export async function saveCompiledPdf({ pressId, fileName, bytes }: CompiledPdfOptions): Promise<string> {
+  const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes);
+
+  // A job row's file name is ours, but a chunk's comes from the compiling
+  // client, and this one is joined onto a directory path below — a name never
+  // gets to choose where it lands.
+  const safeName = path.basename(fileName).replace(/[^A-Za-z0-9._-]/g, '_') || 'compiled.pdf';
+
+  const isCloudinaryConfigured = !!(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
+
+  if (isCloudinaryConfigured) {
+    const { v2: cloudinary } = require('cloudinary');
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+
+    const uploadResult = await new Promise<any>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: `press_${pressId}/compiled_pdfs`,
+          resource_type: 'raw',
+          public_id: safeName,
+        },
+        (err: any, res: any) => {
+          if (err) reject(err);
+          else resolve(res);
+        }
+      ).end(buffer);
+    });
+
+    return uploadResult.secure_url;
+  }
+
+  const isProd = process.env.VERCEL || process.env.NODE_ENV === 'production';
+  const pdfDir = isProd
+    ? path.join('/tmp', 'idexo', 'uploads', String(pressId), 'pdfs')
+    : path.join(process.cwd(), 'public', 'uploads', String(pressId), 'pdfs');
+  fs.mkdirSync(pdfDir, { recursive: true });
+
+  fs.writeFileSync(path.join(pdfDir, safeName), buffer);
+  return `/uploads/${pressId}/pdfs/${safeName}`;
+}
