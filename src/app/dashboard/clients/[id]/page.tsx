@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
-import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X } from 'lucide-react';
+import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X, Users, FileSpreadsheet, Upload, Plus } from 'lucide-react';
 
 import CardholderGroupedTables from './components/CardholderGroupedTables';
 import { CardholderViewModal } from './components/CardholderViewModal';
@@ -118,25 +118,38 @@ export default function ClientDetailsPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--glass-border)', gap: '8px', marginBottom: '32px', flexWrap: 'wrap' }}>
-        {['list', 'portal', 'add', 'csv', 'zip'].map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab as any)}
-            style={{
-              padding: '12px 20px', background: 'transparent', border: 'none',
-              borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent',
-              color: activeTab === tab ? '#fff' : 'var(--muted)', cursor: 'pointer',
-              fontWeight: activeTab === tab ? '600' : '400', fontSize: '0.9rem'
-            }}
-          >
-            {tab === 'list' && `Cardholders (${cardholders.length})`}
-            {tab === 'portal' && <><Building2 size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} /> Portal Links</>}
-            {tab === 'add' && '+ Add Cardholder'}
-            {tab === 'csv' && 'Google Form'}
-            {tab === 'zip' && 'Batch Import'}
-          </button>
-        ))}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border)', marginBottom: '32px', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+          {[
+            { key: 'list', label: `Cardholders (${cardholders.length})`, icon: Users },
+            { key: 'portal', label: 'Portal Links', icon: Building2 },
+            { key: 'csv', label: 'Google Form', icon: FileSpreadsheet },
+            { key: 'zip', label: 'Batch Import', icon: Upload },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '7px',
+                padding: '12px 18px', background: 'transparent', border: 'none',
+                borderBottom: activeTab === key ? '2px solid var(--primary)' : '2px solid transparent',
+                color: activeTab === key ? '#fff' : 'var(--muted)', cursor: 'pointer',
+                fontWeight: activeTab === key ? '600' : '400', fontSize: '0.9rem',
+              }}
+            >
+              <Icon size={15} />
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          style={{ fontSize: '0.85rem', padding: '8px 16px', marginBottom: '8px' }}
+          onClick={() => setActiveTab('add')}
+        >
+          <Plus size={15} /> Add Cardholder
+        </button>
       </div>
 
       {activeTab === 'list' && (

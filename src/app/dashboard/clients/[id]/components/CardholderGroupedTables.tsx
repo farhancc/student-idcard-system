@@ -236,7 +236,7 @@ export default function CardholderGroupedTables({
                   ))}
                   {cols.length === 0 && <th>Name</th>}
                   <th>Date Added</th>
-                  <th>Actions</th>
+                  <th className="sticky-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -384,31 +384,31 @@ export default function CardholderGroupedTables({
 
                       <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
 
-                      <td>
+                      <td className="sticky-actions">
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <button 
-                            className="btn btn-secondary" 
+                          <button
+                            className="btn btn-secondary"
                             style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.2)' }}
                             onClick={() => onCompileIndividual(ch)}
                           >
                             Compile PDF
                           </button>
-                          <button 
-                            className="btn btn-secondary" 
+                          <button
+                            className="btn btn-secondary"
                             style={{ padding: '6px 10px', fontSize: '0.75rem' }}
                             onClick={() => onViewDetails(ch)}
                           >
                             View
                           </button>
-                          <button 
-                            className="btn btn-secondary" 
+                          <button
+                            className="btn btn-secondary"
                             style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.3)' }}
                             onClick={() => onEdit(ch)}
                           >
                             Edit
                           </button>
-                          <button 
-                            className="btn btn-danger" 
+                          <button
+                            className="btn btn-danger"
                             style={{ padding: '6px 10px', fontSize: '0.75rem' }}
                             onClick={() => onDelete(ch.id)}
                           >
@@ -511,7 +511,7 @@ export default function CardholderGroupedTables({
               <th>Name</th>
               <th>Designation</th>
               <th>Date Added</th>
-              <th>Actions</th>
+              <th className="sticky-actions">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -582,7 +582,7 @@ export default function CardholderGroupedTables({
                   </td>
                   <td>{ch.designation || '—'}</td>
                   <td>{new Date(ch.createdAt).toLocaleDateString()}</td>
-                  <td>
+                  <td className="sticky-actions">
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem', borderColor: 'rgba(99, 102, 241, 0.2)' }} onClick={() => onCompileIndividual(ch)}>Compile PDF</button>
                       <button className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '0.75rem' }} onClick={() => onViewDetails(ch)}>View</button>
