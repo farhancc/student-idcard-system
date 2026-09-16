@@ -82,6 +82,40 @@ export function clearFontBytesCache() {
 import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, isImageField, normalizeGoogleDriveUrl, getPlaceholderImageForField, buildFieldDataContext, isFieldVisible } from './field-resolver';
 export { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue, formatFieldLabel, normalizeGoogleDriveUrl, getPlaceholderImageForField, buildFieldDataContext, isFieldVisible };
 
+// In-memory cache of remote font URL -> resolved local:// path, so a font is
+// only ever handed to the Electron main process once per app session.
+const resolvedFontUrlCache = new Map<string, string>();
+
+/**
+ * Resolves a press font URL to a locally cached local:// path when running in
+ * Electron, downloading and persisting it to disk on first use so a later
+ * compile needs no network for this font — mirrors the persistent caching
+ * already done for cardholder photos and template backgrounds. Falls back to
+ * the original URL when not in Electron or caching fails (browser tab, or a
+ * font that has never been fetched and there is no network for it yet).
+ */
+async function resolveFontUrlClient(fontUrl: string): Promise<string> {
+  if (!fontUrl || fontUrl.startsWith('local://') || fontUrl.startsWith('file://') || fontUrl.startsWith('data:')) {
+    return fontUrl;
+  }
+  const cached = resolvedFontUrlCache.get(fontUrl);
+  if (cached) return cached;
+
+  const electronAPI = typeof window !== 'undefined' && (window as any).electronAPI;
+  if (!electronAPI?.cacheFont) return fontUrl;
+
+  try {
+    const res = await electronAPI.cacheFont(fontUrl);
+    if (res?.success && res.localUrl) {
+      resolvedFontUrlCache.set(fontUrl, res.localUrl);
+      return res.localUrl;
+    }
+  } catch (err) {
+    console.warn(`[PDF client] Failed to cache font locally: ${fontUrl}`, err);
+  }
+  return fontUrl;
+}
+
 /**
  * Loads a custom font using the browser's FontFace API.
  */
@@ -92,7 +126,7 @@ export async function ensureFontLoadedClient(fontName: string, fontUrl: string):
     return familyName;
   }
 
-  let finalFontUrl = fontUrl.trim();
+  let finalFontUrl = (await resolveFontUrlClient(fontUrl)).trim();
   if (finalFontUrl.startsWith('local://')) {
     const urlParts = finalFontUrl.split('?');
     let pathPart = urlParts[0].substring(8);
@@ -1312,7 +1346,8 @@ export async function renderCardSideToPdfBytesClient(
           try {
             let fontBytes = globalFontBytesCache.get(cacheKey);
             if (!fontBytes) {
-              fontBytes = await fetchArrayBuffer(match.fileUrl);
+              const resolvedFontUrl = await resolveFontUrlClient(match.fileUrl);
+              fontBytes = await fetchArrayBuffer(resolvedFontUrl);
               globalFontBytesCache.set(cacheKey, fontBytes);
             }
             fontCache.set(cacheKey, await pdfDoc.embedFont(fontBytes));

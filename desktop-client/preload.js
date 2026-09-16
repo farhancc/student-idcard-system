@@ -36,4 +36,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('save-backup', { clientName, monthName, base64ZipData }),
   cachePhoto: (cardholderId, photoUrl) =>
     ipcRenderer.invoke('cache-photo', { cardholderId, photoUrl }),
+  cacheFont: (fontUrl) =>
+    ipcRenderer.invoke('cache-font', { fontUrl }),
 });

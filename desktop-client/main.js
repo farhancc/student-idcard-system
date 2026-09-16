@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, nativeImage, protocol, safeStorage, session, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { autoUpdater } = require('electron-updater');
 
 function setupApplicationMenu() {
@@ -914,6 +915,63 @@ ipcMain.handle('cache-photo', async (event, { cardholderId, photoUrl }) => {
     return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
   } catch (error) {
     console.error(`[Main Process] cache-photo error for cardholder ${cardholderId}:`, error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC handler to cache a press's custom font file on disk so compilation can
+// re-embed it without network on a later run — same persistence guarantee
+// cache-photo gives cardholder photos and save-template-original gives
+// template backgrounds. Keyed by a hash of the URL (not the font name) since
+// distinct presses/templates can reuse the same display name for different
+// files.
+ipcMain.handle('cache-font', async (event, { fontUrl }) => {
+  try {
+    if (fontUrl && (fontUrl.startsWith('local://') || fontUrl.startsWith('file://'))) {
+      const systemPath = getSystemPathFromLocalUrl(fontUrl);
+      if (systemPath && fs.existsSync(systemPath)) {
+        return { success: true, localUrl: getLocalUrlFromSystemPath(systemPath) };
+      }
+    }
+
+    const dir = path.join(app.getPath('userData'), 'fonts');
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    let ext = '.ttf';
+    try {
+      const parsedUrl = new URL(fontUrl);
+      const pathname = parsedUrl.pathname;
+      const dotIndex = pathname.lastIndexOf('.');
+      if (dotIndex !== -1) {
+        const urlExt = pathname.slice(dotIndex).toLowerCase();
+        if (['.ttf', '.otf', '.woff', '.woff2'].includes(urlExt)) {
+          ext = urlExt;
+        }
+      }
+    } catch (e) {
+      // Ignored: fallback to .ttf
+    }
+
+    const safeKey = crypto.createHash('sha1').update(fontUrl).digest('hex');
+    const filePath = path.join(dir, `${safeKey}${ext}`);
+
+    // Short-circuit: file is already cached on disk — skip re-download
+    if (fs.existsSync(filePath)) {
+      return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
+    }
+
+    const response = await fetch(fontUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch font from ${fontUrl}: ${response.statusText}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    fs.writeFileSync(filePath, Buffer.from(arrayBuffer));
+
+    return { success: true, localUrl: getLocalUrlFromSystemPath(filePath) };
+  } catch (error) {
+    console.error(`[Main Process] cache-font error for ${fontUrl}:`, error);
     return { success: false, error: error.message };
   }
 });
