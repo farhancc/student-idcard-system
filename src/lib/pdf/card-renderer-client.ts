@@ -532,6 +532,12 @@ export async function renderCardSideClient(
   const originalUrl = side === 'front' ? template.frontOriginalUrl : template.backOriginalUrl;
   let bgUrl = primaryUrl || originalUrl;
 
+  // A vector/PDF original isn't directly renderable as an <img> — the browser
+  // can't decode it, and R2's key layout has no on-the-fly preview transform
+  // for it (unlike the Cloudinary setup the code below still guesses at).
+  // Falling back to it only makes sense for a plain raster original.
+  const isRasterOriginal = !!originalUrl && !/\.(pdf|svg)(\?|$)/i.test(originalUrl);
+
   // Try to resolve a local cached file first (Electron)
   if (typeof window !== 'undefined' && (window as any).electronAPI?.getLocalTemplatePath && template.id) {
     try {
@@ -545,13 +551,15 @@ export async function renderCardSideClient(
         const needsLeadingSlash = /^[a-zA-Z]:/.test(formattedPath);
         const localPathSegment = needsLeadingSlash ? `/${formattedPath}` : formattedPath.startsWith('/') ? formattedPath : `/${formattedPath}`;
         bgUrl = `local://${localPathSegment}`;
-      } else if (originalUrl) {
-        // No local cache → fall back to Cloudinary original (high-res)
+      } else if (isRasterOriginal) {
+        // No local cache → fall back to the raster original (higher-res
+        // than the generated preview). Otherwise keep bgUrl on primaryUrl,
+        // the always-valid generated preview.
         bgUrl = originalUrl;
       }
     } catch (err) {
       console.error('Failed to get local template path:', err);
-      if (originalUrl) bgUrl = originalUrl;
+      if (isRasterOriginal) bgUrl = originalUrl;
     }
   }
 
