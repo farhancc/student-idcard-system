@@ -3,12 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useToast } from '@/components/ui/toast';
-import ConfirmDialog from '@/app/components/ConfirmDialog';
-import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import { RETENTION_MONTHS } from '@/lib/retention-constants';
 import {
   backupClientBatch,
-  describeBackups,
   fetchRetentionCandidates,
   purgeBackedUpBatch,
 } from '@/lib/retention-client';
@@ -233,7 +230,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string>('OWNER'); // default to most permissive until fetched
   const [roleLoaded, setRoleLoaded] = useState(false);
-  const { confirmOpen, confirmConfig, showConfirm, closeConfirm } = useConfirmDialog();
 
   // Fetch current user's role
   useEffect(() => {
@@ -277,9 +273,14 @@ export default function DashboardPage() {
 
   // Automatic 6-month archive (desktop client only).
   //
-  // Backs old records up to the operator's machine, then asks before deleting
-  // anything. The previous version purged silently on every dashboard mount,
-  // trusting an id list that included records whose photo download had failed.
+  // Backs old records up to the operator's machine, then purges them from the
+  // server — no confirmation click, by design. The safeguard that still
+  // applies: a purge may only touch records verifiably written into that
+  // backup ZIP first (see signPurgeToken/verifyPurgeToken in retention.ts), so
+  // a record whose photo failed to export is excluded and cannot be deleted
+  // even here. An older version of this feature purged unconditionally,
+  // trusting an id list that included those failed-photo records — that bug
+  // is what the token now prevents, not the removed confirmation dialog.
   useEffect(() => {
     // `role` starts as OWNER before /settings/me answers, so wait for the real
     // value — only an owner may purge, and we do not want a doomed 403 round.
@@ -315,32 +316,23 @@ export default function DashboardPage() {
         }
         if (saved.length === 0) return;
 
-        showConfirm({
-          title: 'Archive data older than 6 months?',
-          message: describeBackups(saved),
-          confirmLabel: 'Delete from server',
-          variant: 'danger',
-          onConfirm: async () => {
-            closeConfirm();
-            let records = 0;
-            let files = 0;
-            for (const { clientName, saved: backup } of saved) {
-              try {
-                const result = await purgeBackedUpBatch(backup.manifest);
-                records += result.cardholdersDeleted;
-                files += result.filesDeleted;
-              } catch (err) {
-                console.error(`[Retention] Purge failed for ${clientName}:`, err);
-              }
-            }
-            toast(
-              `Archived ${records.toLocaleString()} record(s) and freed ${files.toLocaleString()} stored file(s). Backups are in your Documents folder.`,
-              'success',
-              8000
-            );
-            fetchAnalytics();
-          },
-        });
+        let records = 0;
+        let files = 0;
+        for (const { clientName, saved: backup } of saved) {
+          try {
+            const result = await purgeBackedUpBatch(backup.manifest);
+            records += result.cardholdersDeleted;
+            files += result.filesDeleted;
+          } catch (err) {
+            console.error(`[Retention] Purge failed for ${clientName}:`, err);
+          }
+        }
+        toast(
+          `Archived ${records.toLocaleString()} record(s) and freed ${files.toLocaleString()} stored file(s). Backups are in your Documents folder.`,
+          'success',
+          8000
+        );
+        fetchAnalytics();
       } catch (err) {
         console.error('Automatic archive backup failed:', err);
       }
@@ -349,7 +341,7 @@ export default function DashboardPage() {
     // Run slightly after mount to not block initial page render
     const timer = setTimeout(runArchiveBackup, 3000);
     return () => clearTimeout(timer);
-  }, [role, roleLoaded, showConfirm, closeConfirm, toast]);
+  }, [role, roleLoaded, toast]);
 
   const s = data?.summary || {};
   const breakdowns = data?.breakdowns || { byType: {}, byStatus: {} };
@@ -807,17 +799,6 @@ export default function DashboardPage() {
       </div>
     </>
   )}
-
-      <ConfirmDialog
-        open={confirmOpen}
-        title={confirmConfig?.title ?? ''}
-        message={confirmConfig?.message ?? ''}
-        confirmLabel={confirmConfig?.confirmLabel}
-        cancelLabel="Keep on server"
-        variant={confirmConfig?.variant}
-        onConfirm={() => confirmConfig?.onConfirm()}
-        onCancel={closeConfirm}
-      />
 
       <style>{`
         @keyframes pulse {
