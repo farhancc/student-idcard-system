@@ -871,10 +871,31 @@ export default function TemplatesPage() {
       }
 
       if (snapToGrid && showGrid && !snappedToGuideX) {
-        const gridX = Math.round(targetX / gridSize) * gridSize;
-        const diffGrid = Math.abs(targetX - gridX);
-        if (diffGrid < threshold) {
-          snappedX = gridX;
+        // Same text left/right/center anchors as guide-snapping above, just
+        // measured against the nearest grid line instead of a drawn guide —
+        // so the grid aligns what's actually visible, not the field box.
+        const leftAbs = targetX + xOffset;
+        const gridLeft = Math.round(leftAbs / gridSize) * gridSize;
+        const diffLeft = Math.abs(leftAbs - gridLeft);
+        if (diffLeft < minDiffX) {
+          minDiffX = diffLeft;
+          snappedX = gridLeft - xOffset;
+        }
+
+        const rightAbs = targetX + xOffset + textWidth;
+        const gridRight = Math.round(rightAbs / gridSize) * gridSize;
+        const diffRight = Math.abs(rightAbs - gridRight);
+        if (diffRight < minDiffX) {
+          minDiffX = diffRight;
+          snappedX = gridRight - xOffset - textWidth;
+        }
+
+        const centerAbsX = targetX + xOffset + textWidth / 2;
+        const gridCenterX = Math.round(centerAbsX / gridSize) * gridSize;
+        const diffCenterX = Math.abs(centerAbsX - gridCenterX);
+        if (diffCenterX < minDiffX) {
+          minDiffX = diffCenterX;
+          snappedX = gridCenterX - xOffset - textWidth / 2;
         }
       }
       field.x = Math.max(0, Math.round(snappedX));
@@ -914,10 +935,31 @@ export default function TemplatesPage() {
       }
 
       if (snapToGrid && showGrid && !snappedToGuideY) {
-        const gridY = Math.round(targetY / gridSize) * gridSize;
-        const diffGrid = Math.abs(targetY - gridY);
-        if (diffGrid < threshold) {
-          snappedY = gridY;
+        // Same text top/bottom/center anchors as guide-snapping above, just
+        // measured against the nearest grid line instead of a drawn guide —
+        // so the grid aligns what's actually visible, not the field box.
+        const topAbs = targetY + currentPushDown + yOffset;
+        const gridTop = Math.round(topAbs / gridSize) * gridSize;
+        const diffTop = Math.abs(topAbs - gridTop);
+        if (diffTop < minDiffY) {
+          minDiffY = diffTop;
+          snappedY = gridTop - currentPushDown - yOffset;
+        }
+
+        const bottomAbs = targetY + currentPushDown + yOffset + textHeight;
+        const gridBottom = Math.round(bottomAbs / gridSize) * gridSize;
+        const diffBottom = Math.abs(bottomAbs - gridBottom);
+        if (diffBottom < minDiffY) {
+          minDiffY = diffBottom;
+          snappedY = gridBottom - currentPushDown - yOffset - textHeight;
+        }
+
+        const centerAbsY = targetY + currentPushDown + yOffset + textHeight / 2;
+        const gridCenterY = Math.round(centerAbsY / gridSize) * gridSize;
+        const diffCenterY = Math.abs(centerAbsY - gridCenterY);
+        if (diffCenterY < minDiffY) {
+          minDiffY = diffCenterY;
+          snappedY = gridCenterY - currentPushDown - yOffset - textHeight / 2;
         }
       }
       field.y = Math.max(0, Math.round(snappedY));
