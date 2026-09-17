@@ -931,6 +931,12 @@ export async function renderCardSideClient(
 // Only the photograph (image field) is embedded as a raster image.
 // ──────────────────────────────────────────────────────────────────────────────
 
+// A dropped connection during render should fail fast into the existing
+// skip/fallback paths below, not hang the card (and the batch) forever —
+// fetch() has no timeout of its own.
+const FETCH_TIMEOUT_MS = 15000;
+const fetchWithTimeout = (url: string) => fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+
 /** Helper: fetch a URL and return its raw ArrayBuffer. */
 async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
   if (!url) throw new Error('Empty URL passed to fetchArrayBuffer');
@@ -980,21 +986,21 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
 
   let directFetchOk = false;
   try {
-    const res = await fetch(targetUrl);
+    const res = await fetchWithTimeout(targetUrl);
     if (res.ok) return await res.arrayBuffer();
     directFetchOk = false; // Non-OK response (403, 302, etc.)
   } catch (err) {
-    directFetchOk = false; // Network/CORS error
+    directFetchOk = false; // Network/CORS error, or timed out
   }
 
   // Proxy fallback for external HTTP/HTTPS URLs that failed due to CORS
   if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
     try {
       const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(targetUrl)}`;
-      const proxyRes = await fetch(proxyUrl);
+      const proxyRes = await fetchWithTimeout(proxyUrl);
       if (proxyRes.ok) return await proxyRes.arrayBuffer();
     } catch (proxyErr) {
-      // Proxy also failed — continue to portal fallback below
+      // Proxy also failed (or timed out) — continue to portal fallback below
     }
   }
 
@@ -1015,7 +1021,7 @@ async function fetchArrayBuffer(url: string): Promise<ArrayBuffer> {
       ? window.location.origin
       : ((typeof process !== 'undefined' && process.env && process.env.PORTAL_URL) || 'https://idexocards.vercel.app');
     const remoteUrl = `${portalUrl}${relPath}`;
-    const remoteRes = await fetch(remoteUrl);
+    const remoteRes = await fetchWithTimeout(remoteUrl);
     if (remoteRes.ok) return await remoteRes.arrayBuffer();
   }
 
