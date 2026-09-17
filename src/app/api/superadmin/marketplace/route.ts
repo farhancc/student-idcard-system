@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { basePrisma as prisma } from '@/lib/prisma';
 import { requireSuperAdmin } from '@/lib/authz';
+import { deleteOrHideTemplate } from '@/lib/template-delete';
 
 // GET /api/superadmin/marketplace — list templates for moderation
 // filter: 'all' | 'reported' | 'moderated' | 'all_including_private'
@@ -108,16 +109,32 @@ export async function POST(request: Request) {
     }
 
     if (action === 'delete') {
-      await prisma.cardTemplate.delete({ where: { id: Number(templateId) } });
+      const result = await deleteOrHideTemplate(Number(templateId));
+
+      if (result.status === 'in_use') {
+        return NextResponse.json(
+          { error: 'This template is used by an existing order and cannot be deleted.' },
+          { status: 409 }
+        );
+      }
+
       await prisma.systemAuditLog.create({
         data: {
           actorType: 'SUPER_ADMIN', actorName: 'Super Admin',
-          action: 'MARKETPLACE_TEMPLATE_DELETED', category: 'CONTENT',
-          description: `Deleted template "${template.name}" (id=${templateId}) from marketplace`,
+          action: result.status === 'hidden' ? 'MARKETPLACE_TEMPLATE_HIDDEN' : 'MARKETPLACE_TEMPLATE_DELETED',
+          category: 'CONTENT',
+          description: result.status === 'hidden'
+            ? `Hid template "${template.name}" (id=${templateId}) from marketplace — kept because other press(es) have purchased it`
+            : `Deleted template "${template.name}" (id=${templateId}) from marketplace`,
           ipAddress: ip, severity: 'CRITICAL',
         },
       });
-      return NextResponse.json({ success: true, message: 'Template deleted' });
+      return NextResponse.json({
+        success: true,
+        message: result.status === 'hidden'
+          ? 'Template has existing purchases — hidden from the marketplace instead of deleted, so buyers keep access.'
+          : 'Template deleted',
+      });
     }
 
     return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

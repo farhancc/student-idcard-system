@@ -57,6 +57,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You cannot purchase your own template' }, { status: 400 });
     }
 
+    const alreadyPurchased = await prisma.templatePurchase.findFirst({
+      where: { buyerPressId, templateId: template.id },
+    });
+    if (alreadyPurchased) {
+      return NextResponse.json({ error: 'You already own this template' }, { status: 409 });
+    }
+
     const price = template.price;
 
     // Execute purchase in a transaction
@@ -148,6 +155,11 @@ export async function POST(request: Request) {
       purchaseId: result.purchase.id,
     });
   } catch (error: unknown) {
+    // Race: two concurrent requests both passed the pre-check above — the
+    // unique constraint on (buyerPressId, templateId) is the actual guard.
+    if (typeof error === 'object' && error !== null && (error as any).code === 'P2002') {
+      return NextResponse.json({ error: 'You already own this template' }, { status: 409 });
+    }
     console.error('Marketplace purchase error:', error);
     return NextResponse.json({ error: 'Purchase failed' }, { status: 500 });
   }

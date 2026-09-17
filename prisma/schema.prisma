@@ -655,7 +655,7 @@ model TemplatePurchase {
   clonedTemplateId Int?     @map("cloned_template_id") // the buyer's copy
   createdAt    DateTime     @default(now()) @map("created_at")
 
-  @@index([buyerPressId])
+  @@unique([buyerPressId, templateId])
   @@index([templateId])
   @@map("template_purchases")
 }
