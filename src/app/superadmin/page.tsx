@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import DashboardOverview from './components/DashboardOverview';
+import { StorageTab } from './components/StorageTab';
 import SuperAdminMarketplacePage from './marketplace/page';
 import { useRouter } from 'next/navigation';
 import { PressClient, PressUserItem, Press, categoryColor } from './types';
@@ -11,7 +12,7 @@ import {
   Power, Key, LogOut, Loader2, Sparkles, RefreshCw,
   DollarSign, TrendingUp, BarChart3, Search, Plus,
   Eye, X, CreditCard, FileText, Type,
-  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders, Trash2, Activity, UserCheck, UserX, Clock
+  ChevronLeft, ChevronRight, AlertTriangle, Info, Zap, Shield, Sliders, Trash2, Activity, UserCheck, UserX, Clock, HardDrive
 } from 'lucide-react';
 const severityStyles: Record<string, { bg: string; color: string; label: string; icon: React.ReactNode }> = {
   INFO:     { bg: 'rgba(59,130,246,0.12)', color: '#60a5fa', label: 'Info',     icon: <Info size={12} /> },
@@ -27,7 +28,7 @@ export default function SuperAdminDashboard() {
   const [error, setError] = useState('');
   
   // Tabs Navigation
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'retention' | 'templates' | 'fonts' | 'auditLogs' | 'settings' | 'creditRequests' | 'marketplace'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'presses' | 'analytics' | 'retention' | 'templates' | 'fonts' | 'storage' | 'auditLogs' | 'settings' | 'creditRequests' | 'marketplace'>('dashboard');
 
   // Credit Requests State
   const [creditRequests, setCreditRequests] = useState<any[]>([]);
@@ -1033,8 +1034,29 @@ export default function SuperAdminDashboard() {
         >
           <Type size={16} /> Global Fonts ({globalFonts.length})
         </button>
-        <button 
-          type="button" 
+        <button
+          type="button"
+          onClick={() => setActiveTab('storage')}
+          style={{
+            padding: '10px 20px',
+            fontWeight: '600',
+            fontSize: '0.95rem',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            background: activeTab === 'storage' ? 'rgba(79, 70, 229, 0.15)' : 'transparent',
+            color: activeTab === 'storage' ? 'var(--primary)' : 'var(--muted)',
+            borderBottom: activeTab === 'storage' ? '2px solid var(--primary)' : 'none',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <HardDrive size={16} /> R2 Storage
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab('auditLogs')}
           style={{
             padding: '10px 20px',
@@ -1858,6 +1880,8 @@ export default function SuperAdminDashboard() {
             </div>
           )}
         </>
+      ) : activeTab === 'storage' ? (
+        <StorageTab />
       ) : activeTab === 'auditLogs' ? (
         <>
           {/* System Audit Logs Content */}
