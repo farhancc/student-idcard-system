@@ -101,7 +101,14 @@ export async function generateApprovalPdfClient(
     uniqueKey?: string | null;
     customFields?: any;
   }>,
-  pressFonts: Array<{ name: string; fileUrl: string }> = []
+  pressFonts: Array<{ name: string; fileUrl: string }> = [],
+  /**
+   * Lets a caller that generates one page-group at a time (byte-aware
+   * chunking) still show the cardholder's true position in the overall job
+   * on the "Page X of Y" header, instead of every call restarting at "Page 1
+   * of <however many pages this one call happened to produce>".
+   */
+  pageNumbering?: { offset: number; total: number }
 ): Promise<Blob> {
   // Clear the client-side background bytes caches for this template
   if (template.id) {
@@ -184,8 +191,10 @@ export async function generateApprovalPdfClient(
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
     // Draw Header
+    const displayPageNum = (pageNumbering?.offset ?? 0) + pageIdx + 1;
+    const displayTotalPages = pageNumbering?.total ?? totalPages;
     page.drawText('PROOF SHEET — FOR CLIENT APPROVAL ONLY', { x: 50, y: 800, size: 16, font: fontBold, color: rgb(0.1, 0.1, 0.3) });
-    await safeDrawText(page, pdfDoc, `Client: ${clientName} | Dept: ${deptName} | Portal Proof | Page: ${pageIdx + 1} of ${totalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
+    await safeDrawText(page, pdfDoc, `Client: ${clientName} | Dept: ${deptName} | Portal Proof | Page: ${displayPageNum} of ${displayTotalPages}`, { x: 50, y: 780, size: 10, font, color: rgb(0.4, 0.4, 0.4) });
 
     // Draw watermark
     page.drawText('PROOF ONLY - DO NOT PRINT', {

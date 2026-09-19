@@ -61,6 +61,15 @@ export async function POST(request: Request) {
           // Multi-chunk job: chunks were already uploaded individually.
           // Set downloadUrl to indicate multi-part.
           downloadUrl = `multi-part://${chunkCount}`;
+
+          // Chunks are cut and uploaded as soon as they're big enough, before
+          // the final count is known — each one's own totalChunks column was
+          // a provisional "at least this many so far" at that point. Now
+          // that the job has settled, the count is final; backfill it.
+          await tx.pdfJobChunk.updateMany({
+            where: { pdfJobId: Number(jobId) },
+            data: { totalChunks: chunkCount },
+          });
         } else if (!job.downloadUrl && localPath) {
           const formattedPath = localPath.replace(/\\/g, '/');
           const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';

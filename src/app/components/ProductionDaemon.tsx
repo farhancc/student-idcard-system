@@ -7,11 +7,16 @@ import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
 /**
- * Maximum number of PDF pages per chunk file.
- * When a compilation exceeds this, the output is split into multiple PDF files
- * to prevent browser/Electron memory exhaustion on large batches.
+ * When a compilation's accumulated output crosses this many bytes, it's cut
+ * into a new part instead of continuing to grow — this prevents
+ * browser/Electron memory exhaustion on large batches, and (80% of the 10MB
+ * server upload cap in src/app/api/jobs/[id]/pdf/route.ts, leaving headroom
+ * for PDF container overhead) keeps each part small enough for the server to
+ * actually store. Sized by bytes rather than page count because photos, not
+ * page count, are what drive PDF size — a page of small photos and a page of
+ * high-res print-quality photos can differ by an order of magnitude.
  */
-const MAX_PAGES_PER_CHUNK = 15;
+const SAFE_CHUNK_BYTES = 8 * 1024 * 1024;
 
 async function safeDrawTextClient(
   page: any,
@@ -160,28 +165,52 @@ export default function ProductionDaemon() {
    * Hand the compiled bytes to the server as their own request.
    *
    * Best-effort on purpose: the file is already on this machine, and a server
-   * copy that cannot be stored (too large to send, or the network blinked) must
-   * not stop the job from settling — that is exactly how jobs used to sit at
-   * 100% with their credits locked.
+   * copy that cannot be stored must not stop the job from settling — that is
+   * exactly how jobs used to sit at 100% with their credits locked. But a
+   * transient network blip or a 5xx is not the same as "too large" or "not a
+   * PDF" — those are worth retrying, since giving up on the first hiccup is
+   * what pushes jobs onto the local-only fallback (a path on the operator's
+   * own machine, which nothing server-side can ever read back) more often
+   * than the upload was actually doomed to fail.
    */
   const storeCompiledPdf = async (jobId: number, pdfBytes: Uint8Array, chunkIndex?: number) => {
     const query = chunkIndex === undefined ? '' : `?chunk=${chunkIndex}`;
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/pdf${query}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/pdf' },
-        body: new Blob([pdfBytes.buffer as any], { type: 'application/pdf' }),
-        credentials: 'same-origin',
-      });
-      if (!res.ok) {
-        addLog(`No server copy kept for job #${jobId} (HTTP ${res.status}). The saved file on this machine is the master copy.`);
+    const label = chunkIndex === undefined ? `job #${jobId}` : `job #${jobId} chunk ${chunkIndex + 1}`;
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/pdf${query}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/pdf' },
+          body: new Blob([pdfBytes.buffer as any], { type: 'application/pdf' }),
+          credentials: 'same-origin',
+          signal: AbortSignal.timeout(30000),
+        });
+        if (res.ok) return true;
+
+        // 4xx here means the upload itself is unfixable by retrying (too
+        // large, wrong content, job already settled) — stop immediately.
+        if (res.status >= 400 && res.status < 500) {
+          addLog(`No server copy kept for ${label} (HTTP ${res.status}). The saved file on this machine is the master copy.`);
+          return false;
+        }
+
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+          continue;
+        }
+        addLog(`No server copy kept for ${label} after ${attempt} attempts (HTTP ${res.status}). The saved file on this machine is the master copy.`);
+        return false;
+      } catch (err: any) {
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+          continue;
+        }
+        addLog(`Could not send ${label} to server storage after ${attempt} attempts: ${err.message}. The saved file on this machine is the master copy.`);
         return false;
       }
-      return true;
-    } catch (err: any) {
-      addLog(`Could not send job #${jobId} to server storage: ${err.message}. The saved file on this machine is the master copy.`);
-      return false;
     }
+    return false;
   };
 
   const postCompletion = async (payload: Record<string, unknown>) => {
@@ -356,6 +385,49 @@ export default function ProductionDaemon() {
     }
   };
 
+  /**
+   * Tracks running byte size across the pages folded into the current part
+   * and uploads that part once it's cut or the compile finishes. Shared by
+   * every multi-part compile path (production, approval) so the cut
+   * decision — and the upload wiring that follows it — lives in one place
+   * instead of being duplicated per path.
+   */
+  const createChunkedUploader = (job: any, order: any, baseName: string) => {
+    let partsUploaded = 0;
+    let bytesEstimate = 0;
+    return {
+      addBytes(n: number) {
+        bytesEstimate += n;
+      },
+      /** True once the current part has grown past the safe size and more content remains. */
+      shouldCut(hasMorePages: boolean) {
+        return bytesEstimate >= SAFE_CHUNK_BYTES && hasMorePages;
+      },
+      /** Upload the finished part (as the whole job if it turned out to be the only one), then reset for the next. */
+      async finalize(pdfBytes: Uint8Array, isLast: boolean) {
+        bytesEstimate = 0;
+        const base64Data = await toBase64ForNativeSave(pdfBytes);
+
+        if (partsUploaded === 0 && isLast) {
+          // The threshold was never crossed — genuinely a single-part job.
+          await saveAndCompleteJob(job, order, pdfBytes, base64Data);
+          return;
+        }
+
+        addLog(`Finalizing chunk ${partsUploaded + 1}...`);
+        const chunkFileName = `${baseName}_part${partsUploaded + 1}.pdf`;
+        // The true total isn't known until the last part is cut, so this is
+        // provisional ("at least this many so far") — production-complete
+        // backfills every part's row with the real count once the job settles.
+        await saveAndCompleteChunk(job, order, pdfBytes, base64Data, partsUploaded, partsUploaded + 1, chunkFileName);
+        addLog(`Chunk ${partsUploaded + 1} complete. Memory released.`);
+        partsUploaded++;
+      },
+      get partCount() {
+        return partsUploaded;
+      },
+    };
+  };
 
   const drawCropMarks = (page: any, x: number, y: number, cw: number, ch: number) => {
     const markLen = 10;
@@ -578,66 +650,56 @@ export default function ProductionDaemon() {
 
     const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
 
-    // Calculate total pages for the approval PDF to determine chunking
     const hasBackSide = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
     const approvalCardsPerPage = hasBackSide ? 4 : 8;
     const totalApprovalPages = Math.ceil(clientCardholders.length / approvalCardsPerPage);
-    const totalChunks = Math.ceil(totalApprovalPages / MAX_PAGES_PER_CHUNK);
 
-    if (totalChunks <= 1) {
-      // Single chunk — keep existing behavior
+    const baseName = (job.fileName || 'approval.pdf').replace(/\.pdf$/i, '');
+    const uploader = createChunkedUploader(job, order, baseName);
+    // Cards are rendered one page at a time and merged into this accumulator
+    // — the same byte-aware cut point used for production, decided here by
+    // the actual size of each rendered page rather than a fixed page count.
+    let currentDoc = await PDFDocument.create();
+
+    for (let pageIdx = 0; pageIdx < totalApprovalPages; pageIdx++) {
+      const pageStart = pageIdx * approvalCardsPerPage;
+      const pageEnd = Math.min(pageStart + approvalCardsPerPage, clientCardholders.length);
+      const pageCardholders = clientCardholders.slice(pageStart, pageEnd);
+
+      addLog(`Rendering approval page ${pageIdx + 1}/${totalApprovalPages}...`);
       const pdfBlob = await generateApprovalPdfClient(
         order.clientName || 'Client',
         order.clientName || 'Batch',
         clientTemplate,
-        clientCardholders,
-        pressFonts
+        pageCardholders,
+        pressFonts,
+        { offset: pageIdx, total: totalApprovalPages }
       );
+      const pageBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+      uploader.addBytes(pageBytes.length);
 
-      await updateProgress(job.id, 80);
+      const pageDoc = await PDFDocument.load(pageBytes);
+      const copiedPages = await currentDoc.copyPages(pageDoc, pageDoc.getPageIndices());
+      copiedPages.forEach(p => currentDoc.addPage(p));
 
-      const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
+      const progressPercent = Math.min(90, Math.round(10 + ((pageIdx + 1) / totalApprovalPages) * 80));
+      await updateProgress(job.id, progressPercent);
 
-      const base64Data = await toBase64ForNativeSave(pdfBytes);
-
-      await saveAndCompleteJob(job, order, pdfBytes, base64Data);
-    } else {
-      // Multi-chunk: split cardholders into groups and compile each chunk separately
-      addLog(`Large approval job: ${totalApprovalPages} pages → ${totalChunks} chunks (max ${MAX_PAGES_PER_CHUNK} pages each)`);
-      const cardsPerChunk = MAX_PAGES_PER_CHUNK * approvalCardsPerPage;
-
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-        const chunkStart = chunkIdx * cardsPerChunk;
-        const chunkEnd = Math.min(chunkStart + cardsPerChunk, clientCardholders.length);
-        const chunkCardholders = clientCardholders.slice(chunkStart, chunkEnd);
-
-        addLog(`Compiling approval chunk ${chunkIdx + 1}/${totalChunks} (${chunkCardholders.length} cards)...`);
-
-        const pdfBlob = await generateApprovalPdfClient(
-          order.clientName || 'Client',
-          order.clientName || 'Batch',
-          clientTemplate,
-          chunkCardholders,
-          pressFonts
-        );
-
-        const pdfBytes = new Uint8Array(await pdfBlob.arrayBuffer());
-        const base64Data = await toBase64ForNativeSave(pdfBytes);
-
-        const baseName = (job.fileName || 'approval.pdf').replace(/\.pdf$/i, '');
-        const chunkFileName = `${baseName}_part${chunkIdx + 1}.pdf`;
-
-        await saveAndCompleteChunk(job, order, pdfBytes, base64Data, chunkIdx, totalChunks, chunkFileName);
-
-        // Update progress proportionally
-        const progressPercent = Math.min(95, Math.round(10 + ((chunkIdx + 1) / totalChunks) * 85));
-        await updateProgress(job.id, progressPercent);
+      if (uploader.shouldCut(pageIdx < totalApprovalPages - 1)) {
+        const chunkBytes = await currentDoc.save();
+        await uploader.finalize(chunkBytes, false);
+        currentDoc = await PDFDocument.create();
       }
+    }
 
-      // Final completion — no base64 payload since chunks uploaded individually
+    await updateProgress(job.id, 95);
+    const finalBytes = await currentDoc.save();
+    await uploader.finalize(finalBytes, true);
+
+    if (uploader.partCount > 0) {
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, undefined, totalChunks);
-      addLog(`Approval job completed: ${totalChunks} chunks generated.`);
+      await reportJobComplete(job.id, true, undefined, undefined, uploader.partCount);
+      addLog(`Approval job completed: ${uploader.partCount} chunks generated.`);
     }
   };
 
@@ -867,22 +929,23 @@ export default function ProductionDaemon() {
     }
 
     // ── Chunked compilation logic ──────────────────────────────────────────
-    const totalChunks = Math.ceil(totalPages / MAX_PAGES_PER_CHUNK);
-    const isMultiChunk = totalChunks > 1;
+    // Chunk boundaries are decided by the actual bytes embedded into each
+    // page (see createChunkedUploader / SAFE_CHUNK_BYTES above) rather than a
+    // fixed page count — a 15-page chunk of high-res, photo-heavy cards can
+    // easily exceed the server's upload cap (MAX_UPLOAD_BYTES in
+    // src/app/api/jobs/[id]/pdf/route.ts) while the same page count with
+    // small photos would comfortably fit in a fraction of it.
+    addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}`);
 
-    addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}${isMultiChunk ? `, chunks=${totalChunks} (max ${MAX_PAGES_PER_CHUNK} pages each)` : ''}`);
+    const baseName = (job.fileName || 'production.pdf').replace(/\.pdf$/i, '');
+    const uploader = createChunkedUploader(job, order, baseName);
 
-    /**
-     * Renders a range of pages [startPage, endPage) into a single PDFDocument,
-     * saves it, converts to base64, and returns the result.
-     */
-    const compilePageRange = async (startPage: number, endPage: number): Promise<{ pdfBytes: Uint8Array; base64Data: string }> => {
-      const pdfDoc = await PDFDocument.create();
-      pdfDoc.setTitle('Production Print File');
-      pdfDoc.setCreator('ID Card Press Desktop Client');
+    let currentDoc = await PDFDocument.create();
+    currentDoc.setTitle('Production Print File');
+    currentDoc.setCreator('ID Card Press Desktop Client');
 
-      for (let pIdx = startPage; pIdx < endPage; pIdx++) {
-        const page = pdfDoc.addPage([pageWidth, pageHeight]);
+    for (let pIdx = 0; pIdx < totalPages; pIdx++) {
+        const page = currentDoc.addPage([pageWidth, pageHeight]);
         page.setMediaBox(0, 0, pageWidth, pageHeight);
         page.setBleedBox(0, 0, pageWidth, pageHeight);
         page.setTrimBox(0, 0, pageWidth, pageHeight);
@@ -936,42 +999,45 @@ export default function ProductionDaemon() {
             try {
               const rawBytes = Uint8Array.from(atob(ch.pdfBytes), c => c.charCodeAt(0));
               const isPdf = rawBytes[0] === 0x25 && rawBytes[1] === 0x50 && rawBytes[2] === 0x44 && rawBytes[3] === 0x46;
+              uploader.addBytes(rawBytes.length);
 
               if (isPdf) {
                 const customDoc = await PDFDocument.load(rawBytes);
                 const pageCount = customDoc.getPageCount();
-                const [fPage] = await pdfDoc.embedPdf(customDoc, [0]);
+                const [fPage] = await currentDoc.embedPdf(customDoc, [0]);
                 frontEmbeddedPdf = fPage;
 
                 if (!isSingleSided && backsY !== null) {
                   if (ch.backPdfBytes) {
                     const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
                     const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                    uploader.addBytes(backRawBytes.length);
                     if (isBackPdf) {
                       const backDoc = await PDFDocument.load(backRawBytes);
-                      const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                      const [bPage] = await currentDoc.embedPdf(backDoc, [0]);
                       backEmbeddedPdf = bPage;
                     } else {
-                      backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                      backEmbeddedImg = await embedImageBuffer(currentDoc, backRawBytes);
                     }
                   } else if (pageCount > 1) {
-                    const [bPage] = await pdfDoc.embedPdf(customDoc, [1]);
+                    const [bPage] = await currentDoc.embedPdf(customDoc, [1]);
                     backEmbeddedPdf = bPage;
                   }
                 }
               } else {
-                frontEmbeddedImg = await embedImageBuffer(pdfDoc, rawBytes);
+                frontEmbeddedImg = await embedImageBuffer(currentDoc, rawBytes);
 
                 if (!isSingleSided && backsY !== null) {
                   if (ch.backPdfBytes) {
                     const backRawBytes = Uint8Array.from(atob(ch.backPdfBytes), c => c.charCodeAt(0));
                     const isBackPdf = backRawBytes[0] === 0x25 && backRawBytes[1] === 0x50 && backRawBytes[2] === 0x44 && backRawBytes[3] === 0x46;
+                    uploader.addBytes(backRawBytes.length);
                     if (isBackPdf) {
                       const backDoc = await PDFDocument.load(backRawBytes);
-                      const [bPage] = await pdfDoc.embedPdf(backDoc, [0]);
+                      const [bPage] = await currentDoc.embedPdf(backDoc, [0]);
                       backEmbeddedPdf = bPage;
                     } else {
-                      backEmbeddedImg = await embedImageBuffer(pdfDoc, backRawBytes);
+                      backEmbeddedImg = await embedImageBuffer(currentDoc, backRawBytes);
                     }
                   }
                 }
@@ -1005,8 +1071,9 @@ export default function ProductionDaemon() {
               template.validTillDate ? new Date(template.validTillDate) : null,
               pressFonts
             );
+            uploader.addBytes(frontPdfBytes.length);
             const frontCardDoc = await PDFDocument.load(frontPdfBytes);
-            const [fPage] = await pdfDoc.embedPdf(frontCardDoc, [0]);
+            const [fPage] = await currentDoc.embedPdf(frontCardDoc, [0]);
             frontEmbeddedPdf = fPage;
           }
 
@@ -1046,8 +1113,9 @@ export default function ProductionDaemon() {
                 template.validTillDate ? new Date(template.validTillDate) : null,
                 pressFonts
               );
+              uploader.addBytes(backPdfBytes.length);
               const backCardDoc = await PDFDocument.load(backPdfBytes);
-              const [bPage] = await pdfDoc.embedPdf(backCardDoc, [0]);
+              const [bPage] = await currentDoc.embedPdf(backCardDoc, [0]);
               backEmbeddedPdf = bPage;
             }
 
@@ -1082,47 +1150,27 @@ export default function ProductionDaemon() {
           const progressPercent = Math.min(90, Math.round(5 + ((overallIndex + 1) / total) * 85));
           await updateProgress(job.id, progressPercent);
         }
+
+      // Cut a chunk once it's grown past the safe size — but never on the
+      // last page, since that's just the final save below.
+      if (uploader.shouldCut(pIdx < totalPages - 1)) {
+        const chunkBytes = await currentDoc.save();
+        await uploader.finalize(chunkBytes, false);
+        currentDoc = await PDFDocument.create();
+        currentDoc.setTitle('Production Print File');
+        currentDoc.setCreator('ID Card Press Desktop Client');
       }
+    }
 
-      addLog(`Finalizing PDF (pages ${startPage + 1}–${endPage})...`);
-      const pdfBytes = await pdfDoc.save();
+    await updateProgress(job.id, 95);
+    const finalBytes = await currentDoc.save();
+    await uploader.finalize(finalBytes, true);
 
-      const base64Data = await toBase64ForNativeSave(pdfBytes);
-
-      return { pdfBytes, base64Data };
-    };
-
-    // ── Execute compilation (single or multi-chunk) ─────────────────────
-    if (!isMultiChunk) {
-      // Single chunk — compile all pages in one PDFDocument (original behavior)
-      const { pdfBytes, base64Data } = await compilePageRange(0, totalPages);
-      await updateProgress(job.id, 95);
-      await saveAndCompleteJob(job, order, pdfBytes, base64Data);
-    } else {
-      // Multi-chunk — compile each chunk separately, upload, free memory
-      addLog(`Starting chunked compilation: ${totalChunks} parts...`);
-
-      for (let chunkIdx = 0; chunkIdx < totalChunks; chunkIdx++) {
-        const chunkStartPage = chunkIdx * MAX_PAGES_PER_CHUNK;
-        const chunkEndPage = Math.min(chunkStartPage + MAX_PAGES_PER_CHUNK, totalPages);
-        const pagesInChunk = chunkEndPage - chunkStartPage;
-
-        addLog(`Compiling chunk ${chunkIdx + 1}/${totalChunks} (pages ${chunkStartPage + 1}–${chunkEndPage}, ${pagesInChunk} pages)...`);
-
-        const { pdfBytes, base64Data } = await compilePageRange(chunkStartPage, chunkEndPage);
-
-        const baseName = (job.fileName || 'production.pdf').replace(/\.pdf$/i, '');
-        const chunkFileName = `${baseName}_part${chunkIdx + 1}.pdf`;
-
-        await saveAndCompleteChunk(job, order, pdfBytes, base64Data, chunkIdx, totalChunks, chunkFileName);
-
-        addLog(`Chunk ${chunkIdx + 1}/${totalChunks} complete. Memory released.`);
-      }
-
-      // Final job completion — chunks were uploaded individually
+    if (uploader.partCount > 0) {
+      // Multi-chunk — chunks were uploaded individually as they were cut.
       await updateProgress(job.id, 100, 'PROCESSING');
-      await reportJobComplete(job.id, true, undefined, undefined, totalChunks);
-      addLog(`Production job completed: ${totalChunks} chunks generated successfully.`);
+      await reportJobComplete(job.id, true, undefined, undefined, uploader.partCount);
+      addLog(`Production job completed: ${uploader.partCount} chunks generated successfully.`);
     }
   };
 

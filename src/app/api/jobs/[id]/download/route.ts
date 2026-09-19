@@ -5,6 +5,23 @@ import { requireActor } from '@/lib/authz';
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * `existsSync` followed by `readFileSync` is a check-then-use race — the
+ * resolved path can also be a directory (e.g. a bare "/tmp"), which passes
+ * the existence check and then throws EISDIR on read. Collapse both into one
+ * operation so any failure (missing, deleted between check and read, not a
+ * regular file, no permission) is treated as "not found" instead of
+ * crashing the request with a 500.
+ */
+function readFileIfExists(filePath: string): Buffer | null {
+  try {
+    if (!fs.statSync(filePath).isFile()) return null;
+    return fs.readFileSync(filePath);
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -52,9 +69,8 @@ export async function GET(
         const chunkPath = chunk.downloadUrl.replace(/^\//, '');
         const tmpPath = path.join('/tmp', 'idexo', chunkPath);
         const publicPath = path.join(process.cwd(), 'public', chunkPath);
-        const finalChunkPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
-        if (!finalChunkPath) return new Response('Chunk file not found on server.', { status: 404 });
-        const chunkBuffer = fs.readFileSync(finalChunkPath);
+        const chunkBuffer = readFileIfExists(tmpPath) ?? readFileIfExists(publicPath);
+        if (!chunkBuffer) return new Response('Chunk file not found on server.', { status: 404 });
         return new Response(chunkBuffer as any, {
           headers: {
             'Content-Type': 'application/pdf',
@@ -122,7 +138,7 @@ export async function GET(
         }
       }
 
-      let finalPath: string | null = null;
+      let localBuffer: Buffer | null = null;
 
       if (job.downloadUrl.startsWith('local://')) {
         let urlPath = job.downloadUrl.replace(/^local:\/\//i, '').split('?')[0].split('#')[0];
@@ -132,20 +148,18 @@ export async function GET(
         } else {
           if (!urlPath.startsWith('/')) urlPath = '/' + urlPath;
         }
-        if (fs.existsSync(urlPath)) {
-          finalPath = urlPath;
-        }
+        localBuffer = readFileIfExists(urlPath);
       }
 
-      if (!finalPath) {
+      if (!localBuffer) {
         const relativePath = job.downloadUrl.replace(/^\//, '');
         const tmpPath = path.join('/tmp', 'idexo', relativePath);
         const publicPath = path.join(process.cwd(), 'public', relativePath);
-        finalPath = fs.existsSync(tmpPath) ? tmpPath : fs.existsSync(publicPath) ? publicPath : null;
+        localBuffer = readFileIfExists(tmpPath) ?? readFileIfExists(publicPath);
       }
 
-      if (!finalPath) return new Response('PDF file was not found on server storage.', { status: 404 });
-      fileBuffer = fs.readFileSync(finalPath);
+      if (!localBuffer) return new Response('PDF file was not found on server storage.', { status: 404 });
+      fileBuffer = localBuffer;
     }
 
     // 4. Log download event
