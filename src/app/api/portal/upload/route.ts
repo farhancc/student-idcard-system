@@ -21,10 +21,10 @@ function validateImageMagicBytes(buf: Buffer): string | null {
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
-  const rl = await rateLimit(`portal-upload:${ip}`, 20, 60 * 1000);
+  const rl = await rateLimit(`portal-upload:${ip}`, 60, 60 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json(
-      { error: 'Too many upload requests. Please wait a minute.' },
+      { error: 'Too many upload requests. Please wait before trying again.' },
       {
         status: 429,
         headers: { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) },
