@@ -1,11 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Menu, X } from 'lucide-react';
+
+const NAV_LINKS = [
+  { href: '#vdp-types', label: 'What You Can Print' },
+  { href: '#features', label: 'Features' },
+  { href: '#comparison', label: 'Why IDexo' },
+  { href: '#faq', label: 'FAQ' },
+];
 
 export function LandingHeader() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = () => setMenuOpen(false);
+
   return (
     <header className="idexo-header">
       <div className="idexo-header-inner">
@@ -22,20 +32,43 @@ export function LandingHeader() {
           </span>
         </Link>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          <a href="#vdp-types" className="nav-link">What You Can Print</a>
-          <a href="#features" className="nav-link">Features</a>
-          <a href="#comparison" className="nav-link">Why IDexo</a>
-          <a href="#faq" className="nav-link">FAQ</a>
+        <nav className="desktop-nav" style={{ alignItems: 'center', gap: '32px' }}>
+          {NAV_LINKS.map(link => (
+            <a key={link.href} href={link.href} className="nav-link">{link.label}</a>
+          ))}
         </nav>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="desktop-auth" style={{ alignItems: 'center', gap: '16px' }}>
           <Link href="/login" className="nav-link">Press Login</Link>
           <Link href="/signup" className="btn-primary" style={{ padding: '10px 20px', fontSize: '0.875rem' }}>
             Get Started <ArrowRight size={16} />
           </Link>
         </div>
+
+        <button
+          type="button"
+          className="mobile-menu-toggle"
+          aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(v => !v)}
+        >
+          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
       </div>
+
+      {menuOpen && (
+        <div className="mobile-nav-panel">
+          {NAV_LINKS.map(link => (
+            <a key={link.href} href={link.href} className="nav-link" onClick={closeMenu}>{link.label}</a>
+          ))}
+          <div className="mobile-auth">
+            <Link href="/login" className="btn-secondary" onClick={closeMenu}>Press Login</Link>
+            <Link href="/signup" className="btn-primary" onClick={closeMenu}>
+              Get Started <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

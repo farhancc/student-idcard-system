@@ -106,6 +106,53 @@ export default function LandingPage() {
           color: #ffffff;
         }
 
+        .desktop-nav,
+        .desktop-auth {
+          display: flex;
+        }
+
+        .mobile-menu-toggle {
+          display: none;
+          background: transparent;
+          border: none;
+          color: #ffffff;
+          cursor: pointer;
+          padding: 6px;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .mobile-nav-panel {
+          position: fixed;
+          top: 76px;
+          left: 0;
+          right: 0;
+          z-index: 99;
+          background: rgba(7, 13, 30, 0.98);
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          border-bottom: 1px solid var(--border-glass);
+          display: flex;
+          flex-direction: column;
+          padding: 12px 24px 24px;
+          max-height: calc(100vh - 76px);
+          overflow-y: auto;
+        }
+        .mobile-nav-panel .nav-link {
+          padding: 14px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          font-size: 1rem;
+        }
+        .mobile-nav-panel .mobile-auth {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          margin-top: 16px;
+        }
+        .mobile-nav-panel .mobile-auth a {
+          justify-content: center;
+        }
+
         /* Typography & Headings */
         .gradient-text {
           background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 50%, #818cf8 100%);
@@ -311,7 +358,25 @@ export default function LandingPage() {
           gap: 28px;
         }
 
+        /* Text+screenshot layout inside each Features tab panel */
+        .feature-tab-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 48px;
+          align-items: center;
+        }
+
         @media (max-width: 1024px) {
+          .idexo-header-inner .desktop-nav,
+          .idexo-header-inner .desktop-auth {
+            display: none;
+          }
+          .mobile-menu-toggle {
+            display: flex;
+          }
+          .feature-tab-grid {
+            grid-template-columns: 1fr;
+          }
           .vdp-grid {
             grid-template-columns: repeat(3, 1fr);
           }

@@ -42,7 +42,7 @@ export function FeaturesSection() {
           {/* Active Tab Showcase Content */}
           <div className="glass-panel" style={{ padding: '48px' }}>
             {activeTab === 'intake' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+              <div className="feature-tab-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="hero-badge">Client Self-Service</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
@@ -70,7 +70,7 @@ export function FeaturesSection() {
             )}
 
             {activeTab === 'designer' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+              <div className="feature-tab-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="hero-badge">Design Once, Reuse Forever</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
@@ -98,7 +98,7 @@ export function FeaturesSection() {
             )}
 
             {activeTab === 'grid' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+              <div className="feature-tab-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="hero-badge">Automatic Sheet Layout</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
@@ -126,7 +126,7 @@ export function FeaturesSection() {
             )}
 
             {activeTab === 'billing' && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
+              <div className="feature-tab-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                   <div className="hero-badge">Billing, Handled</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
