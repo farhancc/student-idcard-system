@@ -11,9 +11,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ enrollToken: string }> }
 ) {
-  // ── Rate limiting: 20 submissions per hour per IP ─────────────────────────
+  // ── Rate limiting: 60 submissions per hour per IP ─────────────────────────
   const ip = getClientIp(request);
-  const rl = await rateLimit(`enroll:${ip}`, 20, 60 * 60 * 1000);
+  const rl = await rateLimit(`enroll:${ip}`, 60, 60 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json(
       { error: 'Too many submissions. Please wait before trying again.' },
