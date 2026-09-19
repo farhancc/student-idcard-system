@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import fsp from 'fs/promises';
 import path from 'path';
 import { fetchPublicAsset, resolveWithinDir, UnsafeAssetError } from '@/lib/safe-fetch';
+import { getFromR2, isR2Configured } from '@/lib/storage';
 
 // ────────────────────────────────────────────────────────────────
 // Types
@@ -31,20 +32,33 @@ interface FieldCoordinate {
 const MAX_PDF_BYTES = 20 * 1024 * 1024;
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
 
-// The only host we store template originals on (see next.config.ts remotePatterns).
+// Legacy hosted originals still resolve here (see next.config.ts remotePatterns).
+// Storage has since moved to R2, which /api/uploads and the raw-R2-URL branches
+// below handle by key instead — an R2 URL never has a fixed hostname to allowlist.
 const ALLOWED_HOSTS: ReadonlySet<string> = new Set(['res.cloudinary.com']);
 
 /**
  * Load the source PDF.
  *
- * Both branches are attacker-reachable — `originalUrl` comes straight from the
- * request body — so each one is constrained rather than trusted. The guards
- * live in `@/lib/safe-fetch` so that this route, `/api/uploads` and
+ * Every branch is attacker-reachable — `originalUrl` comes straight from the
+ * request body — so each one is constrained rather than trusted. The remote-host
+ * guard lives in `@/lib/safe-fetch` so that this route, `/api/uploads` and
  * `/api/proxy-image` share one implementation instead of three.
  *
  * Throws opaque codes; callers must not echo them to the client.
  */
 async function getPdfBuffer(rawUrl: string): Promise<Buffer> {
+  // Template originals uploaded to R2 come back as "/api/uploads/<key>"
+  // (see uploadToR2 in @/lib/storage) rather than a real path under
+  // public/ — resolve those by key directly against the bucket instead of
+  // treating the route as a filesystem path.
+  if (rawUrl.startsWith('/api/uploads/')) {
+    const key = rawUrl.slice('/api/uploads/'.length).split('?')[0].split('#')[0];
+    const buffer = key ? await getFromR2(key, MAX_PDF_BYTES) : null;
+    if (!buffer) throw new UnsafeAssetError('INVALID_PATH');
+    return buffer;
+  }
+
   if (rawUrl.startsWith('/')) {
     const resolved = resolveWithinDir(PUBLIC_DIR, rawUrl);
     if (!resolved) throw new UnsafeAssetError('INVALID_PATH');
@@ -52,6 +66,16 @@ async function getPdfBuffer(rawUrl: string): Promise<Buffer> {
     if (!stat?.isFile()) throw new UnsafeAssetError('INVALID_PATH');
     if (stat.size > MAX_PDF_BYTES) throw new UnsafeAssetError('TOO_LARGE');
     return fsp.readFile(resolved);
+  }
+
+  // A raw R2 URL (only reachable if R2_PUBLIC_DOMAIN is ever configured) —
+  // same by-key resolution as the /api/uploads case, not a host allowlist,
+  // since R2's own endpoint isn't publicly readable without our credentials.
+  if (isR2Configured && rawUrl.includes('.r2.cloudflarestorage.com/')) {
+    const key = rawUrl.split('.r2.cloudflarestorage.com/')[1]?.split('?')[0];
+    const buffer = key ? await getFromR2(key, MAX_PDF_BYTES) : null;
+    if (!buffer) throw new UnsafeAssetError('INVALID_PATH');
+    return buffer;
   }
 
   // Allowlisted host *and* the public-address guard: this source is known, so
@@ -146,9 +170,19 @@ export async function POST(request: Request) {
     // ── 2. Parse with pdfjs-dist (legacy build, Node-compatible) ─
     // We use a dynamic import to avoid bundler issues with the WASM worker
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    // Disable worker in Node environment
-    (pdfjsLib as any).GlobalWorkerOptions = (pdfjsLib as any).GlobalWorkerOptions || {};
-    (pdfjsLib as any).GlobalWorkerOptions.workerSrc = '';
+    // GlobalWorkerOptions is already an object on the export — reassigning the
+    // binding itself throws, since an ES module namespace object's own
+    // top-level properties are read-only.
+    //
+    // KNOWN ISSUE (pre-existing, unrelated to R2/Cloudinary): pdfjs-dist v5's
+    // fake-worker (main-thread) fallback still throws "No
+    // GlobalWorkerOptions.workerSrc specified" even with a real path set here
+    // — the worker-setup code appears to read a different module instance
+    // than the one mutated above. Pointing at the on-disk worker file is the
+    // documented fix and doesn't regress anything, but has not been
+    // confirmed to actually resolve the fake-worker error in this Next.js
+    // version; this route may still fail at the getDocument() call below.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = path.join(process.cwd(), 'node_modules', 'pdfjs-dist', 'legacy', 'build', 'pdf.worker.mjs');
 
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
     const pdfDoc = await loadingTask.promise;

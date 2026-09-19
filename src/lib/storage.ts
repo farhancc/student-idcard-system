@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
@@ -84,6 +84,30 @@ export async function uploadToR2({ key, body, contentType }: UploadOptions): Pro
   const localPath = path.join(process.cwd(), 'public', 'uploads', key);
   fs.writeFileSync(localPath, body);
   return `/uploads/${key}`;
+}
+
+/**
+ * Fetch an object directly from R2 by key.
+ *
+ * Returns null on any failure (R2 not configured, object missing, over
+ * maxBytes) rather than throwing — callers that need a distinct error should
+ * check isR2Configured themselves first.
+ */
+export async function getFromR2(key: string, maxBytes?: number): Promise<Buffer | null> {
+  const client = getR2Client();
+  if (!client) return null;
+
+  try {
+    const result = await client.send(new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key }));
+    if (!result.Body) return null;
+    if (maxBytes && result.ContentLength != null && result.ContentLength > maxBytes) return null;
+    const bytes = await result.Body.transformToByteArray();
+    if (maxBytes && bytes.length > maxBytes) return null;
+    return Buffer.from(bytes);
+  } catch (err) {
+    console.warn(`[Storage] Failed to fetch key "${key}" from R2:`, err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 /**

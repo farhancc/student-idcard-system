@@ -35,6 +35,18 @@ const getOptimizedImageUrl = (url: string) => {
     return url;
   }
 
+  // These rewrites only make sense against Cloudinary's URL conventions
+  // (a same-named /previews/ derivative next to /originals/, and on-the-fly
+  // transformation segments like /image/upload/w_2000/). Storage has moved
+  // to R2, which has neither — a "/api/uploads/<key>.pdf" URL has no PNG
+  // sibling to swap to, so guessing one just points at a 404. Uploads now
+  // generate a real rendered PNG up front (see the PDF upload handler
+  // below), so this only still matters for templates saved before that.
+  const isCloudinary = lowerUrl.includes('res.cloudinary.com');
+  if (!isCloudinary) {
+    return url;
+  }
+
   // Handle PDF: map originals to previews folder and change ext to .png (ignoring query parameters)
   if (lowerUrl.includes('.pdf')) {
     if (url.includes('/templates/originals/')) {
