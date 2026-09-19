@@ -451,6 +451,43 @@ export default function TemplatesPage() {
   const CR80_150DPI_W = 507;
   const CR80_150DPI_H = 319;
 
+  /**
+   * Render a PDF's first page to a PNG data URL entirely client-side.
+   *
+   * The layout canvas previously depended on either the Electron app's
+   * bundled `pdftoppm.exe` (which can silently fail — missing binary in an
+   * older install, blocked by antivirus, etc. — leaving the canvas blank
+   * with no visible error) or a Cloudinary URL trick (swapping `.pdf` for
+   * `.png` and hoping Cloudinary's on-the-fly conversion picks it up) that
+   * doesn't apply at all now that uploads go to R2, which has no
+   * transformation API. pdfjs-dist sidesteps both: it's pure JS, already a
+   * project dependency, and used the same way in the serial-printer page.
+   */
+  const renderPdfFirstPageToPng = async (file: File): Promise<string> => {
+    const pdfjsLib = await import('pdfjs-dist');
+    if (typeof window !== 'undefined') {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `${window.location.origin}/pdf.worker.min.mjs`;
+    }
+    const buffer = await file.arrayBuffer();
+    let pdfDoc;
+    try {
+      pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
+    } catch (workerErr) {
+      console.warn('pdfjs worker load failed, falling back to main-thread rendering:', workerErr);
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+      pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer.slice(0)) }).promise;
+    }
+    const page = await pdfDoc.getPage(1);
+    const viewport = page.getViewport({ scale: 3.0 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Could not create canvas context');
+    await page.render({ canvasContext: ctx, viewport, canvas } as any).promise;
+    return canvas.toDataURL('image/png');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, side: 'front' | 'back') => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -551,6 +588,17 @@ export default function TemplatesPage() {
                      file.type === 'image/svg+xml' || 
                      file.name.toLowerCase().endsWith('.svg');
 
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    let pdfPreviewDataUrl = '';
+    if (isPdf) {
+      try {
+        pdfPreviewDataUrl = await renderPdfFirstPageToPng(file);
+      } catch (renderErr) {
+        console.error('Client-side PDF preview render failed:', renderErr);
+        toast(`Could not render a preview of this PDF: ${(renderErr as any)?.message || 'unknown error'}`, 'warning');
+      }
+    }
+
     if (isVector) {
       if (side === 'front') { setCardWidth(673); setCardHeight(1039); }
     } else {
@@ -618,11 +666,16 @@ export default function TemplatesPage() {
         });
         if (!result.success) throw new Error(result.error || 'Failed to save image locally');
         
-        // Show high-res local preview instantly in editor
+        // Show high-res local preview instantly in editor. If the electron
+        // side's own native conversion (pdftoppm) produced a usable PNG, use
+        // it — it's higher-res. Otherwise fall back to the pdfjs render done
+        // above, so a failed/missing binary never leaves the canvas blank.
+        const electronPreviewIsUsable = !result.url.startsWith('data:application/pdf') && !result.url.toLowerCase().endsWith('.pdf');
+        const initialPreviewUrl = electronPreviewIsUsable ? result.url : (pdfPreviewDataUrl || result.url);
         if (side === 'front') {
-          setFrontImageUrl(result.url);   // local:// PNG preview for canvas display
+          setFrontImageUrl(initialPreviewUrl);
           setFrontLocalPath(result.localPath); // absolute path to the raw PDF
-          setFrontWebUrl(''); // Reset during upload
+          setFrontWebUrl(pdfPreviewDataUrl || ''); // Reset during upload
           // IMPORTANT: immediately set originalUrl to the local PDF path so that
           // the production renderer can embed it natively even before the background
           // Cloudinary upload completes. Uses local:// protocol so the Electron
@@ -633,9 +686,9 @@ export default function TemplatesPage() {
             setFrontOriginalUrl(`local://${prefix}${formattedPath}`);
           }
         } else {
-          setBackImageUrl(result.url);
+          setBackImageUrl(initialPreviewUrl);
           setBackLocalPath(result.localPath);
-          setBackWebUrl(''); // Reset during upload
+          setBackWebUrl(pdfPreviewDataUrl || ''); // Reset during upload
           if (result.localPath) {
             const formattedPath = result.localPath.replace(/\\/g, '/');
             const prefix = (formattedPath.startsWith('/') || !/^[a-zA-Z]:/.test(formattedPath)) ? '' : '/';
@@ -691,11 +744,15 @@ export default function TemplatesPage() {
           });
         };
 
-        let localPreviewGenerated = false;
+        // The pdfjs render above already gave the PDF case a usable preview
+        // (frontWebUrl/backWebUrl), so only raster images need the
+        // background cheap-copy step here.
+        let localPreviewGenerated = !!pdfPreviewDataUrl;
         const isPdfUrl = result.url.startsWith('data:application/pdf') || result.url.toLowerCase().endsWith('.pdf');
 
         if (isPdfUrl) {
-          console.log(`Local conversion returned a PDF file. Deferring preview generation to server-side Cloudinary fallback...`);
+          // Nothing to do — pdfPreviewDataUrl (or its absence, already
+          // toasted above) is the whole story for this side.
         } else {
           // Trigger base64 preview generation in background
           createCheapCopyBase64(result.url)
@@ -759,19 +816,23 @@ export default function TemplatesPage() {
           .catch(err => console.error('Background Cloudinary original upload failed:', err));
 
       } else {
-        // ── Web path: upload with direct Cloudinary sign fallback ─────────
+        // ── Web path: upload the original, use the pdfjs render for preview ──
         const result = await uploadFileWithFallback(file);
-        
+        // For a PDF, result.url is whatever the upload endpoint returned for
+        // the raw file — not a rendered image — so prefer the pdfjs preview
+        // when one was generated.
+        const previewUrl = (isPdf && pdfPreviewDataUrl) ? pdfPreviewDataUrl : result.url;
+
         if (side === 'front') {
-          setFrontImageUrl(result.url);
+          setFrontImageUrl(previewUrl);
           setFrontOriginalUrl(result.originalUrl || result.url);
           setFrontLocalPath('');
-          setFrontWebUrl(result.url);
+          setFrontWebUrl(previewUrl);
         } else {
-          setBackImageUrl(result.url);
+          setBackImageUrl(previewUrl);
           setBackOriginalUrl(result.originalUrl || result.url);
           setBackLocalPath('');
-          setBackWebUrl(result.url);
+          setBackWebUrl(previewUrl);
         }
         
         toast(`Template ${side} side uploaded successfully!`, 'success');
