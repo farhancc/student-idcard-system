@@ -26,7 +26,7 @@ export function DownloadSection() {
               </div>
               <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#ffffff', marginBottom: '6px' }}>Windows</h3>
               <p style={{ color: '#94a3b8', fontSize: '0.85rem', marginBottom: '24px' }}>Windows 10 / 11 (64-bit)</p>
-              <a href="/api/uploads/releases/IDexoPressClient-Setup-1.0.1.exe" download className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <a href="/api/uploads/releases/idexo.exe" download className="btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
                 <Download size={16} /> Download .exe
               </a>
             </div>
