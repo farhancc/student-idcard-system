@@ -10,6 +10,7 @@ import {
   isImageField,
   parseTemplateFields,
   pickPrimaryPhotoKey,
+  formatFieldLabel,
   type TemplateFieldDef,
 } from '@/lib/pdf/field-resolver';
 import { saveBatch, getBatch, clearBatch, type BatchKey } from '@/lib/clientDb';
@@ -56,6 +57,19 @@ const IMAGE_EXTENSIONS = new Set([
   'jpg', 'jpeg', 'jfif', 'png', 'apng', 'webp', 'avif', 'bmp', 'gif',
 ]);
 
+// JSZip's `entry.async('blob')` has no idea what kind of file it just
+// unzipped — the Blob it hands back is always typed `application/octet-stream`.
+// The renderer's `isValidImageUrl` only accepts a `data:image/...` URL, so an
+// untyped blob's data URL (`data:application/octet-stream;base64,...`) gets
+// silently treated as "no photo" even though the bytes decode fine. Re-type
+// the blob from the entry's own extension before turning it into a data URL.
+const EXTENSION_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', jfif: 'image/jpeg',
+  png: 'image/png', apng: 'image/png',
+  webp: 'image/webp', avif: 'image/avif',
+  bmp: 'image/bmp', gif: 'image/gif',
+};
+
 /** The template shape the client renderer needs for a preview. */
 type TemplateForRender = {
   cardWidth: number;
@@ -92,7 +106,7 @@ export function BatchCompilePanel({
   // Each surface owns its own IndexedDB slot so a batch in progress on one tab
   // is not overwritten by the other.
   const batchKey: BatchKey = isGoogleForm ? 'gform' : 'current';
-  const [step, setStep] = useState<'upload' | 'review' | 'done'>('upload');
+  const [step, setStep] = useState<'upload' | 'mapping' | 'review' | 'done'>('upload');
 
   // ── Upload state ──
   const [excelFile, setExcelFile] = useState<File | null>(null);
@@ -107,12 +121,19 @@ export function BatchCompilePanel({
   const [previewError, setPreviewError] = useState('');
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [previewHasBack, setPreviewHasBack] = useState(false);
-  // Template + fonts are the same for every row, so fetch once and reuse.
+  // Template + fonts are the same for every row, so fetch once per time the
+  // preview is opened and reuse while it stays open (typing in the grid or
+  // flipping front/back must not re-fetch on every keystroke). Re-opening the
+  // preview always re-fetches, so a template edited (e.g. field positions
+  // nudged in the Templates editor) while this tab was open is picked up the
+  // next time a row is previewed, instead of showing the stale layout for the
+  // rest of the session.
   const previewAssets = useRef<{
     templateId: string;
     template: TemplateForRender;
     fonts: Array<{ name: string; fileUrl: string }>;
   } | null>(null);
+  const previewAssetsFreshForThisOpen = useRef(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeStatus, setAnalyzeStatus] = useState('');
   const [error, setError] = useState('');
@@ -121,6 +142,13 @@ export function BatchCompilePanel({
   const [fieldDefs, setFieldDefs] = useState<TemplateFieldDef[]>([]);
   const [fieldToHeader, setFieldToHeader] = useState<Record<string, string>>({});
   const [unmatchedHeaders, setUnmatchedHeaders] = useState<string[]>([]);
+  // Excel/CSV column names and the raw parsed rows (still header-keyed) from
+  // the last import — kept only in memory (not persisted) so the mapping
+  // step can rebuild `rows` whenever the operator adjusts a mapping, without
+  // needing the file reselected. Only the confirmed result (`rows`) survives
+  // a reload, same as before this step existed.
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [rawRecords, setRawRecords] = useState<Record<string, any>[]>([]);
   const [rows, setRows] = useState<Record<string, string>[]>([]);
   const [zipMap, setZipMap] = useState<Map<string, string>>(new Map());
   const [imageOverrides, setImageOverrides] = useState<Record<string, string>>({});
@@ -142,6 +170,9 @@ export function BatchCompilePanel({
   >(null);
   // Set when the operator has been shown the missing-photo count and chose to proceed.
   const [ackMissingPhotos, setAckMissingPhotos] = useState(false);
+  // Briefly true right after a Compile click is blocked on the checkbox above, to draw the eye to it.
+  const [highlightAck, setHighlightAck] = useState(false);
+  const ackBoxRef = useRef<HTMLLabelElement | null>(null);
 
   const imageFields = useMemo(() => fieldDefs.filter(f => isImageField(f)), [fieldDefs]);
   const mappedFields = useMemo(
@@ -219,9 +250,62 @@ export function BatchCompilePanel({
     setStep('upload');
     setExcelFile(null); setZipFile(null);
     setFieldDefs([]); setFieldToHeader({}); setUnmatchedHeaders([]);
+    setHeaders([]); setRawRecords([]);
     setRows([]); setZipMap(new Map()); setImageOverrides({});
     setSelectedRows([]); setSearch(''); setSheetUrl('');
     setSavedResult(null); setError(''); setAckMissingPhotos(false);
+  };
+
+  // Build rows keyed by template field name from the raw parsed records and a
+  // field->header mapping. When the primary photo field has no Excel column,
+  // seed its match-key from the record's ID (or name) so photos named e.g.
+  // "SA-2024-001.png" match by uniqueKey.
+  const buildRowsFromMapping = (
+    defs: TemplateFieldDef[],
+    map: Record<string, string>,
+    records: Record<string, any>[]
+  ): Record<string, string>[] => {
+    const primaryLocal = pickPrimaryPhotoKey(defs.filter(d => isImageField(d)));
+    const idFieldName = defs.find(d => classifyField(d.field) === 'id' && map[d.field])?.field;
+    const nameFieldName = defs.find(d => classifyField(d.field) === 'name' && map[d.field])?.field;
+
+    return records.map(pr => {
+      const r: Record<string, string> = {};
+      for (const def of defs) {
+        const h = map[def.field];
+        r[def.field] = h ? String(pr[h] ?? '').trim() : '';
+      }
+      if (primaryLocal && !map[primaryLocal]) {
+        r[primaryLocal] =
+          (idFieldName ? r[idFieldName] : '') || (nameFieldName ? r[nameFieldName] : '') || '';
+      }
+      return r;
+    });
+  };
+
+  // ── Step 2: operator confirms/adjusts the column mapping, then rows are built ──
+  const handleConfirmMapping = async () => {
+    const usedHeaders = new Set(Object.values(fieldToHeader).filter(Boolean));
+    const unmatched = headers.filter(h => !usedHeaders.has(h));
+    // `rawRecords` isn't persisted (see its declaration) — if this batch was
+    // restored from a previous session rather than just parsed, there's
+    // nothing to rebuild rows from. Carry the already-reviewed rows forward
+    // unchanged rather than overwriting them with blanks.
+    const builtRows = rawRecords.length > 0
+      ? buildRowsFromMapping(fieldDefs, fieldToHeader, rawRecords)
+      : rows;
+    const allSelected = builtRows.map((_, i) => i);
+
+    setUnmatchedHeaders(unmatched);
+    setRows(builtRows);
+    setSelectedRows(allSelected);
+    setSavedResult(null);
+    await saveBatch({
+      rows: builtRows, fieldDefs, fieldToHeader, unmatchedHeaders: unmatched,
+      templateId, zip: Object.fromEntries(zipMap), overrides: {},
+      selectedRows: allSelected,
+    }, batchKey);
+    setStep('review');
   };
 
   // ── Step 1: parse spreadsheet + template fields + zip photos ──
@@ -309,7 +393,9 @@ export function BatchCompilePanel({
         for (const [fileName, entry] of imageEntries) {
           const base = fileName.split('/').pop() || fileName;
           const noExt = base.replace(/\.[^.]+$/, '');
-          const blob = await entry.async('blob');
+          const ext = base.split('.').pop()?.toLowerCase() || '';
+          const bytes = await entry.async('uint8array');
+          const blob = new Blob([bytes as BlobPart], { type: EXTENSION_TO_MIME[ext] || 'image/jpeg' });
           const dataUrl = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result as string);
@@ -322,42 +408,15 @@ export function BatchCompilePanel({
         }
       }
 
-      // Build rows keyed by template field name. When the primary photo field has
-      // no Excel column, seed its match-key from the record's ID (or name) so
-      // photos named e.g. "SA-2024-001.png" match by uniqueKey.
-      const primaryLocal = pickPrimaryPhotoKey(defs.filter(d => isImageField(d)));
-      const idFieldName = defs.find(d => classifyField(d.field) === 'id' && f2h[d.field])?.field;
-      const nameFieldName = defs.find(d => classifyField(d.field) === 'name' && f2h[d.field])?.field;
-
-      const builtRows: Record<string, string>[] = parsed.map(pr => {
-        const r: Record<string, string> = {};
-        for (const def of defs) {
-          const h = f2h[def.field];
-          r[def.field] = h ? String(pr[h] ?? '').trim() : '';
-        }
-        if (primaryLocal && !f2h[primaryLocal]) {
-          r[primaryLocal] =
-            (idFieldName ? r[idFieldName] : '') || (nameFieldName ? r[nameFieldName] : '') || '';
-        }
-        return r;
-      });
-
       setFieldDefs(defs);
       setFieldToHeader(f2h);
       setUnmatchedHeaders(unmatched);
       setZipMap(photoMap);
       setImageOverrides({});
-      setRows(builtRows);
-      const allSelected = builtRows.map((_, i) => i);
-      setSelectedRows(allSelected);
+      setHeaders(headers);
+      setRawRecords(parsed);
       setSavedResult(null);
-      // Persist the fresh working set immediately.
-      await saveBatch({
-        rows: builtRows, fieldDefs: defs, fieldToHeader: f2h, unmatchedHeaders: unmatched,
-        templateId, zip: Object.fromEntries(photoMap), overrides: {},
-        selectedRows: allSelected,
-      }, batchKey);
-      setStep('review');
+      setStep('mapping');
     } catch (err: any) {
       setError(err.message || 'Failed to analyze files.');
     } finally {
@@ -544,14 +603,23 @@ export function BatchCompilePanel({
   // Draw the previewed row onto the modal canvas. Re-runs when the row, the side
   // or the row's own data changes, so edits in the grid show up immediately.
   useEffect(() => {
-    if (previewRow === null) return;
+    if (previewRow === null) {
+      // Modal closed — next open must re-check the template rather than trust
+      // whatever was cached from a possibly-since-edited earlier session.
+      previewAssetsFreshForThisOpen.current = false;
+      return;
+    }
     let cancelled = false;
 
     (async () => {
       setPreviewBusy(true);
       setPreviewError('');
       try {
-        if (!previewAssets.current || previewAssets.current.templateId !== templateId) {
+        if (
+          !previewAssetsFreshForThisOpen.current ||
+          !previewAssets.current ||
+          previewAssets.current.templateId !== templateId
+        ) {
           const [tplRes, fontsRes] = await Promise.all([
             fetch(`/api/templates/${templateId}?_t=${Date.now()}`),
             fetch('/api/fonts').catch(() => null),
@@ -561,6 +629,7 @@ export function BatchCompilePanel({
           if (!template) throw new Error('Template not found.');
           const fonts = fontsRes && fontsRes.ok ? ((await fontsRes.json()).fonts || []) : [];
           previewAssets.current = { templateId, template, fonts };
+          previewAssetsFreshForThisOpen.current = true;
         }
         setPreviewHasBack(Boolean(previewAssets.current.template.backImageUrl));
         const { template, fonts } = previewAssets.current;
@@ -796,11 +865,12 @@ export function BatchCompilePanel({
 
   const renderStepIndicator = () => {
     const steps = [
-      { key: 'upload', label: '1. Import & Map' },
-      { key: 'review', label: '2. Review & Edit' },
-      { key: 'done', label: '3. Compile PDF' },
+      { key: 'upload', label: '1. Import' },
+      { key: 'mapping', label: '2. Map Columns' },
+      { key: 'review', label: '3. Review & Edit' },
+      { key: 'done', label: '4. Compile PDF' },
     ];
-    const order = ['upload', 'review', 'done'];
+    const order = ['upload', 'mapping', 'review', 'done'];
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: '0', marginBottom: '28px' }}>
         {steps.map((s, i) => {
@@ -923,14 +993,114 @@ export function BatchCompilePanel({
             disabled={analyzing || !templateId || (isGoogleForm ? !sheetUrl.trim() : !excelFile)}
             onClick={handleAnalyze}
           >
-            {analyzing ? 'Analyzing…' : isGoogleForm ? 'Load responses →' : 'Next — Review Records →'}
+            {analyzing ? 'Analyzing…' : isGoogleForm ? 'Load responses →' : 'Next — Map Columns →'}
           </button>
         </div>
       </div>
     );
   }
 
-  // ── STEP 2: Review & Edit ──
+  // ── STEP 2: Map Columns ──
+  // Exact-match auto-detection (handleAnalyze) already filled in whatever it
+  // could; this is where a column named e.g. "Full Name" instead of "name"
+  // gets connected by hand instead of silently importing blank.
+  if (step === 'mapping') {
+    // The raw spreadsheet rows aren't persisted (see `rawRecords`'s
+    // declaration), so a batch restored from a previous session only has the
+    // headers it already knows about (mapped + unmatched) to offer here —
+    // and changing a mapping in that state is a no-op (handleConfirmMapping
+    // carries the existing rows forward rather than rebuilding blanks).
+    const isRestoredBatch = rawRecords.length === 0;
+    const availableHeaders = isRestoredBatch
+      ? Array.from(new Set([...unmatchedHeaders, ...Object.values(fieldToHeader).filter(Boolean)]))
+      : headers;
+
+    return (
+      <div className="glass-panel" style={{ width: '100%' }}>
+        {renderStepIndicator()}
+        {errorBox}
+
+        <div style={{ marginBottom: '16px' }}>
+          <h3 style={{ margin: '0 0 6px' }}>Map spreadsheet columns to template fields</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: 0 }}>
+            Columns are matched automatically when the header text matches a field name exactly.
+            Anything that didn&rsquo;t match is shown below — pick the right column for each field,
+            or leave it unmapped to leave that field blank on every card.
+          </p>
+          {isRestoredBatch && (
+            <p style={{ fontSize: '0.78rem', color: '#fbbf24', marginTop: '8px' }}>
+              This batch was restored from your last session — re-import the file to change the
+              column mapping; edits here won&rsquo;t apply to already-reviewed rows.
+            </p>
+          )}
+        </div>
+
+        <div className="table-container" style={{ marginBottom: '16px' }}>
+          <table className="custom-table">
+            <thead>
+              <tr>
+                <th>Template Field</th>
+                <th>Spreadsheet Column</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fieldDefs.map((def) => {
+                const mapped = fieldToHeader[def.field];
+                return (
+                  <tr key={def.field}>
+                    <td style={{ fontWeight: 600, color: mapped ? '#fff' : '#fca5a5' }}>
+                      {formatFieldLabel(def.field)}
+                      {isImageField(def) && (
+                        <span style={{ marginLeft: '6px', fontSize: '0.7rem', color: 'var(--muted)', fontWeight: 'normal' }}>
+                          (photo)
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <select
+                        className="form-select"
+                        value={mapped || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setFieldToHeader(prev => {
+                            const next = { ...prev };
+                            if (value) next[def.field] = value;
+                            else delete next[def.field];
+                            return next;
+                          });
+                        }}
+                        style={{ minWidth: '220px' }}
+                      >
+                        <option value="">— Not mapped —</option>
+                        {availableHeaders.map(h => (
+                          <option key={h} value={h}>{h}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {unmatchedHeaders.length > 0 && (
+          <div style={{ padding: '10px 14px', borderRadius: '8px', fontSize: '0.78rem', lineHeight: 1.6, background: 'rgba(148,163,184,0.08)', border: '1px solid var(--glass-border)', color: 'var(--muted)', marginBottom: '16px' }}>
+            <strong>Unused columns</strong> (not mapped to any field, will be ignored): {unmatchedHeaders.join(', ')}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+          <button type="button" className="btn btn-secondary" onClick={() => setStep('upload')}>← Back</button>
+          <button type="button" className="btn btn-primary" onClick={handleConfirmMapping}>
+            Next — Review Records →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── STEP 3: Review & Edit ──
   if (step === 'review') {
     return (
       <div className="glass-panel" style={{ width: '100%' }}>
@@ -1160,11 +1330,18 @@ export function BatchCompilePanel({
         </div>
 
         {photoStats && photoStats.missing.length > 0 && (
-          <label style={{
-            display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px', cursor: 'pointer',
-            padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem',
-            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-          }}>
+          <label
+            ref={ackBoxRef}
+            className={highlightAck ? 'attention-shake' : undefined}
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '14px', cursor: 'pointer',
+              padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem',
+              background: highlightAck ? 'rgba(239,68,68,0.16)' : 'rgba(239,68,68,0.08)',
+              border: highlightAck ? '1px solid #ef4444' : '1px solid rgba(239,68,68,0.25)',
+              boxShadow: highlightAck ? '0 0 0 3px rgba(239,68,68,0.25)' : 'none',
+              transition: 'background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+            }}
+          >
             <input
               type="checkbox"
               checked={ackMissingPhotos}
@@ -1181,12 +1358,21 @@ export function BatchCompilePanel({
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <button type="button" className="btn btn-secondary" onClick={() => setStep('upload')}>← Back</button>
+          <button type="button" className="btn btn-secondary" onClick={() => setStep('mapping')}>← Back</button>
           <button
             type="button"
             className="btn btn-primary"
-            disabled={selectedCount === 0 || (!!photoStats && photoStats.missing.length > 0 && !ackMissingPhotos)}
-            onClick={() => { setError(''); setShowWizard(true); }}
+            disabled={selectedCount === 0}
+            onClick={() => {
+              if (photoStats && photoStats.missing.length > 0 && !ackMissingPhotos) {
+                ackBoxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setHighlightAck(true);
+                setTimeout(() => setHighlightAck(false), 1600);
+                return;
+              }
+              setError('');
+              setShowWizard(true);
+            }}
           >
             Compile PDF ({selectedCount}) →
           </button>
