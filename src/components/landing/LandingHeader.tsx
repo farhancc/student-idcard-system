@@ -18,15 +18,14 @@ export function LandingHeader() {
             style={{ borderRadius: '8px' }}
           />
           <span style={{ fontSize: '1.25rem', fontWeight: '800', letterSpacing: '-0.02em', color: '#ffffff' }}>
-            IDexo <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '0.85rem' }}>VDP OS</span>
+            IDexo <span style={{ color: '#818cf8', fontWeight: '600', fontSize: '0.85rem' }}>for Print Shops</span>
           </span>
         </Link>
 
         <nav style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
-          <a href="#vdp-types" className="nav-link">Product Types</a>
+          <a href="#vdp-types" className="nav-link">What You Can Print</a>
           <a href="#features" className="nav-link">Features</a>
-          <a href="#architecture" className="nav-link">Architecture</a>
-          <a href="#pricing" className="nav-link">Pricing</a>
+          <a href="#comparison" className="nav-link">Why IDexo</a>
           <a href="#faq" className="nav-link">FAQ</a>
         </nav>
 

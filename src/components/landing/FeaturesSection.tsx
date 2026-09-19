@@ -16,26 +16,26 @@ export function FeaturesSection() {
       <section id="features" style={{ padding: '100px 24px', position: 'relative', zIndex: 10 }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 60px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="hero-badge" style={{ alignSelf: 'center' }}>Engineered for Commercial VDP Printing</div>
-            <h2 className="headline-section">Everything You Need to Scale Variable Printing</h2>
+            <div className="hero-badge" style={{ alignSelf: 'center' }}>How It Works</div>
+            <h2 className="headline-section">Everything You Need to Run a Card Printing Job</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Four core pillars designed to automate variable text, images, barcodes, and serial numbers without manual design merges.
+              From collecting client data to printing the final sheet — four steps, no manual copy-pasting.
             </p>
           </div>
 
           {/* Tab Selector */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '48px' }}>
             <button className={`tab-btn ${activeTab === 'intake' ? 'active' : ''}`} onClick={() => setActiveTab('intake')}>
-              <Smartphone size={18} /> 1. Self-Serve VDP Intake
+              <Smartphone size={18} /> 1. Client Data Collection
             </button>
             <button className={`tab-btn ${activeTab === 'designer' ? 'active' : ''}`} onClick={() => setActiveTab('designer')}>
-              <Sliders size={18} /> 2. Dynamic VDP Blueprint Canvas
+              <Sliders size={18} /> 2. Template Designer
             </button>
             <button className={`tab-btn ${activeTab === 'grid' ? 'active' : ''}`} onClick={() => setActiveTab('grid')}>
-              <LayoutGrid size={18} /> 3. Duplex Sheet Imposition Engine
+              <LayoutGrid size={18} /> 3. Print Sheet Layout
             </button>
             <button className={`tab-btn ${activeTab === 'billing' ? 'active' : ''}`} onClick={() => setActiveTab('billing')}>
-              <ClipboardList size={18} /> 4. Instant Billing & Job Tracking
+              <ClipboardList size={18} /> 4. Billing & Invoicing
             </button>
           </div>
 
@@ -44,22 +44,22 @@ export function FeaturesSection() {
             {activeTab === 'intake' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Tokenized Data Collection</div>
+                  <div className="hero-badge">Client Self-Service</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Let Clients Input Rosters, Photos & Custom Fields Directly
+                    Let Clients Submit Their Own Rosters and Photos
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Send tokenized form links to clients for ID cards, event attendee rosters, or certificate recipient lists. Recipients submit details and crop photos on any mobile or desktop device.
+                    Send your client a link. They fill in names and details, then upload and crop photos, right from their phone or computer — no spreadsheets to chase down.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
                       <CheckCircle2 size={16} color="#10b981" /> No more hunting for missing photos or broken Excel spreadsheets
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> In-browser ISO photo alignment and cropping tools
+                      <CheckCircle2 size={16} color="#10b981" /> Built-in photo cropping and alignment, right in the browser
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Departmental sub-links for multi-department data delegation
+                      <CheckCircle2 size={16} color="#10b981" /> Separate links per department or class, if you need them
                     </li>
                   </ul>
                 </div>
@@ -72,22 +72,22 @@ export function FeaturesSection() {
             {activeTab === 'designer' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Universal Variable Canvas</div>
+                  <div className="hero-badge">Design Once, Reuse Forever</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Design Your Template Once. Synthesize Thousands of Personalized Items.
+                    Design the Template Once — Reuse It for Every Batch
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Map exact coordinates for photos, dynamic names, dates (DOB, DOJ, Issue Date), barcodes, and QR codes. Works for ID cards, badges, certificates, tickets, and membership tags.
+                    Place photos, names, dates, barcodes, and QR codes exactly where you want them on the card. Save it once, and every new batch for that client uses the same layout automatically. Works for ID cards, badges, certificates, tickets, and membership tags.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Native support for custom date formats and serialized numbering
+                      <CheckCircle2 size={16} color="#10b981" /> Custom date formats and auto-numbered serials, built in
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Font weight mapping and custom Google Fonts support
+                      <CheckCircle2 size={16} color="#10b981" /> Any Google Font, any weight
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Reusable VDP layout templates across batches and clients
+                      <CheckCircle2 size={16} color="#10b981" /> One template, reused across every batch and client
                     </li>
                   </ul>
                 </div>
@@ -100,22 +100,22 @@ export function FeaturesSection() {
             {activeTab === 'grid' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Automated Imposition Grid</div>
+                  <div className="hero-badge">Automatic Sheet Layout</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Print-Ready Sheet Placement with Mirrored Backs & Crop Marks
+                    Print-Ready Sheets — Fronts, Backs & Crop Marks Aligned
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Stop spending hours manually placing variable items in InDesign or CorelDRAW. IDexo calculates sheet margins, gutters, bleed guidelines, and perfectly aligns front and back sides for duplex printing.
+                    Stop spending hours placing cards by hand in InDesign or CorelDRAW. IDexo works out the margins, gutters, and bleed, and lines up the front and back sides for double-sided printing.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Supports A3, A4, and custom substrate dimensions
+                      <CheckCircle2 size={16} color="#10b981" /> A3, A4, or a custom sheet size
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Automatic corner registration crop marks & cutting lines
+                      <CheckCircle2 size={16} color="#10b981" /> Crop marks and cutting lines added automatically
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Zero server timeouts — rendering completes locally
+                      <CheckCircle2 size={16} color="#10b981" /> Runs on your own computer — no waiting on a server
                     </li>
                   </ul>
                 </div>
@@ -128,22 +128,22 @@ export function FeaturesSection() {
             {activeTab === 'billing' && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '48px', alignItems: 'center' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                  <div className="hero-badge">Commercial Bookkeeping</div>
+                  <div className="hero-badge">Billing, Handled</div>
                   <h3 style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-                    Auto-Calculate Job Yields & Generate Commercial Invoices
+                    Every Job Billed and Invoiced Automatically
                   </h3>
                   <p style={{ color: '#cbd5e1', lineHeight: '1.6', fontSize: '1rem' }}>
-                    Keep your commercial printing shop accounting clean. Calculate total VDP item counts, unit prices, tax rates (GST), and export instant client PDF invoices right after compilation.
+                    As soon as a batch is compiled, IDexo totals the card count, applies your pricing and tax rate, and hands you a client-ready invoice PDF.
                   </p>
                   <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Automated tax parameters (GST 18%) & custom currency
+                      <CheckCircle2 size={16} color="#10b981" /> GST and custom tax rates, built in
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Real-time payment state tracking (UNPAID, PARTIAL, PAID)
+                      <CheckCircle2 size={16} color="#10b981" /> Track what's paid, partially paid, or still owed
                     </li>
                     <li style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#94a3b8' }}>
-                      <CheckCircle2 size={16} color="#10b981" /> Downloadable invoice PDFs and client record archives
+                      <CheckCircle2 size={16} color="#10b981" /> Every invoice saved and downloadable anytime
                     </li>
                   </ul>
                 </div>
@@ -163,11 +163,11 @@ export function FeaturesSection() {
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 64px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <div className="hero-badge" style={{ alignSelf: 'center', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#f87171', background: 'rgba(239, 68, 68, 0.1)' }}>
-              Operational ROI
+              Before &amp; After
             </div>
-            <h2 className="headline-section">Manual VDP Merges vs. The IDexo Engine</h2>
+            <h2 className="headline-section">The Old Way vs. IDexo</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Compare traditional print shop VDP merges with automated IDexo variable printing workflows.
+              What changes when you stop doing this by hand.
             </p>
           </div>
 
@@ -177,7 +177,7 @@ export function FeaturesSection() {
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>
                   <CircleX size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f87171' }}>Legacy Manual VDP Workflow</h3>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#f87171' }}>Doing It by Hand</h3>
               </div>
 
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -209,29 +209,29 @@ export function FeaturesSection() {
                 <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
                   <CircleCheckBig size={20} />
                 </div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#34d399' }}>The IDexo VDP Engine</h3>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '700', color: '#34d399' }}>With IDexo</h3>
               </div>
 
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Clients upload roster data and crop photos directly into your encrypted intake link.</span>
+                  <span>Clients submit their roster and crop their own photos through your own link.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Variable data is validated before submission — 0% corrupt records or missing fields.</span>
+                  <span>Details are checked before submission — no missing fields or bad data.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Single-click synthesis maps variable records into your template canvas instantly.</span>
+                  <span>One click drops every record into your template — no manual matching.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>Automated A3/A4 duplex grid imposition with 3mm bleed margins and registration crop marks.</span>
+                  <span>A3/A4 sheets laid out automatically, with 3mm bleed and crop marks in place.</span>
                 </li>
                 <li style={{ display: 'flex', gap: '12px', fontSize: '0.95rem', color: '#ffffff', lineHeight: '1.5', fontWeight: '500' }}>
                   <span style={{ color: '#10b981', fontWeight: 'bold' }}>✓</span>
-                  <span>100% vector PDF output compiled locally on your desktop in under 5 seconds.</span>
+                  <span>Print-ready vector PDF, compiled on your own computer in under 5 seconds.</span>
                 </li>
               </ul>
             </div>

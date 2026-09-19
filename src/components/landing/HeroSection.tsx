@@ -14,38 +14,38 @@ export function HeroSection() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', alignItems: 'flex-start' }}>
           <div className="hero-badge">
             <Zap size={14} className="text-indigo-400" />
-            <span>Universal Variable Data Printing (VDP) OS</span>
+            <span>Built for Print Shops & Press Owners</span>
           </div>
 
           <h1 className="display-hero">
-            The Next-Gen <span className="gradient-text">Variable Data Printing</span> Engine for Commercial Press
+            Turn Client Rosters Into <span className="gradient-text">Print-Ready Cards</span> — Automatically
           </h1>
 
           <p style={{ fontSize: '1.15rem', color: '#cbd5e1', lineHeight: '1.7', maxWidth: '640px' }}>
-            Automate high-volume variable data workflows for ID cards, event credentials, certificates, membership badges, and personalized mailers. Intake client rosters directly, auto-map variable fields, and compile 100% vector print-ready A3/A4 PDFs in seconds.
+            Collect rosters and photos straight from your clients, drop them into a template you design once, and get a print-ready PDF — sheet laid out, front and back aligned — in seconds. Works for ID cards, event passes, certificates, membership cards, and more.
           </p>
 
           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '4px' }}>
             <a href="#download" className="btn-primary">
-              <Download size={18} /> Download Free Desktop VDP
+              <Download size={18} /> Download Free for Desktop
             </a>
             <a href="/samples/production_sample.pdf" download="production_sample.pdf" className="btn-secondary">
-              <FileCode2 size={18} /> Get Imposed PDF Sample
+              <FileCode2 size={18} /> See a Sample PDF
             </a>
           </div>
 
           <div style={{ display: 'flex', gap: '24px', color: '#94a3b8', fontSize: '0.875rem', flexWrap: 'wrap', marginTop: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} style={{ color: '#10b981' }} />
-              <span>Native macOS, Windows & Linux</span>
+              <span>Works on Windows, Mac & Linux</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} style={{ color: '#10b981' }} />
-              <span>Zero Server Timeout Local PDF Compiler</span>
+              <span>Runs Locally — No Upload Wait</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <ShieldCheck size={16} style={{ color: '#10b981' }} />
-              <span>Tokenized Self-Serve Data Intake</span>
+              <span>Clients Submit Their Own Photos & Details</span>
             </div>
           </div>
         </div>
@@ -75,8 +75,8 @@ export function HeroSection() {
           }}>
             <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 10px #10b981' }} />
             <div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>VDP Batch Status</div>
-              <div style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>1,200 VDP Records Imposed (4.1s)</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '600', textTransform: 'uppercase' }}>Batch Status</div>
+              <div style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: '700' }}>1,200 Cards Ready (4.1s)</div>
             </div>
           </div>
         </div>
@@ -84,11 +84,11 @@ export function HeroSection() {
 
       <div className="divider-line" />
 
-      {/* Supported VDP Product Types Showcase */}
+      {/* Supported Card & Print Product Types Showcase */}
       <section id="vdp-types" style={{ padding: '60px 24px', position: 'relative', zIndex: 10, background: 'rgba(255, 255, 255, 0.01)' }}>
         <div style={{ maxWidth: '1240px', margin: '0 auto', marginBottom: '32px', textAlign: 'center' }}>
           <span style={{ fontSize: '0.8rem', fontWeight: '700', color: '#818cf8', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            Supported Variable Data Printing Applications
+            What You Can Print
           </span>
         </div>
         <div className="vdp-grid">
@@ -126,19 +126,19 @@ export function HeroSection() {
         <div className="stats-grid">
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#818cf8', lineHeight: 1.1 }}>10x</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Faster VDP Batch Rendering</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Faster Than Manual Layout</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#34d399', lineHeight: 1.1 }}>0%</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Variable Data Copy-Paste Errors</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Copy-Paste Errors</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#38bdf8', lineHeight: 1.1 }}>100%</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>CMYK Vector PDF Output</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Print-Ready Vector PDFs</div>
           </div>
           <div className="glass-panel" style={{ padding: '24px', textAlign: 'center' }}>
             <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#c084fc', lineHeight: 1.1 }}>A3 / A4</div>
-            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Automated Duplex Imposition</div>
+            <div style={{ fontSize: '0.9rem', color: '#94a3b8', marginTop: '6px', fontWeight: '500' }}>Sheets Laid Out Automatically</div>
           </div>
         </div>
       </section>

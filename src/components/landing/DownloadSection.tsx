@@ -10,10 +10,10 @@ export function DownloadSection() {
         <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
           
           <div style={{ textAlign: 'center', maxWidth: '720px', margin: '0 auto 64px auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="hero-badge" style={{ alignSelf: 'center' }}>Cross-Platform Native Apps</div>
-            <h2 className="headline-section">Download IDexo VDP Engine for Your Press</h2>
+            <div className="hero-badge" style={{ alignSelf: 'center' }}>Available on Every OS</div>
+            <h2 className="headline-section">Download IDexo for Your Press</h2>
             <p style={{ color: '#94a3b8', fontSize: '1.05rem' }}>
-              Free to download and run on any local workstation. Install the desktop press console and start compiling VDP jobs immediately.
+              Free to download and install on any computer. Set up your first template and compile a batch in minutes.
             </p>
           </div>
 
