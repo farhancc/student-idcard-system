@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withPressContext } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
 import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
@@ -10,71 +10,74 @@ export async function PUT(
   try {
     const { deptToken, id: cardholderIdStr } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(deptToken)) === null) {
+    const pressId = await enterPortalTenant(deptToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
     const cardholderId = Number(cardholderIdStr);
 
-    const dept = await prisma.clientDepartment.findUnique({
-      where: { deptToken },
-      include: { portalShare: true },
-    });
+    return await withPressContext(pressId, async () => {
+      const dept = await prisma.clientDepartment.findUnique({
+        where: { deptToken },
+        include: { portalShare: true },
+      });
 
-    if (!dept || !dept.portalShare.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
+      if (!dept || !dept.portalShare?.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+      }
 
-    const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, clientId: dept.portalShare.clientId, enrollToken: dept.enrollToken },
-    });
+      const cardholder = await prisma.cardholder.findFirst({
+        where: { id: cardholderId, clientId: dept.portalShare.clientId, enrollToken: dept.enrollToken },
+      });
 
-    if (!cardholder) {
-      return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
-    }
+      if (!cardholder) {
+        return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
+      }
 
-    const { name, designation, photoUrl, customFields } = await request.json();
+      const { name, designation, photoUrl, customFields } = await request.json();
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
+      if (!name) {
+        return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      }
 
-    const custom = typeof customFields === 'string' 
-      ? (customFields ? JSON.parse(customFields) : {}) 
-      : (customFields || {});
+      const custom = typeof customFields === 'string'
+        ? (customFields ? JSON.parse(customFields) : {})
+        : (customFields || {});
 
-    let extractedUniqueKey = custom.uniqueKey || custom.id || custom.unique_key;
-    if (!extractedUniqueKey) {
-      for (const [ck, cv] of Object.entries(custom)) {
-        const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
-          extractedUniqueKey = cv;
-          break;
+      let extractedUniqueKey = custom.uniqueKey || custom.id || custom.unique_key;
+      if (!extractedUniqueKey) {
+        for (const [ck, cv] of Object.entries(custom)) {
+          const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
+            extractedUniqueKey = cv;
+            break;
+          }
         }
       }
-    }
 
-    if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
-      custom.uniqueKey = String(extractedUniqueKey);
-    }
+      if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
+        custom.uniqueKey = String(extractedUniqueKey);
+      }
 
-    const updated = await prisma.cardholder.update({
-      where: { id: cardholderId },
-      data: {
-        name,
-        designation,
-        photoUrl,
-        customFields: JSON.stringify(custom),
-        cardSerial: cardholder.cardSerial,
-      },
+      const updated = await prisma.cardholder.update({
+        where: { id: cardholderId },
+        data: {
+          name,
+          designation,
+          photoUrl,
+          customFields: JSON.stringify(custom),
+          cardSerial: cardholder.cardSerial,
+        },
+      });
+
+      // Mark cache as stale to force a re-render of PDF/PNG assets
+      await prisma.cardAsset.updateMany({
+        where: { cardholderId },
+        data: { isStale: true },
+      });
+
+      return NextResponse.json({ success: true, cardholder: updated });
     });
-
-    // Mark cache as stale to force a re-render of PDF/PNG assets
-    await prisma.cardAsset.updateMany({
-      where: { cardholderId },
-      data: { isStale: true },
-    });
-
-    return NextResponse.json({ success: true, cardholder: updated });
   } catch (error) {
     console.error('Dept portal update cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -88,31 +91,34 @@ export async function DELETE(
   try {
     const { deptToken, id: cardholderIdStr } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(deptToken)) === null) {
+    const pressId = await enterPortalTenant(deptToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
     const cardholderId = Number(cardholderIdStr);
 
-    const dept = await prisma.clientDepartment.findUnique({
-      where: { deptToken },
-      include: { portalShare: true },
+    return await withPressContext(pressId, async () => {
+      const dept = await prisma.clientDepartment.findUnique({
+        where: { deptToken },
+        include: { portalShare: true },
+      });
+
+      if (!dept || !dept.portalShare?.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+      }
+
+      const cardholder = await prisma.cardholder.findFirst({
+        where: { id: cardholderId, clientId: dept.portalShare.clientId, enrollToken: dept.enrollToken },
+      });
+
+      if (!cardholder) {
+        return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
+      }
+
+      await hardDeleteCardholder(cardholderId);
+
+      return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
     });
-
-    if (!dept || !dept.portalShare.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
-
-    const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, clientId: dept.portalShare.clientId, enrollToken: dept.enrollToken },
-    });
-
-    if (!cardholder) {
-      return NextResponse.json({ error: 'Cardholder not found or unauthorized' }, { status: 404 });
-    }
-
-    await hardDeleteCardholder(cardholderId);
-
-    return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
   } catch (error) {
     console.error('Dept portal delete cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -204,7 +204,14 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
   const loadPortalData = async () => {
     try {
       const shareRes = await fetch(`/api/portal/shares/${deptToken}`);
-      if (!shareRes.ok) throw new Error('Portal link is invalid or deactivated');
+      if (!shareRes.ok) {
+        const body = await shareRes.json().catch(() => null);
+        throw new Error(
+          shareRes.status === 404
+            ? (body?.error || 'Portal link is invalid or deactivated')
+            : (body?.error || `Something went wrong loading this portal (error ${shareRes.status}). Please try again shortly.`)
+        );
+      }
       const shareData = await shareRes.json();
 
       if (shareData.type !== 'dept') {

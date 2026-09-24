@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withPressContext } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
 import { hardDeleteCardholder } from '@/lib/cardholder-delete';
 
@@ -10,91 +10,94 @@ export async function PUT(
   try {
     const { orgToken, id: cardholderIdStr } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(orgToken)) === null) {
+    const pressId = await enterPortalTenant(orgToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
     const cardholderId = Number(cardholderIdStr);
 
-    const share = await prisma.clientPortalShare.findUnique({
-      where: { orgToken },
-    });
+    return await withPressContext(pressId, async () => {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
 
-    if (!share || !share.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+      }
 
-    const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, clientId: share.clientId },
-    });
+      const cardholder = await prisma.cardholder.findFirst({
+        where: { id: cardholderId, clientId: share.clientId },
+      });
 
-    if (!cardholder) {
-      return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
-    }
+      if (!cardholder) {
+        return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
+      }
 
-    const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = await request.json();
+      const { name, designation, photoUrl, customFields, uniqueKey, ignoreDuplicate } = await request.json();
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
+      if (!name) {
+        return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      }
 
-    // Fold uniqueKey into customFields if provided and sync uniqueKey column
-    const custom = typeof customFields === 'string' 
-      ? (customFields ? JSON.parse(customFields) : {}) 
-      : (customFields || {});
+      // Fold uniqueKey into customFields if provided and sync uniqueKey column
+      const custom = typeof customFields === 'string'
+        ? (customFields ? JSON.parse(customFields) : {})
+        : (customFields || {});
 
-    let extractedUniqueKey = uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
-    if (!extractedUniqueKey) {
-      for (const [ck, cv] of Object.entries(custom)) {
-        const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
-          extractedUniqueKey = cv;
-          break;
+      let extractedUniqueKey = uniqueKey || custom.uniqueKey || custom.id || custom.unique_key;
+      if (!extractedUniqueKey) {
+        for (const [ck, cv] of Object.entries(custom)) {
+          const ckClean = ck.toLowerCase().replace(/[^a-z0-9]/g, '');
+          if ((ckClean === 'id' || ckClean === 'studentid' || ckClean === 'employeeid' || ckClean === 'empid' || ckClean === 'rollno' || ckClean === 'rollnumber' || ckClean === 'admno' || ckClean === 'admissionnumber' || ckClean.includes('id')) && cv && typeof cv === 'string' && !cv.startsWith('C-')) {
+            extractedUniqueKey = cv;
+            break;
+          }
         }
       }
-    }
 
-    if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
-      custom.uniqueKey = String(extractedUniqueKey);
-    }
+      if (extractedUniqueKey && !String(extractedUniqueKey).startsWith('C-')) {
+        custom.uniqueKey = String(extractedUniqueKey);
+      }
 
-    // Check unique constraint if changed (name + designation, excluding this cardholder)
-    if (!ignoreDuplicate) {
-      const existing = await prisma.cardholder.findFirst({
-        where: { 
-          clientId: share.clientId, 
-          name, 
-          designation: designation ?? null,
-          id: { not: cardholderId }
+      // Check unique constraint if changed (name + designation, excluding this cardholder)
+      if (!ignoreDuplicate) {
+        const existing = await prisma.cardholder.findFirst({
+          where: {
+            clientId: share.clientId,
+            name,
+            designation: designation ?? null,
+            id: { not: cardholderId }
+          },
+        });
+        if (existing) {
+          return NextResponse.json({
+            duplicate: true,
+            error: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
+            message: `Cardholder "${name}" with designation "${designation || ''}" already exists.`
+          }, { status: 400 });
+        }
+      }
+
+      // Update the cardholder details
+      const updated = await prisma.cardholder.update({
+        where: { id: cardholderId },
+        data: {
+          name,
+          designation,
+          photoUrl,
+          customFields: JSON.stringify(custom),
+          cardSerial: cardholder.cardSerial,
         },
       });
-      if (existing) {
-        return NextResponse.json({ 
-          duplicate: true,
-          error: `Cardholder "${name}" with designation "${designation || ''}" already exists.`,
-          message: `Cardholder "${name}" with designation "${designation || ''}" already exists.` 
-        }, { status: 400 });
-      }
-    }
 
-    // Update the cardholder details
-    const updated = await prisma.cardholder.update({
-      where: { id: cardholderId },
-      data: {
-        name,
-        designation,
-        photoUrl,
-        customFields: JSON.stringify(custom),
-        cardSerial: cardholder.cardSerial,
-      },
+      // Mark cache as stale to force a re-render of PDF/PNG assets
+      await prisma.cardAsset.updateMany({
+        where: { cardholderId },
+        data: { isStale: true },
+      });
+
+      return NextResponse.json({ success: true, cardholder: updated });
     });
-
-    // Mark cache as stale to force a re-render of PDF/PNG assets
-    await prisma.cardAsset.updateMany({
-      where: { cardholderId },
-      data: { isStale: true },
-    });
-
-    return NextResponse.json({ success: true, cardholder: updated });
   } catch (error) {
     console.error('Portal update cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -108,31 +111,34 @@ export async function DELETE(
   try {
     const { orgToken, id: cardholderIdStr } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(orgToken)) === null) {
+    const pressId = await enterPortalTenant(orgToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
     const cardholderId = Number(cardholderIdStr);
 
-    const share = await prisma.clientPortalShare.findUnique({
-      where: { orgToken },
+    return await withPressContext(pressId, async () => {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
+
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+      }
+
+      // Verify the cardholder belongs to this org before deleting it.
+      const cardholder = await prisma.cardholder.findFirst({
+        where: { id: cardholderId, clientId: share.clientId },
+        select: { id: true },
+      });
+      if (!cardholder) {
+        return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
+      }
+
+      await hardDeleteCardholder(cardholderId);
+
+      return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
     });
-
-    if (!share || !share.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
-
-    // Verify the cardholder belongs to this org before deleting it.
-    const cardholder = await prisma.cardholder.findFirst({
-      where: { id: cardholderId, clientId: share.clientId },
-      select: { id: true },
-    });
-    if (!cardholder) {
-      return NextResponse.json({ error: 'Cardholder not found' }, { status: 404 });
-    }
-
-    await hardDeleteCardholder(cardholderId);
-
-    return NextResponse.json({ success: true, message: 'Cardholder deleted successfully' });
   } catch (error) {
     console.error('Portal delete cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

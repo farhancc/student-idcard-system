@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withPressContext } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { uploadToR2, isR2Configured } from '@/lib/storage';
@@ -36,84 +36,90 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
     const token = (formData.get('token') as string) || ''; // orgToken or enrollToken
-    const type = (formData.get('type') as string) || 'photo'; // template | photo
+    const rawType = (formData.get('type') as string) || 'photo';
+    // `type` becomes a path segment in the storage key below — only ever
+    // accept the two values this endpoint is documented to use.
+    const type = rawType === 'template' ? 'template' : 'photo';
 
     if (!token) {
       return NextResponse.json({ error: 'Missing security token' }, { status: 400 });
     }
 
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(token)) === null) {
+    const pressId = await enterPortalTenant(token);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Invalid security token' }, { status: 404 });
     }
 
-    let share = await prisma.clientPortalShare.findFirst({
-      where: {
-        OR: [
-          { orgToken: token, active: true },
-          { enrollToken: token, active: true },
-        ],
-      },
-    });
-
-    if (!share) {
-      // Check if it's a department head or department staff token
-      const dept = await prisma.clientDepartment.findFirst({
+    return await withPressContext(pressId, async () => {
+      let share = await prisma.clientPortalShare.findFirst({
         where: {
           OR: [
-            { deptToken: token },
-            { enrollToken: token },
+            { orgToken: token, active: true },
+            { enrollToken: token, active: true },
           ],
         },
-        include: { portalShare: true },
       });
-      if (dept && dept.portalShare.active) {
-        share = dept.portalShare;
+
+      if (!share) {
+        // Check if it's a department head or department staff token
+        const dept = await prisma.clientDepartment.findFirst({
+          where: {
+            OR: [
+              { deptToken: token },
+              { enrollToken: token },
+            ],
+          },
+          include: { portalShare: true },
+        });
+        if (dept && dept.portalShare?.active) {
+          share = dept.portalShare;
+        }
       }
-    }
 
-    if (!share) {
-      return NextResponse.json({ error: 'Invalid or deactivated portal link' }, { status: 403 });
-    }
+      if (!share) {
+        return NextResponse.json({ error: 'Invalid or deactivated portal link' }, { status: 403 });
+      }
 
-    const pressId = share.pressId;
+      const sharePressId = share.pressId;
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
+      if (!file) {
+        return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+      }
 
-    // Limit file size to 5MB
-    const MAX_FILE_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 });
-    }
+      // Limit file size to 5MB
+      const MAX_FILE_SIZE = 5 * 1024 * 1024;
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: 'File size exceeds 5MB limit' }, { status: 400 });
+      }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
 
-    // Verify magic bytes
-    const verifiedMimeType = validateImageMagicBytes(buffer);
-    if (!verifiedMimeType) {
-      return NextResponse.json(
-        { error: 'Invalid file content. Only real JPEG, PNG, and WebP images are allowed.' },
-        { status: 400 }
-      );
-    }
+      // Verify magic bytes
+      const verifiedMimeType = validateImageMagicBytes(buffer);
+      if (!verifiedMimeType) {
+        return NextResponse.json(
+          { error: 'Invalid file content. Only real JPEG, PNG, and WebP images are allowed.' },
+          { status: 400 }
+        );
+      }
 
-    const ext = verifiedMimeType === 'image/png' ? 'png' : verifiedMimeType === 'image/webp' ? 'webp' : 'jpg';
-    const hash = crypto.randomBytes(8).toString('hex');
-    const key = `press_${pressId}/${type}s/${Date.now()}-${hash}.${ext}`;
+      const ext = verifiedMimeType === 'image/png' ? 'png' : verifiedMimeType === 'image/webp' ? 'webp' : 'jpg';
+      const hash = crypto.randomBytes(8).toString('hex');
+      const key = `press_${sharePressId}/${type}s/${Date.now()}-${hash}.${ext}`;
 
-    const url = await uploadToR2({
-      key,
-      body: buffer,
-      contentType: verifiedMimeType,
-    });
+      const url = await uploadToR2({
+        key,
+        body: buffer,
+        contentType: verifiedMimeType,
+      });
 
-    return NextResponse.json({
-      success: true,
-      url,
-      provider: isR2Configured ? 'r2' : 'local',
+      return NextResponse.json({
+        success: true,
+        url,
+        provider: isR2Configured ? 'r2' : 'local',
+      });
     });
   } catch (error: unknown) {
     console.error('Portal upload handler error:', error);

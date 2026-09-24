@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, withPressContext } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
 import { clampLimit } from '@/lib/pagination';
 
@@ -13,100 +13,103 @@ export async function GET(
   try {
     const { orgToken } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(orgToken)) === null) {
+    const pressId = await enterPortalTenant(orgToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    const { searchParams } = new URL(request.url);
-    const limitStr = searchParams.get('limit') || searchParams.get('take');
-    const offsetStr = searchParams.get('offset') || searchParams.get('skip');
-    const limit = limitStr ? clampLimit(limitStr, 50, 100) : undefined;
-    const offset = offsetStr && !isNaN(Number(offsetStr)) ? Math.max(0, Math.floor(Number(offsetStr))) : undefined;
+    return await withPressContext(pressId, async () => {
+      const { searchParams } = new URL(request.url);
+      const limitStr = searchParams.get('limit') || searchParams.get('take');
+      const offsetStr = searchParams.get('offset') || searchParams.get('skip');
+      const limit = limitStr ? clampLimit(limitStr, 50, 100) : undefined;
+      const offset = offsetStr && !isNaN(Number(offsetStr)) ? Math.max(0, Math.floor(Number(offsetStr))) : undefined;
 
-    const share = await prisma.clientPortalShare.findUnique({
-      where: { orgToken },
-      include: {
-        departments: {
-          select: { enrollToken: true }
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+        include: {
+          departments: {
+            select: { enrollToken: true }
+          }
         }
+      });
+
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
       }
-    });
 
-    if (!share || !share.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
+      const clientId = share.clientId;
+      const sharePressId = share.pressId;
 
-    const clientId = share.clientId;
-    const pressId = share.pressId;
+      const templates = await prisma.cardTemplate.findMany({
+        where: {
+          OR: [
+            { clientId },
+            { clientId: null }
+          ],
+          pressId: sharePressId
+        },
+        select: { id: true, name: true }
+      });
+      const templateMap = new Map(templates.map(t => [t.id, t.name]));
 
-    const templates = await prisma.cardTemplate.findMany({
-      where: {
-        OR: [
-          { clientId },
-          { clientId: null }
-        ],
-        pressId
-      },
-      select: { id: true, name: true }
-    });
-    const templateMap = new Map(templates.map(t => [t.id, t.name]));
+      // Collect all enroll tokens that belong to THIS portal share
+      const thisShareEnrollTokens = new Set<string>();
+      if (share.enrollToken) thisShareEnrollTokens.add(share.enrollToken);
+      for (const d of share.departments) {
+        if (d.enrollToken) thisShareEnrollTokens.add(d.enrollToken);
+      }
 
-    // Collect all enroll tokens that belong to THIS portal share
-    const thisShareEnrollTokens = new Set<string>();
-    if (share.enrollToken) thisShareEnrollTokens.add(share.enrollToken);
-    for (const d of share.departments) {
-      if (d.enrollToken) thisShareEnrollTokens.add(d.enrollToken);
-    }
+      // Build enroll-token → templateId map for display purposes (only this share)
+      const tokenToTemplateIdMap = new Map<string, number>();
+      for (const tok of thisShareEnrollTokens) {
+        tokenToTemplateIdMap.set(tok, share.templateId);
+      }
 
-    // Build enroll-token → templateId map for display purposes (only this share)
-    const tokenToTemplateIdMap = new Map<string, number>();
-    for (const tok of thisShareEnrollTokens) {
-      tokenToTemplateIdMap.set(tok, share.templateId);
-    }
-
-    // Fetch only cardholders that belong to this template's portal:
-    //  - templateId directly set to this share's template, OR
-    //  - enrolled via any of this share's enroll tokens (org or dept)
-    const cardholders = await prisma.cardholder.findMany({
-      where: {
-        clientId,
-        pressId,
-        OR: [
-          { templateId: share.templateId },
-          { enrollToken: { in: Array.from(thisShareEnrollTokens) } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-      ...(limit !== undefined ? { take: limit } : {}),
-      ...(offset !== undefined ? { skip: offset } : {}),
-      include: {
-        cardAsset: {
-          select: {
-            frontUrl: true,
-            backUrl: true,
-            templateId: true
+      // Fetch only cardholders that belong to this template's portal:
+      //  - templateId directly set to this share's template, OR
+      //  - enrolled via any of this share's enroll tokens (org or dept)
+      const cardholders = await prisma.cardholder.findMany({
+        where: {
+          clientId,
+          pressId: sharePressId,
+          OR: [
+            { templateId: share.templateId },
+            { enrollToken: { in: Array.from(thisShareEnrollTokens) } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        ...(limit !== undefined ? { take: limit } : {}),
+        ...(offset !== undefined ? { skip: offset } : {}),
+        include: {
+          cardAsset: {
+            select: {
+              frontUrl: true,
+              backUrl: true,
+              templateId: true
+            },
           },
         },
-      },
-    });
+      });
 
-    const cardholdersWithTemplate = cardholders.map(ch => {
-      let templateName = '—';
-      if (ch.enrollToken && tokenToTemplateIdMap.has(ch.enrollToken)) {
-        const tId = tokenToTemplateIdMap.get(ch.enrollToken);
-        templateName = templateMap.get(tId!) || '—';
-      } else if (ch.templateId) {
-        templateName = templateMap.get(ch.templateId) || '—';
-      } else if (ch.cardAsset?.templateId) {
-        templateName = templateMap.get(ch.cardAsset.templateId) || '—';
-      }
-      return {
-        ...ch,
-        templateName
-      };
-    });
+      const cardholdersWithTemplate = cardholders.map(ch => {
+        let templateName = '—';
+        if (ch.enrollToken && tokenToTemplateIdMap.has(ch.enrollToken)) {
+          const tId = tokenToTemplateIdMap.get(ch.enrollToken);
+          templateName = templateMap.get(tId!) || '—';
+        } else if (ch.templateId) {
+          templateName = templateMap.get(ch.templateId) || '—';
+        } else if (ch.cardAsset?.templateId) {
+          templateName = templateMap.get(ch.cardAsset.templateId) || '—';
+        }
+        return {
+          ...ch,
+          templateName
+        };
+      });
 
-    return NextResponse.json({ success: true, cardholders: cardholdersWithTemplate });
+      return NextResponse.json({ success: true, cardholders: cardholdersWithTemplate });
+    });
   } catch (error) {
     console.error('Portal get cardholders error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
@@ -120,74 +123,77 @@ export async function POST(
   try {
     const { orgToken } = await params;
     // Resolve the token to its press before any tenant-scoped query runs.
-    if ((await enterPortalTenant(orgToken)) === null) {
+    const pressId = await enterPortalTenant(orgToken);
+    if (pressId === null) {
       return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
     }
 
-    const share = await prisma.clientPortalShare.findUnique({
-      where: { orgToken },
-    });
+    return await withPressContext(pressId, async () => {
+      const share = await prisma.clientPortalShare.findUnique({
+        where: { orgToken },
+      });
 
-    if (!share || !share.active) {
-      return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
-    }
+      if (!share || !share.active) {
+        return NextResponse.json({ error: 'Unauthorized or invalid token' }, { status: 404 });
+      }
 
-    const { name, designation, photoUrl, customFields } = await request.json();
+      const { name, designation, photoUrl, customFields } = await request.json();
 
-    if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
-    }
+      if (!name) {
+        return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      }
 
-    // Validate Number fields against template min/max caps
-    const template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
-    if (template) {
-      try {
-        const front = JSON.parse(template.frontFields || '[]');
-        const back = JSON.parse(template.backFields || '[]');
-        const allFields: any[] = [...front, ...back];
-        const fieldsObj = typeof customFields === 'string' ? JSON.parse(customFields) : (customFields || {});
+      // Validate Number fields against template min/max caps
+      const template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
+      if (template) {
+        try {
+          const front = JSON.parse(template.frontFields || '[]');
+          const back = JSON.parse(template.backFields || '[]');
+          const allFields: any[] = [...front, ...back];
+          const fieldsObj = typeof customFields === 'string' ? JSON.parse(customFields) : (customFields || {});
 
-        for (const f of allFields) {
-          if (f.field && f.type === 'number') {
-            const rawVal = fieldsObj[f.field];
-            if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
-              const numVal = Number(rawVal);
-              const label = f.label || f.field;
-              if (isNaN(numVal)) {
-                return NextResponse.json({ error: `${label} must be a valid number` }, { status: 400 });
-              }
-              if (f.min !== undefined && f.min !== null && numVal < f.min) {
-                return NextResponse.json({ error: `${label} must be at least ${f.min}` }, { status: 400 });
-              }
-              if (f.max !== undefined && f.max !== null && numVal > f.max) {
-                return NextResponse.json({ error: `${label} cannot exceed ${f.max}` }, { status: 400 });
+          for (const f of allFields) {
+            if (f.field && f.type === 'number') {
+              const rawVal = fieldsObj[f.field];
+              if (rawVal !== undefined && rawVal !== null && String(rawVal).trim() !== '') {
+                const numVal = Number(rawVal);
+                const label = f.label || f.field;
+                if (isNaN(numVal)) {
+                  return NextResponse.json({ error: `${label} must be a valid number` }, { status: 400 });
+                }
+                if (f.min !== undefined && f.min !== null && numVal < f.min) {
+                  return NextResponse.json({ error: `${label} must be at least ${f.min}` }, { status: 400 });
+                }
+                if (f.max !== undefined && f.max !== null && numVal > f.max) {
+                  return NextResponse.json({ error: `${label} cannot exceed ${f.max}` }, { status: 400 });
+                }
               }
             }
           }
+        } catch (err) {
+          console.error('Failed to parse template fields:', err);
         }
-      } catch (err) {
-        console.error('Failed to parse template fields:', err);
       }
-    }
 
-    // Generate unique card serial number
-    const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      // Generate unique card serial number
+      const cardSerial = `C-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-    const cardholder = await prisma.cardholder.create({
-      data: {
-        pressId: share.pressId,
-        clientId: share.clientId,
-        templateId: share.templateId, // stamp template so future filter works
-        name,
-        designation,
-        photoUrl,
-        customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
-        cardSerial,
-        enrollToken: share.enrollToken,
-      },
+      const cardholder = await prisma.cardholder.create({
+        data: {
+          pressId: share.pressId,
+          clientId: share.clientId,
+          templateId: share.templateId, // stamp template so future filter works
+          name,
+          designation,
+          photoUrl,
+          customFields: typeof customFields === 'string' ? customFields : JSON.stringify(customFields || {}),
+          cardSerial,
+          enrollToken: share.enrollToken,
+        },
+      });
+
+      return NextResponse.json({ success: true, cardholder });
     });
-
-    return NextResponse.json({ success: true, cardholder });
   } catch (error) {
     console.error('Portal create cardholder error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
