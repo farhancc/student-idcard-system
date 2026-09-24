@@ -24,7 +24,7 @@ import { getCreditSettings } from '@/lib/system-settings';
 const schema = z.object({
   templateId: z.union([z.number(), z.string().transform(Number)]),
   cardCount: z.union([z.number(), z.string().transform(Number)]),
-  pdfType: z.enum(['PRODUCTION', 'APPROVAL']),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INDIVIDUAL']),
 });
 
 export async function POST(request: Request) {
@@ -64,7 +64,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    const isProduction = pdfType === 'PRODUCTION';
+    // INDIVIDUAL is billed exactly like PRODUCTION — same per-card rate.
+    const isProduction = pdfType === 'PRODUCTION' || pdfType === 'INDIVIDUAL';
     const isDoubleSided = !!template.backImageUrl;
     const isIDCard = template.category === 'ID_CARD';
 

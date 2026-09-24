@@ -684,7 +684,9 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
           onFixRecords={() => compileHooks.setShowValidationModal(false)}
           onSkipAndPrint={() => {
             compileHooks.setShowValidationModal(false);
-            if (compileHooks.validationResult.totalSlots > compileHooks.validationResult.totalCards) {
+            if (compileHooks.pendingCompileType === 'INDIVIDUAL') {
+              compileHooks.proceedWithIndividualCompile(selectedCardholderIds, compileHooks.pendingPaperSize);
+            } else if (compileHooks.validationResult.totalSlots > compileHooks.validationResult.totalCards) {
               compileHooks.setShowEmptySlotModal(true);
             } else {
               compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
@@ -701,6 +703,9 @@ export function PortalSharesPanel({ clientId }: { clientId: number }) {
           onCancel={() => compileHooks.setShowEmptySlotModal(false)}
           onConfirm={() => {
             compileHooks.setShowEmptySlotModal(false);
+            // INDIVIDUAL never reaches this modal (no grid/empty-slot concept),
+            // but the type still has to satisfy proceedWithQuickCompile's signature.
+            if (compileHooks.pendingCompileType === 'INDIVIDUAL') return;
             compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
           }}
         />

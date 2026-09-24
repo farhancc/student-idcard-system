@@ -1892,3 +1892,50 @@ export async function renderCardSideToPdfBytesClient(
 
   return pdfDoc.save();
 }
+
+/**
+ * Renders one card (front, and back if double-sided) as its own standalone
+ * PDF — each side kept at the template's real, unscaled size and centered on
+ * its own page sized to the chosen sheet (A4/A3). Unlike the PRODUCTION grid
+ * layout, nothing here rescales the card into a fixed slot; the "page" is
+ * just a bigger sheet the card sits in the middle of.
+ *
+ * Shared by both compile paths that can produce an individual card PDF: the
+ * desktop daemon's queued-job flow (ProductionDaemon.tsx) and the Batch
+ * Import panel's local/roster-less compile (BatchCompilePanel.tsx).
+ */
+export async function renderIndividualCardPdfClient(
+  template: Parameters<typeof renderCardSideToPdfBytesClient>[0],
+  cardholder: Parameters<typeof renderCardSideToPdfBytesClient>[1],
+  paperSize: 'A4' | 'A3',
+  validTillDate: Date | null,
+  pressFonts: Array<{ name: string; fileUrl: string }> = []
+): Promise<Uint8Array> {
+  const pageWidth = paperSize === 'A3' ? 841.89 : 595.28;
+  const pageHeight = paperSize === 'A3' ? 1190.55 : 841.89;
+  const isSingleSided = !template.backImageUrl;
+
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.setTitle(`Individual Card — ${cardholder.name || 'Cardholder'}`);
+
+  const drawSide = async (side: 'front' | 'back') => {
+    const sideBytes = await renderCardSideToPdfBytesClient(template, cardholder, side, validTillDate, pressFonts);
+    const sideDoc = await PDFDocument.load(sideBytes);
+    const [embedded] = await pdfDoc.embedPdf(sideDoc, [0]);
+    const { width: cardW, height: cardH } = embedded;
+    const page = pdfDoc.addPage([pageWidth, pageHeight]);
+    page.drawPage(embedded, {
+      x: (pageWidth - cardW) / 2,
+      y: (pageHeight - cardH) / 2,
+      width: cardW,
+      height: cardH,
+    });
+  };
+
+  await drawSide('front');
+  if (!isSingleSided) {
+    await drawSide('back');
+  }
+
+  return pdfDoc.save();
+}

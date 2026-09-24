@@ -26,7 +26,7 @@ const schema = z.object({
   templateId: z.union([z.number(), z.string().transform(Number)]),
   cardCount: z.union([z.number(), z.string().transform(Number)]),
   pricePerCard: z.union([z.number(), z.string().transform(Number)]).optional(),
-  pdfType: z.enum(['PRODUCTION', 'APPROVAL']),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INDIVIDUAL']),
 });
 
 export async function POST(request: Request) {

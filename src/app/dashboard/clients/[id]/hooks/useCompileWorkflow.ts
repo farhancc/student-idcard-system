@@ -3,6 +3,7 @@ import { Cardholder, QuickTemplate, QuickJobResult } from '../types';
 import { EmptySlotStrategyType } from '../components/EmptySlotModal';
 import { useToast } from '@/components/ui/toast';
 import { autoDownloadJobFile } from '@/lib/downloadHelper';
+import { queueIndividualPrintJobs } from '@/lib/queueIndividualJobs';
 
 export function useCompileWorkflow({
   clientId,
@@ -21,7 +22,8 @@ export function useCompileWorkflow({
 
   const [showCompileModal, setShowCompileModal] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3 | 4>(1);
-  const [wizardCompileType, setWizardCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+  const [wizardCompileType, setWizardCompileType] = useState<'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL' | null>(null);
+  const [individualQueueStatus, setIndividualQueueStatus] = useState<{ done: number; total: number } | null>(null);
   const [wizardPaperSize, setWizardPaperSize] = useState('A4');
   const [wizardOrientation, setWizardOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
   const [wizardMarginLeft, setWizardMarginLeft] = useState(40);
@@ -49,7 +51,7 @@ export function useCompileWorkflow({
   const [showEmptySlotModal, setShowEmptySlotModal] = useState(false);
   const [validationResult, setValidationResult] = useState<any>(null);
   const [emptySlotStrategy, setEmptySlotStrategy] = useState<EmptySlotStrategyType>('LEAVE_BLANK');
-  const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | null>(null);
+  const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL' | null>(null);
   const [pendingPaperSize, setPendingPaperSize] = useState('A4');
   const [pendingOrientation, setPendingOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
   const [pendingLayoutConfig, setPendingLayoutConfig] = useState<{ marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean; } | null>(null);
@@ -132,6 +134,40 @@ export function useCompileWorkflow({
     setWizardColGap(15); setWizardRowGap(15);
     setWizardBleed(0); setWizardCropMarks(true); setWizardFoldLine(true);
     setWizardEmptySlotStrategy('LEAVE_BLANK');
+    setShowCompileModal(true);
+  };
+
+  const handleCompileAllIndividual = (targetCardholders: Cardholder[]) => {
+    if (!targetCardholders || targetCardholders.length === 0) {
+      toast('No cardholders to print.', 'warning');
+      return;
+    }
+    const ids = targetCardholders.map(c => c.id);
+    setSelectedIds(ids);
+
+    const templateIds = [...new Set(targetCardholders.map((ch: any) => ch.resolvedTemplateId).filter(Boolean))];
+    if (templateIds.length === 1) {
+      setQTemplateId(String(templateIds[0]));
+      const tpl = quickTemplates.find(t => String(t.id) === String(templateIds[0]));
+      setQDetectedTemplateName(tpl?.name || null);
+      setQTemplateMixed(false);
+    } else if (templateIds.length > 1) {
+      setQTemplateId(String(templateIds[0]));
+      setQDetectedTemplateName(null);
+      setQTemplateMixed(true);
+    } else {
+      setQDetectedTemplateName(null);
+      setQTemplateMixed(false);
+      if (quickTemplates.length > 0 && !qTemplateId) {
+        setQTemplateId(String(quickTemplates[0].id));
+      }
+    }
+
+    setQJobResult(null);
+    setIndividualQueueStatus(null);
+    setWizardStep(1);
+    setWizardCompileType('INDIVIDUAL');
+    setWizardPaperSize('A4');
     setShowCompileModal(true);
   };
 
@@ -288,7 +324,38 @@ export function useCompileWorkflow({
     }
   };
 
-  const handleQuickCompile = async (type: 'APPROVAL' | 'PRODUCTION', cfg?: {
+  const proceedWithIndividualCompile = async (cardholderIds: number[], paperSize: string) => {
+    if (!qTemplateId || cardholderIds.length === 0) return;
+    setQCompiling('INDIVIDUAL');
+    setIndividualQueueStatus({ done: 0, total: cardholderIds.length });
+    try {
+      const result = await queueIndividualPrintJobs({
+        clientId,
+        templateId: Number(qTemplateId),
+        cardholderIds,
+        paperSize: paperSize === 'A3' ? 'A3' : 'A4',
+        onProgress: (done, total) => setIndividualQueueStatus({ done, total }),
+      });
+      if (result.queued > 0) {
+        toast(
+          `${result.queued} card${result.queued !== 1 ? 's' : ''} queued for individual printing` +
+          (result.failed > 0 ? ` — ${result.failed} failed (check credits)` : ''),
+          result.failed > 0 ? 'warning' : 'success'
+        );
+      } else {
+        toast('Failed to queue individual print jobs — check your credit balance.', 'error');
+      }
+      window.dispatchEvent(new Event('refresh-profile'));
+    } catch (e: any) {
+      toast(e.message || 'Failed to queue individual print jobs', 'error');
+    } finally {
+      setQCompiling(null);
+      setIndividualQueueStatus(null);
+      setShowCompileModal(false);
+    }
+  };
+
+  const handleQuickCompile = async (type: 'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL', cfg?: {
     paperSize: string; orientation: 'PORTRAIT'|'LANDSCAPE';
     marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
     colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean;
@@ -366,6 +433,22 @@ export function useCompileWorkflow({
         if (missingFields.length > 0) {
           missingList.push({ cardholderName: ch.name || `Cardholder #${ch.id}`, missingFields, cardholderId: ch.id });
         }
+      }
+
+      // Individual prints have no grid/empty-slot concept — one card, one page —
+      // so they only need the missing-field check above before queuing.
+      if (type === 'INDIVIDUAL') {
+        const individualPaperSize = livePaper === 'A3' ? 'A3' : 'A4';
+        setValidationResult({ missingFields: missingList, totalCards: selectedCards.length, totalSlots: selectedCards.length });
+        setPendingCompileType(type);
+        setPendingPaperSize(individualPaperSize);
+        setQCompiling(null);
+        if (missingList.length > 0) {
+          setShowValidationModal(true);
+        } else {
+          await proceedWithIndividualCompile(selectedIds, individualPaperSize);
+        }
+        return;
       }
 
       let pageWidth: number;
@@ -520,7 +603,8 @@ export function useCompileWorkflow({
     qJobResult, setQJobResult,
     qTemplateMixed, setQTemplateMixed,
     qDetectedTemplateName, setQDetectedTemplateName,
-    
+    individualQueueStatus,
+
     showValidationModal, setShowValidationModal,
     showEmptySlotModal, setShowEmptySlotModal,
     validationResult, setValidationResult,
@@ -536,8 +620,10 @@ export function useCompileWorkflow({
     handleWizardCustomCardDelete,
     handleOpenCompileModal,
     handleCompileIndividual,
+    handleCompileAllIndividual,
     handleCompileTable,
     proceedWithQuickCompile,
+    proceedWithIndividualCompile,
     handleQuickCompile,
   };
 }

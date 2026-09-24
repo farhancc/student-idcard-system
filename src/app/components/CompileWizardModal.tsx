@@ -6,7 +6,7 @@ import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimat
 import { isElectronApp } from '@/lib/isElectron';
 
 export interface CompileWizardConfig {
-  compileType: 'APPROVAL' | 'PRODUCTION';
+  compileType: 'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL';
   paperSize: string;
   orientation: 'PORTRAIT' | 'LANDSCAPE';
   marginLeft: number; marginRight: number;
@@ -33,7 +33,9 @@ interface Props {
 
 export default function CompileWizardModal({ cardCount, onClose, onCompile, compiling, progress }: Props) {
   const [step, setStep] = useState<1|2|3|4>(1);
-  const [compileType, setCompileType] = useState<'APPROVAL'|'PRODUCTION'|null>(null);
+  const [compileType, setCompileType] = useState<'APPROVAL'|'PRODUCTION'|'INDIVIDUAL'|null>(null);
+  const isIndividual = compileType === 'INDIVIDUAL';
+  const maxStep = isIndividual ? 2 : 4;
   const [paperSize, setPaperSize] = useState('A4');
   const [orientation, setOrientation] = useState<'PORTRAIT'|'LANDSCAPE'>('PORTRAIT');
   const [marginLeft, setMarginLeft] = useState(40);
@@ -231,7 +233,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
     }
   };
 
-  const stepLabels = ['File Type', 'Sheet Size', 'Layout', 'Empty Slots'];
+  const stepLabels = isIndividual ? ['File Type', 'Paper Size'] : ['File Type', 'Sheet Size', 'Layout', 'Empty Slots'];
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: '#fff', padding: '6px 10px' };
   const radioBox = (active: boolean, disabled: boolean = false) => ({
     display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '11px 14px',
@@ -252,14 +254,14 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
             <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Zap size={17} color="var(--primary)" /> Generate PDF — {cardCount} Card{cardCount !== 1 ? 's' : ''}
             </h3>
-            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>Step {step} of 4 — {stepLabels[step - 1]}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--muted)' }}>Step {step} of {maxStep} — {stepLabels[step - 1]}</p>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
         {/* Step indicator */}
         <div style={{ display: 'flex', gap: '6px' }}>
-          {[1,2,3,4].map(s => (
+          {Array.from({ length: maxStep }, (_, i) => i + 1).map(s => (
             <div key={s} style={{ flex: 1, height: '3px', borderRadius: '2px', background: s <= step ? 'var(--primary)' : 'rgba(255,255,255,0.1)', transition: 'background 0.3s' }} />
           ))}
         </div>
@@ -317,11 +319,35 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                     <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>Print-ready grid layout. Default A3 with crop marks.</div>
                   </div>
                 </label>
+                <label style={radioBox(compileType === 'INDIVIDUAL')}>
+                  <input type="radio" name="ctype" checked={compileType === 'INDIVIDUAL'} onChange={() => setCompileType('INDIVIDUAL')} />
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: '0.875rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FileText size={14} color="#94a3b8" /> Individual Cards
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px' }}>One PDF per card, at its real size, on its own page. Default A4.</div>
+                  </div>
+                </label>
               </div>
             )}
 
             {/* Step 2: Paper Size & Orientation */}
-            {step === 2 && (
+            {step === 2 && isIndividual && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Paper Size</span>
+                  <select className="form-input" value={paperSize === 'A3' ? 'A3' : 'A4'} onChange={e => setPaperSize(e.target.value)} style={{ background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}>
+                    <option value="A4">A4 — 210 × 297 mm</option>
+                    <option value="A3">A3 — 297 × 420 mm</option>
+                  </select>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.5 }}>
+                  Each card is placed at its real, unscaled size in the middle of the page you pick above — the card's own dimensions never change.
+                </p>
+              </div>
+            )}
+
+            {step === 2 && !isIndividual && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Paper Size</span>
@@ -736,7 +762,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
             {/* Footer */}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
               {step > 1 && <button className="btn btn-secondary" onClick={() => setStep((s) => (s - 1) as any)}>Back</button>}
-              {step < 4 ? (
+              {step < maxStep ? (
                 <button className="btn btn-primary" onClick={() => {
                   if (step === 1 && !compileType) return;
                   setStep((s) => (s + 1) as any);

@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CompileWizardModal from '@/app/components/CompileWizardModal';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
-import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X, Users, FileSpreadsheet, Upload, Plus } from 'lucide-react';
+import { Building2, ArrowLeft, RefreshCw, Search, Shuffle, UserCheck, UserX, Trash2, Download, CheckCircle2, X, Users, FileSpreadsheet, Upload, Plus, Printer } from 'lucide-react';
 
 import CardholderGroupedTables from './components/CardholderGroupedTables';
 import { CardholderViewModal } from './components/CardholderViewModal';
@@ -212,14 +212,27 @@ export default function ClientDetailsPage() {
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          style={{ fontSize: '0.85rem', padding: '8px 16px', marginBottom: '8px' }}
-          onClick={() => setActiveTab('add')}
-        >
-          <Plus size={15} /> Add Cardholder
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {activeTab === 'list' && filteredCardholders.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.85rem', padding: '8px 16px', marginBottom: '8px' }}
+              onClick={() => compileHooks.handleCompileAllIndividual(filteredCardholders)}
+              title="Print every listed card as its own separate PDF"
+            >
+              <Printer size={15} /> Print All Individually
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ fontSize: '0.85rem', padding: '8px 16px', marginBottom: '8px' }}
+            onClick={() => setActiveTab('add')}
+          >
+            <Plus size={15} /> Add Cardholder
+          </button>
+        </div>
       </div>
 
       {activeTab === 'list' && (
@@ -416,7 +429,9 @@ export default function ClientDetailsPage() {
           onFixRecords={() => compileHooks.setShowValidationModal(false)}
           onSkipAndPrint={() => {
             compileHooks.setShowValidationModal(false);
-            if (compileHooks.validationResult.totalSlots > compileHooks.validationResult.totalCards) {
+            if (compileHooks.pendingCompileType === 'INDIVIDUAL') {
+              compileHooks.proceedWithIndividualCompile(selectedIds, compileHooks.pendingPaperSize);
+            } else if (compileHooks.validationResult.totalSlots > compileHooks.validationResult.totalCards) {
               compileHooks.setShowEmptySlotModal(true);
             } else {
               compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
@@ -433,6 +448,9 @@ export default function ClientDetailsPage() {
           onCancel={() => compileHooks.setShowEmptySlotModal(false)}
           onConfirm={() => {
             compileHooks.setShowEmptySlotModal(false);
+            // INDIVIDUAL never reaches this modal (no grid/empty-slot concept),
+            // but the type still has to satisfy proceedWithQuickCompile's signature.
+            if (compileHooks.pendingCompileType === 'INDIVIDUAL') return;
             compileHooks.proceedWithQuickCompile(compileHooks.pendingCompileType!, true, compileHooks.emptySlotStrategy, compileHooks.pendingPaperSize, compileHooks.pendingOrientation, compileHooks.pendingLayoutConfig || undefined, compileHooks.pendingCustomCardId);
           }}
         />

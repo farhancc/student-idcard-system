@@ -7,7 +7,7 @@ import { getCreditSettings } from '@/lib/system-settings';
 
 const productionRequestSchema = z.object({
   orderId: z.union([z.number(), z.string().transform(Number)]),
-  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INVOICE']),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INVOICE', 'INDIVIDUAL']),
   paperSize: z.string().optional().default('A3'),
   orientation: z.string().optional().default('PORTRAIT'),
   bleed: z.union([z.number(), z.string().transform(Number)]).optional().default(0),
@@ -93,7 +93,9 @@ export async function POST(request: Request) {
     }
 
     // 1. Credit Check & Lock
-    const isProduction = pdfType === 'PRODUCTION';
+    // INDIVIDUAL jobs are billed exactly like PRODUCTION — same per-card rate,
+    // just one card per job instead of a shared grid sheet.
+    const isProduction = pdfType === 'PRODUCTION' || pdfType === 'INDIVIDUAL';
     const isDoubleSided = !!template.backImageUrl;
     const isIDCard = template.category === 'ID_CARD';
     

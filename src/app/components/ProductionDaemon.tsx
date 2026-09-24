@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
-import { renderCardSideToPdfBytesClient, embedImageBuffer, clearTemplateBgCache, clearFontBytesCache } from '@/lib/pdf/card-renderer-client';
+import { renderCardSideToPdfBytesClient, renderIndividualCardPdfClient, embedImageBuffer, clearTemplateBgCache, clearFontBytesCache } from '@/lib/pdf/card-renderer-client';
 import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
@@ -703,6 +703,69 @@ export default function ProductionDaemon() {
     }
   };
 
+  // One card (front, and back if double-sided), each at the template's real
+  // size — never rescaled into the CR-80 grid slot the PRODUCTION path uses —
+  // centered on its own page sized to whichever sheet (A4/A3) was chosen.
+  const compileIndividualCardLocally = async (jobPayload: any) => {
+    const { job, template, cardholders, order, pressFonts = [] } = jobPayload;
+    await updateProgress(job.id, 10, 'PROCESSING');
+
+    const ch = cardholders[0];
+    if (!ch) {
+      throw new Error('Individual print job has no cardholder attached');
+    }
+    addLog(`Preparing Individual Card PDF for ${ch.name} (#Job-${job.id})`);
+
+    const clientTemplate = {
+      id: template.id,
+      cardWidth: template.width || 1011,
+      cardHeight: template.height || 638,
+      frontImageUrl: template.frontImageUrl,
+      backImageUrl: template.backImageUrl,
+      frontOriginalUrl: template.frontOriginalUrl || null,
+      backOriginalUrl: template.backOriginalUrl || null,
+      frontFields: typeof template.frontFields === 'string' ? template.frontFields : JSON.stringify(template.frontFields || []),
+      backFields: typeof template.backFields === 'string' ? template.backFields : JSON.stringify(template.backFields || []),
+      version: template.version,
+    };
+
+    const clientCardholder = {
+      ...ch,
+      customFields: typeof ch.customFields === 'string' ? ch.customFields : JSON.stringify(ch.customFields || {}),
+    };
+
+    // Pre-cache the photo locally for robust offline rendering
+    const localCardholders = [{ ...clientCardholder }];
+    await cachePhotosForJob(localCardholders);
+
+    const metadata = job.metadata || {};
+    const paperSize: 'A4' | 'A3' = metadata.paperSize === 'A3' ? 'A3' : 'A4';
+
+    addLog(`Rendering individual card for ${ch.name} on ${paperSize}`);
+    await updateProgress(job.id, 40);
+
+    const finalBytes = await renderIndividualCardPdfClient(
+      clientTemplate,
+      localCardholders[0],
+      paperSize,
+      template.validTillDate ? new Date(template.validTillDate) : null,
+      pressFonts
+    );
+
+    const baseName = (job.fileName || 'individual.pdf').replace(/\.pdf$/i, '');
+    const uploader = createChunkedUploader(job, order, baseName);
+    uploader.addBytes(finalBytes.length);
+
+    await updateProgress(job.id, 95);
+    await uploader.finalize(finalBytes, true);
+
+    if (uploader.partCount > 0) {
+      await updateProgress(job.id, 100, 'PROCESSING');
+      await reportJobComplete(job.id, true, undefined, undefined, uploader.partCount);
+      addLog(`Individual card job completed: ${uploader.partCount} chunks generated.`);
+    }
+  };
+
   async function processJob(jobPayload: any) {
     const { job, cardholders, order, pressFonts = [] } = jobPayload;
     let template = jobPayload.template; // mutable reference so the fresh re-fetch below can update it
@@ -777,6 +840,10 @@ export default function ProductionDaemon() {
     }
     if (job.pdfType === 'APPROVAL') {
       await compileApprovalLocally(jobPayload);
+      return;
+    }
+    if (job.pdfType === 'INDIVIDUAL') {
+      await compileIndividualCardLocally(jobPayload);
       return;
     }
 

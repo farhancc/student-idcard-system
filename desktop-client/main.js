@@ -463,6 +463,8 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
       subfolder = 'proof';
     } else if (fnLower.includes('invoice')) {
       subfolder = 'invoices';
+    } else if (fnLower.includes('individual')) {
+      subfolder = 'individual cards';
     }
     const safeClientName = (clientName || 'Client').trim().replace(/[^a-z0-9_-]/gi, '_');
     const targetDir = path.join(documentsPath, 'idexo', safeClientName, subfolder);

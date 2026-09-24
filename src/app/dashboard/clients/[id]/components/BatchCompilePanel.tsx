@@ -751,62 +751,93 @@ export function BatchCompilePanel({
       try {
         // 4. Render locally (chunked so no single file/IPC payload is too large).
         const dateStr = new Date().toISOString().slice(0, 10);
-        const kind = cfg.compileType === 'PRODUCTION' ? 'production' : 'approval';
-        let blobs: Blob[];
 
-        if (cfg.compileType === 'PRODUCTION') {
-          const custom =
-            cfg.paperSize === 'SRA3'
-              ? { w: cfg.orientation === 'PORTRAIT' ? 907.09 : 1275.59, h: cfg.orientation === 'PORTRAIT' ? 1275.59 : 907.09 }
-              : cfg.paperSize === '13x19'
-              ? { w: cfg.orientation === 'PORTRAIT' ? 936 : 1368, h: cfg.orientation === 'PORTRAIT' ? 1368 : 936 }
-              : null;
-          const { generateProductionPdfChunkedClient } = await import('@/lib/pdf/production-pdf-generator');
-          blobs = await generateProductionPdfChunkedClient(
-            template,
-            cardholders,
-            {
-              paperSize: custom ? 'CUSTOM' : (cfg.paperSize as any),
-              orientation: cfg.orientation,
-              customWidth: custom?.w,
-              customHeight: custom?.h,
-              bleed: (cfg.bleed || 0) * MM_TO_PT,
-              cropMarks: cfg.cropMarks,
-              foldLine: cfg.foldLine,
-              marginLeft: cfg.marginLeft,
-              marginRight: cfg.marginRight,
-              marginTop: cfg.marginTop,
-              marginBottom: cfg.marginBottom,
-              colGap: cfg.colGap,
-              rowGap: cfg.rowGap,
-              emptySlotStrategy: cfg.emptySlotStrategy === 'FILL_CUSTOM' ? 'LEAVE_BLANK' : cfg.emptySlotStrategy,
-            },
-            pressFonts,
-            (pct) => setCompileProgress(Math.min(94, Math.max(10, Math.round(pct))))
-          );
-        } else {
-          const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
-          const hasBack = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
-          const perChunk = (hasBack ? 4 : 8) * 15;
-          const totalChunks = Math.max(1, Math.ceil(cardholders.length / perChunk));
-          blobs = [];
-          for (let i = 0; i < totalChunks; i++) {
-            setCompileProgress(Math.round(10 + (i / totalChunks) * 84));
-            const slice = cardholders.slice(i * perChunk, (i + 1) * perChunk);
-            blobs.push(await generateApprovalPdfClient(clientName || 'Client', 'Batch Import', template, slice, pressFonts));
+        if (cfg.compileType === 'INDIVIDUAL') {
+          // Unlike Production/Approval, each card becomes its own separate
+          // file (not pages of one shared document) — saved one at a time as
+          // it's rendered, at the card's real size, on the chosen sheet.
+          const { renderIndividualCardPdfClient } = await import('@/lib/pdf/card-renderer-client');
+          const paperSize: 'A4' | 'A3' = cfg.paperSize === 'A3' ? 'A3' : 'A4';
+          total = cardholders.length;
+          for (let i = 0; i < total; i++) {
+            const rawCustomFields = cardholders[i].customFields;
+            const cardBytes = await renderIndividualCardPdfClient(
+              template,
+              {
+                ...cardholders[i],
+                customFields: typeof rawCustomFields === 'string' ? rawCustomFields : JSON.stringify(rawCustomFields || {}),
+              },
+              paperSize,
+              template.validTillDate ? new Date(template.validTillDate) : null,
+              pressFonts
+            );
+            const safeName = String(cardholders[i].name || `card_${i + 1}`).replace(/[^a-z0-9]+/gi, '_');
+            const fileName = `individual_${safeName}_${dateStr}.pdf`;
+            const base64 = uint8ArrayToBase64(cardBytes);
+            const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
+            if (res && res.success === false) throw new Error(res.error || `Failed to save PDF for ${cardholders[i].name}.`);
+            if (!savedPath && res?.path) savedPath = res.path;
+            setCompileProgress(Math.min(100, Math.round(10 + ((i + 1) / total) * 84)));
           }
-        }
+          setCompileProgress(100);
+        } else {
+          const kind = cfg.compileType === 'PRODUCTION' ? 'production' : 'approval';
+          let blobs: Blob[];
 
-        // 5. Save each chunk into the client folder.
-        total = blobs.length;
-        for (let i = 0; i < total; i++) {
-          const part = total > 1 ? `_part${i + 1}of${total}` : '';
-          const fileName = `${kind}_batch_${cardholders.length}cards_${dateStr}${part}.pdf`;
-          const base64 = uint8ArrayToBase64(new Uint8Array(await blobs[i].arrayBuffer()));
-          const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
-          if (res && res.success === false) throw new Error(res.error || 'Failed to save PDF.');
-          if (!savedPath && res?.path) savedPath = res.path;
-          setCompileProgress(Math.min(100, Math.round(94 + ((i + 1) / total) * 6)));
+          if (cfg.compileType === 'PRODUCTION') {
+            const custom =
+              cfg.paperSize === 'SRA3'
+                ? { w: cfg.orientation === 'PORTRAIT' ? 907.09 : 1275.59, h: cfg.orientation === 'PORTRAIT' ? 1275.59 : 907.09 }
+                : cfg.paperSize === '13x19'
+                ? { w: cfg.orientation === 'PORTRAIT' ? 936 : 1368, h: cfg.orientation === 'PORTRAIT' ? 1368 : 936 }
+                : null;
+            const { generateProductionPdfChunkedClient } = await import('@/lib/pdf/production-pdf-generator');
+            blobs = await generateProductionPdfChunkedClient(
+              template,
+              cardholders,
+              {
+                paperSize: custom ? 'CUSTOM' : (cfg.paperSize as any),
+                orientation: cfg.orientation,
+                customWidth: custom?.w,
+                customHeight: custom?.h,
+                bleed: (cfg.bleed || 0) * MM_TO_PT,
+                cropMarks: cfg.cropMarks,
+                foldLine: cfg.foldLine,
+                marginLeft: cfg.marginLeft,
+                marginRight: cfg.marginRight,
+                marginTop: cfg.marginTop,
+                marginBottom: cfg.marginBottom,
+                colGap: cfg.colGap,
+                rowGap: cfg.rowGap,
+                emptySlotStrategy: cfg.emptySlotStrategy === 'FILL_CUSTOM' ? 'LEAVE_BLANK' : cfg.emptySlotStrategy,
+              },
+              pressFonts,
+              (pct) => setCompileProgress(Math.min(94, Math.max(10, Math.round(pct))))
+            );
+          } else {
+            const { generateApprovalPdfClient } = await import('@/lib/pdf/approval-pdf-generator');
+            const hasBack = !!template.backImageUrl || (template.backFields && template.backFields !== '[]');
+            const perChunk = (hasBack ? 4 : 8) * 15;
+            const totalChunks = Math.max(1, Math.ceil(cardholders.length / perChunk));
+            blobs = [];
+            for (let i = 0; i < totalChunks; i++) {
+              setCompileProgress(Math.round(10 + (i / totalChunks) * 84));
+              const slice = cardholders.slice(i * perChunk, (i + 1) * perChunk);
+              blobs.push(await generateApprovalPdfClient(clientName || 'Client', 'Batch Import', template, slice, pressFonts));
+            }
+          }
+
+          // 5. Save each chunk into the client folder.
+          total = blobs.length;
+          for (let i = 0; i < total; i++) {
+            const part = total > 1 ? `_part${i + 1}of${total}` : '';
+            const fileName = `${kind}_batch_${cardholders.length}cards_${dateStr}${part}.pdf`;
+            const base64 = uint8ArrayToBase64(new Uint8Array(await blobs[i].arrayBuffer()));
+            const res = await electronAPI.savePdfLocally(fileName, base64, clientName || 'Client');
+            if (res && res.success === false) throw new Error(res.error || 'Failed to save PDF.');
+            if (!savedPath && res?.path) savedPath = res.path;
+            setCompileProgress(Math.min(100, Math.round(94 + ((i + 1) / total) * 6)));
+          }
         }
       } catch (renderErr) {
         await settleHold(false);
@@ -1482,8 +1513,8 @@ export function BatchCompilePanel({
           <CheckCircle size={22} color="var(--success)" />
           <div>
             <div style={{ fontWeight: 700, color: 'var(--success)' }}>
-              {savedResult.type === 'PRODUCTION' ? 'Production' : 'Proof'} PDF saved locally
-              {savedResult.parts > 1 ? ` (${savedResult.parts} parts)` : ''}
+              {savedResult.type === 'PRODUCTION' ? 'Production' : savedResult.type === 'INDIVIDUAL' ? 'Individual card' : 'Proof'} PDF{savedResult.type === 'INDIVIDUAL' && savedResult.parts !== 1 ? 's' : ''} saved locally
+              {savedResult.type === 'INDIVIDUAL' ? ` (${savedResult.parts} card file${savedResult.parts !== 1 ? 's' : ''})` : (savedResult.parts > 1 ? ` (${savedResult.parts} parts)` : '')}
             </div>
             <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FolderOpen size={14} />
