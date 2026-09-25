@@ -48,11 +48,17 @@ export async function GET(request: Request) {
       MaxKeys: limit,
     }));
 
-    const objects = (result.Contents || []).map(obj => ({
-      key: obj.Key || '',
-      size: obj.Size ?? 0,
-      lastModified: obj.LastModified ? obj.LastModified.toISOString() : null,
-    }));
+    const objects = (result.Contents || []).map(obj => {
+      const key = obj.Key || '';
+      return {
+        key,
+        size: obj.Size ?? 0,
+        lastModified: obj.LastModified ? obj.LastModified.toISOString() : null,
+        // Same-origin proxy that already holds the R2 credentials (src/app/api/uploads/[...path]/route.ts)
+        // — lets the browser render a preview without exposing R2 credentials or needing R2_PUBLIC_DOMAIN/CSP changes.
+        previewUrl: key ? `/api/uploads/${key.split('/').map(encodeURIComponent).join('/')}` : null,
+      };
+    });
 
     return NextResponse.json({
       success: true,

@@ -1,10 +1,20 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Loader2, HardDrive, Trash2, Search, RefreshCw, ChevronRight } from 'lucide-react';
+import { Loader2, HardDrive, Trash2, Search, RefreshCw, ChevronRight, Eye, X, Download, FileQuestion } from 'lucide-react';
 
 interface StorageObject {
   key: string;
   size: number;
   lastModified: string | null;
+  previewUrl: string | null;
+}
+
+const IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg']);
+
+function getPreviewKind(key: string): 'image' | 'pdf' | null {
+  const ext = key.split('.').pop()?.toLowerCase() || '';
+  if (ext === 'pdf') return 'pdf';
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+  return null;
 }
 
 function formatBytes(bytes: number): string {
@@ -12,6 +22,47 @@ function formatBytes(bytes: number): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+function PreviewModal({ object, onClose }: { object: StorageObject; onClose: () => void }) {
+  const kind = getPreviewKind(object.key);
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 9900, background: 'rgba(3,4,7,0.8)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: 'rgba(13,16,27,0.98)', border: '1px solid var(--glass-border)', borderTop: '2px solid var(--primary)', borderRadius: '16px', padding: '20px', width: '100%', maxWidth: '900px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: '14px', boxShadow: '0 24px 64px rgba(0,0,0,0.6)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--muted)', wordBreak: 'break-all' }}>{object.key}</span>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            {object.previewUrl && (
+              <a href={object.previewUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <Download size={14} /> Open / Download
+              </a>
+            )}
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}><X size={18} /></button>
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', background: 'rgba(0,0,0,0.2)', borderRadius: '10px' }}>
+          {kind === 'image' && object.previewUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={object.previewUrl} alt={object.key} style={{ maxWidth: '100%', maxHeight: '75vh', objectFit: 'contain' }} />
+          ) : kind === 'pdf' && object.previewUrl ? (
+            <iframe src={object.previewUrl} title={object.key} style={{ width: '100%', height: '75vh', border: 'none', borderRadius: '8px' }} />
+          ) : (
+            <div style={{ textAlign: 'center', color: 'var(--muted)', padding: '40px' }}>
+              <FileQuestion size={36} style={{ marginBottom: '10px' }} />
+              <div>No inline preview for this file type.</div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function StorageTab() {
@@ -24,6 +75,7 @@ export function StorageTab() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [isTruncated, setIsTruncated] = useState(false);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [previewObj, setPreviewObj] = useState<StorageObject | null>(null);
   // Running total across pages actually loaded in this session — not the
   // whole bucket, since R2 has no cheap way to total an arbitrary prefix.
   const [loadedBytes, setLoadedBytes] = useState(0);
@@ -163,7 +215,16 @@ export function StorageTab() {
                     <td style={{ whiteSpace: 'nowrap', color: 'var(--muted)', fontSize: '0.85rem' }}>
                       {obj.lastModified ? new Date(obj.lastModified).toLocaleString() : '—'}
                     </td>
-                    <td>
+                    <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: '8px' }}>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => setPreviewObj(obj)}
+                        disabled={!getPreviewKind(obj.key)}
+                        title={getPreviewKind(obj.key) ? 'Preview' : 'No inline preview for this file type'}
+                      >
+                        <Eye size={14} /> Preview
+                      </button>
                       <button
                         className="btn btn-danger"
                         style={{ padding: '6px 12px', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -195,6 +256,8 @@ export function StorageTab() {
           )}
         </>
       )}
+
+      {previewObj && <PreviewModal object={previewObj} onClose={() => setPreviewObj(null)} />}
     </div>
   );
 }
