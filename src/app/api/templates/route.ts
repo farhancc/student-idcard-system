@@ -19,16 +19,6 @@ export async function GET(request: Request) {
       },
     });
 
-    const globalTemplates = await prisma.cardTemplate.findMany({
-      where: { pressId: null, isLatest: true, deletedAt: null },
-      orderBy: { name: 'asc' },
-      include: {
-        clientAssignments: {
-          select: { clientId: true },
-        },
-      },
-    });
-
     const purchases = await prisma.templatePurchase.findMany({
       where: { buyerPressId: pressId },
       select: { clonedTemplateId: true },
@@ -43,7 +33,7 @@ export async function GET(request: Request) {
         clientIds: t.clientAssignments.map((a: any) => a.clientId),
       }));
 
-    return NextResponse.json({ success: true, templates: mapTemplates(templates), globalTemplates: mapTemplates(globalTemplates) });
+    return NextResponse.json({ success: true, templates: mapTemplates(templates) });
   } catch (error) {
     console.error('Get templates error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Copy, Lightbulb, Store, Tag, ChevronDown, Search, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Lightbulb, Store, ChevronDown, Search, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -69,8 +69,6 @@ const getOptimizedImageUrl = (url: string) => {
 export default function TemplatesPage() {
   const { toast } = useToast();
   const [templates, setTemplates] = useState<any[]>([]);
-  const [globalTemplates, setGlobalTemplates] = useState<any[]>([]);
-  const [viewTab, setViewTab] = useState<'my' | 'starter'>('my');
   const [loading, setLoading] = useState(true);
   const [isElectron, setIsElectron] = useState(true);
   const [pressId, setPressId] = useState<number | null>(null);
@@ -224,50 +222,10 @@ export default function TemplatesPage() {
       if (res.ok) {
         const json = await res.json();
         setTemplates(json.templates || []);
-        setGlobalTemplates(json.globalTemplates || []);
       }
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCloneTemplate = async (tmpl: any) => {
-    setLoading(true);
-    try {
-      let baseName = `${tmpl.name} (Copy)`;
-      let uniqueName = baseName;
-      let counter = 2;
-      while (templates.some(t => t.name.trim().toLowerCase() === uniqueName.trim().toLowerCase())) {
-        uniqueName = `${baseName} ${counter}`;
-        counter++;
-      }
-
-      const res = await fetch('/api/templates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: uniqueName,
-          cardWidth: tmpl.cardWidth,
-          cardHeight: tmpl.cardHeight,
-          frontImageUrl: tmpl.frontImageUrl,
-          backImageUrl: tmpl.backImageUrl || null,
-          frontOriginalUrl: tmpl.frontOriginalUrl || null,
-          backOriginalUrl: tmpl.backOriginalUrl || null,
-          frontFields: tmpl.frontFields,
-          backFields: tmpl.backFields,
-        }),
-      });
-
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to clone template');
-
-      toast(`Successfully cloned "${tmpl.name}" to your library!`, 'success');
-      setViewTab('my');
-      fetchTemplates();
-    } catch (err: any) {
-      toast(err.message || 'Error cloning template', 'error');
       setLoading(false);
     }
   };
@@ -4523,7 +4481,7 @@ export default function TemplatesPage() {
             </h3>
             
             {(() => {
-              const tmpl = templates.find((t) => t.id === previewId) || globalTemplates.find((t) => t.id === previewId);
+              const tmpl = templates.find((t) => t.id === previewId);
               if (!tmpl) return <p style={{ color: 'var(--muted)' }}>Template not found</p>;
               return (
                 <div style={{

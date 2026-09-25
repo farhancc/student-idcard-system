@@ -66,10 +66,7 @@ export function useOrderList() {
       const templatesRes = await fetch('/api/templates');
       if (templatesRes.ok) {
         const json = await templatesRes.json();
-        const allTemplates = [
-          ...(json.templates || []),
-          ...(json.globalTemplates || []).map((t: any) => ({ ...t, name: `⭐ ${t.name} (Starter)` }))
-        ];
+        const allTemplates = json.templates || [];
         setTemplates(allTemplates);
         if (allTemplates.length > 0) setTemplateId(String(allTemplates[0].id));
       }

@@ -34,11 +34,7 @@ export function useClientData(clientId: number) {
       const res = await fetch(`/api/templates?_t=${Date.now()}`);
       if (res.ok) {
         const json = await res.json();
-        const list = [
-          ...(json.templates || []),
-          ...(json.globalTemplates || []).map((t: any) => ({ ...t, name: `⭐ ${t.name} (Starter)` }))
-        ];
-        setQuickTemplates(list);
+        setQuickTemplates(json.templates || []);
       }
     } catch (err) { console.error(err); }
   }, []);
