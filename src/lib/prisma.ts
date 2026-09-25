@@ -268,6 +268,12 @@ export const TENANT_MODELS = [
   'TemplatePurchase', 'TemplateLike', 'TemplateReport'
 ];
 
+// Tenant models that also carry rows shared with every press (pressId: null) —
+// global templates and the built-in/superadmin-provided font library. Reads on
+// these must OR in the null-pressId rows rather than being narrowed to the
+// current tenant only, the way every other tenant model is.
+const MODELS_WITH_GLOBAL_ROWS = ['CardTemplate', 'PressFont'];
+
 export const prisma = (basePrisma.$extends({
   query: {
     $allModels: {
@@ -299,7 +305,7 @@ export const prisma = (basePrisma.$extends({
             //     (pressId is not part of unique constraints, so findUnique can't accept it)
             if (['findUnique', 'findUniqueOrThrow'].includes(op)) {
               args.where = args.where || {};
-              if (model === 'CardTemplate') {
+              if (MODELS_WITH_GLOBAL_ROWS.includes(model)) {
                 const existingWhere = args.where;
                 args.where = {
                   AND: [
@@ -322,8 +328,8 @@ export const prisma = (basePrisma.$extends({
             // 1b. Read operations (inject tenant filter & soft-delete filter)
             if (['findFirst', 'findMany', 'count', 'aggregate', 'groupBy', 'findFirstOrThrow'].includes(op)) {
               args.where = args.where || {};
-              if (model === 'CardTemplate') {
-                // Allow global templates (pressId is null) or tenant-specific templates
+              if (MODELS_WITH_GLOBAL_ROWS.includes(model)) {
+                // Allow global rows (pressId is null) or tenant-specific rows
                 const existingWhere = args.where;
                 args.where = {
                   AND: [

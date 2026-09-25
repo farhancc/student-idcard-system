@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
+import { groupSelectableFonts } from '@/lib/fontLibrary';
 
 interface FieldCoordinate {
   field: string;
@@ -59,6 +60,7 @@ export default function CoordinateTable({
   setActiveTooltipSide
 }: CoordinateTableProps) {
   if (fields.length === 0) return null;
+  const selectableFonts = groupSelectableFonts(pressFonts);
 
   return (
                     <div className="table-container">
@@ -117,9 +119,18 @@ export default function CoordinateTable({
                                     {/* Row 2: Font family & Basic Styles */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                                       <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: getFontFamily(f.fontFamily) }} value={f.fontFamily || 'sans-serif'} onChange={e => onFieldChange(side, i, 'fontFamily', e.target.value)}>
-                                        {pressFonts.length > 0 && (
-                                          <optgroup label="── Custom Fonts">
-                                            {pressFonts.map(pf => (
+                                        {selectableFonts.builtin.length > 0 && (
+                                          <optgroup label="── Built-in Fonts">
+                                            {selectableFonts.builtin.map(pf => (
+                                              <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                                                {pf.name}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
+                                        {selectableFonts.custom.length > 0 && (
+                                          <optgroup label="── My Custom Fonts">
+                                            {selectableFonts.custom.map(pf => (
                                               <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
                                                 {pf.name}
                                               </option>
@@ -135,32 +146,6 @@ export default function CoordinateTable({
                                           <option value="Verdana">Verdana</option>
                                           <option value="Times New Roman">Times New Roman</option>
                                           <option value="Impact">Impact</option>
-                                        </optgroup>
-                                        <optgroup label="── Google – Modern">
-                                          <option value="Roboto">Roboto</option>
-                                          <option value="Open Sans">Open Sans</option>
-                                          <option value="Lato">Lato</option>
-                                          <option value="Montserrat">Montserrat</option>
-                                          <option value="Poppins">Poppins</option>
-                                          <option value="Raleway">Raleway</option>
-                                          <option value="Oswald">Oswald</option>
-                                          <option value="Nunito">Nunito</option>
-                                          <option value="Ubuntu">Ubuntu</option>
-                                        </optgroup>
-                                        <optgroup label="── Google – Display & Script">
-                                          <option value="Bebas Neue">Bebas Neue</option>
-                                          <option value="Dancing Script">Dancing Script</option>
-                                          <option value="Pacifico">Pacifico</option>
-                                          <option value="Lobster">Lobster</option>
-                                        </optgroup>
-                                        <optgroup label="── Google – Hindi / Devanagari">
-                                          <option value="Mukta">Mukta</option>
-                                          <option value="Hind">Hind</option>
-                                          <option value="Tiro Devanagari Hindi">Tiro Devanagari Hindi</option>
-                                          <option value="Baloo 2">Baloo 2</option>
-                                          <option value="Laila">Laila</option>
-                                          <option value="Yatra One">Yatra One</option>
-                                          <option value="Kalam">Kalam</option>
                                         </optgroup>
                                       </select>
                                       <select className="form-select" title="Font Weight" style={{ padding: '4px', fontSize: '0.75rem', width: '85px' }} value={f.fontWeight || 'normal'} onChange={e => onFieldChange(side, i, 'fontWeight', e.target.value)}>

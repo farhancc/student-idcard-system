@@ -4,6 +4,7 @@ import JsBarcode from 'jsbarcode';
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
 
@@ -867,6 +868,7 @@ export async function renderCardSideToPdfBytes(
   const bgUrl = originalUrl || previewUrl;
 
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   const page = pdfDoc.addPage([widthPt, heightPt]);
 
   // 1. Draw solid white background

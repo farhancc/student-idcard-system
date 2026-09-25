@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import type { FieldVisibilityRule, FieldComputeRule } from './field-resolver';
 
 export interface FieldCoordinate {
@@ -1175,6 +1176,7 @@ export async function renderCardSideToPdfBytesClient(
   }
 
   const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
   const page = pdfDoc.addPage([widthPt, heightPt]);
 
   // ── 1. White background ──────────────────────────────────────────────────

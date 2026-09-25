@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { autoDownloadJobFile } from '@/lib/downloadHelper';
 import { isElectronApp } from '@/lib/isElectron';
+import fontkit from '@pdf-lib/fontkit';
+import { groupSelectableFonts } from '@/lib/fontLibrary';
 
 const SERIAL_ZIP_MAX_PAGES = 15;
 
@@ -76,7 +78,9 @@ export default function SerialPrinterPage() {
 
   // ── Quantity & Print Sheet Layout State ──
   const [quantity, setQuantity] = useState<number>(20);
-  const [paperSize, setPaperSize] = useState<'A4' | 'LETTER' | 'SINGLE'>('A4');
+  const [paperSize, setPaperSize] = useState<'A4' | 'A3' | 'LETTER' | 'SINGLE' | 'CUSTOM'>('A4');
+  const [customWidthMm, setCustomWidthMm] = useState<number>(210);
+  const [customHeightMm, setCustomHeightMm] = useState<number>(297);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
   const [cols, setCols] = useState<number>(2);
   const [rows, setRows] = useState<number>(5);
@@ -97,6 +101,7 @@ export default function SerialPrinterPage() {
   const [clientsLoading, setClientsLoading] = useState<boolean>(false);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [creditsInfo, setCreditsInfo] = useState<{ charged: number; remaining: number } | null>(null);
+  const [pressFonts, setPressFonts] = useState<Array<{ id: number; pressId: number | null; name: string; fileUrl: string }>>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -129,6 +134,48 @@ export default function SerialPrinterPage() {
       }
     })();
   }, [uploadMode, clients.length, clientsLoading]);
+
+  // Load the press's custom fonts once, so they show up alongside the system
+  // font choices below and can be picked for the serial number text.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch('/api/fonts');
+        const json = await res.json().catch(() => ({}));
+        if (res.ok) setPressFonts(json.fonts || []);
+      } catch {
+        // Non-fatal — the font list simply stays empty.
+      }
+    })();
+  }, []);
+
+  // CSS-safe family name for a custom press font, so it can be referenced
+  // both in document.fonts registration and inline style="fontFamily".
+  const cssFontFamily = (family: string) => {
+    const isCustom = pressFonts.some(pf => pf.name.toLowerCase() === family.toLowerCase());
+    return isCustom ? family.replace(/\s+/g, '_') : family;
+  };
+
+  // Font-family picker options: built-in library vs this press's own uploads,
+  // with weight/style variant rows (e.g. "Lato Bold") collapsed out.
+  const selectableFonts = groupSelectableFonts(pressFonts);
+
+  // Load custom fonts into the browser so the live canvas preview renders them.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    pressFonts.forEach(font => {
+      const familyName = font.name.replace(/\s+/g, '_');
+      const isLoaded = Array.from(document.fonts.values()).some((f: any) => f.family === familyName);
+      if (!isLoaded && font.fileUrl) {
+        const fontFace = new FontFace(familyName, `url(${font.fileUrl})`);
+        fontFace.load().then(loadedFace => {
+          document.fonts.add(loadedFace);
+        }).catch(err => {
+          console.error(`Failed to load font ${font.name} in browser:`, err);
+        });
+      }
+    });
+  }, [pressFonts]);
 
   // Load PDF page into canvas data URL using pdfjs-dist
   const loadPdfTemplate = async (buffer: ArrayBuffer, pageNum: number = 1) => {
@@ -416,7 +463,7 @@ export default function SerialPrinterPage() {
       const currentFontSize = fontSize * scaleFactor;
 
       // Set text styles
-      ctx.font = `${fontStyle} ${fontWeight} ${currentFontSize}px ${fontFamily}`;
+      ctx.font = `${fontStyle} ${fontWeight} ${currentFontSize}px ${cssFontFamily(fontFamily)}`;
       ctx.textAlign = textAlign;
       ctx.textBaseline = 'middle';
 
@@ -456,6 +503,7 @@ export default function SerialPrinterPage() {
     posX,
     posY,
     fontFamily,
+    pressFonts,
     fontSize,
     fontWeight,
     fontStyle,
@@ -537,10 +585,24 @@ export default function SerialPrinterPage() {
     return { color: rgbFn(r, g, b), opacity };
   };
 
-  // Helper to select pdf-lib StandardFonts for vector text
+  // Helper to select the vector font for stamped serial text: a matching
+  // uploaded press font (embedded as real vector outlines) if the operator
+  // picked one, otherwise the closest pdf-lib StandardFonts fallback.
   const selectPdfFont = async (pdfDoc: any, family: string, weight: string, style: string, StandardFonts: any) => {
     const isBold = weight === '700' || weight === '900' || weight === '600' || weight === 'bold';
     const isItalic = style === 'italic';
+
+    const customFont = pressFonts.find(pf => pf.name.toLowerCase() === family.toLowerCase());
+    if (customFont) {
+      try {
+        pdfDoc.registerFontkit(fontkit);
+        const res = await fetch(customFont.fileUrl);
+        const fontBytes = await res.arrayBuffer();
+        return await pdfDoc.embedFont(fontBytes, { subset: true });
+      } catch (err) {
+        console.error(`Failed to embed custom font "${customFont.name}", falling back to Helvetica:`, err);
+      }
+    }
 
     if (family.includes('Courier') || family.includes('monospace')) {
       if (isBold && isItalic) return await pdfDoc.embedFont(StandardFonts.CourierBoldOblique);
@@ -592,6 +654,16 @@ export default function SerialPrinterPage() {
       if (paperSize === 'LETTER') {
         pageW = 215.9 * mmToPt;
         pageH = 279.4 * mmToPt;
+      }
+
+      if (paperSize === 'A3') {
+        pageW = 297 * mmToPt;
+        pageH = 420 * mmToPt;
+      }
+
+      if (paperSize === 'CUSTOM') {
+        pageW = Math.max(10, customWidthMm) * mmToPt;
+        pageH = Math.max(10, customHeightMm) * mmToPt;
       }
 
       if (orientation === 'landscape' && paperSize !== 'SINGLE') {
@@ -1264,13 +1336,38 @@ export default function SerialPrinterPage() {
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Font Family</label>
-                  <select className="form-select" value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
-                    <option value="Inter, sans-serif">Inter (Sans-Serif)</option>
-                    <option value="'Courier Prime', monospace">Monospace</option>
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="Georgia, serif">Georgia</option>
-                    <option value="Impact, sans-serif">Impact</option>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Font Family</span>
+                    <a href="/dashboard/settings" style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--primary)' }}>
+                      + Add Custom Font
+                    </a>
+                  </label>
+                  <select className="form-select" style={{ fontFamily: cssFontFamily(fontFamily) }} value={fontFamily} onChange={e => setFontFamily(e.target.value)}>
+                    {selectableFonts.builtin.length > 0 && (
+                      <optgroup label="── Built-in Fonts">
+                        {selectableFonts.builtin.map(pf => (
+                          <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                            {pf.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {selectableFonts.custom.length > 0 && (
+                      <optgroup label="── My Custom Fonts">
+                        {selectableFonts.custom.map(pf => (
+                          <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                            {pf.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="── System">
+                      <option value="Inter, sans-serif">Inter (Sans-Serif)</option>
+                      <option value="'Courier Prime', monospace">Monospace</option>
+                      <option value="Arial, sans-serif">Arial</option>
+                      <option value="Georgia, serif">Georgia</option>
+                      <option value="Impact, sans-serif">Impact</option>
+                    </optgroup>
                   </select>
                 </div>
 
@@ -1403,10 +1500,35 @@ export default function SerialPrinterPage() {
               <label className="form-label">Paper Size</label>
               <select className="form-select" value={paperSize} onChange={e => setPaperSize(e.target.value as any)}>
                 <option value="A4">A4 Sheet (210 x 297 mm)</option>
+                <option value="A3">A3 Sheet (297 x 420 mm)</option>
                 <option value="LETTER">US Letter Sheet (8.5 x 11 in)</option>
                 <option value="SINGLE">Single PDF per Page</option>
+                <option value="CUSTOM">Custom Size (mm)</option>
               </select>
             </div>
+
+            {paperSize === 'CUSTOM' && (
+              <div className="form-group">
+                <label className="form-label">Custom Dimensions (mm)</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <input
+                    type="number" min="10" max="2000"
+                    className="form-input"
+                    placeholder="Width"
+                    value={customWidthMm}
+                    onChange={e => setCustomWidthMm(Math.max(10, Number(e.target.value)))}
+                  />
+                  <span style={{ color: 'var(--muted)' }}>×</span>
+                  <input
+                    type="number" min="10" max="2000"
+                    className="form-input"
+                    placeholder="Height"
+                    value={customHeightMm}
+                    onChange={e => setCustomHeightMm(Math.max(10, Number(e.target.value)))}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Orientation</label>

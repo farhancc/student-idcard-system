@@ -1,6 +1,7 @@
 import React from 'react';
 import { Copy, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { FieldCoordinate } from '@/lib/pdf/card-renderer-client';
+import { groupSelectableFonts } from '@/lib/fontLibrary';
 import FieldRulesEditor from './FieldRulesEditor';
 
 export interface FieldTooltipProps {
@@ -38,6 +39,7 @@ export default function FieldTooltip({
   getFieldSelfOverflow
 }: FieldTooltipProps) {
   const isTextLike = f.type === 'text' || f.type === 'id' || f.type === 'date' || f.type === 'number';
+  const selectableFonts = groupSelectableFonts(pressFonts);
 
   const x = f.x * scale;
   const yOffset = yOffsets.get(index) ?? 0;
@@ -389,12 +391,25 @@ export default function FieldTooltip({
                 <option style={{ background: '#1e293b', color: '#ffffff' }} value="Times New Roman">Times New Roman</option>
                 <option style={{ background: '#1e293b', color: '#ffffff' }} value="Courier New">Courier New</option>
               </optgroup>
-              {pressFonts && pressFonts.length > 0 && (
-                <optgroup label="Custom Fonts" style={{ background: '#1e293b', color: '#ffffff' }}>
-                  {pressFonts.map((pf) => (
-                    <option 
-                      key={pf.id} 
-                      style={{ background: '#1e293b', color: '#ffffff' }} 
+              {selectableFonts.builtin.length > 0 && (
+                <optgroup label="Built-in Fonts" style={{ background: '#1e293b', color: '#ffffff' }}>
+                  {selectableFonts.builtin.map((pf) => (
+                    <option
+                      key={pf.id}
+                      style={{ background: '#1e293b', color: '#ffffff' }}
+                      value={pf.name}
+                    >
+                      {pf.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {selectableFonts.custom.length > 0 && (
+                <optgroup label="My Custom Fonts" style={{ background: '#1e293b', color: '#ffffff' }}>
+                  {selectableFonts.custom.map((pf) => (
+                    <option
+                      key={pf.id}
+                      style={{ background: '#1e293b', color: '#ffffff' }}
                       value={pf.name}
                     >
                       {pf.name}

@@ -11,6 +11,7 @@ import { CanvasRuler, GuideDifferences } from './components/CanvasRuler';
 import TemplateListGrid from './components/TemplateListGrid';
 
 import { TEMPLATE_CATEGORIES, TemplateCategory, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_DIMENSIONS } from './components/constants';
+import { groupSelectableFonts } from '@/lib/fontLibrary';
 
 const SMART_SUGGESTIONS: Record<TemplateCategory, string[]> = {
   ID_CARD:      ['photo', 'name', 'id', 'department', 'qr'],
@@ -91,6 +92,10 @@ export default function TemplatesPage() {
     const isCustom = pressFonts.some(pf => pf.name.toLowerCase() === family.toLowerCase());
     return isCustom ? family.replace(/\s+/g, '_') : family;
   };
+
+  // Font-family picker options: built-in library vs this press's own uploads,
+  // with weight/style variant rows (e.g. "Lato Bold") collapsed out.
+  const selectableFonts = groupSelectableFonts(pressFonts);
 
   useEffect(() => {
     setIsElectron(typeof window !== 'undefined' && !!(window as any).electronAPI);
@@ -3695,9 +3700,18 @@ export default function TemplatesPage() {
                                     {/* Row 2: Font family & Basic Styles */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                                       <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: getFontFamily(f.fontFamily) }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('front', i, 'fontFamily', e.target.value)}>
-                                        {pressFonts.length > 0 && (
-                                          <optgroup label="── Custom Fonts">
-                                            {pressFonts.map(pf => (
+                                        {selectableFonts.builtin.length > 0 && (
+                                          <optgroup label="── Built-in Fonts">
+                                            {selectableFonts.builtin.map(pf => (
+                                              <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                                                {pf.name}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
+                                        {selectableFonts.custom.length > 0 && (
+                                          <optgroup label="── My Custom Fonts">
+                                            {selectableFonts.custom.map(pf => (
                                               <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
                                                 {pf.name}
                                               </option>
@@ -3939,9 +3953,18 @@ export default function TemplatesPage() {
                                     {/* Row 2: Font family & Basic Styles */}
                                     <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap', alignItems: 'center' }}>
                                       <select className="form-select" style={{ padding: '4px', fontSize: '0.75rem', flex: 1, minWidth: '110px', fontFamily: getFontFamily(f.fontFamily) }} value={f.fontFamily || 'sans-serif'} onChange={e => handleFieldChange('back', i, 'fontFamily', e.target.value)}>
-                                        {pressFonts.length > 0 && (
-                                          <optgroup label="── Custom Fonts">
-                                            {pressFonts.map(pf => (
+                                        {selectableFonts.builtin.length > 0 && (
+                                          <optgroup label="── Built-in Fonts">
+                                            {selectableFonts.builtin.map(pf => (
+                                              <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
+                                                {pf.name}
+                                              </option>
+                                            ))}
+                                          </optgroup>
+                                        )}
+                                        {selectableFonts.custom.length > 0 && (
+                                          <optgroup label="── My Custom Fonts">
+                                            {selectableFonts.custom.map(pf => (
                                               <option key={pf.id} value={pf.name} style={{ fontFamily: pf.name.replace(/\s+/g, '_') }}>
                                                 {pf.name}
                                               </option>
