@@ -99,166 +99,6 @@ if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = basePrisma;
 // Export the raw client for cross-tenant reads (e.g. marketplace — shows ALL presses)
 export { basePrisma };
 
-async function syncTemplateFields(templateId: number, db: any = basePrisma) {
-  const tmpl = await db.cardTemplate.findUnique({
-    where: { id: templateId },
-  });
-  if (!tmpl) return;
-
-  let frontFields: any[] = [];
-  let backFields: any[] = [];
-  try { if (tmpl.frontFields) frontFields = JSON.parse(tmpl.frontFields); } catch {}
-  try { if (tmpl.backFields) backFields = JSON.parse(tmpl.backFields); } catch {}
-
-  const merged = [
-    ...frontFields.map((f: any) => ({ ...f, side: 'front' })),
-    ...backFields.map((f: any) => ({ ...f, side: 'back' })),
-  ];
-
-  const activeKeys = new Set<string>();
-
-  for (let i = 0; i < merged.length; i++) {
-    const f = merged[i];
-    if (!f.field) continue;
-    const side = f.side || 'front';
-    activeKeys.add(`${f.field}:${side}`);
-
-    await db.templateField.upsert({
-      where: {
-        templateId_field_side: {
-          templateId,
-          field: f.field,
-          side,
-        }
-      },
-      update: {
-        type: f.type || 'text',
-        x: Number(f.x) || 0,
-        y: Number(f.y) || 0,
-        width: Number(f.width) || 100,
-        height: Number(f.height) || 30,
-        fontSize: f.fontSize ? Number(f.fontSize) : null,
-        fontWeight: f.fontWeight || 'normal',
-        fontFamily: f.fontFamily || null,
-        color: f.color || '#000000',
-        align: f.align || 'left',
-        verticalAlign: f.verticalAlign || 'top',
-        isRequired: Boolean(f.required || f.isRequired),
-        prefix: f.prefix || null,
-        suffix: f.suffix || null,
-        lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
-        sortOrder: i,
-        validationPattern: f.validationPattern || f.pattern || null,
-        maxLength: f.maxLength ? Number(f.maxLength) : (f.length ? Number(f.length) : null),
-      },
-      create: {
-        templateId,
-        field: f.field,
-        type: f.type || 'text',
-        side,
-        x: Number(f.x) || 0,
-        y: Number(f.y) || 0,
-        width: Number(f.width) || 100,
-        height: Number(f.height) || 30,
-        fontSize: f.fontSize ? Number(f.fontSize) : null,
-        fontWeight: f.fontWeight || 'normal',
-        fontFamily: f.fontFamily || null,
-        color: f.color || '#000000',
-        align: f.align || 'left',
-        verticalAlign: f.verticalAlign || 'top',
-        isRequired: Boolean(f.required || f.isRequired),
-        prefix: f.prefix || null,
-        suffix: f.suffix || null,
-        lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
-        sortOrder: i,
-        validationPattern: f.validationPattern || f.pattern || null,
-        maxLength: f.maxLength ? Number(f.maxLength) : (f.length ? Number(f.length) : null),
-      }
-    });
-  }
-
-  const existingFields = await db.templateField.findMany({
-    where: { templateId },
-    select: { field: true, side: true }
-  });
-
-  for (const ef of existingFields) {
-    if (!activeKeys.has(`${ef.field}:${ef.side}`)) {
-      await db.templateField.delete({
-        where: {
-          templateId_field_side: {
-            templateId,
-            field: ef.field,
-            side: ef.side,
-          }
-        }
-      });
-    }
-  }
-}
-
-async function syncCardholderValues(cardholderId: number, db: any = basePrisma) {
-  const ch = await db.cardholder.findUnique({
-    where: { id: cardholderId },
-  });
-  if (!ch) return;
-
-  let customFields: Record<string, any> = {};
-  try { if (ch.customFields) customFields = JSON.parse(ch.customFields); } catch {}
-
-  const idVal = customFields.uniqueKey || customFields.id || customFields.unique_key || null;
-
-  const allValues: Record<string, string> = {
-    name: ch.name,
-    ...(ch.designation ? { designation: ch.designation } : {}),
-    ...(ch.photoUrl ? { photo: ch.photoUrl } : {}),
-    ...(idVal ? { id: String(idVal) } : {}),
-    ...(ch.cardSerial ? { cardSerial: ch.cardSerial } : {}),
-    ...Object.fromEntries(
-      Object.entries(customFields)
-        .filter(([k]) => k !== '__proto__' && k !== 'constructor' && k !== 'prototype')
-        .map(([k, v]) => [k, v !== null && v !== undefined ? String(v) : ''])
-    ),
-  };
-
-  const activeFields = new Set<string>();
-
-  for (const [field, value] of Object.entries(allValues)) {
-    if (!field || value === undefined || value === null) continue;
-    activeFields.add(field);
-
-    await db.cardholderValue.upsert({
-      where: {
-        cardholderId_field: {
-          cardholderId,
-          field,
-        }
-      },
-      update: { value: String(value) },
-      create: { cardholderId, field, value: String(value) }
-    });
-  }
-
-  // Delete cardholder values no longer present
-  const existingValues = await db.cardholderValue.findMany({
-    where: { cardholderId },
-    select: { field: true }
-  });
-
-  for (const ev of existingValues) {
-    if (!activeFields.has(ev.field)) {
-      await db.cardholderValue.delete({
-        where: {
-          cardholderId_field: {
-            cardholderId,
-            field: ev.field,
-          }
-        }
-      });
-    }
-  }
-}
-
 export const TENANT_MODELS = [
   'PressUser', 'Client', 'Cardholder', 'CardTemplate', 'CardOrder',
   'OrderInvoice', 'CardSerialCounter', 'CardPrintRecord', 'PdfDownloadLog',
@@ -358,7 +198,10 @@ export const prisma = (basePrisma.$extends({
             }
 
             // 2. Write operations (inject tenant on creation/modification)
-            if (['create', 'createMany'].includes(op)) {
+            // createManyAndReturn takes the same array-of-rows shape as
+            // createMany; without it listed here a caller that forgets to set
+            // pressId in the payload writes rows with no tenant.
+            if (['create', 'createMany', 'createManyAndReturn'].includes(op)) {
               if (Array.isArray(args.data)) {
                 args.data = args.data.map((item: any) => ({ ...item, [pressIdField]: pressId }));
               } else {
@@ -381,37 +224,7 @@ export const prisma = (basePrisma.$extends({
           // Note: if ctx is { system: true }, tenant filtering is deliberately skipped.
         }
 
-        const result = await query(args);
-
-        // Double-write logic for CardTemplate
-        if (model === 'CardTemplate' && ['create', 'update', 'upsert'].includes(op) && result) {
-          const items = Array.isArray(result) ? result : [result];
-          for (const item of items) {
-            if (item && item.id) {
-              try {
-                await syncTemplateFields(item.id, (this as any) || basePrisma);
-              } catch (err) {
-                console.error(`[Prisma Double-Write] Error syncing TemplateFields for template ${item.id}:`, err);
-              }
-            }
-          }
-        }
-
-        // Double-write logic for Cardholder
-        if (model === 'Cardholder' && ['create', 'update', 'upsert'].includes(op) && result) {
-          const items = Array.isArray(result) ? result : [result];
-          for (const item of items) {
-            if (item && item.id) {
-              try {
-                await syncCardholderValues(item.id, (this as any) || basePrisma);
-              } catch (err) {
-                console.error(`[Prisma Double-Write] Error syncing CardholderValues for cardholder ${item.id}:`, err);
-              }
-            }
-          }
-        }
-
-        return result;
+        return query(args);
       }
     }
   }

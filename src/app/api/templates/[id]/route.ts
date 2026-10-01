@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { syncTemplateFieldRows } from '@/lib/template-field-sync';
 import { updateTemplateSchema } from '@/lib/schemas';
 import { writeAuditLog, getActorFromRequest, AuditActions } from '@/lib/audit-log';
 import { getActor, requireActor } from '@/lib/authz';
@@ -119,62 +120,8 @@ export async function PUT(
         },
       });
 
-      // 2. Synchronize normalized TemplateField table (defensively handle duplicate/missing field names)
-      try {
-        await tx.templateField.deleteMany({ where: { templateId } });
-
-        let parsedFront: any[] = [];
-        let parsedBack: any[] = [];
-        try { parsedFront = JSON.parse(sanitizedFrontFields || '[]'); } catch {}
-        try { parsedBack = JSON.parse(sanitizedBackFields || '[]'); } catch {}
-
-        const seenFields = new Set<string>();
-        const fieldRows: any[] = [];
-
-        const processFields = (fields: any[], side: 'front' | 'back') => {
-          fields.forEach((f: any, idx: number) => {
-            const rawKey = f.field || f.id || `field_${side}_${idx + 1}`;
-            let uniqueKey = String(rawKey).trim();
-            let counter = 1;
-            while (seenFields.has(`${side}:${uniqueKey.toLowerCase()}`)) {
-              counter++;
-              uniqueKey = `${rawKey}_${counter}`;
-            }
-            seenFields.add(`${side}:${uniqueKey.toLowerCase()}`);
-
-            fieldRows.push({
-              templateId,
-              field: uniqueKey,
-              type: f.type || 'text',
-              side,
-              x: Number(f.x || 0),
-              y: Number(f.y || 0),
-              width: Number(f.width || 0),
-              height: Number(f.height || 0),
-              fontSize: f.fontSize ? Number(f.fontSize) : null,
-              fontWeight: f.fontWeight || 'normal',
-              fontFamily: f.fontFamily || null,
-              color: f.color || '#000000',
-              align: f.align || 'left',
-              verticalAlign: f.verticalAlign || 'top',
-              isRequired: Boolean(f.required || f.isRequired),
-              prefix: f.prefix || null,
-              suffix: f.suffix || null,
-              lineHeight: f.lineHeight ? Number(f.lineHeight) : 1.2,
-              sortOrder: idx + 1,
-            });
-          });
-        };
-
-        processFields(parsedFront, 'front');
-        processFields(parsedBack, 'back');
-
-        if (fieldRows.length > 0) {
-          await tx.templateField.createMany({ data: fieldRows, skipDuplicates: true });
-        }
-      } catch (tfErr) {
-        console.warn('[PUT Template] Non-fatal issue syncing templateField table:', tfErr);
-      }
+      // 2. Synchronize normalized TemplateField table
+      await syncTemplateFieldRows(tx, templateId, sanitizedFrontFields, sanitizedBackFields);
 
       // Sync client assignments if provided
       if (clientIds !== undefined) {

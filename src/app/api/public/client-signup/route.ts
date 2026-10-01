@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, enterPressContext } from '@/lib/prisma';
+import { syncTemplateFieldRows } from '@/lib/template-field-sync';
 import crypto from 'crypto';
 
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
           isLatest: true,
         },
       });
+      await syncTemplateFieldRows(prisma, newTemplate.id, newTemplate.frontFields, newTemplate.backFields);
       templateId = newTemplate.id;
     }
 

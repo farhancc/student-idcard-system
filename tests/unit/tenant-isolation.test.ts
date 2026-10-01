@@ -139,6 +139,21 @@ describe('signed tenant context', () => {
     expect(up.update.pressId).toBe(7);
   });
 
+  it('injects the tenant into every row of a bulk create', async () => {
+    // createManyAndReturn takes createMany's array-of-rows shape. It was absent
+    // from the injection list, so bulk inserts relied entirely on the caller
+    // remembering to put pressId in each payload.
+    for (const op of ['createMany', 'createManyAndReturn']) {
+      const args = await run('Cardholder', op, { data: [{ name: 'a' }, { name: 'b' }] });
+      expect(args.data.map((d: any) => d.pressId), op).toEqual([7, 7]);
+    }
+  });
+
+  it('overrides a bulk-create payload that names the wrong tenant', async () => {
+    const args = await run('Cardholder', 'createManyAndReturn', { data: [{ name: 'a', pressId: 99 }] });
+    expect(args.data[0].pressId).toBe(7);
+  });
+
   it('uses buyerPressId for TemplatePurchase', async () => {
     const args = await run('TemplatePurchase', 'findMany');
     expect(args.where.buyerPressId).toBe(7);
@@ -190,5 +205,55 @@ describe('explicit context wrappers', () => {
   it('withSystemContext runs unscoped', async () => {
     const args = await prismaModule.withSystemContext(() => run('Cardholder', 'findMany'));
     expect(args.where.pressId).toBeUndefined();
+  });
+});
+
+describe('post-write hooks', () => {
+  /**
+   * The extension used to run a "double-write" after every Cardholder and
+   * CardTemplate write, mirroring the field JSON into CardholderValue and
+   * TemplateField. It could never work: Prisma dispatches query callbacks as
+   * `callbacks[n](params)`, so `this` is the callbacks array, not a client, and
+   * `(this || basePrisma).cardholder` was undefined. Every write threw a
+   * TypeError straight into the hook's own try/catch.
+   *
+   * TemplateField is now written by the routes that own the template (see
+   * src/lib/template-field-sync.ts). This pins the hook as write-through so a
+   * future sync does not get re-added in a position where it silently fails.
+   */
+  it('forwards a write without issuing follow-up queries of its own', async () => {
+    signHeaders(1, 7, 'OWNER', 'tenant');
+    const errors: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => { errors.push(a); });
+
+    let queryCalls = 0;
+    const result = await hook({
+      model: 'Cardholder',
+      operation: 'create',
+      args: { data: { name: 'Asha' } },
+      query: async () => { queryCalls++; return { id: 1, name: 'Asha', customFields: '{"roll":"7"}' }; },
+    });
+
+    spy.mockRestore();
+    expect(queryCalls).toBe(1);
+    expect(result).toEqual({ id: 1, name: 'Asha', customFields: '{"roll":"7"}' });
+    expect(errors, 'no swallowed double-write failure').toEqual([]);
+  });
+
+  it('forwards a CardTemplate write the same way', async () => {
+    signHeaders(1, 7, 'OWNER', 'tenant');
+    const errors: unknown[][] = [];
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => { errors.push(a); });
+
+    const result = await hook({
+      model: 'CardTemplate',
+      operation: 'update',
+      args: { where: { id: 3 }, data: { name: 'T' } },
+      query: async () => ({ id: 3, frontFields: '[{"field":"name"}]', backFields: '[]' }),
+    });
+
+    spy.mockRestore();
+    expect(result).toEqual({ id: 3, frontFields: '[{"field":"name"}]', backFields: '[]' });
+    expect(errors).toEqual([]);
   });
 });

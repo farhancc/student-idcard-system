@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, basePrisma } from '@/lib/prisma';
+import { syncTemplateFieldRows } from '@/lib/template-field-sync';
 import { requireRole } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
@@ -132,6 +133,10 @@ export async function POST(request: Request) {
           // Don't copy file URLs — buyer downloads via /api/marketplace/download?templateId=originalId
         },
       });
+
+      // The clone carries the source template's field JSON, so it needs the
+      // matching normalized rows too.
+      await syncTemplateFieldRows(tx, cloned.id, cloned.frontFields, cloned.backFields);
 
       // Record the purchase
       const purchase = await tx.templatePurchase.create({

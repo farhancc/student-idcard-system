@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { syncTemplateFieldRows } from '@/lib/template-field-sync';
 import { templateSchema } from '@/lib/schemas';
 
 export async function GET(request: Request) {
@@ -97,6 +98,10 @@ export async function POST(request: Request) {
         isLatest: true,
       },
     });
+
+    // Normalized field rows — the CSV importer validates against these, and a
+    // template with none is imported unvalidated.
+    await syncTemplateFieldRows(prisma, template.id, template.frontFields, template.backFields);
 
     // Sync client assignments (multi-client)
     if (clientIds && clientIds.length > 0) {
