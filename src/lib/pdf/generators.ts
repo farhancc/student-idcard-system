@@ -1,5 +1,5 @@
 import { PDFDocument, rgb, StandardFonts, PDFName, PDFString, PDFDict, degrees } from 'pdf-lib';
-import { getOrRenderCard } from './cache-manager';
+import { createCardRenderContext, getOrRenderCard } from './cache-manager';
 import { FieldCoordinate } from './card-engine';
 import { getResolvedFieldValue, resolveFieldRawValue, formatFieldLabel } from './field-resolver';
 import { prisma } from '../prisma';
@@ -126,14 +126,8 @@ export class IndividualPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({
-      where: {
-        OR: [
-          { pressId },
-          { pressId: null }
-        ]
-      }
-    });
+    // Template, fonts, cardholders and cache rows for the whole job, read once.
+    const renderCtx = await createCardRenderContext(pressId, order.templateId, order.validTill, cardholderIds);
 
     // CR-80 Standard Dimensions: 85.6mm x 53.98mm -> 242.6 pt x 153 pt
     const isPortraitTemplate = (order.template?.cardWidth || 1011) < (order.template?.cardHeight || 638);
@@ -144,11 +138,11 @@ export class IndividualPdfGenerator implements IPdfGenerator {
     const total = cardholderIds.length;
     for (let i = 0; i < total; i++) {
       const chId = cardholderIds[i];
-      const cardholder = await prisma.cardholder.findFirst({ where: { id: chId, pressId } });
+      const cardholder = renderCtx.cardholders.get(chId);
       if (!cardholder) continue;
 
       // Get rendered front and back card images (utilizes caching layer)
-      const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(pressId, cardholder.id, order.templateId, order.validTill);
+      const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(renderCtx, cardholder);
       
       if (frontPdfBuffer && backPdfBuffer) {
         const frontPages = await pdfDoc.embedPdf(frontPdfBuffer);
@@ -198,14 +192,8 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({
-      where: {
-        OR: [
-          { pressId },
-          { pressId: null }
-        ]
-      }
-    });
+    // Template, fonts, cardholders and cache rows for the whole job, read once.
+    const renderCtx = await createCardRenderContext(pressId, order.templateId, order.validTill, cardholderIds);
 
     // A4 Portrait Size: 595.27 pt x 841.89 pt
     const pageWidth = 595.27;
@@ -244,7 +232,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
 
       for (let idx = startChIdx; idx < endChIdx; idx++) {
         const chId = cardholderIds[idx];
-        const cardholder = await prisma.cardholder.findFirst({ where: { id: chId, pressId } });
+        const cardholder = renderCtx.cardholders.get(chId);
         if (!cardholder) continue;
 
         const rowIdx = idx - startChIdx; // 0, 1, 2, 3
@@ -253,7 +241,7 @@ export class ApprovalPdfGenerator implements IPdfGenerator {
 
 
         // Render card sides (utilizes caching layer)
-        const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(pressId, cardholder.id, order.templateId, order.validTill);
+        const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(renderCtx, cardholder);
         
         if (frontPdfBuffer && backPdfBuffer) {
           const frontPages = await pdfDoc.embedPdf(frontPdfBuffer);
@@ -489,14 +477,8 @@ export class ProductionPdfGenerator implements IPdfGenerator {
     });
     if (!order) throw new Error('Order not found');
 
-    const pressFonts = await prisma.pressFont.findMany({
-      where: {
-        OR: [
-          { pressId },
-          { pressId: null }
-        ]
-      }
-    });
+    // Template, fonts, cardholders and cache rows for the whole job, read once.
+    const renderCtx = await createCardRenderContext(pressId, order.templateId, order.validTill, cardholderIds);
 
     // Page dimensions in points
     // A3 Portrait: 841.89 pt x 1190.55 pt
@@ -620,7 +602,7 @@ export class ProductionPdfGenerator implements IPdfGenerator {
           // Leave slot blank
           continue;
         }
-        const cardholder = await prisma.cardholder.findFirst({ where: { id: chId, pressId } });
+        const cardholder = renderCtx.cardholders.get(chId);
         if (!cardholder) continue;
 
         const colIdx = gridIdx % cols;
@@ -641,7 +623,7 @@ export class ProductionPdfGenerator implements IPdfGenerator {
         }
 
         // Render card sides (utilizes caching layer)
-        const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(pressId, cardholder.id, order.templateId, order.validTill);
+        const { frontBuffer, backBuffer, frontPdfBuffer, backPdfBuffer } = await getOrRenderCard(renderCtx, cardholder);
 
         if (isSingleSided) {
           // ── Single-sided: front only ──
