@@ -143,13 +143,25 @@ async function handleCleanup(request: Request) {
       where: { status: 'PENDING', createdAt: { lt: new Date(Date.now() - 60 * 60 * 1000) } },
       select: { id: true, pressId: true, amount: true },
     });
-    let holdsRefunded = 0;
+    // Refund per press rather than per hold: a press with 50 stale holds gets
+    // one credit increment for their total, and all the holds settle together.
+    const refundByPress = new Map<number, number>();
     for (const hold of staleHolds) {
+      refundByPress.set(hold.pressId, (refundByPress.get(hold.pressId) || 0) + hold.amount);
+    }
+
+    let holdsRefunded = 0;
+    if (staleHolds.length > 0) {
       await prisma.$transaction([
-        prisma.press.update({ where: { id: hold.pressId }, data: { credits: { increment: hold.amount } } }),
-        prisma.creditHold.update({ where: { id: hold.id }, data: { status: 'REFUNDED', settledAt: new Date() } }),
+        ...[...refundByPress].map(([pressId, amount]) =>
+          prisma.press.update({ where: { id: pressId }, data: { credits: { increment: amount } } })
+        ),
+        prisma.creditHold.updateMany({
+          where: { id: { in: staleHolds.map((h) => h.id) } },
+          data: { status: 'REFUNDED', settledAt: new Date() },
+        }),
       ]);
-      holdsRefunded++;
+      holdsRefunded = staleHolds.length;
     }
 
     return NextResponse.json({

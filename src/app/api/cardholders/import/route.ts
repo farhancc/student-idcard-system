@@ -255,7 +255,11 @@ export async function POST(request: Request) {
     let skippedCountVal = 0;
 
     const itemsToCreate: any[] = [];
-    const txOps: Array<(tx: any) => Promise<{ type: 'update' | 'create'; data: any }>> = [];
+    // Rows this import updates in place. Each carries its own values, so the
+    // updates stay one per row; the staleness flag is batched after them.
+    const updatesToRun: Array<{ id: number; data: any; markStale: boolean }> = [];
+    // Rows this import replaces outright: old row deleted, new row created.
+    const overwritePayloads: any[] = [];
     // Files belonging to cardholders this import overwrites — collected as
     // rows are processed, reclaimed from R2 once the transaction commits.
     const overwriteR2Keys: string[] = [];
@@ -304,39 +308,22 @@ export async function POST(request: Request) {
         if (importMode === 'skip') {
           skippedCountVal += 1;
         } else if (importMode === 'update') {
-          txOps.push(async (tx) => {
-            const updated = await tx.cardholder.update({
-              where: { id: duplicate.id },
-              data: {
-                ...cardholderPayload,
-                photoUrl: photoUrl || duplicate.photoUrl,
-              },
-            });
-            if (
+          updatesToRun.push({
+            id: duplicate.id,
+            data: {
+              ...cardholderPayload,
+              photoUrl: photoUrl || duplicate.photoUrl,
+            },
+            markStale: (
               name !== duplicate.name ||
               designation !== duplicate.designation ||
               JSON.stringify(custom) !== duplicate.customFields
-            ) {
-              await tx.cardAsset.updateMany({
-                where: { cardholderId: duplicate.id },
-                data: { isStale: true },
-              });
-            }
-            return { type: 'update', data: updated };
+            ),
           });
         } else if (importMode === 'overwrite') {
           if (duplicate.photoUrl) overwriteR2Keys.push(duplicate.photoUrl);
           overwriteDuplicateIds.push(duplicate.id);
-          txOps.push(async (tx) => {
-            // Clear the RESTRICT-protected order-membership rows first —
-            // without this the delete below throws for any cardholder that
-            // has already been added to a print order (see
-            // src/lib/cardholder-delete.ts for the same pattern elsewhere).
-            await tx.orderCardholder.deleteMany({ where: { cardholderId: duplicate.id } });
-            await tx.cardholder.delete({ where: { id: duplicate.id } });
-            const created = await tx.cardholder.create({ data: cardholderPayload });
-            return { type: 'create', data: created };
-          });
+          overwritePayloads.push(cardholderPayload);
         }
       } else {
         // Not a duplicate
@@ -348,7 +335,7 @@ export async function POST(request: Request) {
 
     if (importMode !== 'check') {
       if (itemsToCreate.length > 0) {
-        // Run in batches of 100 so post-write syncCardholderValues hook triggers for each record
+        // Insert in batches to keep any single statement bounded on a large import.
         const BATCH_SIZE = 100;
         for (let i = 0; i < itemsToCreate.length; i += BATCH_SIZE) {
           const batch = itemsToCreate.slice(i, i + BATCH_SIZE);
@@ -359,29 +346,50 @@ export async function POST(request: Request) {
         }
       }
 
-      if (txOps.length > 0) {
+      if (updatesToRun.length > 0) {
+        const updatedRows = await prisma.$transaction(async (tx) => {
+          const rows = await Promise.all(
+            updatesToRun.map(u => tx.cardholder.update({ where: { id: u.id }, data: u.data }))
+          );
+          // One statement for the whole import rather than one per changed row.
+          const staleIds = updatesToRun.filter(u => u.markStale).map(u => u.id);
+          if (staleIds.length > 0) {
+            await tx.cardAsset.updateMany({
+              where: { cardholderId: { in: staleIds } },
+              data: { isStale: true },
+            });
+          }
+          return rows;
+        });
+        updatedItems.push(...updatedRows);
+      }
+
+      if (overwritePayloads.length > 0) {
         // Rendered card faces are cascade-deleted with the cardholder row —
         // read their URLs before that happens, or there is nothing left to
         // reclaim from R2 afterward.
-        if (overwriteDuplicateIds.length > 0) {
-          const overwrittenAssets = await prisma.cardAsset.findMany({
-            where: { cardholderId: { in: overwriteDuplicateIds } },
-            select: { frontUrl: true, backUrl: true },
-          });
-          for (const asset of overwrittenAssets) {
-            if (asset.frontUrl) overwriteR2Keys.push(asset.frontUrl);
-            if (asset.backUrl) overwriteR2Keys.push(asset.backUrl);
-          }
-        }
-
-        const txResults = await prisma.$transaction(async (tx) => {
-          return Promise.all(txOps.map(op => op(tx)));
+        const overwrittenAssets = await prisma.cardAsset.findMany({
+          where: { cardholderId: { in: overwriteDuplicateIds } },
+          select: { frontUrl: true, backUrl: true },
         });
-
-        for (const res of txResults) {
-          if (res.type === 'update') updatedItems.push(res.data);
-          else if (res.type === 'create') newItems.push(res.data);
+        for (const asset of overwrittenAssets) {
+          if (asset.frontUrl) overwriteR2Keys.push(asset.frontUrl);
+          if (asset.backUrl) overwriteR2Keys.push(asset.backUrl);
         }
+
+        const createdRows = await prisma.$transaction(async (tx) => {
+          // Two CSV rows can match the same existing cardholder, so the id list
+          // is deduped before the delete.
+          const ids = [...new Set(overwriteDuplicateIds)];
+          // Clear the RESTRICT-protected order-membership rows first — without
+          // this the delete below throws for any cardholder that has already
+          // been added to a print order (see src/lib/cardholder-delete.ts for
+          // the same pattern elsewhere).
+          await tx.orderCardholder.deleteMany({ where: { cardholderId: { in: ids } } });
+          await tx.cardholder.deleteMany({ where: { id: { in: ids } } });
+          return await (tx.cardholder as any).createManyAndReturn({ data: overwritePayloads });
+        });
+        newItems.push(...createdRows);
 
         if (overwriteR2Keys.length > 0) {
           await deleteManyFromR2(overwriteR2Keys);

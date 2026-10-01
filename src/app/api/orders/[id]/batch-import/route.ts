@@ -51,36 +51,32 @@ export async function POST(
       return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    // Create cardholders + link them to the order in a single transaction
+    // Create cardholders + link them to the order in a single transaction.
+    // Two statements rather than two per row: a large batch import otherwise
+    // held the transaction open for thousands of serial round trips.
     const result = await prisma.$transaction(async (tx) => {
-      const createdCardholders = [];
+      const createdCardholders = await (tx.cardholder as any).createManyAndReturn({
+        data: cardholders.map((c: any) => ({
+          pressId,
+          clientId: order.clientId,
+          templateId: order.templateId,
+          name: c.name || 'Unnamed',
+          designation: c.designation || null,
+          photoUrl: c.photoUrl || null,
+          customFields: c.customFields
+            ? JSON.stringify(c.customFields)
+            : null,
+          active: true,
+        })),
+      });
 
-      for (const c of cardholders) {
-        const cardholder = await tx.cardholder.create({
-          data: {
-            pressId,
-            clientId: order.clientId,
-            templateId: order.templateId,
-            name: c.name || 'Unnamed',
-            designation: c.designation || null,
-            photoUrl: c.photoUrl || null,
-            customFields: c.customFields
-              ? JSON.stringify(c.customFields)
-              : null,
-            active: true,
-          },
-        });
-
-        // Create OrderCardholder join record
-        await tx.orderCardholder.create({
-          data: {
-            orderId,
-            cardholderId: cardholder.id,
-          },
-        });
-
-        createdCardholders.push(cardholder);
-      }
+      // Link them to the order
+      await tx.orderCardholder.createMany({
+        data: createdCardholders.map((ch: { id: number }) => ({
+          orderId,
+          cardholderId: ch.id,
+        })),
+      });
 
       return createdCardholders;
     });

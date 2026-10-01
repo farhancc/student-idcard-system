@@ -72,18 +72,18 @@ export async function processPdfJobInBackground(
           data: { status: 'PRINTING' },
         });
 
-        // Insert or update print records for each cardholder
-        for (const chId of cardholderIds) {
-          await prisma.cardPrintRecord.create({
-            data: {
-              cardholderId: chId,
-              pressId,
-              orderId,
-              status: 'PRINTED',
-              printedAt: new Date(),
-            },
-          });
-        }
+        // Insert print records for each cardholder. One statement, and every
+        // card in a print run shares the run's timestamp.
+        const printedAt = new Date();
+        await prisma.cardPrintRecord.createMany({
+          data: cardholderIds.map((chId) => ({
+            cardholderId: chId,
+            pressId,
+            orderId,
+            status: 'PRINTED',
+            printedAt,
+          })),
+        });
 
         // Add to order activity log
         await prisma.orderActivityLog.create({
