@@ -478,10 +478,10 @@ export default function TemplatesPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check file size limit (10MB)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    // Check file size limit (25MB)
+    const MAX_FILE_SIZE = 25 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
-      toast(`⛔ File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the maximum limit of 10MB.`, 'error');
+      toast(`⛔ File size (${(file.size / (1024 * 1024)).toFixed(1)}MB) exceeds the maximum limit of 25MB.`, 'error');
       e.target.value = '';
       return;
     }
@@ -3154,7 +3154,7 @@ export default function TemplatesPage() {
                               <path d="M12 16V8M8 12l4-4 4 4" />
                             </svg>
                             <p style={{ fontSize: '0.85rem', fontWeight: 500, margin: 0 }}>Click to upload front background</p>
-                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 10 MB</p>
+                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 25 MB</p>
                           </>
                         )}
                       </div>
@@ -3637,7 +3637,7 @@ export default function TemplatesPage() {
                               <path d="M12 16V8M8 12l4-4 4 4" />
                             </svg>
                             <p style={{ fontSize: '0.85rem', fontWeight: 500, margin: 0 }}>Click to upload back background</p>
-                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 10 MB</p>
+                            <p style={{ fontSize: '0.72rem', color: 'var(--muted)', margin: 0 }}>PDF, SVG, or PNG · Max 25 MB</p>
                           </>
                         )}
                       </div>
