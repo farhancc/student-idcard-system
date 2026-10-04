@@ -62,3 +62,6 @@ next-env.d.ts
 /.stitch/
 
 
+
+# Claude Code local state (agent worktrees, local settings)
+/.claude/
