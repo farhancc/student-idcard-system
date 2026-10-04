@@ -4,6 +4,7 @@ import { EmptySlotStrategyType } from '../components/EmptySlotModal';
 import { useToast } from '@/components/ui/toast';
 import { autoDownloadJobFile } from '@/lib/downloadHelper';
 import { queueIndividualPrintJobs } from '@/lib/queueIndividualJobs';
+import { jobSheetFields, sheetSizePt, type PaperSizeId } from '@/lib/paper-sizes';
 
 export function useCompileWorkflow({
   clientId,
@@ -54,6 +55,9 @@ export function useCompileWorkflow({
   const [pendingCompileType, setPendingCompileType] = useState<'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL' | null>(null);
   const [pendingPaperSize, setPendingPaperSize] = useState('A4');
   const [pendingOrientation, setPendingOrientation] = useState<'PORTRAIT' | 'LANDSCAPE'>('PORTRAIT');
+  // Only read when the pending paper size is CUSTOM. A4 in millimetres is a
+  // harmless default for the legacy paths that never offer a custom sheet.
+  const [pendingCustomSheet, setPendingCustomSheet] = useState({ widthMm: 210, heightMm: 297 });
   const [pendingLayoutConfig, setPendingLayoutConfig] = useState<{ marginLeft: number; marginRight: number; marginTop: number; marginBottom: number; colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean; } | null>(null);
   const [pendingCustomCardId, setPendingCustomCardId] = useState<string | undefined>(undefined);
 
@@ -245,7 +249,8 @@ export function useCompileWorkflow({
       marginLeft: number; marginRight: number; marginTop: number; marginBottom: number;
       colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean;
     },
-    customCardId?: string
+    customCardId?: string,
+    customSheet: { widthMm: number; heightMm: number } = pendingCustomSheet
   ) => {
     if (!qTemplateId || selectedIds.length === 0) return;
     setQCompiling(type);
@@ -272,7 +277,12 @@ export function useCompileWorkflow({
       const jobBody: any = {
         orderId: orderData.order.id,
         pdfType: type,
-        paperSize: (targetPaperSize === 'SRA3' || targetPaperSize === '13x19') ? 'CUSTOM' : targetPaperSize,
+        ...jobSheetFields({
+          id: targetPaperSize as PaperSizeId,
+          orientation: targetOrientation as 'PORTRAIT' | 'LANDSCAPE',
+          customWidthMm: customSheet.widthMm,
+          customHeightMm: customSheet.heightMm,
+        }),
         orientation: targetOrientation,
         bleed: lc.bleed,
         cropMarks: lc.cropMarks,
@@ -289,14 +299,6 @@ export function useCompileWorkflow({
       if (selectedStrategy === 'FILL_CUSTOM' && customCardId) {
         jobBody.emptySlotCustomCardId = customCardId;
       }
-      if (targetPaperSize === 'SRA3') {
-        jobBody.customWidth = targetOrientation === 'PORTRAIT' ? 907.09 : 1275.59;
-        jobBody.customHeight = targetOrientation === 'PORTRAIT' ? 1275.59 : 907.09;
-      } else if (targetPaperSize === '13x19') {
-        jobBody.customWidth = targetOrientation === 'PORTRAIT' ? 936 : 1368;
-        jobBody.customHeight = targetOrientation === 'PORTRAIT' ? 1368 : 936;
-      }
-
       const jobRes = await fetch('/api/jobs/production-request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -324,7 +326,12 @@ export function useCompileWorkflow({
     }
   };
 
-  const proceedWithIndividualCompile = async (cardholderIds: number[], paperSize: string) => {
+  const proceedWithIndividualCompile = async (
+    cardholderIds: number[],
+    paperSize: string,
+    orientation: 'PORTRAIT' | 'LANDSCAPE' = pendingOrientation,
+    customSheet: { widthMm: number; heightMm: number } = pendingCustomSheet,
+  ) => {
     if (!qTemplateId || cardholderIds.length === 0) return;
     setQCompiling('INDIVIDUAL');
     setIndividualQueueStatus({ done: 0, total: cardholderIds.length });
@@ -333,7 +340,12 @@ export function useCompileWorkflow({
         clientId,
         templateId: Number(qTemplateId),
         cardholderIds,
-        paperSize: paperSize === 'A3' ? 'A3' : 'A4',
+        sheet: {
+          id: paperSize as PaperSizeId,
+          orientation,
+          customWidthMm: customSheet.widthMm,
+          customHeightMm: customSheet.heightMm,
+        },
         onProgress: (done, total) => setIndividualQueueStatus({ done, total }),
       });
       if (result.queued > 0) {
@@ -361,8 +373,14 @@ export function useCompileWorkflow({
     colGap: number; rowGap: number; bleed: number; cropMarks: boolean; foldLine: boolean;
     emptySlotStrategy: EmptySlotStrategyType;
     customCardId?: string;
+    customWidthMm?: number;
+    customHeightMm?: number;
   }) => {
     const livePaper = cfg?.paperSize ?? wizardPaperSize;
+    const liveSheet = {
+      widthMm: cfg?.customWidthMm ?? pendingCustomSheet.widthMm,
+      heightMm: cfg?.customHeightMm ?? pendingCustomSheet.heightMm,
+    };
     const liveOri = cfg?.orientation ?? wizardOrientation;
     const liveML = cfg?.marginLeft ?? wizardMarginLeft;
     const liveMR = cfg?.marginRight ?? wizardMarginRight;
@@ -438,34 +456,26 @@ export function useCompileWorkflow({
       // Individual prints have no grid/empty-slot concept — one card, one page —
       // so they only need the missing-field check above before queuing.
       if (type === 'INDIVIDUAL') {
-        const individualPaperSize = livePaper === 'A3' ? 'A3' : 'A4';
         setValidationResult({ missingFields: missingList, totalCards: selectedCards.length, totalSlots: selectedCards.length });
         setPendingCompileType(type);
-        setPendingPaperSize(individualPaperSize);
+        setPendingPaperSize(livePaper);
+        setPendingOrientation(liveOri);
+        setPendingCustomSheet(liveSheet);
         setQCompiling(null);
         if (missingList.length > 0) {
           setShowValidationModal(true);
         } else {
-          await proceedWithIndividualCompile(selectedIds, individualPaperSize);
+          await proceedWithIndividualCompile(selectedIds, livePaper, liveOri, liveSheet);
         }
         return;
       }
 
-      let pageWidth: number;
-      let pageHeight: number;
-      if (livePaper === 'SRA3') {
-        pageWidth = liveOri === 'PORTRAIT' ? 907.09 : 1275.59;
-        pageHeight = liveOri === 'PORTRAIT' ? 1275.59 : 907.09;
-      } else if (livePaper === '13x19') {
-        pageWidth = liveOri === 'PORTRAIT' ? 936 : 1368;
-        pageHeight = liveOri === 'PORTRAIT' ? 1368 : 936;
-      } else if (livePaper === 'A4') {
-        pageWidth = liveOri === 'PORTRAIT' ? 595.27 : 841.89;
-        pageHeight = liveOri === 'PORTRAIT' ? 841.89 : 595.27;
-      } else {
-        pageWidth = liveOri === 'PORTRAIT' ? 841.89 : 1190.55;
-        pageHeight = liveOri === 'PORTRAIT' ? 1190.55 : 841.89;
-      }
+      const { width: pageWidth, height: pageHeight } = sheetSizePt({
+        id: livePaper as PaperSizeId,
+        orientation: liveOri,
+        customWidthMm: liveSheet.widthMm,
+        customHeightMm: liveSheet.heightMm,
+      });
 
       const bleedPt = (liveBl || 0) * 2.83464567;
       const isPortraitTemplate = (template.cardWidth || 673) < (template.cardHeight || 1039);
@@ -509,6 +519,7 @@ export function useCompileWorkflow({
       setPendingCompileType(type);
       setPendingPaperSize(livePaper);
       setPendingOrientation(liveOri);
+      setPendingCustomSheet(liveSheet);
       setPendingLayoutConfig(layoutConfig);
       setPendingCustomCardId(liveCustomId);
       setQCompiling(null);
@@ -518,7 +529,7 @@ export function useCompileWorkflow({
       } else if (totalSlots > totalCards && !cfg) {
         setShowEmptySlotModal(true);
       } else {
-        await proceedWithQuickCompile(type, false, liveStrategy, livePaper, liveOri, layoutConfig, liveCustomId);
+        await proceedWithQuickCompile(type, false, liveStrategy, livePaper, liveOri, layoutConfig, liveCustomId, liveSheet);
       }
     } catch (err: any) {
       toast(err.message || 'Validation failed', 'error');

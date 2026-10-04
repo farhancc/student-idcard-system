@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import JsBarcode from 'jsbarcode';
+import { type SheetSize } from '@/lib/paper-sizes';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import type { FieldVisibilityRule, FieldComputeRule } from './field-resolver';
@@ -1898,7 +1899,7 @@ export async function renderCardSideToPdfBytesClient(
 /**
  * Renders one card (front, and back if double-sided) as its own standalone
  * PDF — each side kept at the template's real, unscaled size and centered on
- * its own page sized to the chosen sheet (A4/A3). Unlike the PRODUCTION grid
+ * its own page sized to the chosen sheet. Unlike the PRODUCTION grid
  * layout, nothing here rescales the card into a fixed slot; the "page" is
  * just a bigger sheet the card sits in the middle of.
  *
@@ -1909,12 +1910,12 @@ export async function renderCardSideToPdfBytesClient(
 export async function renderIndividualCardPdfClient(
   template: Parameters<typeof renderCardSideToPdfBytesClient>[0],
   cardholder: Parameters<typeof renderCardSideToPdfBytesClient>[1],
-  paperSize: 'A4' | 'A3',
+  /** The page to centre the card on, in PDF points — see lib/paper-sizes. */
+  sheet: SheetSize,
   validTillDate: Date | null,
   pressFonts: Array<{ name: string; fileUrl: string }> = []
 ): Promise<Uint8Array> {
-  const pageWidth = paperSize === 'A3' ? 841.89 : 595.28;
-  const pageHeight = paperSize === 'A3' ? 1190.55 : 841.89;
+  const { width: pageWidth, height: pageHeight } = sheet;
   const isSingleSided = !template.backImageUrl;
 
   const pdfDoc = await PDFDocument.create();

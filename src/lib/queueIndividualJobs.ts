@@ -1,3 +1,5 @@
+import { jobSheetFields, type SheetSizeRequest } from '@/lib/paper-sizes';
+
 /**
  * Queues one "print this card by itself" job per cardholder.
  *
@@ -11,7 +13,8 @@ export interface QueueIndividualJobsParams {
   clientId: number;
   templateId: number;
   cardholderIds: number[];
-  paperSize: 'A4' | 'A3';
+  /** The sheet each card is centred on — any size the wizard offers. */
+  sheet: SheetSizeRequest;
   orgToken?: string;
   onProgress?: (done: number, total: number) => void;
 }
@@ -26,10 +29,12 @@ export async function queueIndividualPrintJobs({
   clientId,
   templateId,
   cardholderIds,
-  paperSize,
+  sheet,
   orgToken,
   onProgress,
 }: QueueIndividualJobsParams): Promise<QueueIndividualJobsResult> {
+  // Resolved once: every card in the run goes on the same sheet.
+  const sheetFields = jobSheetFields(sheet);
   let queued = 0;
   let failed = 0;
   const jobIds: number[] = [];
@@ -57,8 +62,8 @@ export async function queueIndividualPrintJobs({
         body: JSON.stringify({
           orderId: orderData.order.id,
           pdfType: 'INDIVIDUAL',
-          paperSize,
-          orientation: 'PORTRAIT',
+          ...sheetFields,
+          orientation: sheet.orientation ?? 'PORTRAIT',
           ...(orgToken ? { orgToken } : {}),
         }),
       });

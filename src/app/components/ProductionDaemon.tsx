@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
 import { renderCardSideToPdfBytesClient, renderIndividualCardPdfClient, embedImageBuffer, clearTemplateBgCache, clearFontBytesCache } from '@/lib/pdf/card-renderer-client';
+import { sheetSizePt, type PaperSizeId } from '@/lib/paper-sizes';
 import { resolveCardholderPhotoUrl } from '@/lib/pdf/field-resolver';
 import { getCustomCardById } from '@/lib/clientDb';
 
@@ -739,15 +740,20 @@ export default function ProductionDaemon() {
     await cachePhotosForJob(localCardholders);
 
     const metadata = job.metadata || {};
-    const paperSize: 'A4' | 'A3' = metadata.paperSize === 'A3' ? 'A3' : 'A4';
+    // A custom sheet arrives as explicit points, the same way the grid path
+    // below receives one; named sheets resolve from the shared table.
+    const paperSize: PaperSizeId = metadata.paperSize || 'A4';
+    const sheet = paperSize === 'CUSTOM' && metadata.customWidth && metadata.customHeight
+      ? { width: Number(metadata.customWidth), height: Number(metadata.customHeight) }
+      : sheetSizePt({ id: paperSize, orientation: metadata.orientation === 'LANDSCAPE' ? 'LANDSCAPE' : 'PORTRAIT' });
 
-    addLog(`Rendering individual card for ${ch.name} on ${paperSize}`);
+    addLog(`Rendering individual card for ${ch.name} on ${paperSize} (${Math.round(sheet.width)}x${Math.round(sheet.height)} pt)`);
     await updateProgress(job.id, 40);
 
     const finalBytes = await renderIndividualCardPdfClient(
       clientTemplate,
       localCardholders[0],
-      paperSize,
+      sheet,
       template.validTillDate ? new Date(template.validTillDate) : null,
       pressFonts
     );

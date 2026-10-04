@@ -8,10 +8,17 @@ import {
   LENGTH_UNITS, MAX_GAP_PT, MAX_MARGIN_PT, convertLength, secondaryReadout, unitSpec,
   type LengthUnit,
 } from '@/lib/units';
+import {
+  MAX_CUSTOM_MM, MIN_CUSTOM_MM, PAPER_SIZE_OPTIONS, clampCustomMm, sheetSizePt,
+  type PaperSizeId,
+} from '@/lib/paper-sizes';
 
 export interface CompileWizardConfig {
   compileType: 'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL';
   paperSize: string;
+  /** Only meaningful when paperSize is CUSTOM. */
+  customWidthMm: number;
+  customHeightMm: number;
   orientation: 'PORTRAIT' | 'LANDSCAPE';
   marginLeft: number; marginRight: number;
   marginTop: number;  marginBottom: number;
@@ -40,7 +47,10 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
   const [compileType, setCompileType] = useState<'APPROVAL'|'PRODUCTION'|'INDIVIDUAL'|null>(null);
   const isIndividual = compileType === 'INDIVIDUAL';
   const maxStep = isIndividual ? 2 : 4;
-  const [paperSize, setPaperSize] = useState('A4');
+  const [paperSize, setPaperSize] = useState<PaperSizeId>('A4');
+  const [customWidthMm, setCustomWidthMm] = useState(210);
+  const [customHeightMm, setCustomHeightMm] = useState(297);
+  const isCustomSheet = paperSize === 'CUSTOM';
   const [orientation, setOrientation] = useState<'PORTRAIT'|'LANDSCAPE'>('PORTRAIT');
   const [marginLeft, setMarginLeft] = useState(40);
   const [marginRight, setMarginRight] = useState(40);
@@ -62,20 +72,9 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
   // Calculate live slot capacity and dimensions scale
   const calcSlots = () => {
-    let pw = 841.89; let ph = 1190.55;
-    if (paperSize === 'SRA3') {
-      pw = orientation === 'PORTRAIT' ? 907.09 : 1275.59;
-      ph = orientation === 'PORTRAIT' ? 1275.59 : 907.09;
-    } else if (paperSize === '13x19') {
-      pw = orientation === 'PORTRAIT' ? 936 : 1368;
-      ph = orientation === 'PORTRAIT' ? 1368 : 936;
-    } else if (paperSize === 'A4') {
-      pw = orientation === 'PORTRAIT' ? 595.27 : 841.89;
-      ph = orientation === 'PORTRAIT' ? 841.89 : 595.27;
-    } else {
-      pw = orientation === 'PORTRAIT' ? 841.89 : 1190.55;
-      ph = orientation === 'PORTRAIT' ? 1190.55 : 841.89;
-    }
+    const { width: pw, height: ph } = sheetSizePt({
+      id: paperSize, orientation, customWidthMm, customHeightMm,
+    });
     const bleedPt = (bleed || 0) * 2.83464567;
     const cw = 153 + bleedPt * 2;
     const ch = 242.6 + bleedPt * 2;
@@ -220,7 +219,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
     try {
       await onCompile({
-        compileType, paperSize, orientation,
+        compileType, paperSize, orientation, customWidthMm, customHeightMm,
         marginLeft, marginRight, marginTop, marginBottom,
         colGap, rowGap, bleed, cropMarks, foldLine,
         emptySlotStrategy: emptySlots > 0 ? strategy : 'LEAVE_BLANK',
@@ -234,6 +233,48 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
   const stepLabels = isIndividual ? ['File Type', 'Paper Size'] : ['File Type', 'Sheet Size', 'Layout', 'Empty Slots'];
   const inp = { background: 'rgba(255,255,255,0.04)', border: '1px solid var(--glass-border)', borderRadius: '6px', color: '#fff', padding: '6px 10px' };
+
+  const sheetPicker = (
+    <>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Paper Size</span>
+        <select className="form-input" value={paperSize} onChange={e => setPaperSize(e.target.value as PaperSizeId)} style={{ background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}>
+          {PAPER_SIZE_OPTIONS.map(o => (
+            <option key={o.id} value={o.id}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+      {isCustomSheet && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
+            Sheet Size (mm)
+          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input
+              type="number" min={MIN_CUSTOM_MM} max={MAX_CUSTOM_MM} aria-label="Sheet width in millimetres"
+              className="form-input" style={{ ...inp, width: '100%' }}
+              value={customWidthMm}
+              onChange={e => setCustomWidthMm(Number(e.target.value))}
+              onBlur={e => setCustomWidthMm(clampCustomMm(Number(e.target.value)))}
+            />
+            <span style={{ color: 'var(--muted)' }}>×</span>
+            <input
+              type="number" min={MIN_CUSTOM_MM} max={MAX_CUSTOM_MM} aria-label="Sheet height in millimetres"
+              className="form-input" style={{ ...inp, width: '100%' }}
+              value={customHeightMm}
+              onChange={e => setCustomHeightMm(Number(e.target.value))}
+              onBlur={e => setCustomHeightMm(clampCustomMm(Number(e.target.value)))}
+            />
+          </div>
+          <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
+            Width × height as you want it printed, {MIN_CUSTOM_MM}–{MAX_CUSTOM_MM} mm. The
+            orientation buttons do not apply to a custom sheet.
+          </span>
+        </div>
+      )}
+    </>
+  );
+
   const radioBox = (active: boolean, disabled: boolean = false) => ({
     display: 'flex', gap: '10px', alignItems: 'flex-start', padding: '11px 14px',
     border: `1px solid ${active ? 'var(--primary)' : 'var(--glass-border)'}`,
@@ -333,13 +374,7 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
             {/* Step 2: Paper Size & Orientation */}
             {step === 2 && isIndividual && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Paper Size</span>
-                  <select className="form-input" value={paperSize === 'A3' ? 'A3' : 'A4'} onChange={e => setPaperSize(e.target.value)} style={{ background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}>
-                    <option value="A4">A4 — 210 × 297 mm</option>
-                    <option value="A3">A3 — 297 × 420 mm</option>
-                  </select>
-                </div>
+                {sheetPicker}
                 <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--muted)', lineHeight: 1.5 }}>
                   Each card is placed at its real, unscaled size in the middle of the page you pick above — the card's own dimensions never change.
                 </p>
@@ -348,20 +383,12 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
             {step === 2 && !isIndividual && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Paper Size</span>
-                  <select className="form-input" value={paperSize} onChange={e => setPaperSize(e.target.value)} style={{ background: '#0a0d14', color: '#fff', border: '1px solid var(--glass-border)' }}>
-                    <option value="A4">A4 — 210 × 297 mm</option>
-                    <option value="A3">A3 — 297 × 420 mm</option>
-                    <option value="SRA3">SRA3 — 320 × 450 mm</option>
-                    <option value="13x19">13″ × 19″ — 330 × 483 mm</option>
-                  </select>
-                </div>
+                {sheetPicker}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>Orientation</span>
                   <div style={{ display: 'flex', gap: '10px' }}>
                     {(['PORTRAIT','LANDSCAPE'] as const).map(o => (
-                      <button key={o} type="button" onClick={() => setOrientation(o)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${orientation === o ? 'var(--primary)' : 'var(--glass-border)'}`, background: orientation === o ? 'rgba(99,102,241,0.08)' : 'transparent', color: orientation === o ? '#fff' : 'var(--muted)', cursor: 'pointer', transition: 'all 0.15s' }}>
+                      <button key={o} type="button" disabled={isCustomSheet} onClick={() => setOrientation(o)} style={{ flex: 1, padding: '10px', borderRadius: '8px', border: `1px solid ${orientation === o && !isCustomSheet ? 'var(--primary)' : 'var(--glass-border)'}`, background: orientation === o && !isCustomSheet ? 'rgba(99,102,241,0.08)' : 'transparent', color: orientation === o && !isCustomSheet ? '#fff' : 'var(--muted)', cursor: isCustomSheet ? 'not-allowed' : 'pointer', opacity: isCustomSheet ? 0.5 : 1, transition: 'all 0.15s' }}>
                         {o.charAt(0) + o.slice(1).toLowerCase()}
                       </button>
                     ))}

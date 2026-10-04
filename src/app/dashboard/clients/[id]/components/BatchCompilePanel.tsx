@@ -5,6 +5,7 @@ import NextLink from 'next/link';
 import { FileText, ImageIcon, CheckCircle, AlertTriangle, Upload, FolderOpen, Search, X, Link as LinkIcon, HelpCircle, Eye, Trash2 } from 'lucide-react';
 import CompileWizardModal, { CompileWizardConfig } from '@/app/components/CompileWizardModal';
 import { isElectronApp } from '@/lib/isElectron';
+import { sheetSizePt, type PaperSizeId } from '@/lib/paper-sizes';
 import {
   normalizeGoogleDriveUrl,
   isImageField,
@@ -757,7 +758,12 @@ export function BatchCompilePanel({
           // file (not pages of one shared document) — saved one at a time as
           // it's rendered, at the card's real size, on the chosen sheet.
           const { renderIndividualCardPdfClient } = await import('@/lib/pdf/card-renderer-client');
-          const paperSize: 'A4' | 'A3' = cfg.paperSize === 'A3' ? 'A3' : 'A4';
+          const sheet = sheetSizePt({
+            id: cfg.paperSize as PaperSizeId,
+            orientation: cfg.orientation,
+            customWidthMm: cfg.customWidthMm,
+            customHeightMm: cfg.customHeightMm,
+          });
           total = cardholders.length;
           for (let i = 0; i < total; i++) {
             const rawCustomFields = cardholders[i].customFields;
@@ -767,7 +773,7 @@ export function BatchCompilePanel({
                 ...cardholders[i],
                 customFields: typeof rawCustomFields === 'string' ? rawCustomFields : JSON.stringify(rawCustomFields || {}),
               },
-              paperSize,
+              sheet,
               template.validTillDate ? new Date(template.validTillDate) : null,
               pressFonts
             );
