@@ -7,6 +7,7 @@ import CardPreview from '@/app/components/CardPreview';
 import { formatFieldLabel } from '@/lib/pdf/card-renderer-client';
 
 import { Upload, Check, AlertCircle, Loader, CreditCard, Camera, X, Info } from 'lucide-react';
+import { LegalConsent, LegalLink } from '@/app/components/LegalConsent';
 
 interface FieldCoordinate {
   field: string;
@@ -107,6 +108,15 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
   const [webcamError, setWebcamError] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
   const webcamCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Consent — the cardholder, or a guardian where the cardholder is a child.
+  // DPDP s.9 needs a child's data processed on identifiable guardian consent,
+  // so the guardian is named rather than merely asserted.
+  const [consentAccepted, setConsentAccepted] = useState(false);
+  const [onBehalfOfMinor, setOnBehalfOfMinor] = useState(false);
+  const [guardianName, setGuardianName] = useState('');
+  const [guardianRelation, setGuardianRelation] = useState('');
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   // Inline validation — tracks which fields user has touched
   const [touched, setTouched] = useState<Record<string, boolean>>({});
@@ -384,6 +394,16 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
       }
     }
 
+    if (!consentAccepted) {
+      setConsentError('Please confirm you agree before submitting.');
+      return;
+    }
+    if (onBehalfOfMinor && (guardianName.trim().length < 2 || guardianRelation.trim().length < 2)) {
+      setConsentError('Please give the parent or guardian\u2019s name and their relationship to the cardholder.');
+      return;
+    }
+    setConsentError(null);
+
     setLoading(true);
     setError('');
 
@@ -402,6 +422,12 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
         designation: hasDesignation ? (designation || null) : null,
         photoUrl: hasPhoto ? (photoUrl || null) : null,
         customFields: updatedCustomFields,
+        consent: {
+          accepted: true,
+          onBehalfOfMinor,
+          guardianName: onBehalfOfMinor ? guardianName.trim() : null,
+          guardianRelation: onBehalfOfMinor ? guardianRelation.trim() : null,
+        },
       };
 
       const res = await fetch(`/api/portal/enroll/${enrollToken}`, {
@@ -822,6 +848,93 @@ export default function EnrollmentPage({ params }: { params: Promise<{ enrollTok
                   </div>
                 );
               })}
+
+              {/* Consent. Sits immediately above the submit button so it is read
+                  in the moment of submitting, not scrolled past at the top. */}
+              <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div
+                  role="radiogroup"
+                  aria-label="Who is filling this in"
+                  style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+                >
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--muted)' }}>
+                    Who is filling this in?
+                  </span>
+                  {[
+                    { minor: false, label: 'I am the cardholder, and I am 18 or older' },
+                    { minor: true, label: 'I am the parent or guardian of a cardholder under 18' },
+                  ].map(option => (
+                    <label
+                      key={String(option.minor)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        fontSize: '0.85rem',
+                        color: 'var(--muted)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="consent-capacity"
+                        checked={onBehalfOfMinor === option.minor}
+                        onChange={() => {
+                          setOnBehalfOfMinor(option.minor);
+                          setConsentError(null);
+                        }}
+                        style={{ accentColor: '#6366f1', cursor: 'pointer' }}
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+
+                {onBehalfOfMinor && (
+                  <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: '1fr 1fr' }}>
+                    <input
+                      className="form-input"
+                      placeholder="Parent / guardian full name"
+                      value={guardianName}
+                      onChange={e => {
+                        setGuardianName(e.target.value);
+                        setConsentError(null);
+                      }}
+                      maxLength={150}
+                      aria-label="Parent or guardian full name"
+                    />
+                    <input
+                      className="form-input"
+                      placeholder="Relationship (e.g. mother, father, guardian)"
+                      value={guardianRelation}
+                      onChange={e => {
+                        setGuardianRelation(e.target.value);
+                        setConsentError(null);
+                      }}
+                      maxLength={60}
+                      aria-label="Relationship to the cardholder"
+                    />
+                  </div>
+                )}
+
+                <LegalConsent
+                  id="enrol-consent"
+                  checked={consentAccepted}
+                  onChange={next => {
+                    setConsentAccepted(next);
+                    if (next) setConsentError(null);
+                  }}
+                  error={consentError}
+                  disabled={loading || uploadingPhoto}
+                >
+                  {onBehalfOfMinor
+                    ? 'I agree to my child\u2019s details and photograph being used to produce their identity card, '
+                    : 'I agree to my details and photograph being used to produce my identity card, '}
+                  as explained in the{' '}
+                  <LegalLink slug="cardholder-notice">Cardholder Privacy Notice</LegalLink>. I understand they
+                  are not used for anything else, and that I can ask for them to be corrected or deleted.
+                </LegalConsent>
+              </div>
 
               <button 
                 type="submit" 

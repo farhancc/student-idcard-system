@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { signupSchema } from '@/lib/schemas';
 import { getCreditSettings } from '@/lib/system-settings';
+import { acceptanceContextFromRequest, recordLegalAcceptance } from '@/lib/legal/acceptance';
 
 export async function POST(request: Request) {
   // Signing up creates the tenant, so there is no tenant to scope to yet.
@@ -53,7 +54,11 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(password);
     const creditSettings = await getCreditSettings();
 
-    // Create Press and Owner user in a single transaction
+    // Create Press, Owner user and the record of what they accepted in a single
+    // transaction: an account that exists without a demonstrable acceptance of
+    // the terms is exactly the gap this is here to close.
+    const acceptance = acceptanceContextFromRequest(request);
+
     const result = await prisma.$transaction(async (tx) => {
       const press = await tx.press.create({
         data: {
@@ -63,7 +68,6 @@ export async function POST(request: Request) {
           city,
           plan: 'BASIC',
           isActive: true,
-          credits: creditSettings.signupBonusCredits,
           promoCredits: creditSettings.signupBonusCredits,
           trialEndsAt: null,
         },
@@ -78,6 +82,15 @@ export async function POST(request: Request) {
           role: 'OWNER',
           active: true,
         },
+      });
+
+      await recordLegalAcceptance({
+        client: tx,
+        point: 'PRESS_SIGNUP',
+        subjectType: 'PRESS_USER',
+        subjectId: user.id,
+        pressId: press.id,
+        context: acceptance,
       });
 
       return { press, user };

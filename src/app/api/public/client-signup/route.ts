@@ -4,6 +4,8 @@ import { syncTemplateFieldRows } from '@/lib/template-field-sync';
 import crypto from 'crypto';
 
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { clientSignupSchema } from '@/lib/schemas';
+import { acceptanceContextFromRequest, recordLegalAcceptance } from '@/lib/legal/acceptance';
 
 export async function GET() {
   try {
@@ -38,12 +40,23 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { pressId, name, type, contactName, contactPhone, contactEmail, address } = await request.json();
-
-
-    if (!pressId || !name || !type) {
-      return NextResponse.json({ error: 'Press, Organization Name, and Type are required' }, { status: 400 });
+    // ── Input validation ─────────────────────────────────────────────
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
+
+    const parsed = clientSignupSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? 'Invalid input' },
+        { status: 400 }
+      );
+    }
+
+    const { pressId, name, type, contactName, contactPhone, contactEmail, address } = parsed.data;
 
     const press = await prisma.press.findUnique({
       where: { id: Number(pressId) },
@@ -68,6 +81,16 @@ export async function POST(request: Request) {
         contactEmail,
         address,
       },
+    });
+
+    // The organisation has just warranted that it is entitled to share a
+    // roster with this press. Record which version it warranted that under.
+    await recordLegalAcceptance({
+      point: 'CLIENT_SIGNUP',
+      subjectType: 'CLIENT',
+      subjectId: client.id,
+      pressId: press.id,
+      context: acceptanceContextFromRequest(request),
     });
 
     // Find first template of the press

@@ -206,7 +206,7 @@ export async function executePurge(targets: PurgeTargets): Promise<PurgeResult> 
 
   const now = new Date();
 
-  const [, pdfJobsDeleted, cardholdersDeleted, ordersArchived] = await basePrisma.$transaction([
+  const [, pdfJobsDeleted, , cardholdersDeleted, ordersArchived] = await basePrisma.$transaction([
     // 1. Clear the RESTRICT-protected join rows first. Without this the
     //    cardholder delete below throws for anyone who appears in an order,
     //    which aborted every purge this system has ever attempted.
@@ -215,10 +215,17 @@ export async function executePurge(targets: PurgeTargets): Promise<PurgeResult> 
     // 2. PDF jobs (cascades pdf_job_chunks and pdf_download_logs).
     basePrisma.pdfJob.deleteMany({ where: { pressId, orderId: { in: orderIds } } }),
 
-    // 3. Cardholders (cascades card_assets, cardholder_values, card_print_records).
+    // 3. Enrolment consent records for those cardholders. Personal data about
+    //    the same people (IP address, and a guardian's name for a child), so it
+    //    must not survive the record it relates to.
+    basePrisma.legalAcceptance.deleteMany({
+      where: { pressId, subjectType: 'CARDHOLDER', subjectId: { in: cardholderIds } },
+    }),
+
+    // 4. Cardholders (cascades card_assets, cardholder_values, card_print_records).
     basePrisma.cardholder.deleteMany({ where: { pressId, id: { in: cardholderIds } } }),
 
-    // 4. Orders are SOFT-deleted, never destroyed. Their invoices, delivery
+    // 5. Orders are SOFT-deleted, never destroyed. Their invoices, delivery
     //    records and activity logs are RESTRICT-protected on purpose
     //    (migration 20260907140000) and are the financial/audit trail we keep.
     basePrisma.cardOrder.updateMany({

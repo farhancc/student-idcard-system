@@ -284,6 +284,18 @@ p {
   to { transform: rotate(360deg); }
 }
 
+/* Draws attention to a control the user needs to interact with before
+   continuing (e.g. an unchecked acknowledgement box blocking a submit). */
+@keyframes attention-shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.attention-shake {
+  animation: attention-shake 0.5s ease-in-out;
+}
+
 /* Responsive Portals and Grid Layouts */
 .portal-layout {
   display: flex;

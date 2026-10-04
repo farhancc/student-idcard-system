@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { Store, X, FileText, Upload } from 'lucide-react';
+import { LegalConsent, LegalLink } from '@/app/components/LegalConsent';
 
 interface MarketplacePublishModalProps {
   template: any;
@@ -25,6 +26,7 @@ export default function MarketplacePublishModal({
 
   const [uploadingFormat, setUploadingFormat] = useState<string | null>(null);
   const [publishLoading, setPublishLoading] = useState(false);
+  const [publishWarranty, setPublishWarranty] = useState(false);
   const [publishMsg, setPublishMsg] = useState('');
 
   useEffect(() => {
@@ -214,6 +216,20 @@ export default function MarketplacePublishModal({
           </div>
         )}
 
+        <div style={{ marginBottom: '16px' }}>
+          <LegalConsent
+            id="marketplace-warranty-modal"
+            checked={publishWarranty}
+            onChange={setPublishWarranty}
+            disabled={publishLoading || !!uploadingFormat}
+          >
+            I created this template or hold the rights to license it, including every image, logo and font in
+            it. It contains no real cardholder data and does not imitate an official credential. I accept the{' '}
+            <LegalLink slug="marketplace">Marketplace Terms</LegalLink> and the{' '}
+            <LegalLink slug="acceptable-use">Acceptable Use Policy</LegalLink>.
+          </LegalConsent>
+        </div>
+
         <div style={{ display: 'flex', gap: '10px' }}>
           {template.isPublic && (
             <button
@@ -238,7 +254,7 @@ export default function MarketplacePublishModal({
           <button
             className="btn btn-primary"
             style={{ flex: 1, gap: '6px' }}
-            disabled={publishLoading || !!uploadingFormat || template.isPurchased}
+            disabled={publishLoading || !!uploadingFormat || template.isPurchased || !publishWarranty}
             onClick={async () => {
               setPublishLoading(true); setPublishMsg('');
               try {
@@ -247,6 +263,7 @@ export default function MarketplacePublishModal({
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     templateId: template.id,
+                    acceptedMarketplaceTerms: publishWarranty,
                     price: Number(publishPrice),
                     cdrFileUrl: publishCdrUrl,
                     psdFileUrl: publishPsdUrl,

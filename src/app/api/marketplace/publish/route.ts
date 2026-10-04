@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { requireActor } from '@/lib/authz';
+import { marketplacePublishSchema } from '@/lib/schemas';
+import { acceptanceContextFromRequest, recordLegalAcceptance } from '@/lib/legal/acceptance';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,12 +12,27 @@ export async function POST(request: Request) {
   try {
     const auth = requireActor(request);
     if ('response' in auth) return auth.response;
-    const { pressId } = auth.actor;
+    const { pressId, userId } = auth.actor;
 
-    const body = await request.json();
-    const { templateId, price = 0, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = body;
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
 
-    if (!templateId) return NextResponse.json({ error: 'templateId required' }, { status: 400 });
+    // Listing someone else's artwork is the main legal risk the Marketplace
+    // carries, so the IP warranty is required here — from the press user who
+    // actually uploads — rather than once at signup.
+    const parsed = marketplacePublishSchema.safeParse(body);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: parsed.error.issues[0]?.message ?? 'Invalid input' },
+        { status: 400 }
+      );
+    }
+
+    const { templateId, price, cdrFileUrl, psdFileUrl, aiFileUrl, pdfFileUrl } = parsed.data;
 
     // Verify ownership
     const template = await prisma.cardTemplate.findFirst({
@@ -57,6 +74,14 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    await recordLegalAcceptance({
+      point: 'MARKETPLACE_PUBLISH',
+      subjectType: 'PRESS_USER',
+      subjectId: userId,
+      pressId,
+      context: acceptanceContextFromRequest(request),
+    });
 
     const updated = await prisma.cardTemplate.update({
       where: { id: Number(templateId) },

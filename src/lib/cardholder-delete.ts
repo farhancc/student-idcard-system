@@ -48,6 +48,12 @@ export async function hardDeleteCardholders(cardholderIds: number[]): Promise<Ha
 
   await prisma.$transaction([
     prisma.orderCardholder.deleteMany({ where: { cardholderId: { in: cardholderIds } } }),
+    // The enrolment consent record carries an IP address and, for a child, a
+    // guardian's name. It is personal data about the same person, so it goes
+    // when they do rather than outliving the record it relates to.
+    prisma.legalAcceptance.deleteMany({
+      where: { subjectType: 'CARDHOLDER', subjectId: { in: cardholderIds } },
+    }),
     prisma.cardholder.deleteMany({ where: { id: { in: cardholderIds } } }),
   ]);
 

@@ -3,6 +3,7 @@ import { prisma, withPressContext } from '@/lib/prisma';
 import { enterPortalTenant } from '@/lib/portal-auth';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { enrollSchema } from '@/lib/schemas';
+import { acceptanceContextFromRequest, recordLegalAcceptance } from '@/lib/legal/acceptance';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -67,7 +68,7 @@ export async function POST(
         return NextResponse.json({ error: message }, { status: 400 });
       }
 
-      const { name, designation, photoUrl, customFields, uniqueKey } = parsed.data;
+      const { name, designation, photoUrl, customFields, uniqueKey, consent } = parsed.data;
 
       // Fetch template (resolving latest version) to validate Number min/max caps
       let template = share.templateId ? await prisma.cardTemplate.findUnique({ where: { id: share.templateId } }) : null;
@@ -154,6 +155,23 @@ export async function POST(
           cardSerial,
           enrollToken, // Stores either the global enrollToken or the department enrollToken
         },
+      });
+
+      // The notice this person was shown, and who agreed to it. Written after
+      // the cardholder so it can carry their id; both are inside the tenant
+      // context, so the row is scoped to the same press.
+      await recordLegalAcceptance({
+        point: 'CARDHOLDER_ENROLMENT',
+        subjectType: 'CARDHOLDER',
+        subjectId: cardholder.id,
+        pressId: share.pressId,
+        context: acceptanceContextFromRequest(request),
+        guardian: consent.onBehalfOfMinor
+          ? {
+              name: (consent.guardianName ?? '').trim(),
+              relation: (consent.guardianRelation ?? '').trim(),
+            }
+          : null,
       });
 
       return NextResponse.json({

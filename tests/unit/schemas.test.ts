@@ -52,6 +52,7 @@ describe('Zod Validation Schemas', () => {
         password: 'superSecretPassword123',
         phone: '+1234567890',
         city: 'Metropolis',
+        acceptedLegal: true,
       });
       expect(result.success).toBe(true);
     });
@@ -63,6 +64,7 @@ describe('Zod Validation Schemas', () => {
         email: 'jane@apexprints.com',
         password: 'short',
         phone: '+1234567890',
+        acceptedLegal: true,
       });
       expect(result.success).toBe(false);
     });
@@ -74,8 +76,21 @@ describe('Zod Validation Schemas', () => {
         email: 'jane@apexprints.com',
         password: 'validPassword123',
         phone: 'INVALID_PHONE_###',
+        acceptedLegal: true,
       });
       expect(result.success).toBe(false);
+    });
+
+    it('rejects a signup that has not accepted the legal documents', () => {
+      const base = {
+        pressName: 'Apex Prints',
+        ownerName: 'Jane Doe',
+        email: 'jane@apexprints.com',
+        password: 'superSecretPassword123',
+        phone: '+1234567890',
+      };
+      expect(signupSchema.safeParse(base).success).toBe(false);
+      expect(signupSchema.safeParse({ ...base, acceptedLegal: false }).success).toBe(false);
     });
   });
 
@@ -85,6 +100,7 @@ describe('Zod Validation Schemas', () => {
         name: 'John Smith',
         designation: 'Student',
         customFields: { grade: '10th', rollNo: '1024' },
+        consent: { accepted: true, onBehalfOfMinor: false },
       });
       expect(result.success).toBe(true);
     });

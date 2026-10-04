@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import DashboardLayoutClient from './DashboardLayoutClient';
+import LegalAcceptanceGate from './LegalAcceptanceGate';
+import { pendingLegalDocuments } from '@/lib/legal/acceptance';
 
 export default async function DashboardLayout({
   children,
@@ -34,6 +36,10 @@ export default async function DashboardLayout({
   });
   const lockedCredits = lockedJobs._sum.creditsLocked || 0;
 
+  // Resolved here rather than fetched by the gate, so the dashboard is never
+  // briefly usable before the gate appears.
+  const pendingLegal = await pendingLegalDocuments('PRESS_USER', session.userId);
+
   // Serialise dates to prevent Next.js client-server boundary errors
   const profile = {
     success: true,
@@ -61,6 +67,15 @@ export default async function DashboardLayout({
 
   return (
     <DashboardLayoutClient initialProfile={profile}>
+      <LegalAcceptanceGate
+        pending={pendingLegal.map(doc => ({
+          slug: doc.slug,
+          title: doc.title,
+          version: doc.version,
+          summary: doc.summary,
+          effectiveDate: doc.effectiveDate,
+        }))}
+      />
       {children}
     </DashboardLayoutClient>
   );

@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export function FooterSection() {
   return (
@@ -67,14 +68,27 @@ export function FooterSection() {
               <a href="#faq" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>FAQ</a>
               <a href="#download" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Download</a>
             </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#ffffff' }}>
+                Legal
+              </span>
+              <Link href="/legal/terms" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Terms of Service</Link>
+              <Link href="/legal/privacy" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Privacy Policy</Link>
+              <Link href="/legal/acceptable-use" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Acceptable Use</Link>
+              <Link href="/legal/data-processing-addendum" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Data Processing</Link>
+              <Link href="/legal/grievance-redressal" style={{ color: '#94a3b8', textDecoration: 'none', fontSize: '0.875rem' }}>Complaints</Link>
+            </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', fontSize: '0.875rem', color: '#64748b' }}>
           <span>© {new Date().getFullYear()} IDexo. Built for printing presses.</span>
-          <div style={{ display: 'flex', gap: '24px' }}>
-            <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</a>
-            <a href="#" style={{ color: '#64748b', textDecoration: 'none' }}>Terms of Service</a>
+          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+            <Link href="/legal" style={{ color: '#64748b', textDecoration: 'none' }}>All legal documents</Link>
+            <Link href="/legal/privacy" style={{ color: '#64748b', textDecoration: 'none' }}>Privacy Policy</Link>
+            <Link href="/legal/terms" style={{ color: '#64748b', textDecoration: 'none' }}>Terms of Service</Link>
+            <Link href="/legal/cookies" style={{ color: '#64748b', textDecoration: 'none' }}>Cookies</Link>
           </div>
         </div>
       </div>

@@ -18,22 +18,47 @@ export default function LoginPage() {
   const [savedEmailHint, setSavedEmailHint] = useState<string | null>(null);
   const [isElectron, setIsElectron] = useState(false);
 
+  /**
+   * Read the remembered email out of local storage.
+   *
+   * Earlier versions wrote the password here too. Local storage is readable by
+   * any script that reaches the page, so a stored password is one XSS away from
+   * being an account takeover — and the Privacy Policy states that we hold
+   * passwords only as hashes. Any legacy entry is stripped of its password on
+   * the next read, so existing installs clean themselves up.
+   */
+  const readRememberedEmail = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const local = localStorage.getItem('last_successful_login');
+    if (!local) return null;
+    try {
+      const parsed = JSON.parse(local);
+      if (!parsed?.email) return null;
+      if (parsed.password !== undefined) {
+        localStorage.setItem(
+          'last_successful_login',
+          JSON.stringify({ email: parsed.email, savedAt: parsed.savedAt ?? new Date().toISOString() })
+        );
+      }
+      return String(parsed.email);
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const checkSaved = async () => {
       let foundCreds: { email?: string; password?: string } | null = null;
 
       if (typeof window !== 'undefined') {
-        const local = localStorage.getItem('last_successful_login');
-        if (local) {
-          try {
-            const parsed = JSON.parse(local);
-            if (parsed && parsed.email && parsed.password) {
-              foundCreds = parsed;
-            }
-          } catch (e) {}
+        const rememberedEmail = readRememberedEmail();
+        if (rememberedEmail) {
+          foundCreds = { email: rememberedEmail };
         }
 
-        if (!foundCreds && (window as any).electronAPI) {
+        // Only the desktop client has somewhere safe to keep a password: the
+        // operating system's encrypted credential store.
+        if ((window as any).electronAPI) {
           try {
             const creds = await (window as any).electronAPI.loadCredentials();
             if (creds && creds.email && creds.password) {
@@ -63,17 +88,12 @@ export default function LoginPage() {
     let credsToFill: { email?: string; password?: string } | null = null;
 
     if (typeof window !== 'undefined') {
-      const local = localStorage.getItem('last_successful_login');
-      if (local) {
-        try {
-          const parsed = JSON.parse(local);
-          if (parsed && parsed.email && parsed.password) {
-            credsToFill = parsed;
-          }
-        } catch (e) {}
+      const rememberedEmail = readRememberedEmail();
+      if (rememberedEmail) {
+        credsToFill = { email: rememberedEmail };
       }
 
-      if (!credsToFill && (window as any).electronAPI) {
+      if ((window as any).electronAPI) {
         try {
           const creds = await (window as any).electronAPI.loadCredentials();
           if (creds && creds.email && creds.password) {
@@ -83,11 +103,17 @@ export default function LoginPage() {
       }
     }
 
-    if (credsToFill && credsToFill.email && credsToFill.password) {
-      setEmail(credsToFill.email);
+    if (!credsToFill?.email) {
+      setError('No previously saved login found. Please log in once so your email can be remembered.');
+      return;
+    }
+
+    setEmail(credsToFill.email);
+    if (credsToFill.password) {
       setPassword(credsToFill.password);
     } else {
-      setError('No previously saved login credentials found. Please log in once to save credentials.');
+      // Browser sessions remember the email only; the password is never stored.
+      setError('Your email has been filled in. Please enter your password.');
     }
   };
 
@@ -108,11 +134,12 @@ export default function LoginPage() {
         throw new Error(data.error || 'Authentication failed');
       }
 
-      // Store credentials locally on successful login for Auto Refill
+      // Remember the email for Auto Refill. Never the password — see
+      // readRememberedEmail above.
       if (typeof window !== 'undefined') {
         localStorage.setItem(
           'last_successful_login',
-          JSON.stringify({ email, password, savedAt: new Date().toISOString() })
+          JSON.stringify({ email, savedAt: new Date().toISOString() })
         );
 
         if ((window as any).electronAPI) {

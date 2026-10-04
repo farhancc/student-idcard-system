@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Building2, Mail, User, Phone, MapPin, CheckCircle2, ChevronRight, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { LegalConsent, LegalLink } from '@/app/components/LegalConsent';
 
 export default function ClientSignupPage() {
   const router = useRouter();
@@ -17,6 +19,8 @@ export default function ClientSignupPage() {
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [address, setAddress] = useState('');
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   // Status State
   const [error, setError] = useState('');
@@ -47,6 +51,12 @@ export default function ClientSignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!acceptedLegal) {
+      setConsentError('Please confirm the above to register your organisation.');
+      return;
+    }
+    setConsentError(null);
     setSubmitting(true);
 
     try {
@@ -61,6 +71,7 @@ export default function ClientSignupPage() {
           contactPhone,
           contactEmail,
           address,
+          acceptedLegal,
         }),
       });
 
@@ -317,6 +328,28 @@ export default function ClientSignupPage() {
                 </div>
               </div>
 
+              <div style={{ marginTop: '18px' }}>
+                <LegalConsent
+                  id="accept-client-legal"
+                  checked={acceptedLegal}
+                  onChange={next => {
+                    setAcceptedLegal(next);
+                    if (next) setConsentError(null);
+                  }}
+                  error={consentError}
+                  disabled={submitting}
+                >
+                  I am authorised to register this organisation, and I accept the{' '}
+                  <LegalLink slug="client-terms">Client Organisation Terms</LegalLink>,{' '}
+                  <LegalLink slug="privacy">Privacy Policy</LegalLink> and{' '}
+                  <LegalLink slug="acceptable-use">Acceptable Use Policy</LegalLink>. I confirm we have a
+                  lawful basis to share our cardholders&rsquo; details and photographs for card production,
+                  including the consent of a parent or guardian where a cardholder is under 18. Cardholders
+                  can read the{' '}
+                  <LegalLink slug="cardholder-notice">Cardholder Privacy Notice</LegalLink> for themselves.
+                </LegalConsent>
+              </div>
+
               <button
                 type="submit"
                 className="btn btn-primary"
@@ -347,6 +380,11 @@ export default function ClientSignupPage() {
                 <a href="/login" style={{ color: 'var(--primary)', fontWeight: '500' }}>
                   Log In
                 </a>
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                <Link href="/legal" style={{ color: 'var(--muted)', textDecoration: 'underline' }}>
+                  All legal documents
+                </Link>
               </p>
             </div>
           </>

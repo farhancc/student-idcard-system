@@ -42,6 +42,7 @@ model Press {
   templatePurchases TemplatePurchase[] @relation("TemplatePurchases")
   templateLikes     TemplateLike[]
   templateReports   TemplateReport[]
+  legalAcceptances  LegalAcceptance[]
 
   @@map("press")
 }
@@ -683,4 +684,39 @@ model TemplateReport {
 
   @@unique([pressId, templateId])
   @@map("template_reports")
+}
+
+// ── LEGAL ACCEPTANCES ─────────────────────────────────────────────────────────
+
+// Evidence that a specific party agreed to a specific version of a specific
+// published document. Consent that cannot be demonstrated is, under both the
+// DPDP Act and the GDPR, consent that does not count — so this records the
+// version, the moment, and the request it arrived on.
+//
+// `subjectType`/`subjectId` are polymorphic rather than three nullable foreign
+// keys: the three acceptance flows (press signup, client registration, portal
+// enrolment) are identical in every respect except whose id they carry, and a
+// single table is what lets `pendingLegalDocuments()` be one query.
+model LegalAcceptance {
+  id           Int      @id @default(autoincrement())
+  pressId      Int      @map("press_id")
+  press        Press    @relation(fields: [pressId], references: [id], onDelete: Cascade)
+  subjectType  String   @map("subject_type")  // PRESS_USER | CLIENT | CARDHOLDER
+  subjectId    Int      @map("subject_id")
+  documentSlug String   @map("document_slug")
+  version      String
+  acceptedAt   DateTime @default(now()) @map("accepted_at")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  // Set only when a parent or guardian accepted on behalf of a child
+  // cardholder — DPDP s.9 requires that consent to be identifiable.
+  guardianName     String? @map("guardian_name")
+  guardianRelation String? @map("guardian_relation")
+
+  // One row per party per version: a retry or a double-submitted form must not
+  // manufacture a second acceptance. The first one stands.
+  @@unique([subjectType, subjectId, documentSlug, version])
+  @@index([pressId, subjectType, subjectId])
+  @@index([documentSlug, version])
+  @@map("legal_acceptances")
 }

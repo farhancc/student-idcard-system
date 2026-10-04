@@ -47,12 +47,95 @@ export const signupSchema = z.object({
     .max(20)
     .regex(/^[+\d\s\-().]+$/, 'Invalid phone number format'),
   city: z.string().max(100).optional(),
+  // Consent is captured server-side from this flag, against whatever versions
+  // are currently published — never against a version the client names.
+  acceptedLegal: z.literal(true, {
+    message: 'You must accept the Terms of Service, Privacy Policy, Acceptable Use Policy and Data Processing Addendum to register',
+  }),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SignupInput = z.infer<typeof signupSchema>;
 
+// ── Client organisation self-registration ──────────────────────────────────
+
+export const CLIENT_TYPES = ['SCHOOL', 'COMPANY', 'NGO', 'GOVERNMENT', 'OTHER'] as const;
+
+export const clientSignupSchema = z.object({
+  pressId: z.coerce.number().int().positive('Select a printing press'),
+  name: z
+    .string({ message: 'Organization name is required' })
+    .min(2, 'Organization name must be at least 2 characters')
+    .max(150),
+  type: z.enum(CLIENT_TYPES, { message: 'Select a valid organization type' }),
+  contactName: z.string().max(150).nullable().optional(),
+  contactPhone: z.string().max(20).nullable().optional(),
+  contactEmail: z.string().email('Invalid email address').max(255).nullable().optional(),
+  address: z.string().max(500).nullable().optional(),
+  // The organisation warrants its authority over the roster it is about to
+  // share — see the Client Organisation Terms.
+  acceptedLegal: z.literal(true, {
+    message: 'You must accept the Client Organisation Terms to register',
+  }),
+});
+
+export type ClientSignupInput = z.infer<typeof clientSignupSchema>;
+
+// ── Marketplace ────────────────────────────────────────────────────────
+
+const optionalAssetUrl = z.string().max(2048).nullable().optional();
+
+export const marketplacePublishSchema = z.object({
+  templateId: z.coerce.number().int().positive('templateId required'),
+  price: z.coerce.number().int().min(0, 'Price cannot be negative').max(1_000_000).default(0),
+  cdrFileUrl: optionalAssetUrl,
+  psdFileUrl: optionalAssetUrl,
+  aiFileUrl: optionalAssetUrl,
+  pdfFileUrl: optionalAssetUrl,
+  // The person uploading warrants that they own what they are selling. Taken
+  // at the moment of listing, not at signup, because that is who gives it.
+  acceptedMarketplaceTerms: z.literal(true, {
+    message: 'You must accept the Marketplace Terms, and confirm you hold the rights to this template, before listing it',
+  }),
+});
+
+export type MarketplacePublishInput = z.infer<typeof marketplacePublishSchema>;
+
 // ── Portal Enrollment ─────────────────────────────────────────────────────────
+
+/**
+ * Agreement to the Cardholder Privacy Notice, given by the cardholder or, where
+ * the cardholder is a child, by a parent or lawful guardian.
+ *
+ * DPDP s.9 requires a child's data to be processed on verifiable parental
+ * consent, so the guardian has to be identified rather than merely asserted.
+ */
+export const enrolmentConsentSchema = z
+  .object(
+    {
+      accepted: z.literal(true, {
+        message: 'Please confirm you agree to these details being used to produce the card',
+      }),
+      /** True when a parent or guardian is submitting for someone under 18. */
+      onBehalfOfMinor: z.boolean(),
+      guardianName: z.string().max(150).nullable().optional(),
+      guardianRelation: z.string().max(60).nullable().optional(),
+    },
+    // A request that omits consent entirely gets the same plain-language
+    // message as one that sends it unticked, rather than a type error.
+    { error: 'Please confirm you agree to these details being used to produce the card' }
+  )
+  .refine(
+    v =>
+      !v.onBehalfOfMinor ||
+      ((v.guardianName ?? '').trim().length >= 2 && (v.guardianRelation ?? '').trim().length >= 2),
+    {
+      message: 'For a cardholder under 18, give the name of the parent or guardian consenting, and their relationship',
+      path: ['guardianName'],
+    }
+  );
+
+export type EnrolmentConsentInput = z.infer<typeof enrolmentConsentSchema>;
 
 export const enrollSchema = z.object({
   name: z
@@ -63,6 +146,7 @@ export const enrollSchema = z.object({
   photoUrl: z.string().max(10 * 1024 * 1024, 'Photo data is too large').nullable().optional(),
   uniqueKey: z.string().max(100).nullable().optional(),
   customFields: z.record(z.string(), z.string().max(10 * 1024 * 1024, 'Custom field data is too large')).optional(),
+  consent: enrolmentConsentSchema,
 });
 
 export type EnrollInput = z.infer<typeof enrollSchema>;

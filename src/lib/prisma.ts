@@ -105,7 +105,8 @@ export const TENANT_MODELS = [
   'OrderActivityLog', 'PressFont', 'OrderNote', 'DeliveryRecord',
   'PressApiKey', 'PrintVendor', 'ClientPortalShare',
   'PdfJob', 'CardAsset', 'CreditRequest', 'CreditHold',
-  'TemplatePurchase', 'TemplateLike', 'TemplateReport'
+  'TemplatePurchase', 'TemplateLike', 'TemplateReport',
+  'LegalAcceptance'
 ];
 
 // Tenant models that also carry rows shared with every press (pressId: null) —

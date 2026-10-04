@@ -221,6 +221,7 @@ describe('Security — Schema Bounds (customFields)', () => {
     const result = enrollSchema.safeParse({
       name: 'John Doe',
       customFields: { grade: '10th', section: 'A' },
+      consent: { accepted: true, onBehalfOfMinor: false },
     });
     expect(result.success).toBe(true);
   });
