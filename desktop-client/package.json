@@ -6,6 +6,7 @@
   "scripts": {
     "start": "electron .",
     "start:local": "ELECTRON_DISABLE_SANDBOX=1 PORTAL_URL=http://localhost:3000 electron --no-sandbox .",
+    "start:online": "ELECTRON_DISABLE_SANDBOX=1 PORTAL_URL=https://idexocards.vercel.app electron --no-sandbox .",
     "dist": "electron-builder",
     "postinstall": "patch-package && node scripts/download-binaries.js"
   },
@@ -53,7 +54,8 @@
     },
     "win": {
       "target": [
-        "zip"
+        "zip",
+        "nsis"
       ],
       "icon": "build/icon.ico"
     },
