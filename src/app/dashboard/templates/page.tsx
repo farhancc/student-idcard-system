@@ -487,57 +487,50 @@ export default function TemplatesPage() {
     }
 
     const uploadFileWithFallback = async (fileToUpload: File): Promise<{ url: string; originalUrl?: string }> => {
-      // 1. Try direct upload to Cloudinary using /api/upload/sign to bypass Vercel 4.5MB limit
-      try {
-        const folder = `press_${pressId}/templates`;
-        const signRes = await fetch('/api/upload/sign', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'x-press-id': String(pressId ?? 0)
-          },
-          body: JSON.stringify({ folder })
-        });
-        
-        if (signRes.ok) {
-          const signData = await signRes.json();
-          if (signData.success && signData.signature) {
-            const { signature, timestamp, apiKey, cloudName } = signData;
-            const directFormData = new FormData();
-            directFormData.append('file', fileToUpload);
-            directFormData.append('api_key', apiKey);
-            directFormData.append('timestamp', String(timestamp));
-            directFormData.append('signature', signature);
-            directFormData.append('folder', folder);
-            
-            const cloudinaryRes = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/upload`, {
-              method: 'POST',
-              body: directFormData
-            });
-            
-            if (cloudinaryRes.ok) {
-              const cloudinaryData = await cloudinaryRes.json();
-              const uploadedUrl = cloudinaryData.secure_url;
-              
-              const isPdf = fileToUpload.name.toLowerCase().endsWith('.pdf');
-              const isSvg = fileToUpload.name.toLowerCase().endsWith('.svg');
-              let previewUrl = uploadedUrl;
-              
-              if (isPdf) {
-                previewUrl = uploadedUrl.replace(/\.pdf$/i, '.png');
-              } else if (isSvg) {
-                previewUrl = uploadedUrl.replace(/\.svg$/i, '.png');
+      // 1. Upload straight to R2 with a presigned PUT. The point is to keep a
+      //    large template off the 4.5MB serverless request-body limit — the
+      //    bytes go browser -> R2 and never touch a function. Only types the
+      //    presign route allowlists can take this path; anything else falls
+      //    through to the server route below.
+      const presignContentType =
+        fileToUpload.type === 'application/pdf' || fileToUpload.name.toLowerCase().endsWith('.pdf')
+          ? 'application/pdf'
+          : fileToUpload.type === 'image/png' || fileToUpload.name.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : fileToUpload.type === 'image/jpeg' ? 'image/jpeg'
+          : fileToUpload.type === 'image/webp' ? 'image/webp'
+          : '';
+
+      if (presignContentType) {
+        try {
+          const presignRes = await fetch('/api/storage/presigned', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-press-id': String(pressId ?? 0),
+            },
+            body: JSON.stringify({ contentType: presignContentType, assetType: 'template' }),
+          });
+
+          if (presignRes.ok) {
+            const presign = await presignRes.json();
+            if (presign.success && presign.uploadUrl) {
+              const put = await fetch(presign.uploadUrl, {
+                method: 'PUT',
+                headers: { 'Content-Type': presignContentType },
+                body: fileToUpload,
+              });
+              if (put.ok) {
+                // Both point at the stored original. The preview shown in the
+                // editor is rendered client-side (pdfjs, or the Electron
+                // native conversion) rather than derived from this URL.
+                return { url: presign.publicUrl, originalUrl: presign.publicUrl };
               }
-              
-              return {
-                url: previewUrl,
-                originalUrl: uploadedUrl
-              };
             }
           }
+        } catch (err) {
+          console.warn('Presigned R2 upload failed, falling back to server upload...', err);
         }
-      } catch (err) {
-        console.warn('Direct Cloudinary upload failed or not configured, falling back to server...', err);
       }
 
       // 2. Fallback to /api/upload
@@ -664,7 +657,7 @@ export default function TemplatesPage() {
           setFrontWebUrl(pdfPreviewDataUrl || ''); // Reset during upload
           // IMPORTANT: immediately set originalUrl to the local PDF path so that
           // the production renderer can embed it natively even before the background
-          // Cloudinary upload completes. Uses local:// protocol so the Electron
+          // background upload completes. Uses local:// protocol so the Electron
           // protocol handler serves it as application/pdf.
           if (result.localPath) {
             const formattedPath = result.localPath.replace(/\\/g, '/');
@@ -757,7 +750,7 @@ export default function TemplatesPage() {
             });
         }
 
-        // Upload original to Cloudinary in the background for high-res Electron fallback
+        // Upload the original to R2 in the background for the high-res Electron fallback
         uploadFileWithFallback(file)
           .then(result => {
             if (result.originalUrl) {
@@ -768,15 +761,15 @@ export default function TemplatesPage() {
                   if (isPdf && result.url && !result.url.toLowerCase().includes('.pdf')) {
                     setFrontWebUrl(result.url);
                     setFrontImageUrl(result.url);
-                    toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
+                    toast(`Web preview prepared successfully for front side`, 'success');
                   } else {
                     createCheapCopyBase64(result.originalUrl)
                       .then(webUrl => {
                         setFrontWebUrl(webUrl);
                         setFrontImageUrl(result.url);
-                        toast(`Web preview prepared successfully from Cloudinary for front side`, 'success');
+                        toast(`Web preview prepared successfully for front side`, 'success');
                       })
-                      .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                      .catch(err => console.error('Fallback web preview failed:', err));
                   }
                 }
               } else {
@@ -785,21 +778,21 @@ export default function TemplatesPage() {
                   if (isPdf && result.url && !result.url.toLowerCase().includes('.pdf')) {
                     setBackWebUrl(result.url);
                     setBackImageUrl(result.url);
-                    toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
+                    toast(`Web preview prepared successfully for back side`, 'success');
                   } else {
                     createCheapCopyBase64(result.originalUrl)
                       .then(webUrl => {
                         setBackWebUrl(webUrl);
                         setBackImageUrl(result.url);
-                        toast(`Web preview prepared successfully from Cloudinary for back side`, 'success');
+                        toast(`Web preview prepared successfully for back side`, 'success');
                       })
-                      .catch(err => console.error('Cloudinary fallback web preview failed:', err));
+                      .catch(err => console.error('Fallback web preview failed:', err));
                   }
                 }
               }
             }
           })
-          .catch(err => console.error('Background Cloudinary original upload failed:', err));
+          .catch(err => console.error('Background original upload failed:', err));
 
       } else {
         // ── Web path: upload the original, use the pdfjs render for preview ──

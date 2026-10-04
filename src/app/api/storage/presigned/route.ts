@@ -17,13 +17,18 @@ const CONTENT_TYPE_EXTENSIONS = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  // Template artwork. SVG is deliberately absent: it executes script when
+  // served, and these objects are public — an SVG template would be stored
+  // XSS against whoever opens it. SVG templates go through /api/upload,
+  // which rasterises them to a preview rather than serving them raw.
+  'application/pdf': 'pdf',
 } as const;
 
 const presignedRequestSchema = z.object({
-  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp'], {
-    message: 'Only JPEG, PNG, and WebP images are allowed',
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], {
+    message: 'Only JPEG, PNG, WebP and PDF uploads are allowed',
   }),
-  assetType: z.enum(['photo', 'logo', 'signature']).optional().default('photo'),
+  assetType: z.enum(['photo', 'logo', 'signature', 'template']).optional().default('photo'),
 });
 
 export async function POST(request: Request) {

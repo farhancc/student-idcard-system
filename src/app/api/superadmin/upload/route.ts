@@ -1,58 +1,12 @@
 import { NextResponse } from 'next/server';
-import { v2 as cloudinary } from 'cloudinary';
+import { uploadToR2, isR2Configured } from '@/lib/storage';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { requireSuperAdmin } from '@/lib/authz';
 import { sanitizeSvg } from '@/lib/svg-sanitizer';
 
 // Configure separate Cloudinary for templates if set, otherwise fall back to main
-const useTemplateCloudinary = !!(
-  process.env.TEMPLATE_CLOUDINARY_CLOUD_NAME &&
-  process.env.TEMPLATE_CLOUDINARY_API_KEY &&
-  process.env.TEMPLATE_CLOUDINARY_API_SECRET
-);
-
-const useMainCloudinary = !useTemplateCloudinary && !!(
-  process.env.CLOUDINARY_CLOUD_NAME &&
-  process.env.CLOUDINARY_API_KEY &&
-  process.env.CLOUDINARY_API_SECRET
-);
-
-const cloudinaryInstance = cloudinary;
-
-if (useTemplateCloudinary) {
-  cloudinaryInstance.config({
-    cloud_name: process.env.TEMPLATE_CLOUDINARY_CLOUD_NAME,
-    api_key:    process.env.TEMPLATE_CLOUDINARY_API_KEY,
-    api_secret: process.env.TEMPLATE_CLOUDINARY_API_SECRET,
-  });
-} else if (useMainCloudinary) {
-  cloudinaryInstance.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key:    process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-}
-
-const isCloudinaryConfigured = useTemplateCloudinary || useMainCloudinary;
-
-async function uploadBufferToCloudinary(
-  buffer: Buffer,
-  folder: string,
-  resourceType: 'auto' | 'image' | 'raw' = 'auto',
-  publicIdSuffix?: string
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const opts: any = { folder, resource_type: resourceType };
-    if (publicIdSuffix) opts.public_id = publicIdSuffix;
-    cloudinaryInstance.uploader
-      .upload_stream(opts, (error, result) => {
-        if (error) reject(error);
-        else resolve(result!.secure_url);
-      })
-      .end(buffer);
-  });
-}
 
 async function generatePreviewBuffer(
   originalBuffer: Buffer,
@@ -152,48 +106,48 @@ export async function POST(request: Request) {
     const isVectorOrPdf = fileExtension === '.pdf' || fileExtension === '.svg';
 
 
-    if (isCloudinaryConfigured) {
-      const folder = `global/templates`;
+    if (isR2Configured) {
+      const prefix = `global/templates`;
+      const stamp = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+      const contentType =
+        fileExtension === '.pdf' ? 'application/pdf'
+        : fileExtension === '.svg' ? 'image/svg+xml'
+        : fileExtension === '.png' ? 'image/png'
+        : fileExtension === '.webp' ? 'image/webp'
+        : fileExtension === '.jpg' || fileExtension === '.jpeg' ? 'image/jpeg'
+        : 'application/octet-stream';
+      const originalUrl = await uploadToR2({
+        key: `${prefix}/originals/${stamp}${fileExtension}`,
+        body: buffer,
+        contentType,
+      });
 
       if (isVectorOrPdf) {
-        console.log(`Uploading global original ${fileExtension} to Cloudinary…`);
-        const originalUrl = await uploadBufferToCloudinary(buffer, `${folder}/originals`, 'auto');
-
-        console.log('Generating 150 DPI preview for global template…');
+        // R2 stores bytes and nothing else — there is no on-the-fly .pdf -> .png
+        // conversion to fall back on, so a preview exists only if we rasterise
+        // one here. When that is not possible the original stands in, exactly
+        // as it does on the press-level upload route.
         const previewBuffer = await generatePreviewBuffer(buffer, fileExtension);
+        const previewUrl = previewBuffer
+          ? await uploadToR2({
+              key: `${prefix}/previews/${stamp}.jpg`,
+              body: previewBuffer,
+              contentType: 'image/jpeg',
+            })
+          : originalUrl;
 
-        let previewUrl = originalUrl;
-        if (previewBuffer) {
-          previewUrl = await uploadBufferToCloudinary(
-            previewBuffer,
-            `${folder}/previews`,
-            'image'
-          );
-        } else if (fileExtension === '.pdf') {
-          previewUrl = originalUrl.replace(/\.pdf$/i, '.png');
-        } else if (fileExtension === '.svg') {
-          previewUrl = originalUrl.replace(/\.svg$/i, '.png');
-        }
-
-        return NextResponse.json({
-          success: true,
-          url: previewUrl,
-          originalUrl,
-          provider: 'cloudinary',
-        });
-      } else {
-        console.log(`Uploading global raster template to Cloudinary…`);
-        const url = await uploadBufferToCloudinary(buffer, folder, 'auto');
-        return NextResponse.json({ success: true, url, provider: 'cloudinary' });
+        return NextResponse.json({ success: true, url: previewUrl, originalUrl, provider: 'r2' });
       }
+
+      return NextResponse.json({ success: true, url: originalUrl, provider: 'r2' });
     } else {
       if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
         return NextResponse.json(
-          { error: 'Cloudinary credentials are not configured on this Vercel deployment. Persistent file storage is unavailable.' },
+          { error: 'R2 credentials are not configured on this deployment. Persistent file storage is unavailable.' },
           { status: 503 }
         );
       }
-      console.log(`Cloudinary not configured for global templates. Falling back to local upload…`);
+      console.log(`R2 not configured for global templates. Falling back to local upload…`);
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'global', 'templates');
       fs.mkdirSync(uploadDir, { recursive: true });
 
