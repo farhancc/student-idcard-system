@@ -189,7 +189,7 @@ export function CardholderViewModal({
                       style={{
                         padding: '5px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '0.78rem', fontWeight: '600',
                         background: previewSide === side ? 'var(--primary)' : 'transparent',
-                        color: previewSide === side ? '#fff' : 'var(--muted)',
+                        color: previewSide === side ? '#102650' : 'var(--muted)',
                         transition: 'all 0.15s',
                       }}
                     >

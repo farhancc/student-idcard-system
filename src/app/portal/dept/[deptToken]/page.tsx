@@ -1599,7 +1599,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                         fontWeight: 600,
                         cursor: 'pointer',
                         background: previewSide === 'front' ? 'var(--primary)' : 'transparent',
-                        color: previewSide === 'front' ? '#ffffff' : 'var(--muted)',
+                        color: previewSide === 'front' ? '#102650' : 'var(--muted)',
                         transition: 'all 0.2s'
                       }}
                     >
@@ -1616,7 +1616,7 @@ function DeptPortalPageContent({ params }: { params: Promise<{ deptToken: string
                         fontWeight: 600,
                         cursor: 'pointer',
                         background: previewSide === 'back' ? 'var(--primary)' : 'transparent',
-                        color: previewSide === 'back' ? '#ffffff' : 'var(--muted)',
+                        color: previewSide === 'back' ? '#102650' : 'var(--muted)',
                         transition: 'all 0.2s'
                       }}
                     >
