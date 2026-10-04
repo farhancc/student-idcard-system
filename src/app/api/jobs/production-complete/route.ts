@@ -53,9 +53,9 @@ export async function POST(request: Request) {
       }
 
       if (success) {
-        // The bytes themselves arrive on PUT /api/jobs/[id]/pdf, which sets
-        // downloadUrl when it manages to store them. That copy wins; otherwise
-        // point at the operator's own file so the job still has a source.
+        // Compiled PDFs are never stored server-side — the operator's own
+        // saved file is the only copy — so downloadUrl always points at the
+        // path on their machine.
         let downloadUrl = '';
         if (chunkCount && chunkCount > 1) {
           // Multi-chunk job: chunks were already uploaded individually.

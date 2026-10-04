@@ -9,11 +9,10 @@ import { getCustomCardById } from '@/lib/clientDb';
 
 /**
  * When a compilation's accumulated output crosses this many bytes, it's cut
- * into a new part instead of continuing to grow — this prevents
- * browser/Electron memory exhaustion on large batches, and (80% of the 10MB
- * server upload cap in src/app/api/jobs/[id]/pdf/route.ts, leaving headroom
- * for PDF container overhead) keeps each part small enough for the server to
- * actually store. Sized by bytes rather than page count because photos, not
+ * into a new part instead of continuing to grow, which keeps a large batch
+ * from exhausting browser/Electron memory. It was also sized to clear a
+ * server upload cap; nothing is uploaded any more, so memory is the only
+ * reason left. Sized by bytes rather than page count because photos, not
  * page count, are what drive PDF size — a page of small photos and a page of
  * high-res print-quality photos can differ by an order of magnitude.
  */
@@ -162,58 +161,6 @@ export default function ProductionDaemon() {
     }
   };
 
-  /**
-   * Hand the compiled bytes to the server as their own request.
-   *
-   * Best-effort on purpose: the file is already on this machine, and a server
-   * copy that cannot be stored must not stop the job from settling — that is
-   * exactly how jobs used to sit at 100% with their credits locked. But a
-   * transient network blip or a 5xx is not the same as "too large" or "not a
-   * PDF" — those are worth retrying, since giving up on the first hiccup is
-   * what pushes jobs onto the local-only fallback (a path on the operator's
-   * own machine, which nothing server-side can ever read back) more often
-   * than the upload was actually doomed to fail.
-   */
-  const storeCompiledPdf = async (jobId: number, pdfBytes: Uint8Array, chunkIndex?: number) => {
-    const query = chunkIndex === undefined ? '' : `?chunk=${chunkIndex}`;
-    const label = chunkIndex === undefined ? `job #${jobId}` : `job #${jobId} chunk ${chunkIndex + 1}`;
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        const res = await fetch(`/api/jobs/${jobId}/pdf${query}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/pdf' },
-          body: new Blob([pdfBytes.buffer as any], { type: 'application/pdf' }),
-          credentials: 'same-origin',
-          signal: AbortSignal.timeout(30000),
-        });
-        if (res.ok) return true;
-
-        // 4xx here means the upload itself is unfixable by retrying (too
-        // large, wrong content, job already settled) — stop immediately.
-        if (res.status >= 400 && res.status < 500) {
-          addLog(`No server copy kept for ${label} (HTTP ${res.status}). The saved file on this machine is the master copy.`);
-          return false;
-        }
-
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
-          continue;
-        }
-        addLog(`No server copy kept for ${label} after ${attempt} attempts (HTTP ${res.status}). The saved file on this machine is the master copy.`);
-        return false;
-      } catch (err: any) {
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, attempt * 2000));
-          continue;
-        }
-        addLog(`Could not send ${label} to server storage after ${attempt} attempts: ${err.message}. The saved file on this machine is the master copy.`);
-        return false;
-      }
-    }
-    return false;
-  };
-
   const postCompletion = async (payload: Record<string, unknown>) => {
     const res = await fetch('/api/jobs/production-complete', {
       method: 'POST',
@@ -304,10 +251,9 @@ export default function ProductionDaemon() {
       }
       addLog(`Saved successfully to: ${saveResult.path}`);
       await updateProgress(job.id, 100, 'PROCESSING');
-      await storeCompiledPdf(job.id, pdfBytes);
       await reportJobComplete(job.id, true, undefined, saveResult.path);
     } else {
-      addLog('Web client detected. Triggering browser file download and uploading to server...');
+      addLog('Web client detected. Triggering browser file download...');
       
       const blob = new Blob([pdfBytes.buffer as any], { type: 'application/pdf' });
       const downloadUrl = URL.createObjectURL(blob);
@@ -320,7 +266,6 @@ export default function ProductionDaemon() {
       URL.revokeObjectURL(downloadUrl);
 
       await updateProgress(job.id, 100, 'PROCESSING');
-      await storeCompiledPdf(job.id, pdfBytes);
       await reportJobComplete(job.id, true, undefined, undefined);
       addLog('Job completed successfully. Download started.');
     }
@@ -380,7 +325,6 @@ export default function ProductionDaemon() {
         credentials: 'same-origin',
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-      await storeCompiledPdf(job.id, pdfBytes, chunkIndex);
     } catch (err: any) {
       addLog(`Warning: Failed to report chunk ${chunkIndex + 1} to server: ${err.message}`);
     }
@@ -1004,10 +948,9 @@ export default function ProductionDaemon() {
     // ── Chunked compilation logic ──────────────────────────────────────────
     // Chunk boundaries are decided by the actual bytes embedded into each
     // page (see createChunkedUploader / SAFE_CHUNK_BYTES above) rather than a
-    // fixed page count — a 15-page chunk of high-res, photo-heavy cards can
-    // easily exceed the server's upload cap (MAX_UPLOAD_BYTES in
-    // src/app/api/jobs/[id]/pdf/route.ts) while the same page count with
-    // small photos would comfortably fit in a fraction of it.
+    // fixed page count — a 15-page chunk of high-res, photo-heavy cards holds
+    // an order of magnitude more bytes than the same page count of small
+    // photos, and it is bytes that exhaust memory.
     addLog(`Layout Grid: cols=${cols}, cardsPerPage=${cardsPerPage}, totalPages=${totalPages}`);
 
     const baseName = (job.fileName || 'production.pdf').replace(/\.pdf$/i, '');

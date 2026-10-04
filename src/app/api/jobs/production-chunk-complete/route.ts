@@ -39,9 +39,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'PDF Job not found' }, { status: 404 });
     }
 
-    // The chunk's bytes follow on PUT /api/jobs/[id]/pdf?chunk=N, which fills in
-    // downloadUrl and fileSize if it manages to store them. Until then the
-    // operator's own saved file is where this chunk lives.
+    // A chunk's bytes are never sent to the server — the operator's own saved
+    // file is where this chunk lives, so downloadUrl records that path.
     let downloadUrl = '';
     if (localPath) {
       const formattedPath = localPath.replace(/\\/g, '/');
