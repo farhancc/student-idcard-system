@@ -3,6 +3,27 @@ import { requireActor } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { verifySubscriptionLimits } from '@/lib/pdf/subscription';
 import { clampLimit } from '@/lib/pagination';
+import { z } from 'zod';
+
+// `pdfType` ends up in the job's `fileName` (see below) and from there in a
+// filesystem path the Electron desktop client writes to unsanitized — an
+// unconstrained string here is a path-traversal / arbitrary-file-write
+// primitive, not just a data-modeling nicety.
+const createJobSchema = z.object({
+  orderId: z.union([z.number(), z.string().transform(Number)]),
+  pdfType: z.enum(['PRODUCTION', 'APPROVAL', 'INVOICE', 'INDIVIDUAL']),
+  paperSize: z.string().optional(),
+  orientation: z.string().optional(),
+  bleed: z.union([z.number(), z.string().transform(Number)]).optional(),
+  cropMarks: z.boolean().optional(),
+  foldLine: z.boolean().optional(),
+  marginLeft: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginTop: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginRight: z.union([z.number(), z.string().transform(Number)]).optional(),
+  marginBottom: z.union([z.number(), z.string().transform(Number)]).optional(),
+  colGap: z.union([z.number(), z.string().transform(Number)]).optional(),
+  rowGap: z.union([z.number(), z.string().transform(Number)]).optional(),
+});
 
 export async function POST(request: Request) {
   try {
@@ -10,14 +31,23 @@ export async function POST(request: Request) {
     if ('response' in auth) return auth.response;
     const { pressId, userId, role: userRole, name: actorName } = auth.actor;
 
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 });
+    }
+    const validation = createJobSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: 'Order ID and a valid PDF Type (PRODUCTION, APPROVAL, INVOICE, or INDIVIDUAL) are required' },
+        { status: 400 },
+      );
+    }
     const {
       orderId, pdfType, paperSize, orientation, bleed, cropMarks, foldLine,
       marginLeft, marginTop, marginRight, marginBottom, colGap, rowGap
-    } = await request.json();
-
-    if (!orderId || !pdfType) {
-      return NextResponse.json({ error: 'Order ID and PDF Type are required' }, { status: 400 });
-    }
+    } = validation.data;
 
     // 1. Role-Based PDF Type Permissions (R1)
     if (userRole === 'DESIGNER') {

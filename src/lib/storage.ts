@@ -2,6 +2,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, Dele
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import fs from 'fs';
 import path from 'path';
+import { resolveWithinDir } from '@/lib/safe-fetch';
 
 // ── Environment Variables for Cloudflare R2 ─────────────────────────────────
 const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
@@ -77,11 +78,17 @@ export async function uploadToR2({ key, body, contentType }: UploadOptions): Pro
   }
 
   // ── Local Fallback (for local development when R2 env vars are not set or when network is offline) ────
-  const localDir = path.join(process.cwd(), 'public', 'uploads', path.dirname(key));
+  // `key` is built by callers from a caller-supplied `type` field (e.g. the
+  // portal upload route) — never trust it to stay inside the uploads root.
+  const uploadsRoot = path.join(process.cwd(), 'public', 'uploads');
+  const localPath = resolveWithinDir(uploadsRoot, key);
+  if (!localPath) {
+    throw new Error('Invalid upload key');
+  }
+  const localDir = path.dirname(localPath);
   if (!fs.existsSync(localDir)) {
     fs.mkdirSync(localDir, { recursive: true });
   }
-  const localPath = path.join(process.cwd(), 'public', 'uploads', key);
   fs.writeFileSync(localPath, body);
   return `/uploads/${key}`;
 }
@@ -172,7 +179,8 @@ export async function deleteFromR2(urlOrKey: string): Promise<boolean> {
 
   // Local fallback deletion
   try {
-    const localPath = path.join(process.cwd(), 'public', 'uploads', key);
+    const localPath = resolveWithinDir(path.join(process.cwd(), 'public', 'uploads'), key);
+    if (!localPath) return false;
     if (fs.existsSync(localPath)) {
       fs.unlinkSync(localPath);
     }

@@ -7,6 +7,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getResolvedFieldValue, resolveCardholderPhotoUrl, isPrimaryPhotoField, isValidImageUrl, resolveFieldRawValue, isPlaceholderStaticValue } from './field-resolver';
+import { fetchPublicAsset, UnsafeAssetError } from '@/lib/safe-fetch';
 
 // Helper to resolve SVG to high-resolution PNG URL
 function resolveSvgToPng(url: string, width = 3000): string {
@@ -173,10 +174,19 @@ async function getFileBuffer(fileUrl: string): Promise<Buffer> {
   }
 
   if (isExternalUrl) {
-    const res = await fetch(fileUrl, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`Failed to download file (${res.status}): ${res.statusText}`);
-    const arrayBuffer = await res.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    // `fileUrl` here can be a cardholder photo/custom-field value supplied
+    // through an unauthenticated-beyond-token portal import — fetch it
+    // through the SSRF-safe helper (blocks private/link-local/metadata IPs,
+    // including on redirect hops) rather than an unrestricted fetch().
+    try {
+      const asset = await fetchPublicAsset(fileUrl);
+      return asset.body;
+    } catch (err) {
+      if (err instanceof UnsafeAssetError) {
+        throw new Error(`Refused to fetch file: ${err.code}`);
+      }
+      throw err;
+    }
   }
 
   const publicPath = path.join(/*turbopackIgnore: true*/ process.cwd(), 'public', cleanUrl);

@@ -456,9 +456,14 @@ app.on('window-all-closed', function () {
 // IPC handler to save PDF binary buffer directly to OS documents folder
 ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) => {
   try {
+    // `fileName` ultimately comes from a server-supplied PdfJob record, so it
+    // is not trusted input — strip any directory components (path.basename
+    // neutralizes both `/` and `\` separators, so `../../etc/passwd` becomes
+    // just `passwd`) before it's ever joined into a filesystem path.
+    const safeFileName = path.basename(String(fileName || 'document.pdf')) || 'document.pdf';
     const documentsPath = app.getPath('documents');
     let subfolder = 'production';
-    const fnLower = (fileName || '').toLowerCase();
+    const fnLower = safeFileName.toLowerCase();
     if (fnLower.includes('approval') || fnLower.includes('proof')) {
       subfolder = 'proof';
     } else if (fnLower.includes('invoice')) {
@@ -474,7 +479,7 @@ ipcMain.handle('save-pdf', async (event, { fileName, base64Data, clientName }) =
     }
 
     const dateStr = new Date().toISOString().split('T')[0];
-    const datedFileName = `${dateStr}_${fileName}`;
+    const datedFileName = `${dateStr}_${safeFileName}`;
 
     const filePath = path.join(targetDir, datedFileName);
     const buffer = Buffer.from(base64Data, 'base64');
