@@ -9,9 +9,13 @@ import { computeYOffsets, wrapWords, formatFieldLabel, FieldCoordinate, getPlace
 import FieldTooltip from './components/FieldTooltip';
 import { CanvasRuler, GuideDifferences } from './components/CanvasRuler';
 import TemplateListGrid from './components/TemplateListGrid';
+import { LegalConsent, LegalLink } from '@/app/components/LegalConsent';
 
 import { TEMPLATE_CATEGORIES, TemplateCategory, CATEGORY_LABELS, CATEGORY_COLORS, CATEGORY_DIMENSIONS } from './components/constants';
 import { groupSelectableFonts } from '@/lib/fontLibrary';
+import {
+  LENGTH_UNITS, lengthToPx, pxToLength, unitSpec, type LengthUnit,
+} from '@/lib/units';
 
 const SMART_SUGGESTIONS: Record<TemplateCategory, string[]> = {
   ID_CARD:      ['photo', 'name', 'id', 'department', 'qr'],
@@ -161,8 +165,11 @@ export default function TemplatesPage() {
   // Bleed & Safe Area guide overlay
   const [showBleedGuides, setShowBleedGuides] = useState(false);
   const [zoom, setZoom] = useState(1);
-  // CR80 standard at 300 DPI: 3.375" x 2.125" => 1013 x 638 px
-  // Bleed: 1.5mm at 300 DPI = ~18px; Safe area: 3mm = ~35px
+  // Display unit for everything physical in the designer — the dimension
+  // inputs, the rulers, the guide readouts. Geometry itself stays in the
+  // 300 DPI pixels the template is stored in.
+  const [designerUnit, setDesignerUnit] = useState<LengthUnit>('MM');
+  // Bleed: 1.5 mm at 300 DPI = ~18 px; Safe area: 3 mm = ~35 px
   const BLEED_PX = 18;
   const SAFE_PX = 35;
 
@@ -213,6 +220,9 @@ export default function TemplatesPage() {
   const [publishPdfUrl, setPublishPdfUrl] = useState<string | null>(null);
   const [uploadingFormat, setUploadingFormat] = useState<string | null>(null);
   const [publishLoading, setPublishLoading] = useState(false);
+  // The seller's IP warranty, required by the publish endpoint. Reset whenever
+  // a different template is opened, so it is never carried over.
+  const [publishWarranty, setPublishWarranty] = useState(false);
   const [publishMsg, setPublishMsg] = useState('');
   const [includeSourceFiles, setIncludeSourceFiles] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -418,13 +428,14 @@ export default function TemplatesPage() {
   };
 
   // ── DPI / Dimension Standards ─────────────────────────────────────────────
-  // CR80 card at 300 DPI:  1013 × 638 px (landscape)
-  // CR80 card at 300 DPI:   638 × 1013 px (portrait)
-  // Minimum acceptable: 150 DPI => 507 × 319 px
-  const CR80_300DPI_W = 1013;
-  const CR80_300DPI_H = 638;
-  const CR80_150DPI_W = 507;
-  const CR80_150DPI_H = 319;
+  // Background artwork is judged against a CR80 card (ISO/IEC 7810 ID-1,
+  // 85.6 x 53.98 mm). Derived from the same millimetres as the ID_CARD preset
+  // so the resolution advice always matches the size the preset actually sets.
+  const CR80_300DPI_W = CATEGORY_DIMENSIONS.ID_CARD.w;
+  const CR80_300DPI_H = CATEGORY_DIMENSIONS.ID_CARD.h;
+  // Minimum acceptable quality is half that, i.e. 150 DPI.
+  const CR80_150DPI_W = Math.round(CR80_300DPI_W / 2);
+  const CR80_150DPI_H = Math.round(CR80_300DPI_H / 2);
 
   /**
    * Render a PDF's first page to a PNG data URL entirely client-side.
@@ -1854,7 +1865,8 @@ export default function TemplatesPage() {
                     {CATEGORY_LABELS[category]}
                   </span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--muted)', marginLeft: '8px' }}>
-                    Default: {CATEGORY_DIMENSIONS[category].label}
+                    Default: {pxToLength(CATEGORY_DIMENSIONS[category].w, designerUnit)} × {pxToLength(CATEGORY_DIMENSIONS[category].h, designerUnit)} {unitSpec(designerUnit).symbol}
+                    {CATEGORY_DIMENSIONS[category].name ? ` (${CATEGORY_DIMENSIONS[category].name})` : ''}
                   </span>
                 </div>
               </div>
@@ -2128,20 +2140,39 @@ export default function TemplatesPage() {
             {/* Dimensions Row */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
               <div className="form-group">
-                <label className="form-label">Dimensions</label>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                  <span>Dimensions</span>
+                  <span style={{ display: 'flex', gap: '3px', background: 'rgba(0,0,0,0.3)', padding: '2px', borderRadius: '6px' }}>
+                    {LENGTH_UNITS.map(u => (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => setDesignerUnit(u.id)}
+                        title={`Show card dimensions, rulers and guides in ${u.label}`}
+                        style={{
+                          padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer',
+                          background: designerUnit === u.id ? 'var(--primary)' : 'transparent',
+                          color: designerUnit === u.id ? '#102650' : 'var(--muted)', border: 'none'
+                        }}
+                      >
+                        {u.symbol}
+                      </button>
+                    ))}
+                  </span>
+                </label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Width (mm)</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Width ({unitSpec(designerUnit).symbol})</span>
                       <input 
                         type="number" 
-                        step="0.1"
+                        step={unitSpec(designerUnit).step}
                         className="form-input" 
-                        placeholder="e.g. 85.6" 
-                        value={cardWidth ? Math.round((cardWidth * 25.4 / 300) * 10) / 10 : ''} 
+                        placeholder={`e.g. ${pxToLength(1011, designerUnit)}`}
+                        value={cardWidth ? pxToLength(cardWidth, designerUnit) : ''} 
                         onChange={e => {
-                          const mm = Number(e.target.value);
-                          setCardWidth(mm ? Math.round(mm * 300 / 25.4) : 0);
+                          const val = Number(e.target.value);
+                          setCardWidth(val ? lengthToPx(val, designerUnit) : 0);
                         }} 
                       />
                     </div>
@@ -2170,16 +2201,16 @@ export default function TemplatesPage() {
                       <RefreshCw size={16} />
                     </button>
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Height (mm)</span>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Height ({unitSpec(designerUnit).symbol})</span>
                       <input 
                         type="number" 
-                        step="0.1"
+                        step={unitSpec(designerUnit).step}
                         className="form-input" 
-                        placeholder="e.g. 54" 
-                        value={cardHeight ? Math.round((cardHeight * 25.4 / 300) * 10) / 10 : ''} 
+                        placeholder={`e.g. ${pxToLength(638, designerUnit)}`}
+                        value={cardHeight ? pxToLength(cardHeight, designerUnit) : ''} 
                         onChange={e => {
-                          const mm = Number(e.target.value);
-                          setCardHeight(mm ? Math.round(mm * 300 / 25.4) : 0);
+                          const val = Number(e.target.value);
+                          setCardHeight(val ? lengthToPx(val, designerUnit) : 0);
                         }} 
                       />
                     </div>
@@ -2305,6 +2336,10 @@ export default function TemplatesPage() {
                         <option value={1.25} style={{ background: '#1e293b' }}>125%</option>
                         <option value={1.5} style={{ background: '#1e293b' }}>150%</option>
                         <option value={2} style={{ background: '#1e293b' }}>200%</option>
+                        <option value={2.5} style={{ background: '#1e293b' }}>250%</option>
+                        <option value={3} style={{ background: '#1e293b' }}>300%</option>
+                        <option value={4} style={{ background: '#1e293b' }}>400%</option>
+                        <option value={5} style={{ background: '#1e293b' }}>500%</option>
                       </select>
                     </div>
                     {/* Grid Toggle */}
@@ -2396,7 +2431,7 @@ export default function TemplatesPage() {
                     </label>
 
                     <span style={{ fontSize: '0.75rem', color: '#64748b', marginLeft: '6px' }}>
-                      💡 Drag from rulers to place custom guides (units in mm).
+                      💡 Drag from rulers to place custom guides (units: {unitSpec(designerUnit).symbol}).
                     </span>
 
                     {/* Bleed & Safe Area Guide Toggle */}
@@ -2633,9 +2668,13 @@ export default function TemplatesPage() {
                   display: 'flex',
                   flexWrap: 'wrap',
                   gap: '24px',
-                  justifyContent: 'center',
+                  // `safe center` keeps the canvas centred until it outgrows the panel,
+                  // then falls back to flex-start so zoomed-in artwork stays scrollable
+                  // instead of being clipped off the left edge.
+                  justifyContent: 'safe center',
                   alignItems: 'flex-start',
-                  marginTop: '10px'
+                  marginTop: '10px',
+                  overflowX: 'auto'
                 }}>
                   {/* Front Side Designer */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
@@ -2650,9 +2689,9 @@ export default function TemplatesPage() {
                         return (
                           <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* Rulers */}
-                            <CanvasRuler side="front" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} onAddGuide={handleAddGuide} />
-                            <CanvasRuler side="front" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} onAddGuide={handleAddGuide} />
-                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>px</div>
+                            <CanvasRuler side="front" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="front" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>{unitSpec(designerUnit).symbol}</div>
 
                             <div 
                               id="designer-canvas-front"
@@ -2758,8 +2797,8 @@ export default function TemplatesPage() {
                                       strokeDasharray="6,3"
                                     />
                                     {/* Labels */}
-                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed (1.5mm)</text>
-                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area (3mm)</text>
+                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed ({pxToLength(BLEED_PX, designerUnit)} {unitSpec(designerUnit).symbol})</text>
+                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area ({pxToLength(SAFE_PX, designerUnit)} {unitSpec(designerUnit).symbol})</text>
                                   </svg>
                                 );
                               })()}
@@ -2798,12 +2837,12 @@ export default function TemplatesPage() {
                                         cursor: isHoriz ? 'ns-resize' : 'ew-resize',
                                         background: 'transparent'
                                       }}
-                                      title={`Guide: ${Math.round((g.value * 25.4 / 300) * 10) / 10} mm (Drag to move, drag off canvas/ruler to delete)`}
+                                      title={`Guide: ${pxToLength(g.value, designerUnit)} ${unitSpec(designerUnit).symbol} (Drag to move, drag off canvas/ruler to delete)`}
                                     />
                                   </div>
                                 );
                               })}
-                              <GuideDifferences side="front" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} frontGuides={frontGuides} backGuides={backGuides} />
+                              <GuideDifferences side="front" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = frontYOffsets.get(i) ?? 0;
@@ -3136,9 +3175,9 @@ export default function TemplatesPage() {
                         return (
                           <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* Rulers */}
-                            <CanvasRuler side="back" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} onAddGuide={handleAddGuide} />
-                            <CanvasRuler side="back" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} onAddGuide={handleAddGuide} />
-                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>px</div>
+                            <CanvasRuler side="back" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="back" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>{unitSpec(designerUnit).symbol}</div>
 
                             <div 
                               id="designer-canvas-back"
@@ -3241,8 +3280,8 @@ export default function TemplatesPage() {
                                       strokeWidth="1.5"
                                       strokeDasharray="6,3"
                                     />
-                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed (1.5mm)</text>
-                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area (3mm)</text>
+                                    <text x={bleedPx + 3} y={bleedPx - 3} fill="rgba(239,68,68,0.9)" fontSize="9" fontWeight="600">Bleed ({pxToLength(BLEED_PX, designerUnit)} {unitSpec(designerUnit).symbol})</text>
+                                    <text x={safePx + 3} y={safePx + 11} fill="rgba(234,179,8,0.9)" fontSize="9" fontWeight="600">Safe Area ({pxToLength(SAFE_PX, designerUnit)} {unitSpec(designerUnit).symbol})</text>
                                   </svg>
                                 );
                               })()}
@@ -3281,12 +3320,12 @@ export default function TemplatesPage() {
                                         cursor: isHoriz ? 'ns-resize' : 'ew-resize',
                                         background: 'transparent'
                                       }}
-                                      title={`Guide: ${Math.round((g.value * 25.4 / 300) * 10) / 10} mm (Drag to move, drag off canvas/ruler to delete)`}
+                                      title={`Guide: ${pxToLength(g.value, designerUnit)} ${unitSpec(designerUnit).symbol} (Drag to move, drag off canvas/ruler to delete)`}
                                     />
                                   </div>
                                 );
                               })}
-                              <GuideDifferences side="back" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} frontGuides={frontGuides} backGuides={backGuides} />
+                              <GuideDifferences side="back" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = backYOffsets.get(i) ?? 0;
@@ -3766,9 +3805,9 @@ export default function TemplatesPage() {
                                         <option value="800">800 - ExBold</option>
                                         <option value="900">900 - Black</option>
                                       </select>
-                                      <button type="button" title="Italic" onClick={() => handleFieldChange('front', i, 'fontStyle', f.fontStyle === 'italic' ? 'normal' : 'italic')} style={{ padding: '3px 8px', fontSize: '0.8rem', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.fontStyle === 'italic' ? 'var(--primary)' : 'transparent', color: f.fontStyle === 'italic' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>I</button>
-                                      <button type="button" title="Underline" onClick={() => handleFieldChange('front', i, 'textDecoration', f.textDecoration === 'underline' ? 'none' : 'underline')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'underline', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'underline' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'underline' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>U</button>
-                                      <button type="button" title="Strikethrough" onClick={() => handleFieldChange('front', i, 'textDecoration', f.textDecoration === 'line-through' ? 'none' : 'line-through')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'line-through', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'line-through' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'line-through' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>S</button>
+                                      <button type="button" title="Italic" onClick={() => handleFieldChange('front', i, 'fontStyle', f.fontStyle === 'italic' ? 'normal' : 'italic')} style={{ padding: '3px 8px', fontSize: '0.8rem', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.fontStyle === 'italic' ? 'var(--primary)' : 'transparent', color: f.fontStyle === 'italic' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>I</button>
+                                      <button type="button" title="Underline" onClick={() => handleFieldChange('front', i, 'textDecoration', f.textDecoration === 'underline' ? 'none' : 'underline')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'underline', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'underline' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'underline' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>U</button>
+                                      <button type="button" title="Strikethrough" onClick={() => handleFieldChange('front', i, 'textDecoration', f.textDecoration === 'line-through' ? 'none' : 'line-through')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'line-through', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'line-through' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'line-through' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>S</button>
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4019,9 +4058,9 @@ export default function TemplatesPage() {
                                         <option value="800">800 - ExBold</option>
                                         <option value="900">900 - Black</option>
                                       </select>
-                                      <button type="button" title="Italic" onClick={() => handleFieldChange('back', i, 'fontStyle', f.fontStyle === 'italic' ? 'normal' : 'italic')} style={{ padding: '3px 8px', fontSize: '0.8rem', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.fontStyle === 'italic' ? 'var(--primary)' : 'transparent', color: f.fontStyle === 'italic' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>I</button>
-                                      <button type="button" title="Underline" onClick={() => handleFieldChange('back', i, 'textDecoration', f.textDecoration === 'underline' ? 'none' : 'underline')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'underline', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'underline' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'underline' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>U</button>
-                                      <button type="button" title="Strikethrough" onClick={() => handleFieldChange('back', i, 'textDecoration', f.textDecoration === 'line-through' ? 'none' : 'line-through')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'line-through', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'line-through' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'line-through' ? '#fff' : 'var(--muted)', cursor: 'pointer' }}>S</button>
+                                      <button type="button" title="Italic" onClick={() => handleFieldChange('back', i, 'fontStyle', f.fontStyle === 'italic' ? 'normal' : 'italic')} style={{ padding: '3px 8px', fontSize: '0.8rem', fontStyle: 'italic', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.fontStyle === 'italic' ? 'var(--primary)' : 'transparent', color: f.fontStyle === 'italic' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>I</button>
+                                      <button type="button" title="Underline" onClick={() => handleFieldChange('back', i, 'textDecoration', f.textDecoration === 'underline' ? 'none' : 'underline')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'underline', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'underline' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'underline' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>U</button>
+                                      <button type="button" title="Strikethrough" onClick={() => handleFieldChange('back', i, 'textDecoration', f.textDecoration === 'line-through' ? 'none' : 'line-through')} style={{ padding: '3px 8px', fontSize: '0.8rem', textDecoration: 'line-through', borderRadius: '4px', border: '1px solid var(--glass-border)', background: f.textDecoration === 'line-through' ? 'var(--primary)' : 'transparent', color: f.textDecoration === 'line-through' ? '#102650' : 'var(--muted)', cursor: 'pointer' }}>S</button>
                                     </div>
                                     {/* Row 3: Advanced formatting controls */}
                                     <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -4164,6 +4203,7 @@ export default function TemplatesPage() {
           setPublishAiUrl(tmpl.aiFileUrl || null);
           setPublishPdfUrl(tmpl.pdfFileUrl || null);
           setIncludeSourceFiles(!!(tmpl.cdrFileUrl || tmpl.psdFileUrl || tmpl.aiFileUrl || tmpl.pdfFileUrl));
+          setPublishWarranty(false);
           setPublishMsg('');
         }}
         onPreviewClick={(id, side) => {
@@ -4354,6 +4394,20 @@ export default function TemplatesPage() {
               </div>
             )}
 
+            <div style={{ marginBottom: '16px' }}>
+              <LegalConsent
+                id="marketplace-warranty"
+                checked={publishWarranty}
+                onChange={setPublishWarranty}
+                disabled={publishLoading || !!uploadingFormat}
+              >
+                I created this template or hold the rights to license it, including every image, logo and
+                font in it. It contains no real cardholder data and does not imitate an official credential.
+                I accept the <LegalLink slug="marketplace">Marketplace Terms</LegalLink> and the{' '}
+                <LegalLink slug="acceptable-use">Acceptable Use Policy</LegalLink>.
+              </LegalConsent>
+            </div>
+
             <div style={{ display: 'flex', gap: '10px' }}>
               {publishingTemplate.isPublic && (
                 <button
@@ -4379,7 +4433,7 @@ export default function TemplatesPage() {
               <button
                 className="btn btn-primary"
                 style={{ flex: 1, gap: '6px' }}
-                disabled={publishLoading || !!uploadingFormat || publishingTemplate.isPurchased}
+                disabled={publishLoading || !!uploadingFormat || publishingTemplate.isPurchased || !publishWarranty}
                 onClick={async () => {
                   setPublishLoading(true); setPublishMsg('');
                   try {
@@ -4393,6 +4447,7 @@ export default function TemplatesPage() {
                         psdFileUrl: publishPsdUrl,
                         aiFileUrl: publishAiUrl,
                         pdfFileUrl: publishPdfUrl,
+                        acceptedMarketplaceTerms: publishWarranty,
                       }),
                     });
                     const d = await res.json();

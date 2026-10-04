@@ -4,6 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { X, FileText, Zap, CheckCircle2, AlertCircle, Upload, Layers, Trash2, FolderPlus, Monitor } from 'lucide-react';
 import PdfCompileLoadingAnimation from '@/app/components/PdfCompileLoadingAnimation';
 import { isElectronApp } from '@/lib/isElectron';
+import {
+  LENGTH_UNITS, MAX_GAP_PT, MAX_MARGIN_PT, convertLength, secondaryReadout, unitSpec,
+  type LengthUnit,
+} from '@/lib/units';
 
 export interface CompileWizardConfig {
   compileType: 'APPROVAL' | 'PRODUCTION' | 'INDIVIDUAL';
@@ -48,18 +52,13 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
   const [cropMarks, setCropMarks] = useState(true);
   const [foldLine, setFoldLine] = useState(true);
   const [strategy, setStrategy] = useState<'LEAVE_BLANK'|'REPEAT_LAST'|'REPEAT_FIRST'|'FILL_CUSTOM'>('LEAVE_BLANK');
-  const [unitMode, setUnitMode] = useState<'PT' | 'MM'>('MM');
+  const [unitMode, setUnitMode] = useState<LengthUnit>('MM');
 
   // Slot-by-Slot Custom Cards State
   const [isDoubleSided, setIsDoubleSided] = useState(false);
   const [slotCards, setSlotCards] = useState<Record<number, SlotCardFile>>({});
   const [preparingCompile, setPreparingCompile] = useState(false);
 
-  // Unit conversion helpers
-  const PT_TO_MM = 25.4 / 72;
-  const MM_TO_PT = 72 / 25.4;
-  const ptToMm = (pt: number) => Number((pt * PT_TO_MM).toFixed(1));
-  const mmToPt = (mm: number) => Math.round(mm * MM_TO_PT);
 
   // Calculate live slot capacity and dimensions scale
   const calcSlots = () => {
@@ -89,8 +88,8 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
 
     const cardW_mm = Number((54.0 + (bleed || 0) * 2).toFixed(1));
     const cardH_mm = Number((85.6 + (bleed || 0) * 2).toFixed(1));
-    const sheetW_mm = Number((pw * PT_TO_MM).toFixed(1));
-    const sheetH_mm = Number((ph * PT_TO_MM).toFixed(1));
+    const sheetW_mm = convertLength(pw, 'PT', 'MM');
+    const sheetH_mm = convertLength(ph, 'PT', 'MM');
 
     return { totalSlots, perPage, pages, emptySlots, cols, rows, cardW_mm, cardH_mm, sheetW_mm, sheetH_mm, pw, ph, cw, ch };
   };
@@ -397,42 +396,30 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                       border: '1px solid rgba(99, 102, 241, 0.4)',
                       boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}>
-                      <button
-                        type="button"
-                        onClick={() => setUnitMode('MM')}
-                        style={{
-                          padding: '5px 12px',
-                          borderRadius: '6px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          border: unitMode === 'MM' ? '1px solid #818cf8' : '1px solid transparent',
-                          background: unitMode === 'MM' ? '#4f46e5' : 'rgba(255, 255, 255, 0.08)',
-                          color: '#ffffff',
-                          boxShadow: unitMode === 'MM' ? '0 2px 6px rgba(79, 70, 229, 0.4)' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        mm (Millimeters)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUnitMode('PT')}
-                        style={{
-                          padding: '5px 12px',
-                          borderRadius: '6px',
-                          fontSize: '0.76rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          border: unitMode === 'PT' ? '1px solid #818cf8' : '1px solid transparent',
-                          background: unitMode === 'PT' ? '#4f46e5' : 'rgba(255, 255, 255, 0.08)',
-                          color: '#ffffff',
-                          boxShadow: unitMode === 'PT' ? '0 2px 6px rgba(79, 70, 229, 0.4)' : 'none',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        pt (Points)
-                      </button>
+                      {LENGTH_UNITS.map(u => {
+                        const active = unitMode === u.id;
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => setUnitMode(u.id)}
+                            style={{
+                              padding: '5px 12px',
+                              borderRadius: '6px',
+                              fontSize: '0.76rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              border: active ? '1px solid #818cf8' : '1px solid transparent',
+                              background: active ? '#4f46e5' : 'rgba(255, 255, 255, 0.08)',
+                              color: '#ffffff',
+                              boxShadow: active ? '0 2px 6px rgba(79, 70, 229, 0.4)' : 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {u.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -466,10 +453,10 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                     <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 500 }}>
-                      Margins ({unitMode === 'MM' ? 'mm' : 'pt'})
+                      Margins ({unitSpec(unitMode).symbol})
                     </span>
                     <span style={{ fontSize: '0.7rem', color: 'var(--muted)' }}>
-                      1 pt ≈ 0.35 mm | 1 mm ≈ 2.83 pt
+                      1 in = 25.4 mm = 72 pt
                     </span>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -479,8 +466,8 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                       ['Top', marginTop, setMarginTop],
                       ['Bottom', marginBottom, setMarginBottom]
                     ].map(([label, valPt, setter]: any) => {
-                      const displayVal = unitMode === 'MM' ? ptToMm(valPt) : valPt;
-                      const subVal = unitMode === 'MM' ? `${valPt} pt` : `${ptToMm(valPt)} mm`;
+                      const displayVal = convertLength(valPt, 'PT', unitMode);
+                      const subVal = secondaryReadout(valPt, 'PT', unitMode);
                       return (
                         <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -490,12 +477,11 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                           <input
                             type="number"
                             min={0}
-                            max={unitMode === 'MM' ? 100 : 300}
-                            step={unitMode === 'MM' ? 0.5 : 1}
+                            max={convertLength(MAX_MARGIN_PT, 'PT', unitMode)}
+                            step={unitSpec(unitMode).step}
                             value={displayVal}
                             onChange={e => {
-                              const num = Number(e.target.value);
-                              setter(unitMode === 'MM' ? mmToPt(num) : num);
+                              setter(convertLength(Number(e.target.value), unitMode, 'PT'));
                             }}
                             style={{ ...inp, width: '100%' }}
                           />
@@ -508,38 +494,28 @@ export default function CompileWizardModal({ cardCount, onClose, onCompile, comp
                 {/* Gaps & Bleed */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
                   {[
-                    ['Col Gap', colGap, setColGap, false],
-                    ['Row Gap', rowGap, setRowGap, false],
-                    ['Bleed', bleed, setBleed, true]
-                  ].map(([label, val, setter, isBleedMm]: any) => {
-                    let displayVal: number;
-                    let subVal: string;
-                    if (isBleedMm) {
-                      displayVal = unitMode === 'MM' ? val : Number((val * 2.83464567).toFixed(1));
-                      subVal = unitMode === 'MM' ? `${(val * 2.83464567).toFixed(1)} pt` : `${val} mm`;
-                    } else {
-                      displayVal = unitMode === 'MM' ? ptToMm(val) : val;
-                      subVal = unitMode === 'MM' ? `${val} pt` : `${ptToMm(val)} mm`;
-                    }
+                    // Gaps are stored in points, bleed in millimetres —
+                    // the compile API takes each in its own unit.
+                    ['Col Gap', colGap, setColGap, 'PT'],
+                    ['Row Gap', rowGap, setRowGap, 'PT'],
+                    ['Bleed', bleed, setBleed, 'MM']
+                  ].map(([label, val, setter, storedIn]: any) => {
+                    const displayVal = convertLength(val, storedIn, unitMode);
+                    const subVal = secondaryReadout(val, storedIn, unitMode);
 
                     return (
                       <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.76rem', color: 'var(--muted)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span>{label} ({unitMode === 'MM' ? 'mm' : 'pt'})</span>
+                          <span>{label} ({unitSpec(unitMode).symbol})</span>
                         </div>
                         <input
                           type="number"
                           min={0}
-                          max={unitMode === 'MM' ? 50 : 100}
-                          step={unitMode === 'MM' ? 0.5 : 1}
+                          max={convertLength(MAX_GAP_PT, 'PT', unitMode)}
+                          step={unitSpec(unitMode).step}
                           value={displayVal}
                           onChange={e => {
-                            const num = Number(e.target.value);
-                            if (isBleedMm) {
-                              setter(unitMode === 'MM' ? num : Number((num / 2.83464567).toFixed(1)));
-                            } else {
-                              setter(unitMode === 'MM' ? mmToPt(num) : num);
-                            }
+                            setter(convertLength(Number(e.target.value), unitMode, storedIn));
                           }}
                           style={{ ...inp, width: '100%' }}
                         />

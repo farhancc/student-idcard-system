@@ -1,4 +1,17 @@
 import React from 'react';
+import { lengthToPx, pxToLength, unitSpec, type LengthUnit } from '@/lib/units';
+
+/**
+ * Ruler divisions per unit: the smallest division drawn, and how many of
+ * those make a medium and a labelled major tick. A millimetre ruler is not
+ * simply an inch ruler relabelled — inches divide in sixteenths, so the
+ * spacing has to come from the unit rather than from a fixed 1 mm step.
+ */
+const RULER_DIVISIONS: Record<LengthUnit, { minor: number; perMedium: number; perMajor: number }> = {
+  MM: { minor: 1, perMedium: 5, perMajor: 10 },      // labelled every 10 mm
+  PT: { minor: 5, perMedium: 2, perMajor: 10 },      // labelled every 50 pt
+  IN: { minor: 1 / 16, perMedium: 8, perMajor: 16 }, // labelled every inch
+};
 
 export interface Guide {
   id: string;
@@ -19,29 +32,28 @@ export interface CanvasRulerProps {
   cardWidth: number;
   cardHeight: number;
   zoom: number;
+  unit: LengthUnit;
   onAddGuide: (guideId: string, side: 'front' | 'back', type: 'horizontal' | 'vertical') => void;
 }
 
-export function CanvasRuler({ side, type, cardWidth, cardHeight, zoom, onAddGuide }: CanvasRulerProps) {
+export function CanvasRuler({ side, type, cardWidth, cardHeight, zoom, unit, onAddGuide }: CanvasRulerProps) {
   const isHoriz = type === 'horizontal';
   const length = isHoriz ? cardWidth : cardHeight;
   const editorWidth = 480 * zoom;
   const displayLength = isHoriz ? editorWidth : (editorWidth / cardWidth) * cardHeight;
   const scale = editorWidth / cardWidth;
 
+  const { minor, perMedium, perMajor } = RULER_DIVISIONS[unit];
   const ticks = [];
-  const lengthMM = (length * 25.4) / 300;
-  for (let mm = 0; mm <= lengthMM; mm += 1) {
-    const pxValue = (mm * 300) / 25.4;
-    const pos = pxValue * scale;
-    const isMajor = mm % 10 === 0;
-    const isMedium = mm % 5 === 0 && !isMajor;
-    
+  const divisions = Math.floor(pxToLength(length, unit) / minor);
+  for (let i = 0; i <= divisions; i += 1) {
+    const isMajor = i % perMajor === 0;
     ticks.push({
-      val: mm,
-      pos,
+      // Labelled ticks fall on whole units, so the label stays a round number.
+      val: Number((i * minor).toFixed(isMajor ? 0 : 3)),
+      pos: lengthToPx(i * minor, unit) * scale,
       isMajor,
-      isMedium
+      isMedium: i % perMedium === 0 && !isMajor,
     });
   }
 
@@ -65,7 +77,7 @@ export function CanvasRuler({ side, type, cardWidth, cardHeight, zoom, onAddGuid
         userSelect: 'none',
         zIndex: 400
       }}
-      title={`Drag to create a ${isHoriz ? 'horizontal' : 'vertical'} guideline (units in mm)`}
+      title={`Drag to create a ${isHoriz ? 'horizontal' : 'vertical'} guideline (units: ${unitSpec(unit).symbol})`}
     >
       <svg style={{ width: '100%', height: '100%', overflow: 'visible' }}>
         {ticks.map((t, idx) => {
@@ -130,11 +142,12 @@ export interface GuideDifferencesProps {
   activeGuideDrag: ActiveGuideDrag | null;
   zoom: number;
   cardWidth: number;
+  unit: LengthUnit;
   frontGuides: Guide[];
   backGuides: Guide[];
 }
 
-export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, frontGuides, backGuides }: GuideDifferencesProps) {
+export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, unit, frontGuides, backGuides }: GuideDifferencesProps) {
   if (!activeGuideDrag || activeGuideDrag.side !== side) return null;
   
   const scale = (480 * zoom) / cardWidth;
@@ -151,7 +164,6 @@ export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, front
   const next = dragIdx < sameTypeGuides.length - 1 ? sameTypeGuides[dragIdx + 1] : null;
   
   const indicators = [];
-  const toMM = (valPx: number) => Math.round((valPx * 25.4 / 300) * 10) / 10;
   
   if (prev) {
     const distPx = dragged.value - prev.value;
@@ -160,7 +172,7 @@ export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, front
         id: 'prev',
         from: prev.value,
         to: dragged.value,
-        dist: toMM(distPx),
+        dist: pxToLength(distPx, unit),
         offsetPct: '35%'
       });
     }
@@ -173,7 +185,7 @@ export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, front
         id: 'next',
         from: dragged.value,
         to: next.value,
-        dist: toMM(distPx),
+        dist: pxToLength(distPx, unit),
         offsetPct: '65%'
       });
     }
@@ -220,7 +232,7 @@ export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, front
               boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
             }}
           >
-            {ind.dist} mm
+            {ind.dist} {unitSpec(unit).symbol}
           </div>
         </div>
       );
@@ -259,7 +271,7 @@ export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, front
               boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
             }}
           >
-            {ind.dist} mm
+            {ind.dist} {unitSpec(unit).symbol}
           </div>
         </div>
       );

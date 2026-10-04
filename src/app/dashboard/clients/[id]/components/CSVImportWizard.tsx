@@ -3,6 +3,10 @@
 import React, { useState } from 'react';
 import { Download, CheckCircle, AlertTriangle, FileSpreadsheet, ImageIcon, HelpCircle, ExternalLink, Printer, Zap, FileText, Layers, Monitor } from 'lucide-react';
 import { isElectronApp } from '@/lib/isElectron';
+import {
+  LENGTH_UNITS, MAX_GAP_PT, MAX_MARGIN_PT, convertLength, unitSpec,
+  type LengthUnit,
+} from '@/lib/units';
 
 interface CSVImportResult {
   mode: string;
@@ -82,16 +86,11 @@ export default function CSVImportWizard({
   const [printMarginBottom, setPrintMarginBottom] = useState(40);
   const [printColGap, setPrintColGap] = useState(15);
   const [printRowGap, setPrintRowGap] = useState(15);
-  const [printUnitMode, setPrintUnitMode] = useState<'MM' | 'PT'>('MM');
+  const [printUnitMode, setPrintUnitMode] = useState<LengthUnit>('MM');
   const [printEmptySlotStrategy, setPrintEmptySlotStrategy] = useState<'LEAVE_BLANK' | 'REPEAT_LAST' | 'REPEAT_FIRST'>('LEAVE_BLANK');
   const [printGenerating, setPrintGenerating] = useState(false);
   const [printProgress, setPrintProgress] = useState(0);
   const [printError, setPrintError] = useState('');
-
-  const PT_TO_MM = 25.4 / 72;
-  const MM_TO_PT = 72 / 25.4;
-  const ptToMm = (pt: number) => Number((pt * PT_TO_MM).toFixed(1));
-  const mmToPt = (mm: number) => Math.round(mm * MM_TO_PT);
 
   const isFormLinkInput = googleSheetsUrl.toLowerCase().includes('/forms/d/');
 
@@ -185,8 +184,8 @@ export default function CSVImportWizard({
 
     const cardW_mm = Number((54.0 + (Number(printBleedMm) || 0) * 2).toFixed(1));
     const cardH_mm = Number((85.6 + (Number(printBleedMm) || 0) * 2).toFixed(1));
-    const sheetW_mm = Number((pw * PT_TO_MM).toFixed(1));
-    const sheetH_mm = Number((ph * PT_TO_MM).toFixed(1));
+    const sheetW_mm = convertLength(pw, 'PT', 'MM');
+    const sheetH_mm = convertLength(ph, 'PT', 'MM');
 
     return { cols, rows, perPage, pages, totalCards, totalSlots, emptySlots, cardW_mm, cardH_mm, sheetW_mm, sheetH_mm, pw, ph, cw, ch };
   };
@@ -451,17 +450,32 @@ export default function CSVImportWizard({
 
           const sanitizeKey = (str: string) => str.toLowerCase().replace(/[^a-z0-9_\-]/g, '_');
 
+          // JSZip's `entry.async('blob')` always hands back an untyped
+          // (`application/octet-stream`) blob — turning that straight into a
+          // data URL produces `data:application/octet-stream;base64,...`,
+          // which the card renderer's `isValidImageUrl` rejects outright
+          // (it only accepts `data:image/...`), so the photo silently never
+          // renders. Re-type the blob from the entry's own extension first.
+          const EXTENSION_TO_MIME: Record<string, string> = {
+            jpg: 'image/jpeg', jpeg: 'image/jpeg',
+            png: 'image/png', webp: 'image/webp',
+            bmp: 'image/bmp', gif: 'image/gif',
+            svg: 'image/svg+xml',
+          };
+
           const imageEntries = Object.entries(zip.files).filter(([name, entry]) => {
             if (entry.dir) return false;
             const ext = name.split('.').pop()?.toLowerCase() || '';
-            return ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif', 'svg'].includes(ext);
+            return ext in EXTENSION_TO_MIME;
           });
 
           for (const [fileName, entry] of imageEntries) {
             const baseName = fileName.split('/').pop() || fileName;
             const nameWithoutExt = baseName.replace(/\.[^.]+$/, '');
+            const ext = baseName.split('.').pop()?.toLowerCase() || '';
 
-            const blob = await entry.async('blob');
+            const bytes = await entry.async('uint8array');
+            const blob = new Blob([bytes as BlobPart], { type: EXTENSION_TO_MIME[ext] || 'image/jpeg' });
             const dataUrl = await new Promise<string>((res) => {
               const reader = new FileReader();
               reader.onloadend = () => res(reader.result as string);
@@ -1104,34 +1118,27 @@ export default function CSVImportWizard({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '4px 0 2px' }}>
                     <span style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600 }}>Units</span>
                     <div style={{ display: 'flex', gap: '4px', background: 'rgba(0,0,0,0.3)', padding: '2px', borderRadius: '6px' }}>
-                      <button
-                        type="button"
-                        onClick={() => setPrintUnitMode('MM')}
-                        style={{
-                          padding: '3px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-                          background: printUnitMode === 'MM' ? 'var(--primary)' : 'transparent',
-                          color: printUnitMode === 'MM' ? '#fff' : 'var(--muted)', border: 'none'
-                        }}
-                      >
-                        mm
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPrintUnitMode('PT')}
-                        style={{
-                          padding: '3px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
-                          background: printUnitMode === 'PT' ? 'var(--primary)' : 'transparent',
-                          color: printUnitMode === 'PT' ? '#fff' : 'var(--muted)', border: 'none'
-                        }}
-                      >
-                        pt
-                      </button>
+                      {LENGTH_UNITS.map(u => (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => setPrintUnitMode(u.id)}
+                          title={u.label}
+                          style={{
+                            padding: '3px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer',
+                            background: printUnitMode === u.id ? 'var(--primary)' : 'transparent',
+                            color: printUnitMode === u.id ? '#102650' : 'var(--muted)', border: 'none'
+                          }}
+                        >
+                          {u.symbol}
+                        </button>
+                      ))}
                     </div>
                   </div>
 
                   {/* Margins */}
                   <div>
-                    <label style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Margins ({printUnitMode === 'MM' ? 'mm' : 'pt'})</label>
+                    <label style={{ fontSize: '0.75rem', color: 'var(--muted)', display: 'block', marginBottom: '4px' }}>Margins ({unitSpec(printUnitMode).symbol})</label>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                       {[
                         ['Left', printMarginLeft, setPrintMarginLeft],
@@ -1139,18 +1146,18 @@ export default function CSVImportWizard({
                         ['Top', printMarginTop, setPrintMarginTop],
                         ['Bottom', printMarginBottom, setPrintMarginBottom]
                       ].map(([label, valPt, setter]: any) => {
-                        const displayVal = printUnitMode === 'MM' ? ptToMm(valPt) : valPt;
+                        const displayVal = convertLength(valPt, 'PT', printUnitMode);
                         return (
                           <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.72rem', color: 'var(--muted)' }}>
                             <span>{label}</span>
                             <input
                               type="number"
                               min={0}
-                              step={printUnitMode === 'MM' ? 0.5 : 1}
+                              max={convertLength(MAX_MARGIN_PT, 'PT', printUnitMode)}
+                              step={unitSpec(printUnitMode).step}
                               value={displayVal}
                               onChange={e => {
-                                const num = Number(e.target.value);
-                                setter(printUnitMode === 'MM' ? mmToPt(num) : num);
+                                setter(convertLength(Number(e.target.value), printUnitMode, 'PT'));
                               }}
                               className="form-input"
                               style={{ padding: '4px 8px', fontSize: '0.78rem' }}
@@ -1164,32 +1171,25 @@ export default function CSVImportWizard({
                   {/* Gaps & Bleed */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                     {[
-                      ['Col Gap', printColGap, setPrintColGap, false],
-                      ['Row Gap', printRowGap, setPrintRowGap, false],
-                      ['Bleed', printBleedMm, setPrintBleedMm, true]
-                    ].map(([label, val, setter, isBleedMm]: any) => {
-                      let displayVal: any;
-                      if (isBleedMm) {
-                        displayVal = val;
-                      } else {
-                        displayVal = printUnitMode === 'MM' ? ptToMm(val) : val;
-                      }
+                      // Gaps are stored in points, bleed in millimetres —
+                      // the compile API takes each in its own unit.
+                      ['Col Gap', printColGap, setPrintColGap, 'PT'],
+                      ['Row Gap', printRowGap, setPrintRowGap, 'PT'],
+                      ['Bleed', Number(printBleedMm) || 0, (n: number) => setPrintBleedMm(String(n)), 'MM']
+                    ].map(([label, val, setter, storedIn]: any) => {
+                      const displayVal = convertLength(val, storedIn, printUnitMode);
 
                       return (
                         <label key={label} style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '0.72rem', color: 'var(--muted)' }}>
-                          <span>{label} {isBleedMm ? '(mm)' : `(${printUnitMode === 'MM' ? 'mm' : 'pt'})`}</span>
+                          <span>{label} ({unitSpec(printUnitMode).symbol})</span>
                           <input
                             type="number"
                             min={0}
-                            step={0.5}
+                            max={convertLength(MAX_GAP_PT, 'PT', printUnitMode)}
+                            step={unitSpec(printUnitMode).step}
                             value={displayVal}
                             onChange={e => {
-                              const num = Number(e.target.value);
-                              if (isBleedMm) {
-                                setter(String(num));
-                              } else {
-                                setter(printUnitMode === 'MM' ? mmToPt(num) : num);
-                              }
+                              setter(convertLength(Number(e.target.value), printUnitMode, storedIn));
                             }}
                             className="form-input"
                             style={{ padding: '4px 8px', fontSize: '0.78rem' }}

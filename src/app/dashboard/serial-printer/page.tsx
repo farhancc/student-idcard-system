@@ -22,6 +22,10 @@ import { autoDownloadJobFile } from '@/lib/downloadHelper';
 import { isElectronApp } from '@/lib/isElectron';
 import fontkit from '@pdf-lib/fontkit';
 import { groupSelectableFonts } from '@/lib/fontLibrary';
+import {
+  drawSerialOnPage, formatSerialFor, makeSerial, parseColorToRgbAndOpacity,
+  sanitizeWinAnsiText, type PdfFontLike, type SerialSpec,
+} from '@/lib/serial-stamp';
 
 const SERIAL_ZIP_MAX_PAGES = 15;
 
@@ -56,25 +60,36 @@ export default function SerialPrinterPage() {
   const [unscaledDimensions, setUnscaledDimensions] = useState<{ width: number; height: number }>({ width: 242.6, height: 153.1 });
 
   // ── Field Position & Style State ──
-  const [posX, setPosX] = useState<number>(50); // percentage (0-100)
-  const [posY, setPosY] = useState<number>(85); // percentage (0-100)
-  const [fontFamily, setFontFamily] = useState<string>('Inter, sans-serif');
-  const [fontSize, setFontSize] = useState<number>(18); // pt (points)
-  const [fontWeight, setFontWeight] = useState<string>('700');
-  const [fontStyle, setFontStyle] = useState<'normal' | 'italic'>('normal');
-  const [textColor, setTextColor] = useState<string>('#ffffff');
-  const [textAlign, setTextAlign] = useState<'left' | 'center' | 'right'>('center');
-  const [badgeBg, setBadgeBg] = useState<string>('rgba(0, 0, 0, 0.6)');
-  const [useBadge, setUseBadge] = useState<boolean>(true);
-  const [badgePadding, setBadgePadding] = useState<number>(6);
-  const [badgeRadius, setBadgeRadius] = useState<number>(4);
+  // Every serial on the card. The styling panel below edits whichever one is
+  // selected, so each control still reads and writes a single plain value.
+  const [serials, setSerials] = useState<SerialSpec[]>(() => [makeSerial()]);
+  const [activeSerialId, setActiveSerialId] = useState<string>('');
+  const activeSerial = serials.find(sr => sr.id === activeSerialId) ?? serials[0];
+  const updateActive = (patch: Partial<SerialSpec>) =>
+    setSerials(prev => prev.map(sr => (sr.id === activeSerial.id ? { ...sr, ...patch } : sr)));
+
+  const {
+    posX, posY, fontFamily, fontSize, fontWeight, fontStyle, textColor, textAlign,
+    useBadge, badgeBg,
+  } = activeSerial;
+  const setPosX = (v: number) => updateActive({ posX: v });
+  const setPosY = (v: number) => updateActive({ posY: v });
+  const setFontFamily = (v: string) => updateActive({ fontFamily: v });
+  const setFontSize = (v: number) => updateActive({ fontSize: v });
+  const setFontWeight = (v: string) => updateActive({ fontWeight: v });
+  const setFontStyle = (v: 'normal' | 'italic') => updateActive({ fontStyle: v });
+  const setTextColor = (v: string) => updateActive({ textColor: v });
+  const setTextAlign = (v: 'left' | 'center' | 'right') => updateActive({ textAlign: v });
+  const setUseBadge = (v: boolean) => updateActive({ useBadge: v });
+  const setBadgeBg = (v: string) => updateActive({ badgeBg: v });
 
   // ── Serial Sequence Rules State ──
-  const [prefix, setPrefix] = useState<string>('NO. ');
-  const [suffix, setSuffix] = useState<string>('');
-  const [startSeq, setStartSeq] = useState<number>(1);
-  const [stepSeq, setStepSeq] = useState<number>(1);
-  const [padLength, setPadLength] = useState<number>(4);
+  const { prefix, suffix, startSeq, stepSeq, padLength } = activeSerial;
+  const setPrefix = (v: string) => updateActive({ prefix: v });
+  const setSuffix = (v: string) => updateActive({ suffix: v });
+  const setStartSeq = (v: number) => updateActive({ startSeq: v });
+  const setStepSeq = (v: number) => updateActive({ stepSeq: v });
+  const setPadLength = (v: number) => updateActive({ padLength: v });
 
   // ── Quantity & Print Sheet Layout State ──
   const [quantity, setQuantity] = useState<number>(20);
@@ -108,6 +123,8 @@ export default function SerialPrinterPage() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
 
   // Helper to format sequence number
+  // The active serial's text for a given absolute number — used by the live
+  // preview and the run summaries, which only ever describe one series.
   const formatSerial = (num: number) => {
     const padded = String(num).padStart(padLength, '0');
     return `${prefix}${padded}${suffix}`;
@@ -451,74 +468,60 @@ export default function SerialPrinterPage() {
       // Draw background PDF page image
       ctx.drawImage(img, 0, 0);
 
-      // Format current preview serial
-      const serialText = formatSerial(startSeq);
-
-      // Calculate position
-      const x = (posX / 100) * canvas.width;
-      const y = (posY / 100) * canvas.height;
-
       // Scale font size proportionally to canvas rendering resolution
       const scaleFactor = canvas.width / (unscaledDimensions.width || 856);
-      const currentFontSize = fontSize * scaleFactor;
 
-      // Set text styles
-      ctx.font = `${fontStyle} ${fontWeight} ${currentFontSize}px ${cssFontFamily(fontFamily)}`;
-      ctx.textAlign = textAlign;
-      ctx.textBaseline = 'middle';
+      // Every serial is drawn, so the preview shows the sheet as it will
+      // print; the one being edited gets a marquee so it can be told apart.
+      for (const spec of serials) {
+        const serialText = formatSerialFor(spec, 0);
 
-      const textMetrics = ctx.measureText(serialText);
-      const textWidth = textMetrics.width;
-      const textHeight = currentFontSize * 1.2;
+        const x = (spec.posX / 100) * canvas.width;
+        const y = (spec.posY / 100) * canvas.height;
+        const currentFontSize = spec.fontSize * scaleFactor;
 
-      const padding = badgePadding * scaleFactor;
-      const radius = badgeRadius * scaleFactor;
+        ctx.font = `${spec.fontStyle} ${spec.fontWeight} ${currentFontSize}px ${cssFontFamily(spec.fontFamily)}`;
+        ctx.textAlign = spec.textAlign;
+        ctx.textBaseline = 'middle';
 
-      // Draw background badge if enabled
-      if (useBadge && badgeBg) {
-        let badgeX = x - textWidth / 2 - padding;
-        if (textAlign === 'left') badgeX = x - padding;
-        if (textAlign === 'right') badgeX = x - textWidth - padding;
+        const textWidth = ctx.measureText(serialText).width;
+        const textHeight = currentFontSize * 1.2;
 
-        const badgeY = y - textHeight / 2 - padding / 2;
-        const badgeW = textWidth + padding * 2;
-        const badgeH = textHeight + padding;
+        const padding = spec.badgePadding * scaleFactor;
+        const radius = spec.badgeRadius * scaleFactor;
 
-        ctx.fillStyle = badgeBg;
-        if (radius > 0) {
-          ctx.beginPath();
-          ctx.roundRect(badgeX, badgeY, badgeW, badgeH, radius);
-          ctx.fill();
-        } else {
-          ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+        let boxX = x - textWidth / 2 - padding;
+        if (spec.textAlign === 'left') boxX = x - padding;
+        if (spec.textAlign === 'right') boxX = x - textWidth - padding;
+        const boxY = y - textHeight / 2 - padding / 2;
+        const boxW = textWidth + padding * 2;
+        const boxH = textHeight + padding;
+
+        if (spec.useBadge && spec.badgeBg) {
+          ctx.fillStyle = spec.badgeBg;
+          if (radius > 0) {
+            ctx.beginPath();
+            ctx.roundRect(boxX, boxY, boxW, boxH, radius);
+            ctx.fill();
+          } else {
+            ctx.fillRect(boxX, boxY, boxW, boxH);
+          }
+        }
+
+        ctx.fillStyle = spec.textColor;
+        ctx.fillText(serialText, x, y);
+
+        if (spec.id === activeSerial.id && serials.length > 1) {
+          ctx.save();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = Math.max(1, 1.5 * scaleFactor);
+          ctx.setLineDash([6 * scaleFactor, 4 * scaleFactor]);
+          ctx.strokeRect(boxX, boxY, boxW, boxH);
+          ctx.restore();
         }
       }
-
-      // Draw serial text
-      ctx.fillStyle = textColor;
-      ctx.fillText(serialText, x, y);
     };
-  }, [
-    imageSrc,
-    posX,
-    posY,
-    fontFamily,
-    pressFonts,
-    fontSize,
-    fontWeight,
-    fontStyle,
-    textColor,
-    textAlign,
-    badgeBg,
-    useBadge,
-    badgePadding,
-    badgeRadius,
-    prefix,
-    suffix,
-    startSeq,
-    padLength,
-    unscaledDimensions,
-  ]);
+  }, [imageSrc, serials, activeSerial.id, pressFonts, unscaledDimensions]);
 
   // Click on preview canvas to set position
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -538,56 +541,25 @@ export default function SerialPrinterPage() {
   const [downloadFileName, setDownloadFileName] = useState<string>('');
   const [savedFilePath, setSavedFilePath] = useState<string>('');
 
-  // Helper to sanitize text for pdf-lib WinAnsi font encoding
-  const sanitizeWinAnsiText = (text: string) => {
-    return text
-      .replace(/№/g, 'No.')
-      .replace(/[—–]/g, '-')
-      .replace(/[“”"]/g, '"')
-      .replace(/[‘’']/g, "'")
-      .replace(/[•·]/g, '.')
-      .replace(/[^\x20-\x7E]/g, '');
-  };
 
-  // Helper to parse hex/rgba colors for pdf-lib vector elements
-  const parseColorToRgbAndOpacity = (colorStr: string, rgbFn: (r: number, g: number, b: number) => any) => {
-    let r = 0, g = 0, b = 0, opacity = 1.0;
-    if (!colorStr) return { color: rgbFn(0, 0, 0), opacity: 1.0 };
-
-    if (colorStr.startsWith('#')) {
-      const hex = colorStr.replace('#', '');
-      if (hex.length === 3) {
-        r = parseInt(hex[0] + hex[0], 16) / 255;
-        g = parseInt(hex[1] + hex[1], 16) / 255;
-        b = parseInt(hex[2] + hex[2], 16) / 255;
-      } else if (hex.length >= 6) {
-        r = parseInt(hex.substring(0, 2), 16) / 255;
-        g = parseInt(hex.substring(2, 4), 16) / 255;
-        b = parseInt(hex.substring(4, 6), 16) / 255;
-      }
-    } else if (colorStr.startsWith('rgba')) {
-      const parts = colorStr.match(/[\d.]+/g);
-      if (parts && parts.length >= 3) {
-        r = parseFloat(parts[0]) / 255;
-        g = parseFloat(parts[1]) / 255;
-        b = parseFloat(parts[2]) / 255;
-        if (parts.length >= 4) opacity = parseFloat(parts[3]);
-      }
-    } else if (colorStr.startsWith('rgb')) {
-      const parts = colorStr.match(/[\d.]+/g);
-      if (parts && parts.length >= 3) {
-        r = parseFloat(parts[0]) / 255;
-        g = parseFloat(parts[1]) / 255;
-        b = parseFloat(parts[2]) / 255;
-      }
-    }
-
-    return { color: rgbFn(r, g, b), opacity };
-  };
 
   // Helper to select the vector font for stamped serial text: a matching
   // uploaded press font (embedded as real vector outlines) if the operator
   // picked one, otherwise the closest pdf-lib StandardFonts fallback.
+
+  /** Embeds one PDF font per distinct family/weight/style across all serials. */
+  const embedSerialFonts = async (pdfDoc: unknown, StandardFonts: unknown) => {
+    const fonts = new Map<string, PdfFontLike>();
+    for (const spec of serials) {
+      const key = `${spec.fontFamily}|${spec.fontWeight}|${spec.fontStyle}`;
+      if (!fonts.has(key)) {
+        fonts.set(key, await selectPdfFont(pdfDoc, spec.fontFamily, spec.fontWeight, spec.fontStyle, StandardFonts));
+      }
+    }
+    return (spec: SerialSpec) =>
+      fonts.get(`${spec.fontFamily}|${spec.fontWeight}|${spec.fontStyle}`) as PdfFontLike;
+  };
+
   const selectPdfFont = async (pdfDoc: any, family: string, weight: string, style: string, StandardFonts: any) => {
     const isBold = weight === '700' || weight === '900' || weight === '600' || weight === 'bold';
     const isItalic = style === 'italic';
@@ -642,8 +614,8 @@ export default function SerialPrinterPage() {
       const sourcePdfDoc = await PDFDocument.load(pdfBuffer.slice(0));
       const targetPdfDoc = await PDFDocument.create();
 
-      // Embed vector font
-      const font = await selectPdfFont(targetPdfDoc, fontFamily, fontWeight, fontStyle, StandardFonts);
+      // Embed one vector font per distinct styling across all serials
+      const fontFor = await embedSerialFonts(targetPdfDoc, StandardFonts);
 
       // mm to pt conversion (1 mm = 2.83465 pt)
       const mmToPt = 2.83465;
@@ -704,13 +676,13 @@ export default function SerialPrinterPage() {
         embeddedVectorPage = await targetPdfDoc.embedPage(sourcePageObj);
       }
 
-      const textRgb = parseColorToRgbAndOpacity(textColor, rgb);
-      const badgeRgb = parseColorToRgbAndOpacity(badgeBg, rgb);
-
       for (let i = 0; i < quantity; i++) {
-        const currentSeq = startSeq + i * stepSeq;
-        const rawSerialText = formatSerial(currentSeq);
-        const serialText = sanitizeWinAnsiText(rawSerialText) || String(currentSeq);
+        // Each serial counts with its own start and step, so they can be the
+        // same number in two places or two unrelated series.
+        const serialTexts = serials.map(spec => {
+          const raw = formatSerialFor(spec, i);
+          return sanitizeWinAnsiText(raw) || String(spec.startSeq + i * spec.stepSeq);
+        });
 
         if (paperSize === 'SINGLE') {
           // ── SINGLE MODE: 100% PURE VECTOR PAGE COPY ──
@@ -718,40 +690,11 @@ export default function SerialPrinterPage() {
           const newPage = targetPdfDoc.addPage(copiedPage);
           const pSize = newPage.getSize();
 
-          const textPt = fontSize;
-          const textWidth = font.widthOfTextAtSize(serialText, textPt);
-
-          const rawX = (posX / 100) * pSize.width;
-          const rawY = pSize.height - (posY / 100) * pSize.height;
-
-          let alignX = rawX - textWidth / 2;
-          if (textAlign === 'left') alignX = rawX;
-          if (textAlign === 'right') alignX = rawX - textWidth;
-
-          if (useBadge && badgeBg) {
-            const pad = badgePadding;
-            const bW = textWidth + pad * 2;
-            const bH = textPt * 1.2 + pad;
-            let bX = alignX - pad;
-            let bY = rawY - textPt * 0.3 - pad / 2;
-
-            newPage.drawRectangle({
-              x: bX,
-              y: bY,
-              width: bW,
-              height: bH,
-              color: badgeRgb.color,
-              opacity: badgeRgb.opacity,
+          serials.forEach((spec, si) => {
+            drawSerialOnPage(newPage, {
+              spec, text: serialTexts[si], font: fontFor(spec), rgb,
+              boxX: 0, boxY: 0, boxW: pSize.width, boxH: pSize.height, scaleRatio: 1,
             });
-          }
-
-          newPage.drawText(serialText, {
-            x: alignX,
-            y: rawY - textPt * 0.3,
-            size: textPt,
-            font: font,
-            color: textRgb.color,
-            opacity: textRgb.opacity,
           });
 
         } else {
@@ -792,40 +735,11 @@ export default function SerialPrinterPage() {
 
           // Scale vector text & positioning to embedded cell
           const scaleRatio = drawW / cardW;
-          const textPt = fontSize * scaleRatio;
-          const textWidth = font.widthOfTextAtSize(serialText, textPt);
-
-          const targetX = drawX + (posX / 100) * drawW;
-          const targetY = drawY + drawH - (posY / 100) * drawH;
-
-          let alignX = targetX - textWidth / 2;
-          if (textAlign === 'left') alignX = targetX;
-          if (textAlign === 'right') alignX = targetX - textWidth;
-
-          if (useBadge && badgeBg) {
-            const pad = badgePadding * scaleRatio;
-            const bW = textWidth + pad * 2;
-            const bH = textPt * 1.2 + pad;
-            let bX = alignX - pad;
-            let bY = targetY - textPt * 0.3 - pad / 2;
-
-            currentPage.drawRectangle({
-              x: bX,
-              y: bY,
-              width: bW,
-              height: bH,
-              color: badgeRgb.color,
-              opacity: badgeRgb.opacity,
+          serials.forEach((spec, si) => {
+            drawSerialOnPage(currentPage, {
+              spec, text: serialTexts[si], font: fontFor(spec), rgb,
+              boxX: drawX, boxY: drawY, boxW: drawW, boxH: drawH, scaleRatio,
             });
-          }
-
-          currentPage.drawText(serialText, {
-            x: alignX,
-            y: targetY - textPt * 0.3,
-            size: textPt,
-            font: font,
-            color: textRgb.color,
-            opacity: textRgb.opacity,
           });
         }
 
@@ -938,9 +852,7 @@ export default function SerialPrinterPage() {
       try {
         const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
         const targetPdfDoc = await PDFDocument.create();
-        const font = await selectPdfFont(targetPdfDoc, fontFamily, fontWeight, fontStyle, StandardFonts);
-        const textRgb = parseColorToRgbAndOpacity(textColor, rgb);
-        const badgeRgb = parseColorToRgbAndOpacity(badgeBg, rgb);
+        const fontFor = await embedSerialFonts(targetPdfDoc, StandardFonts);
 
         for (let i = 0; i < zipDocs.length; i++) {
           const doc = zipDocs[i];
@@ -952,44 +864,14 @@ export default function SerialPrinterPage() {
           const stampPage = copiedPages[selectedPageNum - 1];
           const pSize = stampPage.getSize();
 
-          const currentSeq = startSeq + i * stepSeq;
-          const rawSerialText = formatSerial(currentSeq);
-          const serialText = sanitizeWinAnsiText(rawSerialText) || String(currentSeq);
-
-          const textPt = fontSize;
-          const textWidth = font.widthOfTextAtSize(serialText, textPt);
-          const rawX = (posX / 100) * pSize.width;
-          const rawY = pSize.height - (posY / 100) * pSize.height;
-
-          let alignX = rawX - textWidth / 2;
-          if (textAlign === 'left') alignX = rawX;
-          if (textAlign === 'right') alignX = rawX - textWidth;
-
-          if (useBadge && badgeBg) {
-            const pad = badgePadding;
-            const bW = textWidth + pad * 2;
-            const bH = textPt * 1.2 + pad;
-            const bX = alignX - pad;
-            const bY = rawY - textPt * 0.3 - pad / 2;
-
-            stampPage.drawRectangle({
-              x: bX,
-              y: bY,
-              width: bW,
-              height: bH,
-              color: badgeRgb.color,
-              opacity: badgeRgb.opacity,
+          for (const spec of serials) {
+            const raw = formatSerialFor(spec, i);
+            const text = sanitizeWinAnsiText(raw) || String(spec.startSeq + i * spec.stepSeq);
+            drawSerialOnPage(stampPage, {
+              spec, text, font: fontFor(spec), rgb,
+              boxX: 0, boxY: 0, boxW: pSize.width, boxH: pSize.height, scaleRatio: 1,
             });
           }
-
-          stampPage.drawText(serialText, {
-            x: alignX,
-            y: rawY - textPt * 0.3,
-            size: textPt,
-            font,
-            color: textRgb.color,
-            opacity: textRgb.opacity,
-          });
 
           setRenderProgress(Math.round(5 + ((i + 1) / zipDocs.length) * 85));
         }
@@ -1295,6 +1177,74 @@ export default function SerialPrinterPage() {
 
           {/* Controls: Sequence Rules & Text Decorators */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Serials on this card — the cards below edit the selected one */}
+            <div className="glass-panel" style={{ padding: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px', marginBottom: '12px' }}>
+                <h3 style={{ margin: 0, fontSize: '0.92rem', fontWeight: 600 }}>
+                  Serial Numbers {serials.length > 1 && <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({serials.length})</span>}
+                </h3>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+                  onClick={() => {
+                    // Offset the copy so it does not land exactly on top of
+                    // the one it was copied from.
+                    const added = makeSerial({
+                      ...activeSerial,
+                      id: undefined as unknown as string,
+                      posY: Math.min(95, activeSerial.posY - 20),
+                    });
+                    setSerials(prev => [...prev, added]);
+                    setActiveSerialId(added.id);
+                  }}
+                >
+                  + Add Serial
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {serials.map((spec, idx) => {
+                  const isActive = spec.id === activeSerial.id;
+                  return (
+                    <div
+                      key={spec.id}
+                      onClick={() => setActiveSerialId(spec.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer',
+                        padding: '8px 10px', borderRadius: '6px', fontSize: '0.8rem',
+                        background: isActive ? 'rgba(56,189,248,0.14)' : 'rgba(255,255,255,0.04)',
+                        border: isActive ? '1px solid rgba(56,189,248,0.7)' : '1px solid var(--glass-border)',
+                      }}
+                    >
+                      <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{idx + 1}</span>
+                      <strong style={{ fontFamily: cssFontFamily(spec.fontFamily) }}>{formatSerialFor(spec, 0)}</strong>
+                      <span style={{ color: 'var(--muted)', marginLeft: 'auto', fontSize: '0.72rem' }}>
+                        {spec.posX}% , {spec.posY}%
+                      </span>
+                      {serials.length > 1 && (
+                        <button
+                          type="button"
+                          title="Remove this serial"
+                          onClick={ev => {
+                            ev.stopPropagation();
+                            setSerials(prev => prev.filter(x => x.id !== spec.id));
+                            if (isActive) setActiveSerialId('');
+                          }}
+                          style={{ background: 'none', border: 'none', color: 'var(--danger, #ef4444)', cursor: 'pointer', padding: '0 2px', fontSize: '0.9rem', lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p style={{ margin: '10px 0 0', fontSize: '0.74rem', color: 'var(--muted)' }}>
+                Click a serial to edit it, then click the artwork to place it. Give two serials the
+                same start and step to print the same number in both places.
+              </p>
+            </div>
+
             {/* Sequence Rules Card */}
             <div className="glass-panel" style={{ padding: '20px' }}>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '0.92rem', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
@@ -1312,6 +1262,17 @@ export default function SerialPrinterPage() {
                 <div className="form-group">
                   <label className="form-label">Start Number</label>
                   <input type="number" min="1" className="form-input" value={startSeq} onChange={e => setStartSeq(Number(e.target.value))} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Step</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="form-input"
+                    value={stepSeq}
+                    onChange={e => setStepSeq(Math.max(1, Number(e.target.value)))}
+                    title="How much the number increases between documents"
+                  />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Zero Padding</label>
@@ -1387,10 +1348,23 @@ export default function SerialPrinterPage() {
                 <div className="form-group">
                   <label className="form-label">Font Weight</label>
                   <select className="form-select" value={fontWeight} onChange={e => setFontWeight(e.target.value)}>
-                    <option value="400">Normal</option>
-                    <option value="600">Semi-Bold</option>
-                    <option value="700">Bold</option>
-                    <option value="900">Extra Bold</option>
+                    <option value="100">100 - Thin</option>
+                    <option value="200">200 - ExLight</option>
+                    <option value="300">300 - Light</option>
+                    <option value="400">400 - Normal</option>
+                    <option value="500">500 - Medium</option>
+                    <option value="600">600 - SemiBold</option>
+                    <option value="700">700 - Bold</option>
+                    <option value="800">800 - ExBold</option>
+                    <option value="900">900 - Black</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Font Style</label>
+                  <select className="form-select" value={fontStyle} onChange={e => setFontStyle(e.target.value as 'normal' | 'italic')}>
+                    <option value="normal">Normal</option>
+                    <option value="italic">Italic</option>
                   </select>
                 </div>
 

@@ -1,3 +1,5 @@
+import { lengthToPx } from '@/lib/units';
+
 export const TEMPLATE_CATEGORIES = [
   'ID_CARD', 'CERTIFICATE', 'BADGE', 'LABEL', 'TICKET',
   'VISITOR_PASS', 'LETTER', 'CARD', 'TAG', 'STICKER', 'OTHER',
@@ -33,17 +35,33 @@ export const CATEGORY_COLORS: Record<TemplateCategory, { bg: string; color: stri
   OTHER:        { bg: 'rgba(255,255,255,0.06)', color: '#94a3b8', border: 'rgba(255,255,255,0.15)' },
 };
 
-// Default dimensions at 300 DPI for each category (width x height in pixels)
-export const CATEGORY_DIMENSIONS: Record<TemplateCategory, { w: number; h: number; label: string }> = {
-  ID_CARD:      { w: 1013, h: 638,  label: '85.6 × 54 mm (CR80)' },
-  CERTIFICATE:  { w: 3508, h: 2480, label: '297 × 210 mm (A4 Landscape)' },
-  BADGE:        { w: 756,  h: 1134, label: '64 × 96 mm' },
-  LABEL:        { w: 945,  h: 472,  label: '80 × 40 mm' },
-  TICKET:       { w: 2244, h: 945,  label: '190 × 80 mm' },
-  VISITOR_PASS: { w: 1013, h: 638,  label: '85.6 × 54 mm (CR80)' },
-  LETTER:       { w: 2480, h: 3508, label: '210 × 297 mm (A4 Portrait)' },
-  CARD:         { w: 1063, h: 688,  label: '90 × 58 mm' },
-  TAG:          { w: 591,  h: 945,  label: '50 × 80 mm' },
-  STICKER:      { w: 945,  h: 945,  label: '80 × 80 mm' },
-  OTHER:        { w: 673,  h: 1039, label: '57 × 88 mm' },
+/**
+ * The physical size of each category's stock, in millimetres. This is the
+ * definition — an ID card really is ISO/IEC 7810 ID-1, 85.6 x 53.98 mm — and
+ * the 300 DPI pixels below are derived from it.
+ *
+ * Previously the pixels were hand-written alongside a hand-written millimetre
+ * label, and the two had drifted: ID_CARD was 1013 px, which is 3.375 in (the
+ * US approximation of CR80) rather than the 85.6 mm its own label claimed.
+ */
+const CATEGORY_SIZES_MM: Record<TemplateCategory, { w: number; h: number; name?: string }> = {
+  ID_CARD:      { w: 85.6, h: 53.98, name: 'CR80' },
+  CERTIFICATE:  { w: 297,  h: 210,   name: 'A4 Landscape' },
+  BADGE:        { w: 64,   h: 96 },
+  LABEL:        { w: 80,   h: 40 },
+  TICKET:       { w: 190,  h: 80 },
+  VISITOR_PASS: { w: 85.6, h: 53.98, name: 'CR80' },
+  LETTER:       { w: 210,  h: 297,   name: 'A4 Portrait' },
+  CARD:         { w: 90,   h: 58 },
+  TAG:          { w: 50,   h: 80 },
+  STICKER:      { w: 80,   h: 80 },
+  OTHER:        { w: 57,   h: 88 },
 };
+
+/** Default card size per category, in the 300 DPI pixels templates are stored in. */
+export const CATEGORY_DIMENSIONS = Object.fromEntries(
+  Object.entries(CATEGORY_SIZES_MM).map(([category, size]) => [
+    category,
+    { w: lengthToPx(size.w, 'MM'), h: lengthToPx(size.h, 'MM'), name: size.name },
+  ])
+) as Record<TemplateCategory, { w: number; h: number; name?: string }>;
