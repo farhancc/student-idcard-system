@@ -171,11 +171,9 @@ export default function TemplatesPage() {
     const handleUndoRedoKeyDown = (e: KeyboardEvent) => {
       const isModifier = e.ctrlKey || e.metaKey;
       if (!isModifier || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
-      const target = e.target as HTMLElement | null;
-      const isEditableTarget = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
-      // Let native text-field undo run for plain Ctrl+Z inside a text box;
-      // only take over for redo (Shift+Z / Y) and for Ctrl+Z outside text fields.
-      if (isEditableTarget && e.key.toLowerCase() === 'z' && !e.shiftKey) return;
+      // All the designer's text fields are React-controlled, so there's no real native
+      // undo stack to defer to inside them — always drive our own history, even when a
+      // field's input has focus (e.g. right after adding a field, its name input is focused).
       e.preventDefault();
       if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
         redoFieldChange();
