@@ -121,6 +121,10 @@ export default function SerialPrinterPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [previewZoom, setPreviewZoom] = useState<number>(1);
+  const [showGrid, setShowGrid] = useState<boolean>(false);
+  const [gridSize, setGridSize] = useState<number>(10); // grid line spacing, in % of card width/height
+  const [snapToGrid, setSnapToGrid] = useState<boolean>(false);
 
   // Helper to format sequence number
   // The active serial's text for a given absolute number — used by the live
@@ -530,11 +534,34 @@ export default function SerialPrinterPage() {
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    const pctX = Math.round((clickX / rect.width) * 100);
-    const pctY = Math.round((clickY / rect.height) * 100);
+    let pctX = (clickX / rect.width) * 100;
+    let pctY = (clickY / rect.height) * 100;
 
-    setPosX(pctX);
-    setPosY(pctY);
+    if (snapToGrid && showGrid) {
+      pctX = Math.round(pctX / gridSize) * gridSize;
+      pctY = Math.round(pctY / gridSize) * gridSize;
+    }
+
+    setPosX(Math.max(0, Math.min(100, Math.round(pctX))));
+    setPosY(Math.max(0, Math.min(100, Math.round(pctY))));
+  };
+
+  // Arrow keys nudge the active serial's position — handy for fine-tuning once zoomed in,
+  // where a mouse click is too imprecise. Shift jumps further; grid size is used as the
+  // step when snapping is on, so nudges land on the same grid the mouse snaps to.
+  const handleCanvasKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    let dx = 0, dy = 0;
+    switch (e.key) {
+      case 'ArrowLeft': dx = -1; break;
+      case 'ArrowRight': dx = 1; break;
+      case 'ArrowUp': dy = -1; break;
+      case 'ArrowDown': dy = 1; break;
+      default: return;
+    }
+    e.preventDefault();
+    const step = e.shiftKey ? 5 : (snapToGrid && showGrid ? gridSize : 1);
+    if (dx !== 0) setPosX(Math.max(0, Math.min(100, Math.round(posX + dx * step))));
+    if (dy !== 0) setPosY(Math.max(0, Math.min(100, Math.round(posY + dy * step))));
   };
 
   const [downloadFallbackUrl, setDownloadFallbackUrl] = useState<string>('');
@@ -1112,21 +1139,65 @@ export default function SerialPrinterPage() {
               <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Move size={16} /> Field Position
               </h3>
-              {totalPdfPages > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
-                  <label className="form-label" style={{ margin: 0 }}>Page:</label>
-                  <select 
-                    className="form-select" 
-                    value={selectedPageNum} 
-                    onChange={e => handlePageChange(Number(e.target.value))}
+                  <label className="form-label" style={{ margin: 0 }}>Zoom:</label>
+                  <select
+                    className="form-select"
+                    value={previewZoom}
+                    onChange={e => setPreviewZoom(Number(e.target.value))}
                     style={{ padding: '4px 8px', fontSize: '0.8rem' }}
                   >
-                    {Array.from({ length: totalPdfPages }, (_, i) => i + 1).map(p => (
-                      <option key={p} value={p}>Page {p} of {totalPdfPages}</option>
-                    ))}
+                    <option value={0.5}>50%</option>
+                    <option value={0.75}>75%</option>
+                    <option value={1}>100%</option>
+                    <option value={1.5}>150%</option>
+                    <option value={2}>200%</option>
+                    <option value={3}>300%</option>
+                    <option value={4}>400%</option>
+                    <option value={5}>500%</option>
                   </select>
                 </div>
-              )}
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} style={{ cursor: 'pointer', margin: 0 }} />
+                  <Grid size={13} /> Grid
+                </label>
+                {showGrid && (
+                  <>
+                    <select
+                      className="form-select"
+                      value={gridSize}
+                      onChange={e => setGridSize(Number(e.target.value))}
+                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                      title="Grid line spacing"
+                    >
+                      <option value={5}>5%</option>
+                      <option value={10}>10%</option>
+                      <option value={20}>20%</option>
+                      <option value={25}>25%</option>
+                    </select>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', userSelect: 'none' }}>
+                      <input type="checkbox" checked={snapToGrid} onChange={e => setSnapToGrid(e.target.checked)} style={{ cursor: 'pointer', margin: 0 }} />
+                      Snap
+                    </label>
+                  </>
+                )}
+                {totalPdfPages > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
+                    <label className="form-label" style={{ margin: 0 }}>Page:</label>
+                    <select
+                      className="form-select"
+                      value={selectedPageNum}
+                      onChange={e => handlePageChange(Number(e.target.value))}
+                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                    >
+                      {Array.from({ length: totalPdfPages }, (_, i) => i + 1).map(p => (
+                        <option key={p} value={p}>Page {p} of {totalPdfPages}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {uploadMode === 'zip' && (
@@ -1137,31 +1208,56 @@ export default function SerialPrinterPage() {
 
             <div
               ref={containerRef}
-              style={{ 
-                position: 'relative', 
-                background: '#090d16', 
-                borderRadius: '8px', 
-                overflow: 'hidden', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
+              style={{
+                position: 'relative',
+                background: '#090d16',
+                borderRadius: '8px',
+                overflow: 'auto',
+                display: 'flex',
+                alignItems: previewZoom > 1 ? 'flex-start' : 'center',
+                justifyContent: previewZoom > 1 ? 'flex-start' : 'center',
                 border: '1px solid rgba(255,255,255,0.08)',
-                padding: '12px'
+                padding: '12px',
+                height: '480px'
               }}
             >
-              <canvas
-                ref={canvasRef}
-                onClick={handleCanvasClick}
-                style={{
-                  maxWidth: '100%',
-                  maxHeight: '480px',
-                  height: 'auto',
-                  cursor: 'crosshair',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                  borderRadius: '4px'
-                }}
-              />
+              <div style={{ position: 'relative', display: 'inline-block', flexShrink: 0 }}>
+                <canvas
+                  ref={canvasRef}
+                  tabIndex={0}
+                  onClick={handleCanvasClick}
+                  onKeyDown={handleCanvasKeyDown}
+                  style={{
+                    width: `${480 * previewZoom}px`,
+                    maxWidth: previewZoom > 1 ? 'none' : '100%',
+                    height: 'auto',
+                    display: 'block',
+                    cursor: 'crosshair',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    borderRadius: '4px'
+                  }}
+                />
+                {showGrid && (
+                  <svg
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    {Array.from({ length: Math.floor(100 / gridSize) - 1 }, (_, i) => {
+                      const pct = `${(i + 1) * gridSize}%`;
+                      return (
+                        <React.Fragment key={i}>
+                          <line x1={pct} y1="0" x2={pct} y2="100%" stroke="rgba(20,184,166,0.4)" strokeWidth="1" strokeDasharray="3,3" />
+                          <line x1="0" y1={pct} x2="100%" y2={pct} stroke="rgba(20,184,166,0.4)" strokeWidth="1" strokeDasharray="3,3" />
+                        </React.Fragment>
+                      );
+                    })}
+                  </svg>
+                )}
+              </div>
             </div>
+            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--muted)' }}>
+              Click the artwork to place the serial, then use the arrow keys (Shift for bigger steps) to nudge it precisely.
+            </p>
 
             <div style={{ display: 'flex', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '6px', fontSize: '0.8rem' }}>
               <div style={{ flex: 1 }}>
