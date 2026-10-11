@@ -942,12 +942,12 @@ export default function SettingsPage() {
                   const langLabels: Record<string, string> = {
                     en: 'Latin', hi: 'Hindi', ur: 'Urdu', ar: 'Arabic',
                     ta: 'Tamil', te: 'Telugu', bn: 'Bengali', gu: 'Gujarati',
-                    pa: 'Punjabi', ml: 'Malayalam', kn: 'Kannada', other: 'Other',
+                    pa: 'Punjabi', ml: 'Malayalam', kn: 'Kannada', or: 'Odia', other: 'Other',
                   };
                   const langColors: Record<string, string> = {
                     en: '#6366f1', hi: '#f59e0b', ur: '#10b981', ar: '#ef4444',
                     ta: '#8b5cf6', te: '#ec4899', bn: '#14b8a6', gu: '#f97316',
-                    pa: '#a78bfa', ml: '#34d399', kn: '#fb923c', other: '#94a3b8',
+                    pa: '#a78bfa', ml: '#34d399', kn: '#fb923c', or: '#eab308', other: '#94a3b8',
                   };
                   const color = langColors[f.language] ?? '#94a3b8';
                   return (

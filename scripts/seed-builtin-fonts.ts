@@ -67,6 +67,31 @@ const BUILTIN_FONTS: BuiltinFont[] = [
   { family: 'Laila', regular: 'Laila-Regular.woff', bold: 'Laila-Bold.woff', language: 'hi' },
   { family: 'Yatra One', regular: 'YatraOne-Regular.woff', language: 'hi' },
   { family: 'Kalam', regular: 'Kalam-Regular.woff', bold: 'Kalam-Bold.woff', language: 'hi' },
+  // Indian scripts beyond Devanagari
+  { family: 'Noto Sans Tamil', regular: 'NotoSansTamil-Regular.ttf', bold: 'NotoSansTamil-Bold.ttf', language: 'ta' },
+  { family: 'Noto Sans Telugu', regular: 'NotoSansTelugu-Regular.ttf', bold: 'NotoSansTelugu-Bold.ttf', language: 'te' },
+  { family: 'Noto Sans Bengali', regular: 'NotoSansBengali-Regular.ttf', bold: 'NotoSansBengali-Bold.ttf', language: 'bn' },
+  { family: 'Noto Sans Gujarati', regular: 'NotoSansGujarati-Regular.ttf', bold: 'NotoSansGujarati-Bold.ttf', language: 'gu' },
+  { family: 'Noto Sans Kannada', regular: 'NotoSansKannada-Regular.ttf', bold: 'NotoSansKannada-Bold.ttf', language: 'kn' },
+  { family: 'Noto Sans Malayalam', regular: 'NotoSansMalayalam-Regular.ttf', bold: 'NotoSansMalayalam-Bold.ttf', language: 'ml' },
+  { family: 'Noto Sans Gurmukhi', regular: 'NotoSansGurmukhi-Regular.ttf', bold: 'NotoSansGurmukhi-Bold.ttf', language: 'pa' },
+  { family: 'Noto Sans Oriya', regular: 'NotoSansOriya-Regular.ttf', bold: 'NotoSansOriya-Bold.ttf', language: 'or' },
+  // Display / headline (more variety)
+  { family: 'Playfair Display', regular: 'PlayfairDisplay-Regular.ttf', bold: 'PlayfairDisplay-Bold.ttf', italic: 'PlayfairDisplay-Italic.ttf', boldItalic: 'PlayfairDisplay-BoldItalic.ttf' },
+  { family: 'Alfa Slab One', regular: 'AlfaSlabOne-Regular.ttf' },
+  { family: 'Permanent Marker', regular: 'PermanentMarker-Regular.ttf' },
+  { family: 'Staatliches', regular: 'Staatliches-Regular.ttf' },
+  { family: 'Passion One', regular: 'PassionOne-Regular.ttf' },
+  { family: 'Bungee', regular: 'Bungee-Regular.ttf' },
+  // Sans-serif (more variety for body text)
+  { family: 'Inter', regular: 'Inter-Regular.ttf', bold: 'Inter-Bold.ttf' },
+  { family: 'Work Sans', regular: 'WorkSans-Regular.ttf', bold: 'WorkSans-Bold.ttf' },
+  { family: 'Rubik', regular: 'Rubik-Regular.ttf', bold: 'Rubik-Bold.ttf' },
+  { family: 'Manrope', regular: 'Manrope-Regular.ttf', bold: 'Manrope-Bold.ttf' },
+  { family: 'Quicksand', regular: 'Quicksand-Regular.ttf', bold: 'Quicksand-Bold.ttf' },
+  { family: 'DM Sans', regular: 'DMSans-Regular.ttf', bold: 'DMSans-Bold.ttf' },
+  { family: 'Karla', regular: 'Karla-Regular.ttf', bold: 'Karla-Bold.ttf' },
+  { family: 'Noto Sans', regular: 'NotoSans-Regular.ttf', bold: 'NotoSans-Bold.ttf' },
 ];
 
 async function upsertGlobalFont(name: string, fileUrl: string, language: string) {
