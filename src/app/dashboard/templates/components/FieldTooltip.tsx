@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { FieldCoordinate } from '@/lib/pdf/card-renderer-client';
@@ -84,6 +84,21 @@ export default function FieldTooltip({
       setViewportPos({ left, top: fieldTop + h + margin, maxHeight: Math.max(150, spaceBelow - margin) });
     }
   }, [side, x, y, h]);
+
+  // Close on an outside click — but not while picking a color: the swatch and its hex
+  // text input are themselves inside this element, so `contains()` already treats clicks
+  // on them as "inside" and leaves the tooltip open. The canvas's own open/close toggle
+  // button already calls stopPropagation() on mousedown, so its native event never reaches
+  // this document listener — it stays the sole source of truth for that button's toggling.
+  useEffect(() => {
+    const handleOutsideMouseDown = (e: MouseEvent) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideMouseDown);
+    return () => document.removeEventListener('mousedown', handleOutsideMouseDown);
+  }, [onClose]);
 
   const handleStaticImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
