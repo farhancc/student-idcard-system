@@ -1363,6 +1363,7 @@ export default function TemplatesPage() {
     const setFields = side === 'front' ? setFrontFields : setBackFields;
 
     const updateField = (updatedProps: Partial<FieldCoordinate>) => {
+      commitFieldHistory();
       const updated = [...fields];
       updated[index] = { ...updated[index], ...updatedProps };
       setFields(updated);
@@ -1379,9 +1380,7 @@ export default function TemplatesPage() {
         field={f}
         scale={scale}
         yOffsets={side === 'front' ? frontYOffsets : backYOffsets}
-        cardHeight={cardHeight}
         pressFonts={pressFonts}
-        zoom={zoom}
         availableFields={[...frontFields, ...backFields]
           .map(cf => cf?.field)
           .filter((key): key is string => !!key)

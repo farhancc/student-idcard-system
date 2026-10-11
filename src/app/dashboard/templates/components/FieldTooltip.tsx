@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, Trash2, X, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
 import { FieldCoordinate } from '@/lib/pdf/card-renderer-client';
 import { groupSelectableFonts } from '@/lib/fontLibrary';
@@ -10,9 +11,7 @@ export interface FieldTooltipProps {
   field: FieldCoordinate;
   scale: number;
   yOffsets: Map<number, number>;
-  cardHeight: number;
   pressFonts: any[];
-  zoom: number;
   /** Every field key on the template, for the rule-builder dropdowns. */
   availableFields: string[];
   onUpdate: (updatedProps: Partial<FieldCoordinate>) => void;
@@ -28,9 +27,7 @@ export default function FieldTooltip({
   field: f,
   scale,
   yOffsets,
-  cardHeight,
   pressFonts,
-  zoom,
   availableFields,
   onUpdate,
   onDelete,
@@ -46,9 +43,47 @@ export default function FieldTooltip({
   const y = (f.y + yOffset) * scale;
   const selfOverflow = getFieldSelfOverflow(f);
   const h = (f.height + selfOverflow) * scale;
-  const isLowerHalf = y > (cardHeight * scale) / 2;
 
-  const tooltipLeft = Math.max(0, Math.min(x, (480 * zoom) - 320));
+  // The tooltip used to be `position: absolute` within the canvas, choosing "open above
+  // or below the field" purely from the field's position within the CARD (upper vs. lower
+  // half). That ignores where the canvas itself actually sits on the page: a field in the
+  // card's lower half can still be only a few px from the top of the visible viewport (a
+  // short canvas, or the page scrolled down), so opening a tall tooltip "above" pushed it
+  // past the top of the page — somewhere a user can never scroll to.
+  //
+  // Instead, measure the canvas's real on-screen position and switch to `position: fixed`,
+  // choosing the open direction from actual remaining viewport space (not card geometry)
+  // and capping max-height to that space with internal scrolling for the rest. This is a
+  // one-shot measurement (no iterative re-measuring of our own rendered size), so it can't
+  // get stuck correcting forever the way a self-referential height-shrink loop can.
+  //
+  // `position: fixed` only escapes to the true viewport if no ancestor has a transform,
+  // filter, backdrop-filter, perspective or will-change — any of those makes that ancestor
+  // the fixed-position containing block instead. The `.glass-panel` wrappers around this
+  // designer use `backdrop-filter: blur(...)`, so without a portal the tooltip would be
+  // "fixed" to that panel, not the window, silently breaking all the viewport math above.
+  // Rendering through a portal to `document.body` sidesteps that entirely.
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
+  const [viewportPos, setViewportPos] = useState<{ left: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const anchorEl = document.getElementById(`designer-canvas-${side}`);
+    if (!anchorEl) return;
+    const anchorRect = anchorEl.getBoundingClientRect();
+    const fieldTop = anchorRect.top + y;
+    const fieldLeft = anchorRect.left + x;
+    const margin = 8;
+    const spaceAbove = fieldTop - margin;
+    const spaceBelow = window.innerHeight - (fieldTop + h) - margin;
+    const left = Math.max(margin, Math.min(fieldLeft, window.innerWidth - 360 - margin));
+    // Reserve `margin` again on the far edge: at the cap, the box's un-anchored edge
+    // would otherwise land exactly at the viewport boundary (0 margin), not `margin` away.
+    if (spaceAbove > spaceBelow) {
+      setViewportPos({ left, bottom: window.innerHeight - fieldTop + margin, maxHeight: Math.max(150, spaceAbove - margin) });
+    } else {
+      setViewportPos({ left, top: fieldTop + h + margin, maxHeight: Math.max(150, spaceBelow - margin) });
+    }
+  }, [side, x, y, h]);
 
   const handleStaticImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -62,19 +97,22 @@ export default function FieldTooltip({
     reader.readAsDataURL(file);
   };
 
-  return (
+  return createPortal(
     <div
+      ref={tooltipRef}
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'absolute',
-        left: `${tooltipLeft}px`,
-        ...(isLowerHalf ? {
-          top: `${y - 8}px`,
-          transform: 'translateY(-100%)',
-        } : {
-          top: `${y + h + 8}px`,
-        }),
+        position: 'fixed',
+        left: viewportPos ? `${viewportPos.left}px` : 0,
+        ...(viewportPos
+          ? ('bottom' in viewportPos ? { bottom: `${viewportPos.bottom}px` } : { top: `${viewportPos.top}px` })
+          : { top: 0 }),
+        // Hidden until measured so there's no one-frame flash at the wrong spot; the
+        // layout effect runs (and sets viewportPos) before the browser paints.
+        visibility: viewportPos ? 'visible' : 'hidden',
+        maxHeight: viewportPos ? `${viewportPos.maxHeight}px` : undefined,
+        overflowY: 'auto',
         width: '360px',
         background: 'rgba(15, 23, 42, 0.96)',
         backdropFilter: 'blur(12px)',
@@ -916,6 +954,7 @@ export default function FieldTooltip({
           />
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
