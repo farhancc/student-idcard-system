@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Lightbulb, Store, ChevronDown, Search, Upload, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, LayoutGrid, Sliders, Save, Image as ImageIcon, Eye, Grid3x3, RefreshCw, Trash2, X, AlignLeft, AlignCenter, AlignRight, Lightbulb, Store, ChevronDown, Search, Upload, FileText, Maximize2, Minimize2, Undo2, Redo2 } from 'lucide-react';
 import { useToast } from '@/components/ui/toast';
 import ConfirmDialog from '@/app/components/ConfirmDialog';
 import CardPreview from '@/app/components/CardPreview';
@@ -127,6 +127,66 @@ export default function TemplatesPage() {
   const [backWebUrl, setBackWebUrl] = useState('');
   const [frontFields, setFrontFields] = useState<FieldCoordinate[]>([]);
   const [backFields, setBackFields] = useState<FieldCoordinate[]>([]);
+
+  // ── Undo / Redo for field edits (move, resize, add, remove, style changes) ──
+  // Each entry is the front/back field arrays as they were just BEFORE a change.
+  // Loading or discarding a template resets these — undoing across templates is meaningless.
+  const FIELD_HISTORY_LIMIT = 100;
+  const [fieldHistory, setFieldHistory] = useState<{ front: FieldCoordinate[]; back: FieldCoordinate[] }[]>([]);
+  const [fieldFuture, setFieldFuture] = useState<{ front: FieldCoordinate[]; back: FieldCoordinate[] }[]>([]);
+  // Captured at drag-start so a whole drag/resize gesture becomes one undo step, not one per mousemove.
+  const [dragStartSnapshot, setDragStartSnapshot] = useState<{ front: FieldCoordinate[]; back: FieldCoordinate[] } | null>(null);
+
+  const commitFieldHistory = () => {
+    setFieldHistory(prev => [...prev, { front: frontFields, back: backFields }].slice(-FIELD_HISTORY_LIMIT));
+    setFieldFuture([]);
+  };
+
+  const resetFieldHistory = () => {
+    setFieldHistory([]);
+    setFieldFuture([]);
+  };
+
+  const undoFieldChange = () => {
+    if (fieldHistory.length === 0) return;
+    const last = fieldHistory[fieldHistory.length - 1];
+    setFieldFuture(prev => [{ front: frontFields, back: backFields }, ...prev]);
+    setFieldHistory(prev => prev.slice(0, -1));
+    setFrontFields(last.front);
+    setBackFields(last.back);
+  };
+
+  const redoFieldChange = () => {
+    if (fieldFuture.length === 0) return;
+    const next = fieldFuture[0];
+    setFieldHistory(prev => [...prev, { front: frontFields, back: backFields }]);
+    setFieldFuture(prev => prev.slice(1));
+    setFrontFields(next.front);
+    setBackFields(next.back);
+  };
+
+  // Ctrl/Cmd+Z to undo, Ctrl/Cmd+Shift+Z or Ctrl+Y to redo — only while the designer form is open.
+  useEffect(() => {
+    if (!showForm) return;
+    const handleUndoRedoKeyDown = (e: KeyboardEvent) => {
+      const isModifier = e.ctrlKey || e.metaKey;
+      if (!isModifier || e.key.toLowerCase() !== 'z' && e.key.toLowerCase() !== 'y') return;
+      const target = e.target as HTMLElement | null;
+      const isEditableTarget = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+      // Let native text-field undo run for plain Ctrl+Z inside a text box;
+      // only take over for redo (Shift+Z / Y) and for Ctrl+Z outside text fields.
+      if (isEditableTarget && e.key.toLowerCase() === 'z' && !e.shiftKey) return;
+      e.preventDefault();
+      if (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) {
+        redoFieldChange();
+      } else {
+        undoFieldChange();
+      }
+    };
+    window.addEventListener('keydown', handleUndoRedoKeyDown);
+    return () => window.removeEventListener('keydown', handleUndoRedoKeyDown);
+  }, [showForm, fieldHistory, fieldFuture, frontFields, backFields]);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [uploadingFront, setUploadingFront] = useState(false);
@@ -300,6 +360,7 @@ export default function TemplatesPage() {
       verticalAlign: 'top',
     };
 
+    commitFieldHistory();
     if (side === 'front') {
       setFrontFields([...frontFields, newField]);
     } else {
@@ -325,6 +386,7 @@ export default function TemplatesPage() {
       verticalAlign: 'top',
     };
 
+    commitFieldHistory();
     if (side === 'front') {
       setFrontFields([...frontFields, newField]);
     } else {
@@ -333,6 +395,7 @@ export default function TemplatesPage() {
   };
 
   const handleRemoveField = (side: 'front' | 'back', index: number) => {
+    commitFieldHistory();
     if (side === 'front') {
       setFrontFields(prev => prev.filter((_, i) => i !== index));
     } else {
@@ -368,6 +431,7 @@ export default function TemplatesPage() {
       y: Math.min(cardHeight - 20, original.y + 15),
     };
 
+    commitFieldHistory();
     if (side === 'front') {
       const updated = [...frontFields, newField];
       setFrontFields(updated);
@@ -391,8 +455,9 @@ export default function TemplatesPage() {
       console.warn(`[handleFieldChange] Invalid field index ${index} for side ${side}`);
       return;
     }
+    commitFieldHistory();
     const oldField = fields[index];
-    
+
     let updatedField = { ...oldField, [key]: val };
     
     // Auto-update prefix if field name changes and prefix was default or empty
@@ -839,6 +904,7 @@ export default function TemplatesPage() {
     const fields = side === 'front' ? frontFields : backFields;
     const field = fields[index];
 
+    setDragStartSnapshot({ front: frontFields, back: backFields });
     setDragState({
       index,
       side,
@@ -1075,6 +1141,15 @@ export default function TemplatesPage() {
   };
 
   const handleMouseUp = () => {
+    // Commit one history entry per whole drag/resize gesture, using the state as it
+    // was before the drag started — not every intermediate mousemove frame.
+    if (dragStartSnapshot) {
+      if (dragStartSnapshot.front !== frontFields || dragStartSnapshot.back !== backFields) {
+        setFieldHistory(prev => [...prev, dragStartSnapshot].slice(-FIELD_HISTORY_LIMIT));
+        setFieldFuture([]);
+      }
+      setDragStartSnapshot(null);
+    }
     setDragState(null);
   };
 
@@ -1093,7 +1168,7 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides, zoom]);
+  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides, zoom, dragStartSnapshot]);
 
   // ── Guide Dragging Effect ─────────────────────────────────────────────
   useEffect(() => {
@@ -1194,6 +1269,7 @@ export default function TemplatesPage() {
       suffix: '',
     };
 
+    setDragStartSnapshot({ front: frontFields, back: backFields });
     if (side === 'front') {
       setFrontFields([...frontFields, newField]);
       setSelectedSide('front');
@@ -1529,6 +1605,7 @@ export default function TemplatesPage() {
       setBackWebUrl('');
       setFrontFields([]);
       setBackFields([]);
+      resetFieldHistory();
       setCategory('OTHER');
       setSides(1);
       setSelectedClientIds([]);
@@ -1560,6 +1637,7 @@ export default function TemplatesPage() {
     setBackLocalPath('');
     setFrontFields(JSON.parse(tmpl.frontFields || '[]'));
     setBackFields(JSON.parse(tmpl.backFields || '[]'));
+    resetFieldHistory();
     setCategory((tmpl.category as TemplateCategory) || 'OTHER');
     setSides((tmpl.sides as 1 | 2) || 1);
     setSelectedClientIds(tmpl.clientIds || []);
@@ -1764,6 +1842,7 @@ export default function TemplatesPage() {
               setBackImageUrl('');
               setFrontFields([]);
               setBackFields([]);
+              resetFieldHistory();
               setTestData({});
               setActiveTooltipIndex(null);
               setActiveTooltipSide(null);
@@ -2303,6 +2382,41 @@ export default function TemplatesPage() {
                     Visual Interactive Designer
                   </h4>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* Undo / Redo */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                      <button
+                        type="button"
+                        title="Undo (Ctrl+Z)"
+                        disabled={fieldHistory.length === 0}
+                        onClick={undoFieldChange}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: '30px', height: '30px', borderRadius: '8px 0 0 8px',
+                          background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', borderRight: 'none',
+                          color: fieldHistory.length === 0 ? 'var(--muted)' : '#fff',
+                          cursor: fieldHistory.length === 0 ? 'not-allowed' : 'pointer',
+                          opacity: fieldHistory.length === 0 ? 0.5 : 1,
+                        }}
+                      >
+                        <Undo2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        title="Redo (Ctrl+Shift+Z)"
+                        disabled={fieldFuture.length === 0}
+                        onClick={redoFieldChange}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          width: '30px', height: '30px', borderRadius: '0 8px 8px 0',
+                          background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)',
+                          color: fieldFuture.length === 0 ? 'var(--muted)' : '#fff',
+                          cursor: fieldFuture.length === 0 ? 'not-allowed' : 'pointer',
+                          opacity: fieldFuture.length === 0 ? 0.5 : 1,
+                        }}
+                      >
+                        <Redo2 size={14} />
+                      </button>
+                    </div>
                     {/* Zoom Option */}
                     <div style={{ 
                       display: 'flex', 
@@ -2633,6 +2747,7 @@ export default function TemplatesPage() {
                                 x: 100, y: 100, width: fieldType === 'image' ? 150 : 300, height: fieldType === 'image' ? 180 : 30,
                                 fontSize: 18, fontWeight: 'normal', color: '#000000', align: 'left', verticalAlign: 'top',
                               };
+                              commitFieldHistory();
                               setFrontFields(prev => [...prev, newField]);
                             }}
                             style={{
@@ -4166,6 +4281,7 @@ export default function TemplatesPage() {
                 setBackImageUrl('');
                 setFrontFields([]);
                 setBackFields([]);
+                resetFieldHistory();
                 setTestData({});
                 setCategory('OTHER');
                 setSides(1);
