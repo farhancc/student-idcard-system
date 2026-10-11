@@ -245,10 +245,12 @@ export default function TemplatesPage() {
       window.removeEventListener('resize', updateHeight);
     };
   }, [showForm]);
-  const designerCardsSideBySide = sides === 2 && designerRowWidth >= 640;
-  const designerWidthBudget = designerCardsSideBySide ? (designerRowWidth - 24) / 2 : designerRowWidth;
+  // Each card is sized independently off the full row width and the height cap — not
+  // divided by number of sides. Switching between 1 and 2 sides shouldn't change how big
+  // the card you're editing renders; if both don't fit on one line at that size, the row's
+  // own `flexWrap` just stacks them, same as any other overflowing flex row.
   const designerHeightBudgetWidth = designerMaxHeight * (cardWidth / cardHeight);
-  const designerBaseWidth = Math.max(160, Math.min(designerWidthBudget, designerHeightBudgetWidth));
+  const designerBaseWidth = Math.max(160, Math.min(designerRowWidth, designerHeightBudgetWidth));
   // Display unit for everything physical in the designer — the dimension
   // inputs, the rulers, the guide readouts. Geometry itself stays in the
   // 300 DPI pixels the template is stored in.
