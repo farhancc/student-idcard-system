@@ -32,14 +32,15 @@ export interface CanvasRulerProps {
   cardWidth: number;
   cardHeight: number;
   zoom: number;
+  baseWidth: number;
   unit: LengthUnit;
   onAddGuide: (guideId: string, side: 'front' | 'back', type: 'horizontal' | 'vertical') => void;
 }
 
-export function CanvasRuler({ side, type, cardWidth, cardHeight, zoom, unit, onAddGuide }: CanvasRulerProps) {
+export function CanvasRuler({ side, type, cardWidth, cardHeight, zoom, baseWidth, unit, onAddGuide }: CanvasRulerProps) {
   const isHoriz = type === 'horizontal';
   const length = isHoriz ? cardWidth : cardHeight;
-  const editorWidth = 480 * zoom;
+  const editorWidth = baseWidth * zoom;
   const displayLength = isHoriz ? editorWidth : (editorWidth / cardWidth) * cardHeight;
   const scale = editorWidth / cardWidth;
 
@@ -141,16 +142,17 @@ export interface GuideDifferencesProps {
   side: 'front' | 'back';
   activeGuideDrag: ActiveGuideDrag | null;
   zoom: number;
+  baseWidth: number;
   cardWidth: number;
   unit: LengthUnit;
   frontGuides: Guide[];
   backGuides: Guide[];
 }
 
-export function GuideDifferences({ side, activeGuideDrag, zoom, cardWidth, unit, frontGuides, backGuides }: GuideDifferencesProps) {
+export function GuideDifferences({ side, activeGuideDrag, zoom, baseWidth, cardWidth, unit, frontGuides, backGuides }: GuideDifferencesProps) {
   if (!activeGuideDrag || activeGuideDrag.side !== side) return null;
-  
-  const scale = (480 * zoom) / cardWidth;
+
+  const scale = (baseWidth * zoom) / cardWidth;
   const guides = side === 'front' ? frontGuides : backGuides;
   const sameTypeGuides = guides
     .filter(g => g.type === activeGuideDrag.type)

@@ -223,6 +223,32 @@ export default function TemplatesPage() {
   // Bleed & Safe Area guide overlay
   const [showBleedGuides, setShowBleedGuides] = useState(false);
   const [zoom, setZoom] = useState(1);
+  // The card canvas used to render at a fixed 480px regardless of screen size, wasting
+  // most of a wide monitor. Instead measure the row that holds the front/back canvases
+  // and fit the card (at 100% zoom) to the larger of available width or a viewport-relative
+  // height cap, preserving the card's own aspect ratio — `zoom` still scales further from there.
+  const designerRowRef = useRef<HTMLDivElement | null>(null);
+  const [designerRowWidth, setDesignerRowWidth] = useState(960);
+  const [designerMaxHeight, setDesignerMaxHeight] = useState(560);
+  useEffect(() => {
+    const el = designerRowRef.current;
+    if (!el) return;
+    const updateWidth = () => setDesignerRowWidth(el.clientWidth);
+    updateWidth();
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(el);
+    const updateHeight = () => setDesignerMaxHeight(Math.max(360, window.innerHeight * 0.62));
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
+  }, [showForm]);
+  const designerCardsSideBySide = sides === 2 && designerRowWidth >= 640;
+  const designerWidthBudget = designerCardsSideBySide ? (designerRowWidth - 24) / 2 : designerRowWidth;
+  const designerHeightBudgetWidth = designerMaxHeight * (cardWidth / cardHeight);
+  const designerBaseWidth = Math.max(160, Math.min(designerWidthBudget, designerHeightBudgetWidth));
   // Display unit for everything physical in the designer — the dimension
   // inputs, the rulers, the guide readouts. Geometry itself stays in the
   // 300 DPI pixels the template is stored in.
@@ -1154,7 +1180,7 @@ export default function TemplatesPage() {
   useEffect(() => {
     if (!dragState) return;
 
-    const scale = (480 * zoom) / cardWidth;
+    const scale = (designerBaseWidth * zoom) / cardWidth;
 
     const onMouseMove = (e: MouseEvent) => handleMouseMove(e, scale);
     const onMouseUp = () => handleMouseUp();
@@ -1166,13 +1192,13 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides, zoom, dragStartSnapshot]);
+  }, [dragState, frontFields, backFields, cardWidth, showGrid, gridSize, snapToGrid, snapToGuides, frontGuides, backGuides, zoom, dragStartSnapshot, designerBaseWidth]);
 
   // ── Guide Dragging Effect ─────────────────────────────────────────────
   useEffect(() => {
     if (!activeGuideDrag) return;
 
-    const scale = (480 * zoom) / cardWidth;
+    const scale = (designerBaseWidth * zoom) / cardWidth;
     const canvasEl = document.getElementById(`designer-canvas-${activeGuideDrag.side}`);
     if (!canvasEl) return;
 
@@ -1223,7 +1249,7 @@ export default function TemplatesPage() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, [activeGuideDrag, cardWidth, cardHeight, zoom]);
+  }, [activeGuideDrag, cardWidth, cardHeight, zoom, designerBaseWidth]);
 
   const handleAddGuide = (id: string, side: 'front' | 'back', type: 'horizontal' | 'vertical') => {
     const newGuide = { id, type, value: 0 };
@@ -1241,7 +1267,7 @@ export default function TemplatesPage() {
 
     e.preventDefault();
     const rect = e.currentTarget.getBoundingClientRect();
-    const scale = (480 * zoom) / cardWidth;
+    const scale = (designerBaseWidth * zoom) / cardWidth;
     
     let startCardX = Math.round((e.clientX - rect.left) / scale);
     let startCardY = Math.round((e.clientY - rect.top) / scale);
@@ -2770,18 +2796,21 @@ export default function TemplatesPage() {
                   </div>
                 )}
 
-                <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '24px',
-                  // `safe center` keeps the canvas centred until it outgrows the panel,
-                  // then falls back to flex-start so zoomed-in artwork stays scrollable
-                  // instead of being clipped off the left edge.
-                  justifyContent: 'safe center',
-                  alignItems: 'flex-start',
-                  marginTop: '10px',
-                  overflowX: 'auto'
-                }}>
+                <div
+                  ref={designerRowRef}
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '24px',
+                    // `safe center` keeps the canvas centred until it outgrows the panel,
+                    // then falls back to flex-start so zoomed-in artwork stays scrollable
+                    // instead of being clipped off the left edge.
+                    justifyContent: 'safe center',
+                    alignItems: 'flex-start',
+                    marginTop: '10px',
+                    overflowX: 'auto'
+                  }}
+                >
                   {/* Front Side Designer */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                     <div className="badge badge-primary" style={{ padding: '6px 12px', fontSize: '0.75rem', fontWeight: 600 }}>
@@ -2789,14 +2818,14 @@ export default function TemplatesPage() {
                     </div>
                     {frontImageUrl ? (
                       (() => {
-                        const editorWidth = 480 * zoom;
+                        const editorWidth = designerBaseWidth * zoom;
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
                           <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* Rulers */}
-                            <CanvasRuler side="front" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
-                            <CanvasRuler side="front" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="front" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} baseWidth={designerBaseWidth} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="front" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} baseWidth={designerBaseWidth} unit={designerUnit} onAddGuide={handleAddGuide} />
                             <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>{unitSpec(designerUnit).symbol}</div>
 
                             <div 
@@ -2948,7 +2977,7 @@ export default function TemplatesPage() {
                                   </div>
                                 );
                               })}
-                              <GuideDifferences side="front" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
+                              <GuideDifferences side="front" activeGuideDrag={activeGuideDrag} zoom={zoom} baseWidth={designerBaseWidth} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
                             {frontFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = frontYOffsets.get(i) ?? 0;
@@ -3229,8 +3258,8 @@ export default function TemplatesPage() {
                       <div
                         onClick={() => document.getElementById('front-image-file')?.click()}
                         style={{
-                          width: `${480 * zoom}px`,
-                          height: `${303 * zoom}px`,
+                          width: `${designerBaseWidth * zoom}px`,
+                          height: `${(designerBaseWidth * zoom) * (cardHeight / cardWidth)}px`,
                           border: '2px dashed var(--primary, #6366f1)',
                           borderRadius: '8px',
                           display: 'flex',
@@ -3275,14 +3304,14 @@ export default function TemplatesPage() {
                     </div>
                     {backImageUrl ? (
                       (() => {
-                        const editorWidth = 480 * zoom;
+                        const editorWidth = designerBaseWidth * zoom;
                         const scale = editorWidth / cardWidth;
                         const editorHeight = cardHeight * scale;
                         return (
                           <div style={{ position: 'relative', paddingLeft: '20px', paddingTop: '20px', background: '#1e293b', borderRadius: '10px', paddingRight: '6px', paddingBottom: '6px', border: '1px solid rgba(255,255,255,0.08)' }}>
                             {/* Rulers */}
-                            <CanvasRuler side="back" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
-                            <CanvasRuler side="back" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="back" type="horizontal" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} baseWidth={designerBaseWidth} unit={designerUnit} onAddGuide={handleAddGuide} />
+                            <CanvasRuler side="back" type="vertical" cardWidth={cardWidth} cardHeight={cardHeight} zoom={zoom} baseWidth={designerBaseWidth} unit={designerUnit} onAddGuide={handleAddGuide} />
                             <div style={{ position: 'absolute', left: 0, top: 0, width: '20px', height: '20px', background: '#0f172a', borderRight: '1px solid #334155', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '6px', color: '#475569', fontWeight: 'bold' }}>{unitSpec(designerUnit).symbol}</div>
 
                             <div 
@@ -3431,7 +3460,7 @@ export default function TemplatesPage() {
                                   </div>
                                 );
                               })}
-                              <GuideDifferences side="back" activeGuideDrag={activeGuideDrag} zoom={zoom} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
+                              <GuideDifferences side="back" activeGuideDrag={activeGuideDrag} zoom={zoom} baseWidth={designerBaseWidth} cardWidth={cardWidth} unit={designerUnit} frontGuides={frontGuides} backGuides={backGuides} />
                             {backFields.map((f, i) => {
                               const x = f.x * scale;
                               const yOffset = backYOffsets.get(i) ?? 0;
@@ -3712,8 +3741,8 @@ export default function TemplatesPage() {
                       <div
                         onClick={() => document.getElementById('back-image-file')?.click()}
                         style={{
-                          width: `${480 * zoom}px`,
-                          height: `${303 * zoom}px`,
+                          width: `${designerBaseWidth * zoom}px`,
+                          height: `${(designerBaseWidth * zoom) * (cardHeight / cardWidth)}px`,
                           border: '2px dashed var(--primary, #6366f1)',
                           borderRadius: '8px',
                           display: 'flex',
